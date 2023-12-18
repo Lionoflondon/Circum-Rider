@@ -7,9 +7,13 @@
     <uses-permission android:name="android.permission.INTERNET"/>
 
     <application
-        android:label="Circum"
+        android:label="Circum Rider"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+        <meta-data android:name="com.google.android.geo.API_KEY"
+               android:value="AIzaSyBk1kErI_wl_Hfvy6cVcUanamYNxF31_Dk"/>
+               
         <activity
             android:name=".MainActivity"
             android:exported="true"

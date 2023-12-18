@@ -15,7 +15,6 @@ import 'app/authentication/bloc/auth_bloc.dart';
 import 'app/bottom_nav/bloc/navbar_bloc.dart';
 import 'app/home/bloc/home_bloc.dart';
 import 'app/history/bloc/history_bloc.dart';
-import 'app/ride_bloc/bloc/parcel_bloc.dart';
 import 'app/support/bloc/support_bloc.dart';
 import 'utils/nav/nav_key.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -108,7 +107,7 @@ void main() async {
           [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown])
       .then((value) {
     Bloc.observer = SimpleBlocObserver();
-    runApp(CircumRider());
+    runApp(const CircumRider());
   });
 }
 
@@ -151,8 +150,6 @@ class CircumRider extends StatelessWidget {
                   BlocProvider(
                     create: (context) => NavbarBloc(),
                   ),
-                  BlocProvider<ParcelBloc>(
-                      create: (BuildContext context) => ParcelBloc()),
                   BlocProvider<HomeBloc>(
                     create: (BuildContext context) => homeBloc,
                   ),

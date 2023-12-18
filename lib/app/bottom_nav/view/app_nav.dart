@@ -1,22 +1,16 @@
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:circum_rider/app/authentication/bloc/auth_bloc.dart';
+import 'package:circum_rider/app/home/bloc/home_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
-import 'package:google_maps_widget/google_maps_widget.dart';
-import 'package:permission_handler/permission_handler.dart';
-// import 'package:google_maps_flutter/google_maps_flutter.dart';
-// import 'package:google_maps_flutter/google_maps_flutter.dart';
-
-// 2 mark okoye road
-
-import '../../../helper/google_map_controller.dart';
 import '../../../utils/theme/theme.dart';
 import '../../account/view/account.dart';
 import '../../history/view/index.dart';
 import '../../home/view/index.dart';
+import '../../home/view/maps_view.dart';
 import '../../support/view/index.dart';
 import '../bloc/navbar_bloc.dart';
 
@@ -34,12 +28,9 @@ class AppNavViewState extends State<AppNavView> {
     super.initState();
     authBloc = context.read<AuthBloc>();
     authBloc?.add(RequestLocationData());
-    Timer.periodic(const Duration(seconds: 20),
+    Timer.periodic(const Duration(seconds: 200),
         (timer) => authBloc?.add(RequestLocationData()));
   }
-
-  final Completer<GoogleMapController> _controller =
-      Completer<GoogleMapController>();
 
   @override
   Widget build(BuildContext context) {
@@ -64,21 +55,7 @@ class AppNavViewState extends State<AppNavView> {
                                     'assets/images/maps_placeholder.png'),
                                 fit: BoxFit.fitWidth,
                               )
-                            : GoogleMap(
-                                mapType: MapType.normal,
-                                initialCameraPosition: CameraPosition(
-                                  target: LatLng(
-                                      authBloc.state.locationData!.latitude,
-                                      authBloc.state.locationData!.longitude),
-                                  zoom: 14.4746,
-                                ),
-                                onMapCreated: !_controller.isCompleted
-                                    ? (GoogleMapController controller) {
-                                        MapControllerSingleton()
-                                            .setController(controller);
-                                      }
-                                    : null,
-                              )),
+                            : MapsView()),
                     const SizedBox(height: 180),
                   ],
                 ),
@@ -92,7 +69,18 @@ class AppNavViewState extends State<AppNavView> {
                       Expanded(
                           child: userScreens(context, state.currentNavIndex)),
                     ],
-                  )
+                  ),
+                BlocBuilder<HomeBloc, HomeState>(builder: ((context, state) {
+                  if (state.rideStatus == RideStatus.acceptedARide) {
+                    return Positioned(
+                        bottom: 0,
+                        left: 0,
+                        height: 4,
+                        width: 1.sw,
+                        child: const ConnectingToUser());
+                  }
+                  return Container();
+                }))
               ],
             )),
         bottomNavigationBar: _buildBottomNavigation(),

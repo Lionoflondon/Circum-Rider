@@ -14,6 +14,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart'
     as permission_handler;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../utils/validator/validator.dart';
 import '../repo/auth_repo.dart';
@@ -301,9 +302,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
 
       if (event is RequestLocationData) {
+        // Obtain shared preferences.
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
         try {
           final User? user = auth.currentUser;
-          // Position locationData = await locationHelper.enableLocation();
+          Position locationData = await locationHelper.enableLocation();
 
           Position myPosition = Position(
               longitude: 7.475763,
@@ -316,6 +319,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               headingAccuracy: 0,
               speed: 0,
               speedAccuracy: 0);
+
+          await prefs.setDouble('longitude', myPosition.longitude);
+          await prefs.setDouble('latitude', myPosition.latitude);
+          await prefs.setString(
+              'timestamp', myPosition.timestamp.toIso8601String());
+          await prefs.setDouble('altitude', myPosition.altitude);
 
           GeoFirePoint myLocation = geo.point(
               latitude: myPosition.latitude, longitude: myPosition.longitude);

@@ -4,10 +4,10 @@ abstract class HomeEvent {
   HomeEvent();
 }
 
-class SetOnlinePresence extends HomeEvent {
-  final bool isOffline;
+class SetRideStatus extends HomeEvent {
+  final RideStatus status;
 
-  SetOnlinePresence({required this.isOffline});
+  SetRideStatus({required this.status});
 }
 
 class GetAvailableRequests extends HomeEvent {}
@@ -23,5 +23,43 @@ class CheckForPushToken extends HomeEvent {}
 class AcceptRide extends HomeEvent {
   final String topic;
   final String code;
-  AcceptRide({required this.topic, required this.code});
+  final int selectedRequestIndex;
+  AcceptRide(
+      {required this.topic,
+      required this.code,
+      required this.selectedRequestIndex});
+}
+
+class SetSourceAndDestinationStatus extends HomeEvent {
+  final SourceAndDestinationStatus status;
+  SetSourceAndDestinationStatus({required this.status});
+}
+
+class SetMapCameraStatus extends HomeEvent {
+  final MapCameraStatus status;
+  SetMapCameraStatus({required this.status});
+}
+
+class SetDrawerHeight extends HomeEvent {
+  final double minDrawerHeight;
+  final double maxDrawerHeight;
+  SetDrawerHeight(
+      {required this.minDrawerHeight, required this.maxDrawerHeight});
+}
+
+class SetPanelControlStatus extends HomeEvent {
+  final PanelControlStatus status;
+  SetPanelControlStatus({required this.status});
+}
+
+class CancelRequest extends HomeEvent {
+  final String? requestId;
+  CancelRequest({this.requestId});
+}
+
+class GetPolylines extends HomeEvent {
+  final PlaceCoordinate pickupCoordinate;
+  final PlaceCoordinate desinationCoordinate;
+  GetPolylines(
+      {required this.pickupCoordinate, required this.desinationCoordinate});
 }

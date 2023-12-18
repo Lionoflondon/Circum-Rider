@@ -1,17 +1,25 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geoflutterfire2/geoflutterfire2.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../helper/messaging_server.dart';
+import '../../../utils/theme/theme.dart';
 import '../models/dispatch_request.m..dart';
+import '../models/place_coordinates.m.dart';
 
 part 'home_event.dart';
 part 'home_state.dart';
@@ -30,7 +38,14 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
     on<CheckForPushToken>(
       (event, emit) async {
-        final fcmToken = await FirebaseMessaging.instance.getToken();
+        // if (Firebase.apps.isEmpty) print('Firebase not initialized');
+        // if (Firebase.apps.isEmpty) await Firebase.initializeApp();
+        if (Platform.isIOS) {
+          await firebaseMessaging.requestPermission();
+        }
+        final apnsToken = await firebaseMessaging.getAPNSToken();
+        print('apnsToken: $apnsToken');
+        final fcmToken = await firebaseMessaging.getToken();
         if (fcmToken != null) {
           try {
             final User? user = auth.currentUser;
@@ -51,16 +66,32 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             print('Push Token update error');
             print(e);
           }
+        } else {
+          print('fcmToken Is null');
+          print('apnsToken: $apnsToken');
         }
       },
     );
 
-    on<SetOnlinePresence>(
+    on<SetRideStatus>(
       (event, emit) {
-        if (event.isOffline == false) {
+        if (event.status == RideStatus.online) {
           add(GetAvailableRequests());
+          add(SetDrawerHeight(
+              minDrawerHeight: state.minDrawerHeight,
+              maxDrawerHeight: 0.75.sh));
+
+          add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
         }
-        emit(state.copyWith(isOffline: event.isOffline));
+
+        if (event.status == RideStatus.offline) {
+          // print('isOffline');
+          add(SetDrawerHeight(
+              minDrawerHeight: state.minDrawerHeight,
+              maxDrawerHeight: state.minDrawerHeight));
+          add(SetPanelControlStatus(status: PanelControlStatus.isClosed));
+        }
+        emit(state.copyWith(rideStatus: event.status));
       },
     );
 
@@ -99,16 +130,24 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
           Completer<List<DispatchRequest>> _completer = Completer();
 
-          stream.listen((List<DocumentSnapshot> documentList) {
-            final dispatchRequests = documentList
-                .map((doc) => DispatchRequest.fromJson(doc.data()))
-                .toList();
+          final docStream = stream.listen(
+            (
+              List<DocumentSnapshot> documentList,
+            ) {
+              final dispatchRequests = documentList
+                  .map((doc) => DispatchRequest.fromJson(doc.data()))
+                  .toList();
 
-            _completer.complete(dispatchRequests);
-          });
+              _completer.complete(dispatchRequests);
+              print('completed');
+            },
+          );
           final _dispatchRequests = await _completer.future;
+          docStream.cancel();
           emit(state.copyWith(dispatchRequests: _dispatchRequests));
-          print(state.dispatchRequests);
+          // Stop Stream
+          // stream
+          // print(state.dispatchRequests);
 
           // print(stream);
         } catch (e) {}
@@ -122,12 +161,35 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<AcceptRide>(
       (event, emit) async {
         final User? user = auth.currentUser;
+        // Obtain shared preferences.
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
 
         final documentReference = db.collection('riders').doc(user?.uid);
         // Get the document snapshot
         final documentSnapshot = await documentReference.get();
 
         final riderData = documentSnapshot.data();
+
+        emit(state.copyWith(
+            rideStatus: RideStatus.acceptedARide,
+            selectedRequestIndex: event.selectedRequestIndex));
+
+        final double? riderLng = prefs.getDouble('longitude');
+        final double? riderLat = prefs.getDouble('latitude');
+
+        final riderCoordinates =
+            PlaceCoordinate(lat: riderLat!, lng: riderLng!);
+        final userPickupCoordinates = PlaceCoordinate(
+          lat: state.dispatchRequests![event.selectedRequestIndex].pickupData
+              .position.geopoint.latitude,
+          lng: state.dispatchRequests![event.selectedRequestIndex].pickupData
+              .position.geopoint.longitude,
+        );
+
+// Create the Ployfills for the routes between the rider and the pickup locations
+        add(GetPolylines(
+            pickupCoordinate: riderCoordinates,
+            desinationCoordinate: userPickupCoordinates));
 
         // final userData = await firebaseMessaging
         //     .subscribeToTopic('your_topic_name')
@@ -144,13 +206,156 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                 'typeOfVehicle': '${riderData['typeOfVehicle']}',
                 'estimatedDeliveryTime': '2min',
                 'phoneNumber': '${user?.phoneNumber}',
-                'riderId': '${user?.uid}'
+                'riderId': '${user?.uid}',
                 'code': '${riderData['fcmToken']}'
               }'''
             },
             code: event.code,
             message:
                 '${user?.displayName!.split(' ').first.trim()} will be picking up your parcel soon.');
+
+        // Verify that the ride was assigned to this rider
+
+        final Completer<bool> rideAssigned = Completer();
+
+        Timer.periodic(const Duration(seconds: 2), (timer) async {
+          final requestID =
+              state.dispatchRequests?[event.selectedRequestIndex].requestId;
+          final documentReference = db
+              .collection('deliveryRequests')
+              .where('requestId', isEqualTo: '$requestID');
+
+          final docResponse = await documentReference.get();
+          print('Doc length: ${docResponse.docs.length}');
+          docResponse.docs.map((i) {
+            final data = i.data();
+            if (data['riderId'] != null && data['riderId'] == user!.uid) {
+              print('Ride assigned to me 🎉');
+              print(timer.tick);
+              rideAssigned.complete(true);
+
+              timer.cancel();
+            } else if (timer.tick ==
+                    15 // Automatically cancel request after 30 sec
+                ) {
+              rideAssigned.complete(false);
+              timer.cancel();
+            }
+            // count++;
+          }).toList();
+
+          if (docResponse.docs.length < 1) {
+            rideAssigned.complete(false);
+            timer.cancel();
+          }
+        });
+
+        final rideAssignedResult = await rideAssigned.future;
+        // The ride was not assigned to this rider in 30s
+        if (rideAssignedResult == false) {
+          emit(state.copyWith(
+            rideStatus: RideStatus.online,
+          ));
+          add(CancelRequest());
+        }
+        if (rideAssignedResult == true) {
+          emit(state.copyWith(rideStatus: RideStatus.userConfirmedRide));
+        }
+      },
+    );
+
+    on<SetSourceAndDestinationStatus>(
+      (event, emit) {
+        emit(state.copyWith(sourceAndDestinationStatus: event.status));
+      },
+    );
+
+    on<SetMapCameraStatus>(
+      (event, emit) {
+        emit(state.copyWith(mapCameraStatus: event.status));
+      },
+    );
+
+    on<SetDrawerHeight>((event, emit) {
+      emit(state.copyWith(
+          minDrawerHeight: event.minDrawerHeight,
+          maxDrawerHeight: event.maxDrawerHeight));
+    });
+
+    on<SetPanelControlStatus>(
+      (event, emit) => emit(state.copyWith(panelControlStatus: event.status)),
+    );
+
+    on<GetPolylines>(
+      (event, emit) async {
+        List<LatLng> latLngList = [];
+
+        PolylinePoints points = PolylinePoints();
+
+        PolylineResult polylineResult = await points.getRouteBetweenCoordinates(
+          'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
+          PointLatLng(event.pickupCoordinate.lat, event.pickupCoordinate.lng),
+          PointLatLng(
+              event.desinationCoordinate.lat, event.desinationCoordinate.lng),
+          travelMode: TravelMode.driving,
+        );
+
+        if (polylineResult.points.isNotEmpty) {
+          double tripDistance;
+          tripDistance =
+              double.parse(polylineResult.distance!.split(' ').first.trim());
+          // print(polylineResult.distance);
+          // print(polylineResult.distanceText);
+          // print(polylineResult.distanceValue);
+          polylineResult.points.forEach((ele) {
+            latLngList.add(LatLng(ele.latitude, ele.longitude));
+          });
+
+          List<Polyline> polyLines = [];
+          polyLines.add(Polyline(
+              polylineId: const PolylineId('PolylineId'),
+              points: latLngList,
+              width: 3,
+              color: AppColors.primary));
+
+          final Marker sourceMarker = Marker(
+            markerId: const MarkerId('source_marker'),
+            position: LatLng(event.pickupCoordinate.lat,
+                event.pickupCoordinate.lng), // Source address location
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueAzure,
+            ),
+          );
+
+          final Marker destinationMarker = Marker(
+            markerId: const MarkerId('destination_marker'),
+            position: LatLng(event.desinationCoordinate.lat,
+                event.desinationCoordinate.lng), // Destination address location
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueRed,
+            ),
+          );
+
+          Map<MarkerId, Marker> markers = {
+            const MarkerId('source_marker'): sourceMarker,
+            const MarkerId('destination_marker'): destinationMarker
+          };
+
+          emit(state.copyWith(
+            polylines: polyLines, markers: markers, // distance: tripDistance
+          ));
+
+          add(SetSourceAndDestinationStatus(
+              status: SourceAndDestinationStatus.selected));
+        }
+      },
+    );
+
+    on<CancelRequest>(
+      (event, emit) {
+        List<Polyline> polylines = [];
+        Map<MarkerId, Marker> markers = {};
+        emit(state.copyWith(polylines: polylines, markers: markers));
       },
     );
 
