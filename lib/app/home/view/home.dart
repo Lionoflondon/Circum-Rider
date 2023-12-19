@@ -34,6 +34,7 @@ class _HomeViewState extends State<HomeView> {
   void initState() {
     super.initState();
     context.read<HomeBloc>().add(CheckForPushToken());
+    context.read<HomeBloc>().add(CheckForActiveRequest());
   }
 
   @override

@@ -26,6 +26,7 @@ class HomeState {
   RideStatus rideStatus;
   final Position? locationData;
   List<DispatchRequest>? dispatchRequests;
+  DispatchRequest? activeRequest;
   int? selectedRequestIndex;
   Map<MarkerId, Marker> markers;
   List<Polyline> polylines;
@@ -49,7 +50,8 @@ class HomeState {
       this.panelControlStatus = PanelControlStatus.initialized,
       this.minDrawerHeight = 180,
       this.maxDrawerHeight = 180,
-      this.selectedRequestIndex});
+      this.selectedRequestIndex,
+      this.activeRequest});
 
   HomeState copyWith(
       {List? ongoingRequests,
@@ -64,7 +66,8 @@ class HomeState {
       PanelControlStatus? panelControlStatus,
       double? minDrawerHeight,
       double? maxDrawerHeight,
-      int? selectedRequestIndex}) {
+      int? selectedRequestIndex,
+      DispatchRequest? activeRequest}) {
     return HomeState(
         ongoingRequests: ongoingRequests ?? this.ongoingRequests,
         rideStatus: rideStatus ?? this.rideStatus,
@@ -79,7 +82,7 @@ class HomeState {
         minDrawerHeight: minDrawerHeight ?? this.minDrawerHeight,
         maxDrawerHeight: maxDrawerHeight ?? this.maxDrawerHeight,
         panelControlStatus: panelControlStatus ?? this.panelControlStatus,
-        selectedRequestIndex:
-            selectedRequestIndex ?? this.selectedRequestIndex);
+        selectedRequestIndex: selectedRequestIndex ?? this.selectedRequestIndex,
+        activeRequest: activeRequest ?? this.activeRequest);
   }
 }

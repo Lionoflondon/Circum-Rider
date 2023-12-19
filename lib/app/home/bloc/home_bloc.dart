@@ -75,21 +75,19 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
     on<SetRideStatus>(
       (event, emit) {
-        if (event.status == RideStatus.online) {
-          add(GetAvailableRequests());
-          add(SetDrawerHeight(
-              minDrawerHeight: state.minDrawerHeight,
-              maxDrawerHeight: 0.75.sh));
-
-          add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
-        }
-
         if (event.status == RideStatus.offline) {
           // print('isOffline');
           add(SetDrawerHeight(
               minDrawerHeight: state.minDrawerHeight,
               maxDrawerHeight: state.minDrawerHeight));
           add(SetPanelControlStatus(status: PanelControlStatus.isClosed));
+        } else {
+          add(GetAvailableRequests());
+          add(SetDrawerHeight(
+              minDrawerHeight: state.minDrawerHeight,
+              maxDrawerHeight: 0.75.sh));
+
+          add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
         }
         emit(state.copyWith(rideStatus: event.status));
       },
@@ -172,7 +170,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
         emit(state.copyWith(
             rideStatus: RideStatus.acceptedARide,
-            selectedRequestIndex: event.selectedRequestIndex));
+            selectedRequestIndex: event.selectedRequestIndex,
+            activeRequest:
+                state.dispatchRequests![event.selectedRequestIndex]));
 
         final double? riderLng = prefs.getDouble('longitude');
         final double? riderLat = prefs.getDouble('latitude');
@@ -259,7 +259,14 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           add(CancelRequest());
         }
         if (rideAssignedResult == true) {
-          emit(state.copyWith(rideStatus: RideStatus.userConfirmedRide));
+          await prefs.setString('activeRequest',
+              state.dispatchRequests![event.selectedRequestIndex].requestId);
+          emit(state.copyWith(
+              rideStatus: RideStatus.userConfirmedRide,
+              activeRequest:
+                  state.dispatchRequests?[event.selectedRequestIndex]));
+
+          add(BroadcastLocation());
         }
       },
     );
@@ -356,6 +363,111 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         List<Polyline> polylines = [];
         Map<MarkerId, Marker> markers = {};
         emit(state.copyWith(polylines: polylines, markers: markers));
+      },
+    );
+
+    on<BroadcastLocation>(
+      (event, emit) async {
+        Timer.periodic(const Duration(seconds: 5), (timer) async {
+          try {
+            final SharedPreferences prefs =
+                await SharedPreferences.getInstance();
+            final double? riderLng = prefs.getDouble('longitude');
+            final double? riderLat = prefs.getDouble('latitude');
+            final String? riderId = prefs.getString('riderId');
+            if (state.activeRequest != null &&
+                (state.rideStatus == RideStatus.userConfirmedRide ||
+                    state.rideStatus == RideStatus.outForDelivery)) {
+              print('code: ${state.activeRequest!.code}');
+              await MessagingServer().sendMessage(
+                  data: {
+                    'type': 'location-broadcast',
+                    'data': '''{
+                'riderId': '$riderId',
+                'latitude': '$riderLat',
+                'longitude': '$riderLng',
+              }'''
+                  },
+                  code: state.activeRequest!.code,
+                  message: "Broadcasting rider's location");
+            } else {
+              timer.cancel();
+            }
+          } catch (e) {
+            print(e);
+            timer.cancel();
+          }
+        });
+      },
+    );
+
+    on<CheckForActiveRequest>(
+      (event, emit) async {
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
+        final String? activeRequest = prefs.getString('activeRequest');
+        final double? riderLng = prefs.getDouble('longitude');
+        final double? riderLat = prefs.getDouble('latitude');
+        final String? riderId = prefs.getString('riderId');
+        if (activeRequest != null) {
+          final documentReference = db
+              .collection('deliveryRequests')
+              .where('requestId', isEqualTo: activeRequest);
+
+          final docResponse = await documentReference.get();
+          print('Doc length: ${docResponse.docs.length}');
+          final doc = docResponse.docs.firstOrNull;
+          if (doc != null) {
+            print('There is an active ride');
+            final data = doc.data();
+            print(data);
+            if (data['riderId'] != null && data['riderId'] == riderId) {
+              print('Ride assigned to me 🎉');
+              final activeRequest = DispatchRequest.fromJson(data);
+              print('code: ${activeRequest.code}');
+              print('currency: ${activeRequest.currency}');
+              print('requestId: ${activeRequest.requestId}');
+
+              PlaceCoordinate pickupCoordinates;
+              PlaceCoordinate desinationCoordinate;
+
+              RideStatus? status;
+              if (data['status'] == 'accepted') {
+                status = RideStatus.userConfirmedRide;
+                pickupCoordinates =
+                    PlaceCoordinate(lat: riderLat!, lng: riderLng!);
+                desinationCoordinate = PlaceCoordinate(
+                    lat: activeRequest.pickupData.position.geopoint.latitude,
+                    lng: activeRequest.pickupData.position.geopoint.longitude);
+                add(GetPolylines(
+                    desinationCoordinate: desinationCoordinate,
+                    pickupCoordinate: pickupCoordinates));
+              }
+
+              if (data['status'] == 'outForDelivery') {
+                status = RideStatus.outForDelivery;
+                pickupCoordinates = PlaceCoordinate(
+                    lat: activeRequest.pickupData.position.geopoint.latitude,
+                    lng: activeRequest.pickupData.position.geopoint.longitude);
+                desinationCoordinate = PlaceCoordinate(
+                    lat: activeRequest.dropoffData.position.geopoint.latitude,
+                    lng: activeRequest.dropoffData.position.geopoint.longitude);
+                add(GetPolylines(
+                    desinationCoordinate: desinationCoordinate,
+                    pickupCoordinate: pickupCoordinates));
+              }
+
+              print('RideStatus: $status');
+              add(SetRideStatus(status: status ?? RideStatus.offline));
+
+              emit(state.copyWith(
+                  activeRequest: activeRequest, rideStatus: status));
+
+              add(BroadcastLocation());
+            }
+          }
+        } else {
+          print('There is no active ride 🏍️');
+        }
       },
     );
 

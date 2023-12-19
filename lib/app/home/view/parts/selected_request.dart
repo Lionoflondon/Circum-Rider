@@ -96,19 +96,19 @@ class _SelectedRequestState extends State<SelectedRequest> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       AppText.text(
-                                          '${state.dispatchRequests![state.selectedRequestIndex!].pickupData.address}',
+                                          '${state.activeRequest!.pickupData.address}',
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600),
                                       AppText.text(
-                                          '${state.dispatchRequests![state.selectedRequestIndex!].pickupData.subAddress}',
+                                          '${state.activeRequest!.pickupData.subAddress}',
                                           color: Color(0xFFC9D2D7)),
                                       const SizedBox(height: 20),
                                       AppText.text(
-                                          '${state.dispatchRequests![state.selectedRequestIndex!].dropoffData.address}',
+                                          '${state.activeRequest!.dropoffData.address}',
                                           fontSize: 16,
                                           fontWeight: FontWeight.w600),
                                       AppText.text(
-                                          '${state.dispatchRequests![state.selectedRequestIndex!].dropoffData.subAddress}',
+                                          '${state.activeRequest!.dropoffData.subAddress}',
                                           color: Color(0xFFC9D2D7)),
                                     ],
                                   )))
@@ -131,7 +131,7 @@ class _SelectedRequestState extends State<SelectedRequest> {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               AppText.text(
-                                  '${cSymbol(state.dispatchRequests![state.selectedRequestIndex!].currency)}${state.dispatchRequests![state.selectedRequestIndex!].price}',
+                                  '${cSymbol(state.activeRequest!.currency)}${state.activeRequest!.price}',
                                   fontSize: 24,
                                   fontWeight: FontWeight.w600),
                               AppText.text('Delivery Price',

@@ -42,11 +42,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<AuthEvent>((event, emit) async {
       if (event is SortSessionState) {
-        FirebaseAuth auth = FirebaseAuth.instance;
         User? user = auth.currentUser;
 
         if (user != null) {
           print("User is signed in: ${user.uid}");
+          final SharedPreferences prefs = await SharedPreferences.getInstance();
+
+          await prefs.setString('riderId', user.uid);
           // You can also access user information like user.displayName, user.email, etc.
           emit(state.copyWith(currentState: AppState.authenticated));
         } else {
@@ -198,9 +200,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         try {
           final User? user = auth.currentUser;
           await user?.updateDisplayName(event.username);
-          print(event.username);
+          // print(event.username);
 
           final documentReference = db.collection('riders').doc(user?.uid);
+          final SharedPreferences prefs = await SharedPreferences.getInstance();
+
+          await prefs.setString('riderId', user!.uid);
 
           // Get the document snapshot
           final documentSnapshot = await documentReference.get();
@@ -319,7 +324,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               headingAccuracy: 0,
               speed: 0,
               speedAccuracy: 0);
-
+          await prefs.setString('riderId', user!.uid);
           await prefs.setDouble('longitude', myPosition.longitude);
           await prefs.setDouble('latitude', myPosition.latitude);
           await prefs.setString(

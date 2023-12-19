@@ -63,3 +63,7 @@ class GetPolylines extends HomeEvent {
   GetPolylines(
       {required this.pickupCoordinate, required this.desinationCoordinate});
 }
+
+class BroadcastLocation extends HomeEvent {}
+
+class CheckForActiveRequest extends HomeEvent {}
