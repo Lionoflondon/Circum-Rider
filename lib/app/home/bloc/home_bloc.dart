@@ -368,36 +368,51 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
     on<BroadcastLocation>(
       (event, emit) async {
-        Timer.periodic(const Duration(seconds: 5), (timer) async {
-          try {
-            final SharedPreferences prefs =
-                await SharedPreferences.getInstance();
-            final double? riderLng = prefs.getDouble('longitude');
-            final double? riderLat = prefs.getDouble('latitude');
-            final String? riderId = prefs.getString('riderId');
-            if (state.activeRequest != null &&
-                (state.rideStatus == RideStatus.userConfirmedRide ||
-                    state.rideStatus == RideStatus.outForDelivery)) {
-              print('code: ${state.activeRequest!.code}');
-              await MessagingServer().sendMessage(
-                  data: {
-                    'type': 'location-broadcast',
-                    'data': '''{
+        try {
+          final SharedPreferences prefs = await SharedPreferences.getInstance();
+          final double? riderLng = prefs.getDouble('longitude');
+          final double? riderLat = prefs.getDouble('latitude');
+          final String? riderId = prefs.getString('riderId');
+          emit(state.copyWith(broadcastStatus: BroadcastStatus.broadcasting));
+          if (state.activeRequest != null &&
+              (state.rideStatus == RideStatus.userConfirmedRide ||
+                  state.rideStatus == RideStatus.outForDelivery)) {
+            print("Gotten ITIIIIIIIIIIIIIIIIIIIIIIIIIII");
+            // Update the marker position
+            final Marker riderLocationMarker = Marker(
+              markerId: MarkerId('rider_location_marker'),
+              position:
+                  LatLng(9.086639, 7.477009), // Destination address location
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueGreen,
+              ),
+            );
+
+            Map<MarkerId, Marker> markers = Map.of(state.markers);
+
+            markers[MarkerId('rider_location_marker')] = riderLocationMarker;
+
+            emit(state.copyWith(markers: markers));
+
+            print('code: ${state.activeRequest!.code}');
+            await MessagingServer().sendMessage(
+                data: {
+                  'type': 'location-broadcast',
+                  'data': '''{
                 'riderId': '$riderId',
                 'latitude': '$riderLat',
-                'longitude': '$riderLng',
+                'longitude': '$riderLng'
               }'''
-                  },
-                  code: state.activeRequest!.code,
-                  message: "Broadcasting rider's location");
-            } else {
-              timer.cancel();
-            }
-          } catch (e) {
-            print(e);
-            timer.cancel();
+                },
+                code: state.activeRequest!.code,
+                message: "Broadcasting rider's location");
+            await Future.delayed(const Duration(seconds: 5));
+            emit(state.copyWith(broadcastStatus: BroadcastStatus.initialized));
           }
-        });
+        } catch (e) {
+          print(e);
+          emit(state.copyWith(broadcastStatus: BroadcastStatus.initialized));
+        }
       },
     );
 

@@ -82,6 +82,13 @@ class _MapsViewState extends State<MapsView> {
         print('here');
       }
 
+      if (state.activeRequest != null &&
+          (state.rideStatus == RideStatus.userConfirmedRide ||
+              state.rideStatus == RideStatus.outForDelivery) &&
+          state.broadcastStatus == BroadcastStatus.initialized) {
+        context.read<HomeBloc>().add(BroadcastLocation());
+      }
+
       return GoogleMap(
         // key: mapKey,
         mapType: MapType.normal,

@@ -21,6 +21,8 @@ enum RideStatus {
 
 enum PanelControlStatus { initialized, isOpened, isClosed }
 
+enum BroadcastStatus { initialized, broadcasting }
+
 class HomeState {
   final List ongoingRequests;
   RideStatus rideStatus;
@@ -34,6 +36,7 @@ class HomeState {
   SourceAndDestinationStatus sourceAndDestinationStatus;
   MapCameraStatus mapCameraStatus;
   PanelControlStatus panelControlStatus;
+  BroadcastStatus broadcastStatus;
   double minDrawerHeight;
   double maxDrawerHeight;
 
@@ -51,7 +54,8 @@ class HomeState {
       this.minDrawerHeight = 180,
       this.maxDrawerHeight = 180,
       this.selectedRequestIndex,
-      this.activeRequest});
+      this.activeRequest,
+      this.broadcastStatus = BroadcastStatus.initialized});
 
   HomeState copyWith(
       {List? ongoingRequests,
@@ -64,25 +68,28 @@ class HomeState {
       SourceAndDestinationStatus? sourceAndDestinationStatus,
       MapCameraStatus? mapCameraStatus,
       PanelControlStatus? panelControlStatus,
+      BroadcastStatus? broadcastStatus,
       double? minDrawerHeight,
       double? maxDrawerHeight,
       int? selectedRequestIndex,
       DispatchRequest? activeRequest}) {
     return HomeState(
-        ongoingRequests: ongoingRequests ?? this.ongoingRequests,
-        rideStatus: rideStatus ?? this.rideStatus,
-        locationData: locationData ?? this.locationData,
-        dispatchRequests: dispatchRequests ?? this.dispatchRequests,
-        markers: markers ?? this.markers,
-        polylines: polylines ?? this.polylines,
-        polylineCoordinates: polylineCoordinates ?? this.polylineCoordinates,
-        sourceAndDestinationStatus:
-            sourceAndDestinationStatus ?? this.sourceAndDestinationStatus,
-        mapCameraStatus: mapCameraStatus ?? this.mapCameraStatus,
-        minDrawerHeight: minDrawerHeight ?? this.minDrawerHeight,
-        maxDrawerHeight: maxDrawerHeight ?? this.maxDrawerHeight,
-        panelControlStatus: panelControlStatus ?? this.panelControlStatus,
-        selectedRequestIndex: selectedRequestIndex ?? this.selectedRequestIndex,
-        activeRequest: activeRequest ?? this.activeRequest);
+      ongoingRequests: ongoingRequests ?? this.ongoingRequests,
+      rideStatus: rideStatus ?? this.rideStatus,
+      locationData: locationData ?? this.locationData,
+      dispatchRequests: dispatchRequests ?? this.dispatchRequests,
+      markers: markers ?? this.markers,
+      polylines: polylines ?? this.polylines,
+      polylineCoordinates: polylineCoordinates ?? this.polylineCoordinates,
+      sourceAndDestinationStatus:
+          sourceAndDestinationStatus ?? this.sourceAndDestinationStatus,
+      broadcastStatus: broadcastStatus ?? this.broadcastStatus,
+      mapCameraStatus: mapCameraStatus ?? this.mapCameraStatus,
+      minDrawerHeight: minDrawerHeight ?? this.minDrawerHeight,
+      maxDrawerHeight: maxDrawerHeight ?? this.maxDrawerHeight,
+      panelControlStatus: panelControlStatus ?? this.panelControlStatus,
+      selectedRequestIndex: selectedRequestIndex ?? this.selectedRequestIndex,
+      activeRequest: activeRequest ?? this.activeRequest,
+    );
   }
 }
