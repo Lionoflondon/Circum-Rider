@@ -10,12 +10,14 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geoflutterfire2/geoflutterfire2.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../helper/bitmap_descriptor_helper.dart';
 import '../../../helper/messaging_server.dart';
 import '../../../utils/theme/theme.dart';
 import '../models/dispatch_request.m..dart';
@@ -221,17 +223,24 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         Timer.periodic(const Duration(seconds: 2), (timer) async {
           final requestID =
               state.dispatchRequests?[event.selectedRequestIndex].requestId;
-          final documentReference = db
+          final docReference = db
               .collection('deliveryRequests')
               .where('requestId', isEqualTo: '$requestID');
 
-          final docResponse = await documentReference.get();
+          final docResponse = await docReference.get();
           print('Doc length: ${docResponse.docs.length}');
-          docResponse.docs.map((i) {
-            final data = i.data();
+          final doc = docResponse.docs.firstOrNull;
+
+          if (doc != null) {
+            final data = doc.data();
             if (data['riderId'] != null && data['riderId'] == user!.uid) {
-              print('Ride assigned to me 🎉');
-              print(timer.tick);
+              // print('Ride assigned to me 🎉');
+              // print(timer.tick);
+
+              print('Document ID: ${doc.id}');
+
+              // Set user as the active delivery;
+              await documentReference.update({'activeDelivery': doc.id});
               rideAssigned.complete(true);
 
               timer.cancel();
@@ -241,10 +250,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
               rideAssigned.complete(false);
               timer.cancel();
             }
-            // count++;
-          }).toList();
-
-          if (docResponse.docs.length < 1) {
+          } else {
             rideAssigned.complete(false);
             timer.cancel();
           }
@@ -377,16 +383,19 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           if (state.activeRequest != null &&
               (state.rideStatus == RideStatus.userConfirmedRide ||
                   state.rideStatus == RideStatus.outForDelivery)) {
-            print("Gotten ITIIIIIIIIIIIIIIIIIIIIIIIIIII");
-            // Update the marker position
+            final icon =
+                await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
+                    "assets/svg/motorcycle.svg");
             final Marker riderLocationMarker = Marker(
-              markerId: MarkerId('rider_location_marker'),
-              position:
-                  LatLng(9.086639, 7.477009), // Destination address location
-              icon: BitmapDescriptor.defaultMarkerWithHue(
-                BitmapDescriptor.hueGreen,
-              ),
-            );
+                markerId: MarkerId('rider_location_marker'),
+                position: LatLng(
+                    riderLat!, riderLng!), // Destination address location
+                icon: icon
+
+                //  BitmapDescriptor.defaultMarkerWithHue(
+                //   BitmapDescriptor.hueGreen,
+                // ),
+                );
 
             Map<MarkerId, Marker> markers = Map.of(state.markers);
 
