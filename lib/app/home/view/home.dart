@@ -6,6 +6,7 @@ import 'package:circum_rider/app/authentication/bloc/auth_bloc.dart';
 import 'package:circum_rider/app/home/bloc/home_bloc.dart';
 import 'package:currency_symbols/currency_symbols.dart';
 import 'package:dotted_line/dotted_line.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_carousel_widget/flutter_carousel_widget.dart';

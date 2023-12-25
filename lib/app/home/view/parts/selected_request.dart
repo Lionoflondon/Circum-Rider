@@ -146,15 +146,74 @@ class _SelectedRequestState extends State<SelectedRequest> {
                   )),
               const SizedBox(height: 12),
               Opacity(
-                opacity: 0.4,
+                opacity:
+                    state.actionButtonStatus == ActionButtonStatus.initialized
+                        ? 0.4
+                        : 1,
                 child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 24),
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: AppButton.button(
-                        widget: Center(
-                          child: AppText.text('Trip in progress',
-                              fontSize: 16, fontWeight: FontWeight.bold),
+                        widget: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (state.actionButtonStatus ==
+                                ActionButtonStatus.initialized)
+                              AppText.text('Trip in progress',
+                                  fontSize: 16, fontWeight: FontWeight.bold),
+                            if (state.actionButtonStatus ==
+                                ActionButtonStatus.goingToPickupLocation)
+                              AppText.text('Arrived pickup location',
+                                  fontSize: 16, fontWeight: FontWeight.bold),
+                            if (state.actionButtonStatus ==
+                                ActionButtonStatus.arrivedPickupLocation)
+                              AppText.text('Start delivery',
+                                  fontSize: 16, fontWeight: FontWeight.bold),
+                            if (state.actionButtonStatus ==
+                                ActionButtonStatus.outForDelivery)
+                              AppText.text('Delivery completed',
+                                  fontSize: 16, fontWeight: FontWeight.bold),
+                          ],
                         ),
-                        onPressed: () {})),
+                        onPressed: () async {
+                          final confirmed = await showCupertinoDialog(
+                              barrierDismissible: true,
+                              context: context,
+                              builder: (_) {
+                                return AlertDialog(
+                                  backgroundColor: Colors.white,
+                                  title: AppText.text('Confirmation',
+                                      fontSize: 18,
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.w600),
+                                  content: AppText.text(
+                                    'Please confirm your selection to proceed',
+                                    fontSize: 16,
+                                    color: Colors.black,
+                                  ),
+                                  actions: [
+                                    AppButton.button(
+                                        widget: AppText.text('confirm',
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600),
+                                        onPressed: () {
+                                          Navigator.pop(_, true);
+                                        }),
+                                    AppButton.button(
+                                        backgroundColor: AppColors.danger,
+                                        widget: AppText.text('cancel',
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600),
+                                        onPressed: () {
+                                          Navigator.pop(_, false);
+                                        }),
+                                  ],
+                                );
+                              });
+
+                          if (confirmed == true) {
+                            print('confirmed');
+                          }
+                        })),
               )
             ],
           ));

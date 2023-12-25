@@ -23,6 +23,14 @@ enum PanelControlStatus { initialized, isOpened, isClosed }
 
 enum BroadcastStatus { initialized, broadcasting }
 
+enum ActionButtonStatus {
+  initialized,
+  goingToPickupLocation,
+  arrivedPickupLocation,
+  outForDelivery,
+  delivered
+}
+
 class HomeState {
   final List ongoingRequests;
   RideStatus rideStatus;
@@ -37,6 +45,7 @@ class HomeState {
   MapCameraStatus mapCameraStatus;
   PanelControlStatus panelControlStatus;
   BroadcastStatus broadcastStatus;
+  ActionButtonStatus actionButtonStatus;
   double minDrawerHeight;
   double maxDrawerHeight;
 
@@ -51,6 +60,7 @@ class HomeState {
       this.sourceAndDestinationStatus = SourceAndDestinationStatus.unselected,
       this.mapCameraStatus = MapCameraStatus.initialized,
       this.panelControlStatus = PanelControlStatus.initialized,
+      this.actionButtonStatus = ActionButtonStatus.initialized,
       this.minDrawerHeight = 180,
       this.maxDrawerHeight = 180,
       this.selectedRequestIndex,
@@ -68,6 +78,7 @@ class HomeState {
       SourceAndDestinationStatus? sourceAndDestinationStatus,
       MapCameraStatus? mapCameraStatus,
       PanelControlStatus? panelControlStatus,
+      ActionButtonStatus? actionButtonStatus,
       BroadcastStatus? broadcastStatus,
       double? minDrawerHeight,
       double? maxDrawerHeight,
@@ -88,6 +99,7 @@ class HomeState {
       minDrawerHeight: minDrawerHeight ?? this.minDrawerHeight,
       maxDrawerHeight: maxDrawerHeight ?? this.maxDrawerHeight,
       panelControlStatus: panelControlStatus ?? this.panelControlStatus,
+      actionButtonStatus: actionButtonStatus ?? this.actionButtonStatus,
       selectedRequestIndex: selectedRequestIndex ?? this.selectedRequestIndex,
       activeRequest: activeRequest ?? this.activeRequest,
     );

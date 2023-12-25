@@ -206,7 +206,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                 'rating': '${riderData!['rating']}',
                 'plateNumber': '${riderData['plateNumber']}',
                 'typeOfVehicle': '${riderData['typeOfVehicle']}',
-                'estimatedDeliveryTime': '2min',
+                'estimatedDeliveryTime': '12:41 PM',
                 'phoneNumber': '${user?.phoneNumber}',
                 'riderId': '${user?.uid}',
                 'code': '${riderData['fcmToken']}'
@@ -215,6 +215,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             code: event.code,
             message:
                 '${user?.displayName!.split(' ').first.trim()} will be picking up your parcel soon.');
+
+        await prefs.setString('courierName', '${user?.displayName}');
+        await prefs.setString('rating', '${riderData['rating']}');
+        await prefs.setString('plateNumber', '${riderData['plateNumber']}');
+        await prefs.setString('typeOfVehicle', '${riderData['typeOfVehicle']}');
+        await prefs.setString('estimatedDeliveryTime', '12:41 PM');
+        await prefs.setString('phoneNumber', '${user?.phoneNumber}');
+        await prefs.setString('riderId', '${user?.uid}');
+        await prefs.setString('code', '${riderData['fcmToken']}');
 
         // Verify that the ride was assigned to this rider
 
@@ -270,7 +279,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           emit(state.copyWith(
               rideStatus: RideStatus.userConfirmedRide,
               activeRequest:
-                  state.dispatchRequests?[event.selectedRequestIndex]));
+                  state.dispatchRequests?[event.selectedRequestIndex],
+              actionButtonStatus: ActionButtonStatus.goingToPickupLocation));
 
           add(BroadcastLocation());
         }
@@ -390,12 +400,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                 markerId: MarkerId('rider_location_marker'),
                 position: LatLng(
                     riderLat!, riderLng!), // Destination address location
-                icon: icon
-
-                //  BitmapDescriptor.defaultMarkerWithHue(
-                //   BitmapDescriptor.hueGreen,
-                // ),
-                );
+                icon: icon);
 
             Map<MarkerId, Marker> markers = Map.of(state.markers);
 
@@ -404,13 +409,29 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             emit(state.copyWith(markers: markers));
 
             print('code: ${state.activeRequest!.code}');
+            // final SharedPreferences prefs = await SharedPreferences.getInstance();
+            final courierName = prefs.getString('courierName');
+            final rating = prefs.getString('rating');
+            final plateNumber = prefs.getString('plateNumber');
+            final typeOfVehicle = prefs.getString('typeOfVehicle');
+            final estimatedDeliveryTime =
+                prefs.getString('estimatedDeliveryTime');
+            final phoneNumber = prefs.getString('phoneNumber');
+            final code = prefs.getString('code');
             await MessagingServer().sendMessage(
                 data: {
                   'type': 'location-broadcast',
                   'data': '''{
                 'riderId': '$riderId',
                 'latitude': '$riderLat',
-                'longitude': '$riderLng'
+                'longitude': '$riderLng',
+                'courierName': '$courierName',
+                'rating': '$rating',
+                'plateNumber': '$plateNumber',
+                'typeOfVehicle': '$typeOfVehicle',
+                'estimatedDeliveryTime': '$estimatedDeliveryTime',
+                'phoneNumber': '$phoneNumber',
+                'code': '$code'
               }'''
                 },
                 code: state.activeRequest!.code,
@@ -465,6 +486,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                 add(GetPolylines(
                     desinationCoordinate: desinationCoordinate,
                     pickupCoordinate: pickupCoordinates));
+                emit(state.copyWith(
+                    actionButtonStatus:
+                        ActionButtonStatus.goingToPickupLocation));
               }
 
               if (data['status'] == 'outForDelivery') {
@@ -478,6 +502,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                 add(GetPolylines(
                     desinationCoordinate: desinationCoordinate,
                     pickupCoordinate: pickupCoordinates));
+                emit(state.copyWith(
+                    actionButtonStatus: ActionButtonStatus.outForDelivery));
               }
 
               print('RideStatus: $status');
