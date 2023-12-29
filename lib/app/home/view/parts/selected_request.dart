@@ -55,10 +55,13 @@ class _SelectedRequestState extends State<SelectedRequest> {
               Padding(
                   padding: const EdgeInsets.only(left: 24, right: 24),
                   child: AppButton.button(
+                      backgroundColor: Color(0xFF415058),
                       widget: Row(
                         children: [
-                          AppText.text('Messsage User', color: Colors.white),
-                          Icon(
+                          AppText.text('Messsage User',
+                              fontWeight: FontWeight.w600, color: Colors.white),
+                          const Spacer(),
+                          const Icon(
                             Icons.arrow_forward_rounded,
                             color: Colors.white,
                           )
