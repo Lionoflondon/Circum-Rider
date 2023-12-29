@@ -67,3 +67,9 @@ class GetPolylines extends HomeEvent {
 class BroadcastLocation extends HomeEvent {}
 
 class CheckForActiveRequest extends HomeEvent {}
+
+class ArrivedAtPickUpLocation extends HomeEvent {}
+
+class StartDelivery extends HomeEvent {}
+
+class RideCompleted extends HomeEvent {}

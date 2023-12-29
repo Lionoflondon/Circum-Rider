@@ -60,6 +60,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
               print('FCMToken: $fcmToken');
               await db.collection("riders").doc(user?.uid).update({
                 'fcmToken': fcmToken,
+                'updatedAt': DateTime.now()
               }).then(
                   (value) => print("DocumentSnapshot successfully updated!"),
                   onError: (e) => print("Error updating document $e"));
@@ -249,7 +250,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
               print('Document ID: ${doc.id}');
 
               // Set user as the active delivery;
-              await documentReference.update({'activeDelivery': doc.id});
+              await documentReference.update(
+                  {'activeDelivery': doc.id, 'updatedAt': DateTime.now()});
               rideAssigned.complete(true);
 
               timer.cancel();
@@ -370,6 +372,96 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
           add(SetSourceAndDestinationStatus(
               status: SourceAndDestinationStatus.selected));
+        }
+      },
+    );
+
+    on<ArrivedAtPickUpLocation>(
+      (event, emit) async {
+        emit(state.copyWith(
+            actionButtonStatus: ActionButtonStatus.arrivedPickupLocation));
+      },
+    );
+
+    on<StartDelivery>(
+      (event, emit) async {
+        try {
+          final SharedPreferences prefs = await SharedPreferences.getInstance();
+          final String? activeRequest = prefs.getString('activeRequest');
+          final documentReference = db
+              .collection('deliveryRequests')
+              .where('requestId', isEqualTo: activeRequest);
+
+          final docResponse = await documentReference.get();
+          // print('Doc length: ${docResponse.docs.length}');
+          final doc = docResponse.docs.firstOrNull;
+          if (doc != null) {
+            // await doc.data().update('status', (value) => 'outForDelivery');
+
+            await db.collection('deliveryRequests').doc(doc.id).update(
+                {'status': 'outForDelivery', 'updatedAt': DateTime.now()});
+
+            final newRideData = doc.data();
+            newRideData['status'] = 'outForDelivery';
+
+            final activeRide = DispatchRequest.fromJson(newRideData);
+            PlaceCoordinate pickupCoordinates = PlaceCoordinate(
+                lat: activeRide.pickupData.position.geopoint.latitude,
+                lng: activeRide.pickupData.position.geopoint.longitude);
+            PlaceCoordinate desinationCoordinate = PlaceCoordinate(
+                lat: activeRide.dropoffData.position.geopoint.latitude,
+                lng: activeRide.dropoffData.position.geopoint.longitude);
+            add(GetPolylines(
+                desinationCoordinate: desinationCoordinate,
+                pickupCoordinate: pickupCoordinates));
+            emit(state.copyWith(
+                activeRequest: activeRide,
+                actionButtonStatus: ActionButtonStatus.outForDelivery,
+                rideStatus: RideStatus.outForDelivery));
+          }
+        } catch (e) {
+          print(e);
+        }
+      },
+    );
+
+    on<RideCompleted>(
+      (event, emit) async {
+        try {
+          final SharedPreferences prefs = await SharedPreferences.getInstance();
+          final String? activeRequest = prefs.getString('activeRequest');
+          final documentReference = db
+              .collection('deliveryRequests')
+              .where('requestId', isEqualTo: activeRequest);
+
+          final docResponse = await documentReference.get();
+          // print('Doc length: ${docResponse.docs.length}');
+          final doc = docResponse.docs.firstOrNull;
+          if (doc != null) {
+            // await doc.data().update('status', (value) => 'outForDelivery');
+
+            await db
+                .collection('deliveryRequests')
+                .doc(doc.id)
+                .update({'status': 'completed', 'updatedAt': DateTime.now()});
+
+            final newRideData = doc.data();
+            newRideData['userId'] = doc.id;
+            newRideData['status'] = 'completed';
+            newRideData['timestamp'] = DateTime.now();
+
+            await db.collection('history').doc().set(newRideData);
+
+            emit(state.copyWith(
+              polylines: [],
+              polylineCoordinates: [],
+              markers: {},
+              actionButtonStatus: ActionButtonStatus.initialized,
+              rideStatus: RideStatus.delivered,
+            ));
+          }
+        } catch (e) {
+          print(e);
         }
       },
     );

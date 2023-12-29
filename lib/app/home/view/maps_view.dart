@@ -6,6 +6,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../authentication/bloc/auth_bloc.dart';
 import '../bloc/home_bloc.dart';
+import 'ratings.dart';
 
 class MapsView extends StatefulWidget {
   const MapsView({Key? key}) : super(key: key);
@@ -84,7 +85,8 @@ class _MapsViewState extends State<MapsView> {
 
       if (state.activeRequest != null &&
           (state.rideStatus == RideStatus.userConfirmedRide ||
-              state.rideStatus == RideStatus.outForDelivery) &&
+              state.rideStatus == RideStatus.userConfirmedRide ||
+              state.rideStatus == RideStatus.arrivedAtPickupLocation) &&
           state.broadcastStatus == BroadcastStatus.initialized) {
         context.read<HomeBloc>().add(BroadcastLocation());
       }

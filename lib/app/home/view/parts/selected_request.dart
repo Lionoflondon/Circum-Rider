@@ -52,6 +52,20 @@ class _SelectedRequestState extends State<SelectedRequest> {
                     ),
                   )),
               const SizedBox(height: 14),
+              Padding(
+                  padding: const EdgeInsets.only(left: 24, right: 24),
+                  child: AppButton.button(
+                      widget: Row(
+                        children: [
+                          AppText.text('Messsage User', color: Colors.white),
+                          Icon(
+                            Icons.arrow_forward_rounded,
+                            color: Colors.white,
+                          )
+                        ],
+                      ),
+                      onPressed: () {})),
+              const SizedBox(height: 14),
               Container(
                   width: MediaQuery.of(context).size.width,
                   margin: const EdgeInsets.symmetric(
@@ -212,6 +226,25 @@ class _SelectedRequestState extends State<SelectedRequest> {
 
                           if (confirmed == true) {
                             print('confirmed');
+                            if (state.actionButtonStatus ==
+                                ActionButtonStatus.goingToPickupLocation) {
+                              // ignore: use_build_context_synchronously
+                              context
+                                  .read<HomeBloc>()
+                                  .add(ArrivedAtPickUpLocation());
+                            }
+
+                            if (state.actionButtonStatus ==
+                                ActionButtonStatus.arrivedPickupLocation) {
+                              // ignore: use_build_context_synchronously
+                              context.read<HomeBloc>().add(StartDelivery());
+                            }
+
+                            if (state.actionButtonStatus ==
+                                ActionButtonStatus.outForDelivery) {
+                              // ignore: use_build_context_synchronously
+                              context.read<HomeBloc>().add(RideCompleted());
+                            }
                           }
                         })),
               )

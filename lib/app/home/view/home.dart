@@ -8,6 +8,7 @@ import 'package:currency_symbols/currency_symbols.dart';
 import 'package:dotted_line/dotted_line.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_carousel_widget/flutter_carousel_widget.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -17,6 +18,7 @@ import 'package:sliding_up_panel/sliding_up_panel.dart';
 // import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../utils/theme/theme.dart';
+import 'ratings.dart';
 
 part 'parts/dispatch_requests.dart';
 part 'parts/selected_request.dart';
@@ -41,6 +43,19 @@ class _HomeViewState extends State<HomeView> {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<HomeBloc, HomeState>(builder: (context, state) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        //yourcode
+        if (state.rideStatus == RideStatus.delivered) {
+          print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>...');
+          print('Delivered');
+          print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>...');
+          context
+              .read<HomeBloc>()
+              .add(SetRideStatus(status: RideStatus.online));
+          Navigator.push(
+              context, MaterialPageRoute(builder: (_) => RatingsView()));
+        }
+      });
       if (state.panelControlStatus == PanelControlStatus.isOpened) {
         panelController.animatePanelToPosition(1);
         context
