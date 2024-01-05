@@ -73,3 +73,21 @@ class ArrivedAtPickUpLocation extends HomeEvent {}
 class StartDelivery extends HomeEvent {}
 
 class RideCompleted extends HomeEvent {}
+
+class SetNewMessage extends HomeEvent {
+  final String value;
+  SetNewMessage({required this.value});
+}
+
+class IncomingMessage extends HomeEvent {
+  final dynamic data;
+
+  IncomingMessage({required this.data});
+}
+
+class LoadChatMessages extends HomeEvent {}
+
+class MessageUser extends HomeEvent {
+  final String message;
+  MessageUser({required this.message});
+}

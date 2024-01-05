@@ -19,6 +19,7 @@ import 'package:sliding_up_panel/sliding_up_panel.dart';
 
 import '../../../utils/theme/theme.dart';
 import 'ratings.dart';
+import 'ride_chats.dart';
 
 part 'parts/dispatch_requests.dart';
 part 'parts/selected_request.dart';

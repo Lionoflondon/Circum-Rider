@@ -23,6 +23,8 @@ enum PanelControlStatus { initialized, isOpened, isClosed }
 
 enum BroadcastStatus { initialized, broadcasting }
 
+enum ChatStatus { initial, newMessage }
+
 enum ActionButtonStatus {
   initialized,
   goingToPickupLocation,
@@ -48,6 +50,9 @@ class HomeState {
   ActionButtonStatus actionButtonStatus;
   double minDrawerHeight;
   double maxDrawerHeight;
+  List<Message> chatMessages;
+  ChatStatus chatStatus;
+  String? message;
 
   HomeState(
       {this.ongoingRequests = const [],
@@ -65,7 +70,10 @@ class HomeState {
       this.maxDrawerHeight = 180,
       this.selectedRequestIndex,
       this.activeRequest,
-      this.broadcastStatus = BroadcastStatus.initialized});
+      this.broadcastStatus = BroadcastStatus.initialized,
+      this.chatMessages = const [],
+      this.chatStatus = ChatStatus.initial,
+      this.message});
 
   HomeState copyWith(
       {List? ongoingRequests,
@@ -83,25 +91,30 @@ class HomeState {
       double? minDrawerHeight,
       double? maxDrawerHeight,
       int? selectedRequestIndex,
-      DispatchRequest? activeRequest}) {
+      DispatchRequest? activeRequest,
+      List<Message>? chatMessages,
+      ChatStatus? chatStatus,
+      String? message}) {
     return HomeState(
-      ongoingRequests: ongoingRequests ?? this.ongoingRequests,
-      rideStatus: rideStatus ?? this.rideStatus,
-      locationData: locationData ?? this.locationData,
-      dispatchRequests: dispatchRequests ?? this.dispatchRequests,
-      markers: markers ?? this.markers,
-      polylines: polylines ?? this.polylines,
-      polylineCoordinates: polylineCoordinates ?? this.polylineCoordinates,
-      sourceAndDestinationStatus:
-          sourceAndDestinationStatus ?? this.sourceAndDestinationStatus,
-      broadcastStatus: broadcastStatus ?? this.broadcastStatus,
-      mapCameraStatus: mapCameraStatus ?? this.mapCameraStatus,
-      minDrawerHeight: minDrawerHeight ?? this.minDrawerHeight,
-      maxDrawerHeight: maxDrawerHeight ?? this.maxDrawerHeight,
-      panelControlStatus: panelControlStatus ?? this.panelControlStatus,
-      actionButtonStatus: actionButtonStatus ?? this.actionButtonStatus,
-      selectedRequestIndex: selectedRequestIndex ?? this.selectedRequestIndex,
-      activeRequest: activeRequest ?? this.activeRequest,
-    );
+        ongoingRequests: ongoingRequests ?? this.ongoingRequests,
+        rideStatus: rideStatus ?? this.rideStatus,
+        locationData: locationData ?? this.locationData,
+        dispatchRequests: dispatchRequests ?? this.dispatchRequests,
+        markers: markers ?? this.markers,
+        polylines: polylines ?? this.polylines,
+        polylineCoordinates: polylineCoordinates ?? this.polylineCoordinates,
+        sourceAndDestinationStatus:
+            sourceAndDestinationStatus ?? this.sourceAndDestinationStatus,
+        broadcastStatus: broadcastStatus ?? this.broadcastStatus,
+        mapCameraStatus: mapCameraStatus ?? this.mapCameraStatus,
+        minDrawerHeight: minDrawerHeight ?? this.minDrawerHeight,
+        maxDrawerHeight: maxDrawerHeight ?? this.maxDrawerHeight,
+        panelControlStatus: panelControlStatus ?? this.panelControlStatus,
+        actionButtonStatus: actionButtonStatus ?? this.actionButtonStatus,
+        selectedRequestIndex: selectedRequestIndex ?? this.selectedRequestIndex,
+        activeRequest: activeRequest ?? this.activeRequest,
+        chatMessages: chatMessages ?? this.chatMessages,
+        chatStatus: chatStatus ?? this.chatStatus,
+        message: message ?? this.message);
   }
 }

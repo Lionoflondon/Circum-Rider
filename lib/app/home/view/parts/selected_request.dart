@@ -52,11 +52,10 @@ class _SelectedRequestState extends State<SelectedRequest> {
                     ),
                   )),
               const SizedBox(height: 14),
-              // jfjj
               Padding(
                   padding: const EdgeInsets.only(left: 24, right: 24),
                   child: AppButton.button(
-                      backgroundColor: Color(0xFF415058),
+                      backgroundColor: const Color(0xFF415058),
                       widget: Row(
                         children: [
                           AppText.text('Messsage User',
@@ -68,7 +67,12 @@ class _SelectedRequestState extends State<SelectedRequest> {
                           )
                         ],
                       ),
-                      onPressed: () {})),
+                      onPressed: () {
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => RideChatPageView()));
+                      })),
               const SizedBox(height: 14),
               Container(
                   width: MediaQuery.of(context).size.width,

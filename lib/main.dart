@@ -16,6 +16,7 @@ import 'app/bottom_nav/bloc/navbar_bloc.dart';
 import 'app/home/bloc/home_bloc.dart';
 import 'app/history/bloc/history_bloc.dart';
 import 'app/support/bloc/support_bloc.dart';
+import 'helper/chats_help.dart';
 import 'utils/nav/nav_key.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:bot_toast/bot_toast.dart';
@@ -26,23 +27,22 @@ foregoundMessage() {
   // chatBloc.add(event);
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
     print('Got a message whilst in the foreground!');
-    print('Message data: ${message.data}');
-    // final msg = jsonDecode(message.data['data']);
-    // homeBloc.add(IncomingMessage(data: msg));
+    // print('Message data: ${message.data}');
+    if (message.data['type'] == 'message') {
+      // Remove leading and trailing whitespace
+      // String jsonString = message.data['data'].trim();
 
-    // final directory = await getApplicationDocumentsDirectory();
-    // final chats = File('${directory.path}/${msg['conversationId']}.json');
-    // List jsonData = [];
-    // if (await chats.exists()) {
-    //   final contents = await chats.readAsString();
-    //   final parsingData = await jsonDecode(contents) as List;
-    //   jsonData = [...parsingData];
-    // }
-    // jsonData.add(msg);
-    // // final jsonDataa = jsonData.map((message) => message.toJson()).toList();
-    // final jsonString = jsonEncode(jsonData);
+      // // Replace single quotes with double quotes to make it valid JSON
+      // jsonString = jsonString.replaceAll("'", '"');
+      // print(jsonString);
 
-    // await chats.writeAsString(jsonString);
+      // Parse the modified string into a map
+      Map<String, dynamic> msg = jsonDecode(message.data['data']);
+
+      homeBloc.add(IncomingMessage(data: msg));
+
+      await ChatsHelper().storeChat(msg);
+    }
   });
 }
 
@@ -51,26 +51,13 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
   print('Got a message whilst in the background!');
   print('Message data: ${message.data}');
+  if (message.data['type'] == 'message') {
+    final msg = jsonDecode(message.data['data']);
+    homeBloc.add(IncomingMessage(data: msg));
 
-  // final messageJson = jsonDecode(message.data['data']);
+    await ChatsHelper().storeChat(msg);
+  }
 
-  // final directory = await getApplicationDocumentsDirectory();
-  // final chats = File('${directory.path}/${messageJson['conversationId']}.json');
-  // List jsonData = [];
-  // if (await chats.exists()) {
-  //   final contents = await chats.readAsString();
-  //   final parsingData = await jsonDecode(contents) as List;
-  //   jsonData = [...parsingData];
-  // }
-  // jsonData.add(messageJson);
-  // // final jsonDataa = jsonData.map((message) => message.toJson()).toList();
-  // final jsonString = jsonEncode(jsonData);
-
-  // await chats.writeAsString(jsonString);
-
-  // print('Handling a background message ${message.messageId}');
-  // print('New message');
-  // print(messageJson['conversationId']);
   return Future<void>.value();
 }
 

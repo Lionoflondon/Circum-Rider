@@ -4,7 +4,8 @@ class MessagingServer {
   sendMessage(
       {required Map<String, String> data,
       required String code,
-      required String message}) async {
+      required String message,
+      String? title}) async {
     try {
       /// My Service Account Json File Content
       final serviceAccountFileContent = <String, String>{
@@ -39,19 +40,22 @@ class MessagingServer {
         FirebaseSend(
           validateOnly: false,
           message: FirebaseMessage(
+            apns: const FirebaseApnsConfig(payload: {
+              'aps': {'content-available': 1}
+            }),
             token:
                 code, // only required If you want to send message to specific user.
             data: data,
             // topic: topic,
             notification: FirebaseNotification(
-              // title: 'Package by Ottoman',
+              title: title,
               body: message,
             ),
             android: FirebaseAndroidConfig(
               // ttl: '3s',
               /// Add Delay in String. If you want to add 1 minute delat then add it like "60s"
               notification: FirebaseAndroidNotification(
-                // title: 'Package by Ottoman',
+                title: title,
                 body: message,
                 // icon: 'ic_notification',
                 // color: '#009999',
