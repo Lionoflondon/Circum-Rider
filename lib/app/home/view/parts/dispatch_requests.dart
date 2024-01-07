@@ -184,7 +184,10 @@ class _DispatchRequestsState extends State<DispatchRequests> {
       }
 
       if (state.rideStatus != RideStatus.offline &&
-          state.dispatchRequests == null) {
+          (state.dispatchRequests == null || state.dispatchRequests == [])) {
+        Timer.periodic(Duration(seconds: 4), (tik) {
+          context.read<HomeBloc>().add(GetAvailableRequests());
+        });
         return Expanded(
             child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),

@@ -1,6 +1,9 @@
+import 'package:circum_rider/app/authentication/bloc/auth_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../utils/theme/theme.dart';
 import '../bloc/account_bloc.dart';
@@ -20,21 +23,28 @@ class AccountView extends StatelessWidget {
   }
 
   Widget appBar(context) {
-    return Container(
-        margin: EdgeInsets.only(
-            top: MediaQuery.of(context).padding.top + 20, left: 24),
-        width: double.maxFinite,
-        child: Row(
-          children: [
-            SvgPicture.asset(
-              'assets/svg/account.svg',
-              height: 32,
-            ),
-            const SizedBox(width: 16),
-            AppText.text('Moses',
-                color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
-          ],
-        ));
+    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
+      return Container(
+          margin: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 20, left: 24),
+          width: double.maxFinite,
+          child: Row(
+            children: [
+              SvgPicture.asset(
+                'assets/svg/account.svg',
+                height: 32,
+              ),
+              const SizedBox(width: 16),
+              AppText.text(
+                  state.username != null
+                      ? '${state.username}'.trim().split(' ').first
+                      : '',
+                  color: Colors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold),
+            ],
+          ));
+    });
   }
 
   Widget options() {
@@ -133,7 +143,11 @@ class AccountView extends StatelessWidget {
                       )
                     ],
                   ),
-                  onPressed: () {}),
+                  onPressed: () async {
+                    await Share.share(
+                        'Get anything to anyone, instantly. https://circumuk.com',
+                        subject: 'Take a look at Circum');
+                  }),
               Divider(
                   height: 1,
                   thickness: 1,
@@ -163,7 +177,9 @@ class AccountView extends StatelessWidget {
                       )
                     ],
                   ),
-                  onPressed: () {}),
+                  onPressed: () async {
+                    await launchUrl(Uri.parse('https://circumuk.com/terms'));
+                  }),
             ],
           ));
     });

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../utils/theme/theme.dart';
 
-showEditFirstNameSheet(context) {
+showEditBottomSheet(context, {String? val, required String title}) {
   return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -12,12 +12,30 @@ showEditFirstNameSheet(context) {
       ),
       backgroundColor: AppColors.secondary,
       builder: (context) {
-        return ButtShit();
+        return ButtSheet(
+          title: title,
+          val: val,
+        );
       });
 }
 
-class ButtShit extends StatelessWidget {
-  const ButtShit({super.key});
+class ButtSheet extends StatefulWidget {
+  final String? val;
+  final String title;
+  const ButtSheet({super.key, this.val, required this.title});
+  @override
+  ButtSheetState createState() => ButtSheetState();
+}
+
+class ButtSheetState extends State<ButtSheet> {
+  final TextEditingController _textFieldController = TextEditingController();
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    super.initState();
+    _textFieldController.text = widget.val ?? '';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -43,17 +61,22 @@ class ButtShit extends StatelessWidget {
                   ],
                 ),
                 Row(children: [
-                  AppText.text('First name',
+                  AppText.text(widget.title,
                       fontWeight: FontWeight.w600, fontSize: 16)
                 ]),
                 const SizedBox(height: 12),
-                AppTextInput.input(),
-                const SizedBox(height: 100),
+                AppTextInput.input(controller: _textFieldController),
+                const SizedBox(height: 80),
                 AppButton.button(
                     widget: Center(
                         child: AppText.text('Update details',
                             fontSize: 16, fontWeight: FontWeight.w600)),
-                    onPressed: () {})
+                    onPressed: () {
+                      if (_textFieldController.text.trim() != '') {
+                        Navigator.pop(context, _textFieldController.text);
+                      }
+                      // print(_textFieldController.text);
+                    })
               ],
             )));
   }

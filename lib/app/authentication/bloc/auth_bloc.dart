@@ -50,7 +50,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
           await prefs.setString('riderId', user.uid);
           // You can also access user information like user.displayName, user.email, etc.
-          emit(state.copyWith(currentState: AppState.authenticated));
+          emit(state.copyWith(
+            currentState: AppState.authenticated,
+            username: user.displayName,
+            phoneNumber: user.phoneNumber,
+            email: user.email,
+          ));
         } else {
           print('User not signed in');
           emit(state.copyWith(currentState: AppState.unauthenticated));
@@ -391,5 +396,43 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         }
       }
     });
+
+    on<UpdateFirstName>(((event, emit) async {
+      try {
+        User? user = auth.currentUser;
+        final lastName = state.username?.trim().split(' ').last;
+
+        if (lastName != null) {
+          await user?.updateDisplayName('${event.value} $lastName');
+          print(user?.displayName);
+          emit(state.copyWith(username: user?.displayName));
+        } else {
+          await user?.updateDisplayName(event.value);
+          print(user?.displayName);
+          emit(state.copyWith(username: user?.displayName));
+        }
+      } catch (e) {
+        print(e);
+      }
+    }));
+
+    on<UpdateLastName>(((event, emit) async {
+      try {
+        User? user = auth.currentUser;
+        final firstName = state.username?.trim().split(' ').first;
+
+        if (firstName != null) {
+          await user?.updateDisplayName('$firstName ${event.value}');
+          print(user?.displayName);
+          emit(state.copyWith(username: user?.displayName));
+        } else {
+          await user?.updateDisplayName(event.value);
+          print(user?.displayName);
+          emit(state.copyWith(username: user?.displayName));
+        }
+      } catch (e) {
+        print(e);
+      }
+    }));
   }
 }

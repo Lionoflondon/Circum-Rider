@@ -468,6 +468,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                   }'''
             }, code: state.activeRequest!.code, message: "Delivery completed");
 
+            add(GetAvailableRequests());
+
             emit(state.copyWith(
               polylines: [],
               polylineCoordinates: [],

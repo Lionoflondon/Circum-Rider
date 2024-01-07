@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../authentication/bloc/auth_bloc.dart';
 import 'bottom_sheets/bottom_sheets.dart';
 
 class AccountDetails extends StatefulWidget {
@@ -35,16 +36,13 @@ class _AccountDetailsState extends State<AccountDetails> {
           Divider(
               height: 10, thickness: 1, color: Colors.white.withOpacity(0.15)),
           email(),
-          Divider(
-              height: 10, thickness: 1, color: Colors.white.withOpacity(0.15)),
-          password(),
           const Spacer(),
           logout()
         ]));
   }
 
   Widget header() {
-    return BlocBuilder<AccountBloc, AccountState>(builder: (context, state) {
+    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return Stack(
         children: [
           Container(
@@ -95,7 +93,7 @@ class _AccountDetailsState extends State<AccountDetails> {
   }
 
   Widget firstName() {
-    return BlocBuilder<AccountBloc, AccountState>(builder: (context, state) {
+    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return TextButton(
           // borderSide: BorderSide.none,
           // backgroundColor: AppColors.secondary,
@@ -110,8 +108,12 @@ class _AccountDetailsState extends State<AccountDetails> {
                 children: [
                   AppText.text('First name',
                       color: AppColors.textGrey, fontSize: 12),
-                  AppText.text('Joshua',
-                      fontSize: 16, color: AppColors.textGrey)
+                  AppText.text(
+                      state.username != null
+                          ? '${state.username}'.trim().split(' ').first
+                          : '',
+                      fontSize: 16,
+                      color: AppColors.textGrey)
                 ],
               ),
               Icon(
@@ -121,13 +123,17 @@ class _AccountDetailsState extends State<AccountDetails> {
             ],
           ),
           onPressed: () async {
-            String? newName = await showEditFirstNameSheet(context);
+            String? newName = await showEditBottomSheet(context,
+                title: 'First name',
+                val: state.username != null
+                    ? '${state.username}'.trim().split(' ').first
+                    : '');
           });
     });
   }
 
   Widget surname() {
-    return BlocBuilder<AccountBloc, AccountState>(builder: (context, state) {
+    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return TextButton(
           // borderSide: BorderSide.none,
           // backgroundColor: AppColors.secondary,
@@ -142,8 +148,12 @@ class _AccountDetailsState extends State<AccountDetails> {
                 children: [
                   AppText.text('Surname',
                       color: AppColors.textGrey, fontSize: 12),
-                  AppText.text('Joshua',
-                      fontSize: 16, color: AppColors.textGrey)
+                  AppText.text(
+                      state.username != null
+                          ? '${state.username}'.trim().split(' ').last
+                          : '',
+                      fontSize: 16,
+                      color: AppColors.textGrey)
                 ],
               ),
               Icon(
@@ -152,12 +162,18 @@ class _AccountDetailsState extends State<AccountDetails> {
               )
             ],
           ),
-          onPressed: () {});
+          onPressed: () async {
+            String? newName = await showEditBottomSheet(context,
+                title: 'Surname',
+                val: state.username != null
+                    ? '${state.username}'.trim().split(' ').last
+                    : '');
+          });
     });
   }
 
   Widget email() {
-    return BlocBuilder<AccountBloc, AccountState>(builder: (context, state) {
+    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return TextButton(
           // borderSide: BorderSide.none,
           // backgroundColor: AppColors.secondary,
@@ -186,38 +202,8 @@ class _AccountDetailsState extends State<AccountDetails> {
     });
   }
 
-  Widget password() {
-    return BlocBuilder<AccountBloc, AccountState>(builder: (context, state) {
-      return TextButton(
-          // borderSide: BorderSide.none,
-          // backgroundColor: AppColors.secondary,
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AppText.text('Password',
-                      color: AppColors.textGrey, fontSize: 12),
-                  AppText.text('********',
-                      fontSize: 16, color: AppColors.textGrey)
-                ],
-              ),
-              Icon(
-                Icons.keyboard_arrow_right_rounded,
-                color: Colors.white.withOpacity(0.15),
-              )
-            ],
-          ),
-          onPressed: () {});
-    });
-  }
-
   Widget logout() {
-    return BlocBuilder<AccountBloc, AccountState>(builder: (context, state) {
+    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return TextButton(
         style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 20)),
