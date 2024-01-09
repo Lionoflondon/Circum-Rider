@@ -22,7 +22,7 @@ class ContactInfo {
     return ContactInfo(
       fullname: json['fullname'],
       position: PositionData.fromJson(json['position']),
-      phoneNumber: json['phoneNumber'],
+      phoneNumber: json['phone'],
       moreInformation: json['moreInformation'],
       locality: json['locality'],
       address: json['address'],

@@ -1,5 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 
+import '../../../helper/format_date.dart';
 import 'contact_info.m.dart';
 
 class DispatchRequest extends Equatable {
@@ -9,13 +11,15 @@ class DispatchRequest extends Equatable {
   final String code;
   final double price;
   final String currency;
+  final Timestamp? createdAt;
   const DispatchRequest(
       {required this.pickupData,
       required this.dropoffData,
       required this.requestId,
       required this.code,
       required this.price,
-      required this.currency});
+      required this.currency,
+      this.createdAt});
 
   @override
   List<Object> get props => [
@@ -23,18 +27,19 @@ class DispatchRequest extends Equatable {
         {dropoffData},
         {requestId},
         {code},
-        {price}
+        {price},
+        {createdAt}
       ];
 
   static DispatchRequest fromJson(dynamic json) {
     return DispatchRequest(
-      pickupData: ContactInfo.fromJson(json['pickupDetails']),
-      dropoffData: ContactInfo.fromJson(json['dropoffDetails']),
-      requestId: json['requestId'],
-      code: json['code'],
-      price: json['price'],
-      currency: json['currency'],
-    );
+        pickupData: ContactInfo.fromJson(json['pickupDetails']),
+        dropoffData: ContactInfo.fromJson(json['dropoffDetails']),
+        requestId: json['requestId'],
+        code: json['code'],
+        price: json['price'],
+        currency: json['currency'],
+        createdAt: json['createdAt']);
   }
 
   @override

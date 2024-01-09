@@ -404,12 +404,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
         if (lastName != null) {
           await user?.updateDisplayName('${event.value} $lastName');
-          print(user?.displayName);
-          emit(state.copyWith(username: user?.displayName));
+          // print('${event.value} $lastName');
+          emit(state.copyWith(username: '${event.value} $lastName'));
         } else {
           await user?.updateDisplayName(event.value);
-          print(user?.displayName);
-          emit(state.copyWith(username: user?.displayName));
+          // print(user?.displayName);
+          emit(state.copyWith(username: event.value));
         }
       } catch (e) {
         print(e);
@@ -423,12 +423,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
         if (firstName != null) {
           await user?.updateDisplayName('$firstName ${event.value}');
-          print(user?.displayName);
-          emit(state.copyWith(username: user?.displayName));
+          // print(user?.displayName);
+          emit(state.copyWith(username: '$firstName ${event.value}'));
         } else {
           await user?.updateDisplayName(event.value);
-          print(user?.displayName);
-          emit(state.copyWith(username: user?.displayName));
+          // print(user?.displayName);
+          emit(state.copyWith(username: event.value));
         }
       } catch (e) {
         print(e);

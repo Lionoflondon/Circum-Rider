@@ -36,6 +36,7 @@ class _AccountDetailsState extends State<AccountDetails> {
           Divider(
               height: 10, thickness: 1, color: Colors.white.withOpacity(0.15)),
           email(),
+          phone(),
           const Spacer(),
           logout()
         ]));
@@ -128,6 +129,11 @@ class _AccountDetailsState extends State<AccountDetails> {
                 val: state.username != null
                     ? '${state.username}'.trim().split(' ').first
                     : '');
+
+            if (newName != null) {
+              // ignore: use_build_context_synchronously
+              context.read<AuthBloc>().add(UpdateFirstName(value: newName));
+            }
           });
     });
   }
@@ -168,37 +174,78 @@ class _AccountDetailsState extends State<AccountDetails> {
                 val: state.username != null
                     ? '${state.username}'.trim().split(' ').last
                     : '');
+
+            if (newName != null) {
+              // ignore: use_build_context_synchronously
+              context.read<AuthBloc>().add(UpdateLastName(value: newName));
+            }
           });
     });
   }
 
   Widget email() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-      return TextButton(
-          // borderSide: BorderSide.none,
-          // backgroundColor: AppColors.secondary,
-          style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      return state.email != null
+          ? TextButton(
+              // borderSide: BorderSide.none,
+              // backgroundColor: AppColors.secondary,
+              style: TextButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  AppText.text('Email address',
-                      color: AppColors.textGrey, fontSize: 12),
-                  AppText.text('josh@yopmail.com',
-                      fontSize: 16, color: AppColors.textGrey)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AppText.text('Email address',
+                          color: AppColors.textGrey, fontSize: 12),
+                      AppText.text('${state.email}',
+                          fontSize: 16, color: AppColors.textGrey)
+                    ],
+                  ),
+                  Icon(
+                    Icons.keyboard_arrow_right_rounded,
+                    color: Colors.white.withOpacity(0.15),
+                  )
                 ],
               ),
-              Icon(
-                Icons.keyboard_arrow_right_rounded,
-                color: Colors.white.withOpacity(0.15),
-              )
-            ],
-          ),
-          onPressed: () {});
+              onPressed: () {})
+          : Container();
+    });
+  }
+
+  Widget phone() {
+    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
+      return state.phoneNumber != null
+          ? TextButton(
+              // borderSide: BorderSide.none,
+              // backgroundColor: AppColors.secondary,
+              style: TextButton.styleFrom(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AppText.text('Phone number',
+                          color: AppColors.textGrey, fontSize: 12),
+                      AppText.text('${state.phoneNumber}',
+                          fontSize: 16, color: AppColors.textGrey)
+                    ],
+                  ),
+                  Icon(
+                    Icons.keyboard_arrow_right_rounded,
+                    color: Colors.white.withOpacity(0.15),
+                  )
+                ],
+              ),
+              onPressed: () {})
+          : Container();
     });
   }
 
