@@ -85,7 +85,7 @@ class _MapsViewState extends State<MapsView> {
 
       if (state.activeRequest != null &&
           (state.rideStatus == RideStatus.userConfirmedRide ||
-              state.rideStatus == RideStatus.userConfirmedRide ||
+              state.rideStatus == RideStatus.outForDelivery ||
               state.rideStatus == RideStatus.arrivedAtPickupLocation) &&
           state.broadcastStatus == BroadcastStatus.initialized) {
         context.read<HomeBloc>().add(BroadcastLocation());

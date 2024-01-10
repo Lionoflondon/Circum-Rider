@@ -22,6 +22,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../helper/bitmap_descriptor_helper.dart';
 import '../../../helper/chats_help.dart';
+import '../../../helper/formatted_string_after_seconds.dart';
 import '../../../helper/messaging_server.dart';
 import '../../../utils/theme/theme.dart';
 import '../models/dispatch_request.m..dart';
@@ -196,10 +197,47 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
               .position.geopoint.longitude,
         );
 
+        final userDestinationCoordinates = PlaceCoordinate(
+          lat: state.dispatchRequests![event.selectedRequestIndex].dropoffData
+              .position.geopoint.latitude,
+          lng: state.dispatchRequests![event.selectedRequestIndex].dropoffData
+              .position.geopoint.longitude,
+        );
+
 // Create the Ployfills for the routes between the rider and the pickup locations
         add(GetPolylines(
             pickupCoordinate: riderCoordinates,
             desinationCoordinate: userPickupCoordinates));
+
+        PolylinePoints points = PolylinePoints();
+
+        PolylineResult startingPolylineResult =
+            await points.getRouteBetweenCoordinates(
+          'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
+          PointLatLng(riderLat, riderLng),
+          PointLatLng(userPickupCoordinates.lat, userPickupCoordinates.lng),
+          travelMode: TravelMode.driving,
+        );
+
+        PolylineResult endingPolylineResult =
+            await points.getRouteBetweenCoordinates(
+          'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
+          PointLatLng(userPickupCoordinates.lat, userPickupCoordinates.lng),
+          PointLatLng(
+              userDestinationCoordinates.lat, userDestinationCoordinates.lng),
+          travelMode: TravelMode.driving,
+        );
+
+        final totalTime = 120 +
+            startingPolylineResult.durationValue! +
+            endingPolylineResult.distanceValue!;
+
+        // print(startingPolylineResult.durationValue);
+        // print(startingPolylineResult.duration);
+        // print(endingPolylineResult.durationValue);
+        // print(endingPolylineResult.duration);
+
+        final formattedDeliveryTime = formattedTimeAfterSeconds(totalTime);
 
         // final userData = await firebaseMessaging
         //     .subscribeToTopic('your_topic_name')
@@ -211,10 +249,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
               'status': 'accepted',
               'data': '''{
                 'courierName': '${user?.displayName}',
+                'photoURL': '${user?.photoURL}',
                 'rating': '${riderData!['rating']}',
                 'plateNumber': '${riderData['plateNumber']}',
                 'typeOfVehicle': '${riderData['typeOfVehicle']}',
-                'estimatedDeliveryTime': '12:41 PM',
+                'estimatedDeliveryTime': '$formattedDeliveryTime',
                 'phoneNumber': '${user?.phoneNumber}',
                 'riderId': '${user?.uid}',
                 'code': '${riderData['fcmToken']}'
@@ -565,6 +604,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                 'latitude': '$riderLat',
                 'longitude': '$riderLng',
                 'courierName': '$courierName',
+                'photoURL': '${auth.currentUser?.photoURL}',
                 'rating': '$rating',
                 'plateNumber': '$plateNumber',
                 'typeOfVehicle': '$typeOfVehicle',

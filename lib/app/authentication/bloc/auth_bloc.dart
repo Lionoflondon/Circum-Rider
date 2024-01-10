@@ -325,8 +325,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           Position locationData = await locationHelper.enableLocation();
 
           Position myPosition = Position(
-              longitude: 7.475763,
-              latitude: 9.095622,
+              longitude: 7.496811,
+              latitude: 9.078255,
               timestamp: DateTime.timestamp(),
               accuracy: 0.9,
               altitude: 10,
