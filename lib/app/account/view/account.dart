@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:circum_rider/app/authentication/bloc/auth_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -30,9 +31,35 @@ class AccountView extends StatelessWidget {
           width: double.maxFinite,
           child: Row(
             children: [
-              SvgPicture.asset(
-                'assets/svg/account.svg',
+              Container(
                 height: 32,
+                width: 32,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(100),
+                  color: AppColors.input,
+                ),
+                child: state.profilePhoto != null && state.profilePhoto != ''
+                    ? CachedNetworkImage(
+                        imageUrl: state.profilePhoto!,
+                        imageBuilder: (context, imageProvider) => Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(100),
+                            image: DecorationImage(
+                              image: imageProvider,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        placeholder: (context, url) => Container(),
+                        //     CircularProgressIndicator(
+                        //   color: Colors.grey,
+                        // ),
+                        errorWidget: (context, url, error) => Icon(Icons.error),
+                      )
+                    : SvgPicture.asset(
+                        'assets/svg/account.svg',
+                        height: 32,
+                      ),
               ),
               const SizedBox(width: 16),
               AppText.text(

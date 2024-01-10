@@ -99,7 +99,7 @@ class _HistoryDetailsViewState extends State<HistoryDetailsView> {
                   const SizedBox(height: 8),
                   AppText.text('${widget.data.pickupData.phoneNumber}',
                       color: Colors.white, fontSize: 16),
-                  if (widget.data.dropoffData.moreInformation != null)
+                  if (widget.data.pickupData.moreInformation != null)
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

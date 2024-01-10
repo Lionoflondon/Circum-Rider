@@ -62,6 +62,8 @@ class AuthState extends AuthInitial {
 
   final int countdown;
 
+  final String? profilePhoto;
+
   @override
   List<Object?> get props => [
         unknownSessionState,
@@ -95,7 +97,8 @@ class AuthState extends AuthInitial {
         locationData,
         isLocationEnabled,
         hasLocationPermission,
-        appLocationStatus
+        appLocationStatus,
+        profilePhoto
       ];
 
   const AuthState(
@@ -130,7 +133,8 @@ class AuthState extends AuthInitial {
       this.locationData,
       this.isLocationEnabled,
       this.hasLocationPermission,
-      this.appLocationStatus = AppLocationStatus.unavailalbe});
+      this.appLocationStatus = AppLocationStatus.unavailalbe,
+      this.profilePhoto});
 
   AuthState copyWith(
       {bool? unknownSessionState,
@@ -164,7 +168,8 @@ class AuthState extends AuthInitial {
       Position? locationData,
       bool? isLocationEnabled,
       bool? hasLocationPermission,
-      AppLocationStatus? appLocationStatus}) {
+      AppLocationStatus? appLocationStatus,
+      String? profilePhoto}) {
     return AuthState(
         unknownSessionState: unknownSessionState ?? this.unknownSessionState,
         isAuthenticated: isAuthenticated ?? this.isAuthenticated,
@@ -198,6 +203,7 @@ class AuthState extends AuthInitial {
         isLocationEnabled: isLocationEnabled ?? this.isLocationEnabled,
         hasLocationPermission:
             hasLocationPermission ?? this.hasLocationPermission,
-        appLocationStatus: appLocationStatus ?? this.appLocationStatus);
+        appLocationStatus: appLocationStatus ?? this.appLocationStatus,
+        profilePhoto: profilePhoto ?? this.profilePhoto);
   }
 }

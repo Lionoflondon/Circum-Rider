@@ -1,11 +1,14 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:circum_rider/app/account/bloc/account_bloc.dart';
 import 'package:circum_rider/utils/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../authentication/bloc/auth_bloc.dart';
 import 'bottom_sheets/bottom_sheets.dart';
+import 'bottom_sheets/image_bs.dart';
 
 class AccountDetails extends StatefulWidget {
   const AccountDetails({Key? key}) : super(key: key);
@@ -58,36 +61,87 @@ class _AccountDetailsState extends State<AccountDetails> {
               bottom: 0,
               // left: (MediaQuery.of(context).size.width / 2) - 28,
               child: GestureDetector(
+                  onTap: () async {
+                    final ImagePicker picker = ImagePicker();
+                    final imageSource = await showImageBottomSheet(context);
+                    if (imageSource == 'library') {
+                      XFile? image = await picker.pickImage(
+                          source: ImageSource.gallery, imageQuality: 1);
+                      if (image != null) {
+                        // ignore: use_build_context_synchronously
+                        context
+                            .read<AuthBloc>()
+                            .add(UpdateUserProfilePhoto(imagePath: image.path));
+                      }
+                    }
+                    if (imageSource == 'camera') {
+                      XFile? image = await picker.pickImage(
+                          source: ImageSource.camera, imageQuality: 1);
+                      if (image != null) {
+                        // ignore: use_build_context_synchronously
+                        context
+                            .read<AuthBloc>()
+                            .add(UpdateUserProfilePhoto(imagePath: image.path));
+                      }
+                    }
+                  },
                   child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  SizedBox(width: MediaQuery.of(context).size.width),
-                  SizedBox(
-                      height: 56,
-                      width: 56,
-                      child: Stack(
-                        children: [
-                          SvgPicture.asset(
-                            'assets/svg/account.svg',
-                            height: 200,
-                          ),
-                          Align(
-                            alignment: Alignment.center,
-                            child: SvgPicture.asset('assets/svg/user.svg'),
-                          )
-                        ],
-                      )),
-                  const SizedBox(height: 6),
-                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      SvgPicture.asset('assets/svg/edit.svg'),
-                      const SizedBox(width: 4),
-                      AppText.text('Edit Image',
-                          color: AppColors.primary, fontWeight: FontWeight.w600)
+                      SizedBox(width: MediaQuery.of(context).size.width),
+                      Container(
+                          height: 56,
+                          width: 56,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(100),
+                            color: AppColors.input,
+                          ),
+                          child: state.profilePhoto != null &&
+                                  state.profilePhoto != ''
+                              ? CachedNetworkImage(
+                                  imageUrl: state.profilePhoto!,
+                                  imageBuilder: (context, imageProvider) =>
+                                      Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(100),
+                                      image: DecorationImage(
+                                        image: imageProvider,
+                                        fit: BoxFit.cover,
+                                      ),
+                                    ),
+                                  ),
+                                  placeholder: (context, url) => Container(),
+                                  //     CircularProgressIndicator(
+                                  //   color: Colors.grey,
+                                  // ),
+                                  errorWidget: (context, url, error) =>
+                                      Icon(Icons.error),
+                                )
+                              : Stack(
+                                  children: [
+                                    SvgPicture.asset(
+                                      'assets/svg/account.svg',
+                                      height: 200,
+                                    ),
+                                    Align(
+                                      alignment: Alignment.center,
+                                      child: SvgPicture.asset(
+                                          'assets/svg/user.svg'),
+                                    )
+                                  ],
+                                )),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          SvgPicture.asset('assets/svg/edit.svg'),
+                          const SizedBox(width: 4),
+                          AppText.text('Edit Image',
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600)
+                        ],
+                      )
                     ],
-                  )
-                ],
-              )))
+                  )))
         ],
       );
     });
@@ -185,7 +239,7 @@ class _AccountDetailsState extends State<AccountDetails> {
 
   Widget email() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-      return state.email != null
+      return state.email != null && state.email != ''
           ? TextButton(
               // borderSide: BorderSide.none,
               // backgroundColor: AppColors.secondary,
@@ -251,12 +305,15 @@ class _AccountDetailsState extends State<AccountDetails> {
 
   Widget logout() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-      return TextButton(
-        style: TextButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 20)),
-        onPressed: () {},
-        child: Center(child: AppText.text('Logout', color: AppColors.danger)),
-      );
+      return Padding(
+          padding: const EdgeInsets.only(bottom: 24),
+          child: TextButton(
+            style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 20)),
+            onPressed: () {},
+            child:
+                Center(child: AppText.text('Logout', color: AppColors.danger)),
+          ));
     });
   }
 }
