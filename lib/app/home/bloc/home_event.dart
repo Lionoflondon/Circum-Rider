@@ -91,3 +91,9 @@ class MessageUser extends HomeEvent {
   final String message;
   MessageUser({required this.message});
 }
+
+class RateUser extends HomeEvent {
+  final double rating;
+
+  RateUser({required this.rating});
+}

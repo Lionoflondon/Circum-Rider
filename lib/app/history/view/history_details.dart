@@ -126,48 +126,50 @@ class _HistoryDetailsViewState extends State<HistoryDetailsView> {
             thickness: 1,
             height: 1,
           ),
-          Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AppText.text('Sender Rating',
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      SvgPicture.asset(
-                        'assets/svg/account.svg',
-                        height: 32,
-                      ),
-                      const SizedBox(width: 14),
-                      AppText.text('Mauris blandit'),
-                      const Spacer(),
-                      RatingBar(
-                        initialRating: 4,
-                        itemSize: 16,
-                        direction: Axis.horizontal,
-                        allowHalfRating: true,
-                        ignoreGestures: true,
-                        itemCount: 5,
-                        ratingWidget: RatingWidget(
-                          full: SvgPicture.asset('assets/svg/star_full.svg'),
-                          half: SvgPicture.asset('assets/svg/star_half.svg'),
-                          empty: SvgPicture.asset('assets/svg/star_empty.svg'),
+          if (widget.data.riderRating != null)
+            Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AppText.text('Sender Rating',
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        SvgPicture.asset(
+                          'assets/svg/account.svg',
+                          height: 32,
                         ),
-                        itemPadding:
-                            const EdgeInsets.symmetric(horizontal: 4.0),
-                        onRatingUpdate: (rating) {
-                          // Navigator.pop(context);
-                          // print(rating);
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              )),
+                        const SizedBox(width: 14),
+                        AppText.text('${widget.data.pickupData.fullname}'),
+                        const Spacer(),
+                        RatingBar(
+                          initialRating: widget.data.riderRating!,
+                          itemSize: 16,
+                          direction: Axis.horizontal,
+                          allowHalfRating: true,
+                          ignoreGestures: true,
+                          itemCount: 5,
+                          ratingWidget: RatingWidget(
+                            full: SvgPicture.asset('assets/svg/star_full.svg'),
+                            half: SvgPicture.asset('assets/svg/star_half.svg'),
+                            empty:
+                                SvgPicture.asset('assets/svg/star_empty.svg'),
+                          ),
+                          itemPadding:
+                              const EdgeInsets.symmetric(horizontal: 4.0),
+                          onRatingUpdate: (rating) {
+                            // Navigator.pop(context);
+                            // print(rating);
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                )),
           const Divider(
             color: AppColors.borderColor,
             thickness: 1,

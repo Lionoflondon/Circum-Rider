@@ -186,6 +186,9 @@ class _DispatchRequestsState extends State<DispatchRequests> {
       if (state.rideStatus != RideStatus.offline &&
           (state.dispatchRequests == null || state.dispatchRequests == [])) {
         Timer.periodic(Duration(seconds: 4), (tik) {
+          print(">>>>>>>>>>>>>>>>>>>>>");
+          print("Getting available rides");
+          print(">>>>>>>>>>>>>>>>>>>>>>");
           context.read<HomeBloc>().add(GetAvailableRequests());
         });
         return Expanded(

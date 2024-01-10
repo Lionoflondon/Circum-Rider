@@ -18,6 +18,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../helper/bitmap_descriptor_helper.dart';
 import '../../../helper/chats_help.dart';
@@ -155,7 +156,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           // print(state.dispatchRequests);
 
           // print(stream);
-        } catch (e) {}
+        } catch (e) {
+          print(e);
+        }
       },
     );
 
@@ -433,8 +436,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<RideCompleted>(
       (event, emit) async {
         try {
+          final uuid1 = const Uuid().v4();
+          final uuid2 = const Uuid().v4();
+          final uuiduuid = '$uuid1$uuid2';
+          final User user = auth.currentUser!;
           final SharedPreferences prefs = await SharedPreferences.getInstance();
           final String? activeRequest = prefs.getString('activeRequest');
+
+          await prefs.setString('lastTrip', uuiduuid);
+
           final documentReference = db
               .collection('deliveryRequests')
               .where('requestId', isEqualTo: activeRequest);
@@ -445,17 +455,19 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           if (doc != null) {
             // await doc.data().update('status', (value) => 'outForDelivery');
 
-            await db
-                .collection('deliveryRequests')
-                .doc(doc.id)
-                .update({'status': 'completed', 'updatedAt': DateTime.now()});
+            await db.collection('deliveryRequests').doc(doc.id).update({
+              'status': 'completed',
+              'historyId': uuiduuid,
+              'updatedAt': DateTime.now()
+            });
 
             final newRideData = doc.data();
             newRideData['userId'] = doc.id;
+            newRideData['riderName'] = user.displayName;
             newRideData['status'] = 'completed';
             newRideData['timestamp'] = DateTime.now();
 
-            await db.collection('history').doc().set(newRideData);
+            await db.collection('history').doc(uuiduuid).set(newRideData);
 
             final code = prefs.getString('code');
             final String? riderId = prefs.getString('riderId');
@@ -464,7 +476,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
               'type': 'delivery-completed',
               'data': '''{
                     'riderId': '$riderId',
-                    'code': '$code'
+                    'code': '$code',
+                    'historyId': '$uuiduuid'
                   }'''
             }, code: state.activeRequest!.code, message: "Delivery completed");
 
@@ -724,6 +737,19 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           ChatsHelper().storeChat(messageData);
         } catch (e) {
           print('Sending messsage failed');
+          print(e);
+        }
+      },
+    );
+
+    on<RateUser>(
+      (event, emit) async {
+        try {
+          final SharedPreferences prefs = await SharedPreferences.getInstance();
+          final String? lastTrip = prefs.getString('lastTrip');
+          await db.collection('history').doc(lastTrip).update(
+              {'userRating': event.rating, 'updatedAt': DateTime.now()});
+        } catch (e) {
           print(e);
         }
       },

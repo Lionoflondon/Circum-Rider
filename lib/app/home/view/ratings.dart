@@ -1,5 +1,5 @@
-import 'package:circum_rider/app/home/bloc/home_bloc.dart';
 import 'package:flutter/material.dart';
+import 'package:circum_rider/app/home/bloc/home_bloc.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_rating_bar/flutter_rating_bar.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -43,6 +43,7 @@ class _RatingsViewState extends State<RatingsView> {
               ),
               itemPadding: const EdgeInsets.symmetric(horizontal: 4.0),
               onRatingUpdate: (rating) {
+                context.read<HomeBloc>().add(RateUser(rating: rating));
                 Navigator.pop(context);
                 // print(rating);
               },
