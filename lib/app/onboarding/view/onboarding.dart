@@ -15,32 +15,41 @@ class OnboardingView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-        backgroundColor: AppColors.secondary,
-        body: SafeArea(
-            child: Column(
-          mainAxisAlignment: MainAxisAlignment.end,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const SizedBox(height: 10),
-            const Expanded(child: OnboardingSlider()),
-            Container(
-                // margin: const EdgeInsets.only(bottom: 30),
-                width: MediaQuery.of(context).size.width * 0.9,
-                padding: const EdgeInsets.only(
-                    top: 20, bottom: 30, left: 10, right: 10),
+    return BlocListener<AuthBloc, AuthState>(
+        listener: (context, state) {
+          if (state.status == Status.signedInWithOAuth) {
+            context.read<AuthBloc>().add(ResetStatus());
+            // context.read<AuthBloc>().add(StartCountDown());
+            Navigator.push(
+                context, MaterialPageRoute(builder: (_) => const SignupView()));
+          }
+        },
+        child: Scaffold(
+            backgroundColor: AppColors.secondary,
+            body: SafeArea(
                 child: Column(
-                  children: [
-                    actionButton(),
-                    const SizedBox(height: 14),
-                    orSignUpWith(),
-                    const SizedBox(height: 14),
-                    oAuthButtons()
-                    // termsOfService()
-                  ],
-                )),
-          ],
-        )));
+              mainAxisAlignment: MainAxisAlignment.end,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const SizedBox(height: 10),
+                const Expanded(child: OnboardingSlider()),
+                Container(
+                    // margin: const EdgeInsets.only(bottom: 30),
+                    width: MediaQuery.of(context).size.width * 0.9,
+                    padding: const EdgeInsets.only(
+                        top: 20, bottom: 30, left: 10, right: 10),
+                    child: Column(
+                      children: [
+                        actionButton(),
+                        const SizedBox(height: 14),
+                        orSignUpWith(),
+                        const SizedBox(height: 14),
+                        oAuthButtons()
+                        // termsOfService()
+                      ],
+                    )),
+              ],
+            ))));
   }
 
   Widget actionButton() {

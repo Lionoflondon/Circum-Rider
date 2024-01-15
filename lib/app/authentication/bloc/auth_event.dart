@@ -141,6 +141,8 @@ class UpdateUserProfilePhoto extends AuthEvent {
   const UpdateUserProfilePhoto({required this.imagePath});
 }
 
+class SignInWithAppleAuth extends AuthEvent {}
+
 class SignInWithGoogle extends AuthEvent {}
 
 class SignOut extends AuthEvent {}

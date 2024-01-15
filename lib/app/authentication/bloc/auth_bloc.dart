@@ -18,6 +18,7 @@ import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart'
     as permission_handler;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../../utils/validator/validator.dart';
 import '../repo/auth_repo.dart';
@@ -133,6 +134,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         add(SubmitOTP());
       }
 
+      if (event is SignInWithAppleAuth) {
+        try {
+          final credential = await SignInWithApple.getAppleIDCredential(
+            scopes: [
+              AppleIDAuthorizationScopes.email,
+              AppleIDAuthorizationScopes.fullName,
+            ],
+          );
+
+          print(credential.email);
+          print(credential.familyName);
+          print(credential.givenName);
+          emit(state.copyWith(status: Status.signedInWithOAuth));
+        } catch (e) {
+          print(e);
+        }
+      }
+
       if (event is SignInWithGoogle) {
         final GoogleSignIn googleSignIn = GoogleSignIn();
         final GoogleSignInAccount? googleSignInAccount =
@@ -152,13 +171,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         print('>>>>>>>>>>>>>>>>>>');
 
         emit(state.copyWith(
-          oAuthFirstName:
-              googleSignInAccount.displayName!.trim().split(' ').first,
-          oAuthLastName:
-              googleSignInAccount.displayName!.trim().split(' ').last,
-          oAuthEmail: googleSignInAccount.email,
-          oAuthPhotoURL: googleSignInAccount.photoUrl,
-        ));
+            oAuthFirstName:
+                googleSignInAccount.displayName!.trim().split(' ').first,
+            oAuthLastName:
+                googleSignInAccount.displayName!.trim().split(' ').last,
+            oAuthEmail: googleSignInAccount.email,
+            oAuthPhotoURL: googleSignInAccount.photoUrl,
+            status: Status.signedInWithOAuth));
+
+        await googleSignIn.signOut();
       }
 
       if (event is RequestForOTP) {
