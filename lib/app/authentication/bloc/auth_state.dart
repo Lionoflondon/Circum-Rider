@@ -57,6 +57,12 @@ class AuthState extends AuthInitial {
   final bool? isLocationEnabled;
   final bool? hasLocationPermission;
 
+// information extracted when the uses 0Auth sign in method
+  final String? oAuthFirstName;
+  final String? oAuthLastName;
+  final String? oAuthEmail;
+  final String? oAuthPhotoURL;
+
   final Status status;
   final AppLocationStatus appLocationStatus;
 
@@ -98,7 +104,11 @@ class AuthState extends AuthInitial {
         isLocationEnabled,
         hasLocationPermission,
         appLocationStatus,
-        profilePhoto
+        profilePhoto,
+        oAuthFirstName,
+        oAuthLastName,
+        oAuthEmail,
+        oAuthPhotoURL
       ];
 
   const AuthState(
@@ -134,7 +144,11 @@ class AuthState extends AuthInitial {
       this.isLocationEnabled,
       this.hasLocationPermission,
       this.appLocationStatus = AppLocationStatus.unavailalbe,
-      this.profilePhoto});
+      this.profilePhoto,
+      this.oAuthFirstName,
+      this.oAuthLastName,
+      this.oAuthEmail,
+      this.oAuthPhotoURL});
 
   AuthState copyWith(
       {bool? unknownSessionState,
@@ -169,7 +183,11 @@ class AuthState extends AuthInitial {
       bool? isLocationEnabled,
       bool? hasLocationPermission,
       AppLocationStatus? appLocationStatus,
-      String? profilePhoto}) {
+      String? profilePhoto,
+      String? oAuthFirstName,
+      String? oAuthLastName,
+      String? oAuthEmail,
+      String? oAuthPhotoURL}) {
     return AuthState(
         unknownSessionState: unknownSessionState ?? this.unknownSessionState,
         isAuthenticated: isAuthenticated ?? this.isAuthenticated,
@@ -204,6 +222,10 @@ class AuthState extends AuthInitial {
         hasLocationPermission:
             hasLocationPermission ?? this.hasLocationPermission,
         appLocationStatus: appLocationStatus ?? this.appLocationStatus,
-        profilePhoto: profilePhoto ?? this.profilePhoto);
+        profilePhoto: profilePhoto ?? this.profilePhoto,
+        oAuthFirstName: oAuthFirstName ?? this.oAuthFirstName,
+        oAuthLastName: oAuthLastName ?? this.oAuthLastName,
+        oAuthEmail: oAuthEmail ?? this.oAuthEmail,
+        oAuthPhotoURL: oAuthPhotoURL ?? this.oAuthPhotoURL);
   }
 }

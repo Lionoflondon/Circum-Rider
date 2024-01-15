@@ -267,7 +267,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         await prefs.setString('rating', '${riderData['rating']}');
         await prefs.setString('plateNumber', '${riderData['plateNumber']}');
         await prefs.setString('typeOfVehicle', '${riderData['typeOfVehicle']}');
-        await prefs.setString('estimatedDeliveryTime', '12:41 PM');
+        await prefs.setString('estimatedDeliveryTime', formattedDeliveryTime);
         await prefs.setString('phoneNumber', '${user?.phoneNumber}');
         await prefs.setString('riderId', '${user?.uid}');
         await prefs.setString('code', '${riderData['fcmToken']}');
@@ -520,15 +520,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                   }'''
             }, code: state.activeRequest!.code, message: "Delivery completed");
 
-            add(GetAvailableRequests());
+            add(CancelRequest());
 
             emit(state.copyWith(
-              polylines: [],
-              polylineCoordinates: [],
-              markers: {},
               actionButtonStatus: ActionButtonStatus.initialized,
               rideStatus: RideStatus.delivered,
             ));
+            add(GetAvailableRequests());
           }
         } catch (e) {
           print(e);
@@ -550,7 +548,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         await prefs.remove('code');
         List<Polyline> polylines = [];
         Map<MarkerId, Marker> markers = {};
-        emit(state.copyWith(polylines: polylines, markers: markers));
+        emit(state.copyWith(
+            polylines: polylines,
+            markers: markers,
+            polylineCoordinates: [],
+            dispatchRequests: []));
 
         add(SetRideStatus(status: RideStatus.online));
 

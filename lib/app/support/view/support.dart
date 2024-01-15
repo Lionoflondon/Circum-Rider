@@ -5,6 +5,7 @@ import 'package:flutter_svg/svg.dart';
 import '../../../utils/theme/theme.dart';
 import '../bloc/support_bloc.dart';
 import 'chat.dart';
+import 'faq.dart';
 
 class SupportView extends StatelessWidget {
   const SupportView({Key? key}) : super(key: key);
@@ -96,7 +97,10 @@ class SupportView extends StatelessWidget {
                       )
                     ],
                   ),
-                  onPressed: () {}),
+                  onPressed: () {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const FAQView()));
+                  }),
             ],
           ));
     });
