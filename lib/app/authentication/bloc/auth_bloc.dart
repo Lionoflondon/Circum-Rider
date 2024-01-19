@@ -392,30 +392,31 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           final User? user = auth.currentUser;
           Position locationData = await locationHelper.enableLocation();
 
-          Position myPosition = Position(
-              longitude: 7.496811,
-              latitude: 9.078255,
-              timestamp: DateTime.timestamp(),
-              accuracy: 0.9,
-              altitude: 10,
-              altitudeAccuracy: 0.9,
-              heading: 0,
-              headingAccuracy: 0,
-              speed: 0,
-              speedAccuracy: 0);
+          // Position myPosition = Position(
+          //     longitude: 7.496811,
+          //     latitude: 9.078255,
+          //     timestamp: DateTime.timestamp(),
+          //     accuracy: 0.9,
+          //     altitude: 10,
+          //     altitudeAccuracy: 0.9,
+          //     heading: 0,
+          //     headingAccuracy: 0,
+          //     speed: 0,
+          //     speedAccuracy: 0);
           await prefs.setString('riderId', user!.uid);
-          await prefs.setDouble('longitude', myPosition.longitude);
-          await prefs.setDouble('latitude', myPosition.latitude);
+          await prefs.setDouble('longitude', locationData.longitude);
+          await prefs.setDouble('latitude', locationData.latitude);
           await prefs.setString(
-              'timestamp', myPosition.timestamp.toIso8601String());
-          await prefs.setDouble('altitude', myPosition.altitude);
+              'timestamp', locationData.timestamp.toIso8601String());
+          await prefs.setDouble('altitude', locationData.altitude);
 
           GeoFirePoint myLocation = geo.point(
-              latitude: myPosition.latitude, longitude: myPosition.longitude);
-          print('Latitude: ${myPosition.latitude}');
-          print('Longitude: ${myPosition.longitude}');
+              latitude: locationData.latitude,
+              longitude: locationData.longitude);
+          print('Latitude: ${locationData.latitude}');
+          print('Longitude: ${locationData.longitude}');
           emit(state.copyWith(
-              locationData: myPosition,
+              locationData: locationData,
               hasLocationPermission: true,
               isLocationEnabled: true,
               status: Status.locationRequested));
