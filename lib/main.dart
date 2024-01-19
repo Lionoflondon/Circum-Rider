@@ -16,6 +16,7 @@ import 'app/bottom_nav/bloc/navbar_bloc.dart';
 import 'app/home/bloc/home_bloc.dart';
 import 'app/history/bloc/history_bloc.dart';
 import 'app/support/bloc/support_bloc.dart';
+import 'app/verification/bloc/verification_bloc.dart';
 import 'helper/chats_help.dart';
 import 'utils/nav/nav_key.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -136,6 +137,9 @@ class CircumRider extends StatelessWidget {
                   ),
                   BlocProvider(
                     create: (context) => NavbarBloc(),
+                  ),
+                  BlocProvider(
+                    create: (context) => VerificationBloc(),
                   ),
                   BlocProvider<HomeBloc>(
                     create: (BuildContext context) => homeBloc,

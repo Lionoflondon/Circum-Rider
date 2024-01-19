@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:circum_rider/app/authentication/bloc/auth_bloc.dart';
+import 'package:circum_rider/app/verification/view/verification.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -206,6 +207,39 @@ class AccountView extends StatelessWidget {
                   ),
                   onPressed: () async {
                     await launchUrl(Uri.parse('https://circumuk.com/terms'));
+                  }),
+              Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: Colors.white.withOpacity(0.15)),
+              TextButton(
+                  // borderSide: BorderSide.none,
+                  // backgroundColor: AppColors.secondary,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 16),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          SvgPicture.asset('assets/svg/legal.svg'),
+                          const SizedBox(width: 16),
+                          AppText.text(
+                            'Verification',
+                          )
+                        ],
+                      ),
+                      Icon(
+                        Icons.keyboard_arrow_right_rounded,
+                        color: Colors.white.withOpacity(0.15),
+                      )
+                    ],
+                  ),
+                  onPressed: () async {
+                    Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => VerificationView()));
                   }),
             ],
           ));
