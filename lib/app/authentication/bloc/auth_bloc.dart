@@ -511,6 +511,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
     }));
 
+    on<SetVerificationUploadStatus>((event, emit) =>
+        emit(state.copyWith(verificationUploadStatus: event.status)));
+
     on<SubmitVerificationDocuments>(
       (event, emit) async {
         final User? user = auth.currentUser;
@@ -518,6 +521,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         if (event.idType == 'drivers license' ||
             event.idType == 'international passport') {
           try {
+            emit(state.copyWith(
+                verificationUploadStatus: VerificationUploadStatus.loading));
             final frontImageURL =
                 await uploadImage(imagePath: event.frontImagePath!);
             final backImageURL =
@@ -530,19 +535,25 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'updateAt': DateTime.now()
             };
 
-            await db
-                .collection("riders")
-                .doc(user?.uid)
-                .update({'verificationData': verificationData}).then(
-                    (value) => print("DocumentSnapshot successfully updated!"),
-                    onError: (e) => print("Error updating document $e"));
+            await db.collection("riders").doc(user?.uid).update({
+              'verificationData': verificationData,
+              'verificationStatus': 'pending'
+            }).then((value) => print("DocumentSnapshot successfully updated!"),
+                onError: (e) => print("Error updating document $e"));
+
+            emit(state.copyWith(
+                verificationUploadStatus: VerificationUploadStatus.uploaded));
           } catch (e) {
+            emit(state.copyWith(
+                verificationUploadStatus: VerificationUploadStatus.failure));
             print(e);
           }
         }
 
         if (event.idType == 'work permit') {
           try {
+            emit(state.copyWith(
+                verificationUploadStatus: VerificationUploadStatus.loading));
             final imageURL =
                 await uploadImage(imagePath: event.workPermitPath!);
 
@@ -552,13 +563,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'updateAt': DateTime.now()
             };
 
-            await db
-                .collection("riders")
-                .doc(user?.uid)
-                .update({'verificationData': verificationData}).then(
-                    (value) => print("DocumentSnapshot successfully updated!"),
-                    onError: (e) => print("Error updating document $e"));
+            await db.collection("riders").doc(user?.uid).update({
+              'verificationData': verificationData,
+              'verificationStatus': 'pending'
+            }).then((value) => print("DocumentSnapshot successfully updated!"),
+                onError: (e) => print("Error updating document $e"));
+            emit(state.copyWith(
+                verificationUploadStatus: VerificationUploadStatus.uploaded));
           } catch (e) {
+            emit(state.copyWith(
+                verificationUploadStatus: VerificationUploadStatus.failure));
             print(e);
           }
         }
@@ -597,14 +611,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<String> uploadImage({required String imagePath}) async {
-    final fileName = Uuid();
-    File imageFile = File(imagePath);
+    try {
+      print('Uploading Image');
+      final fileName = Uuid();
+      File imageFile = File(imagePath);
 
-    final storageRef = FirebaseStorage.instance;
-    await storageRef.ref('verification-photos/$fileName').putFile(imageFile);
-    final downloadUrl =
-        await storageRef.ref('verification-photos/$fileName').getDownloadURL();
+      final storageRef = FirebaseStorage.instance;
+      await storageRef.ref('verification-photos/$fileName').putFile(imageFile);
+      final downloadUrl = await storageRef
+          .ref('verification-photos/$fileName')
+          .getDownloadURL();
 
-    return downloadUrl;
+      print(downloadUrl);
+
+      return downloadUrl;
+    } catch (e) {
+      print(e);
+      throw 'Something went wrong uploading image';
+    }
   }
 }

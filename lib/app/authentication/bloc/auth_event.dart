@@ -54,6 +54,11 @@ class VerificationCodeChanged extends AuthEvent {
   VerificationCodeChanged({required this.verificationCode});
 }
 
+class SetVerificationUploadStatus extends AuthEvent {
+  final VerificationUploadStatus status;
+  const SetVerificationUploadStatus({required this.status});
+}
+
 class VerifyEmail extends AuthEvent {}
 
 class SetOTP extends AuthEvent {

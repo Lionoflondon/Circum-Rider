@@ -16,6 +16,8 @@ enum AppLocationStatus {
   available,
 }
 
+enum VerificationUploadStatus { initialized, loading, uploaded, failure }
+
 abstract class AuthInitial extends Equatable {
   const AuthInitial();
 
@@ -66,6 +68,7 @@ class AuthState extends AuthInitial {
 
   final Status status;
   final AppLocationStatus appLocationStatus;
+  final VerificationUploadStatus verificationUploadStatus;
 
   final int countdown;
 
@@ -109,7 +112,8 @@ class AuthState extends AuthInitial {
         oAuthFirstName,
         oAuthLastName,
         oAuthEmail,
-        oAuthPhotoURL
+        oAuthPhotoURL,
+        verificationUploadStatus
       ];
 
   const AuthState(
@@ -149,7 +153,8 @@ class AuthState extends AuthInitial {
       this.oAuthFirstName,
       this.oAuthLastName,
       this.oAuthEmail,
-      this.oAuthPhotoURL});
+      this.oAuthPhotoURL,
+      this.verificationUploadStatus = VerificationUploadStatus.initialized});
 
   AuthState copyWith(
       {bool? unknownSessionState,
@@ -188,7 +193,8 @@ class AuthState extends AuthInitial {
       String? oAuthFirstName,
       String? oAuthLastName,
       String? oAuthEmail,
-      String? oAuthPhotoURL}) {
+      String? oAuthPhotoURL,
+      VerificationUploadStatus? verificationUploadStatus}) {
     return AuthState(
         unknownSessionState: unknownSessionState ?? this.unknownSessionState,
         isAuthenticated: isAuthenticated ?? this.isAuthenticated,
@@ -227,6 +233,8 @@ class AuthState extends AuthInitial {
         oAuthFirstName: oAuthFirstName ?? this.oAuthFirstName,
         oAuthLastName: oAuthLastName ?? this.oAuthLastName,
         oAuthEmail: oAuthEmail ?? this.oAuthEmail,
-        oAuthPhotoURL: oAuthPhotoURL ?? this.oAuthPhotoURL);
+        oAuthPhotoURL: oAuthPhotoURL ?? this.oAuthPhotoURL,
+        verificationUploadStatus:
+            verificationUploadStatus ?? this.verificationUploadStatus);
   }
 }
