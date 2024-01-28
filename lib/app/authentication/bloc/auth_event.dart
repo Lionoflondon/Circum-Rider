@@ -122,6 +122,18 @@ class UpdateUserProfile extends AuthEvent {
   const UpdateUserProfile({required this.username});
 }
 
+class SubmitVerificationDocuments extends AuthEvent {
+  final String? frontImagePath;
+  final String? backImagePath;
+  final String? workPermitPath;
+  final String? idType;
+  const SubmitVerificationDocuments(
+      {this.frontImagePath,
+      this.backImagePath,
+      this.workPermitPath,
+      this.idType});
+}
+
 class RequestLocationData extends AuthEvent {}
 
 class OpenSettingsApp extends AuthEvent {}

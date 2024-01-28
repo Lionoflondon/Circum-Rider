@@ -19,6 +19,7 @@ import 'package:permission_handler/permission_handler.dart'
     as permission_handler;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../utils/validator/validator.dart';
 import '../repo/auth_repo.dart';
@@ -509,6 +510,61 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         print(e);
       }
     }));
+
+    on<SubmitVerificationDocuments>(
+      (event, emit) async {
+        final User? user = auth.currentUser;
+
+        if (event.idType == 'drivers license' ||
+            event.idType == 'international passport') {
+          try {
+            final frontImageURL =
+                await uploadImage(imagePath: event.frontImagePath!);
+            final backImageURL =
+                await uploadImage(imagePath: event.backImagePath!);
+
+            final verificationData = {
+              'frontImageURL': frontImageURL,
+              'backImageURL': backImageURL,
+              'idType': event.idType,
+              'updateAt': DateTime.now()
+            };
+
+            await db
+                .collection("riders")
+                .doc(user?.uid)
+                .update({'verificationData': verificationData}).then(
+                    (value) => print("DocumentSnapshot successfully updated!"),
+                    onError: (e) => print("Error updating document $e"));
+          } catch (e) {
+            print(e);
+          }
+        }
+
+        if (event.idType == 'work permit') {
+          try {
+            final imageURL =
+                await uploadImage(imagePath: event.workPermitPath!);
+
+            final verificationData = {
+              'imageURL': imageURL,
+              'idType': event.idType,
+              'updateAt': DateTime.now()
+            };
+
+            await db
+                .collection("riders")
+                .doc(user?.uid)
+                .update({'verificationData': verificationData}).then(
+                    (value) => print("DocumentSnapshot successfully updated!"),
+                    onError: (e) => print("Error updating document $e"));
+          } catch (e) {
+            print(e);
+          }
+        }
+      },
+    );
+
     on<UpdateUserProfilePhoto>(
       (event, emit) async {
         // print('uploading image');
@@ -538,5 +594,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(currentState: AppState.unauthenticated));
       },
     );
+  }
+
+  Future<String> uploadImage({required String imagePath}) async {
+    final fileName = Uuid();
+    File imageFile = File(imagePath);
+
+    final storageRef = FirebaseStorage.instance;
+    await storageRef.ref('verification-photos/$fileName').putFile(imageFile);
+    final downloadUrl =
+        await storageRef.ref('verification-photos/$fileName').getDownloadURL();
+
+    return downloadUrl;
   }
 }

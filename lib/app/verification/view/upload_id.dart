@@ -1,7 +1,9 @@
 import 'dart:io';
 
+import 'package:circum_rider/app/authentication/bloc/auth_bloc.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
@@ -24,6 +26,7 @@ class _UploadIDViewState extends State<UploadIDView> {
   String? backPageImagePath;
   String? workPermitImagePath;
   String? activeImage;
+  int activePage = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -56,25 +59,39 @@ class _UploadIDViewState extends State<UploadIDView> {
               child: Row(
                 children: [
                   Expanded(
-                      child: Container(
-                          color: frontPageImagePath == null
-                              ? AppColors.grey
-                              : null,
-                          height: 50,
-                          child: Center(
-                            child: AppText.text('Front Page',
-                                fontWeight: FontWeight.w600),
-                          ))),
+                      child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              activeImage = frontPageImagePath;
+                              activePage = 0;
+                            });
+                          },
+                          child: Container(
+                              color: activePage == 0
+                                  ? AppColors.grey
+                                  : AppColors.secondary,
+                              height: 50,
+                              child: Center(
+                                child: AppText.text('Front Page',
+                                    fontWeight: FontWeight.w600),
+                              )))),
                   Expanded(
-                      child: Container(
-                          color: frontPageImagePath == null
-                              ? null
-                              : AppColors.grey,
-                          height: 50,
-                          child: Center(
-                            child: AppText.text('Back Page',
-                                fontWeight: FontWeight.w600),
-                          ))),
+                      child: GestureDetector(
+                          onTap: () {
+                            setState(() {
+                              activeImage = backPageImagePath;
+                              activePage = 1;
+                            });
+                          },
+                          child: Container(
+                              color: activePage == 0
+                                  ? AppColors.secondary
+                                  : AppColors.grey,
+                              height: 50,
+                              child: Center(
+                                child: AppText.text('Back Page',
+                                    fontWeight: FontWeight.w600),
+                              )))),
                 ],
               ),
             ),
@@ -100,15 +117,16 @@ class _UploadIDViewState extends State<UploadIDView> {
                               source: ImageSource.gallery, imageQuality: 50);
                           if (image != null) {
                             if (widget.idType != IdType.workPermit) {
-                              if (frontPageImagePath == null) {
+                              if (activePage == 0) {
                                 setState(() {
                                   frontPageImagePath = image.path;
                                   activeImage = frontPageImagePath;
                                 });
-                                await Future.delayed(Duration(seconds: 2));
-                                setState(() {
-                                  activeImage = null;
-                                });
+                                // await Future.delayed(Duration(seconds: 2));
+                                // setState(() {
+                                //   activeImage = null;
+                                //   activePage = 1;
+                                // });
                               } else {
                                 setState(() {
                                   backPageImagePath = image.path;
@@ -184,7 +202,7 @@ class _UploadIDViewState extends State<UploadIDView> {
                           ? null
                           : AppColors.input,
                   widget: Center(
-                    child: AppText.text('Review Document',
+                    child: AppText.text('Submit Document For Review',
                         color: frontPageImagePath != null &&
                                 backPageImagePath != null
                             ? Colors.white
@@ -192,9 +210,29 @@ class _UploadIDViewState extends State<UploadIDView> {
                         fontWeight: FontWeight.w600),
                   ),
                   onPressed: () {
-                    if (frontPageImagePath != null &&
+                    if (widget.idType == IdType.driversLicense &&
+                        frontPageImagePath != null &&
                         backPageImagePath != null) {
-                      print('sometjin');
+                      context.read<AuthBloc>().add(SubmitVerificationDocuments(
+                          frontImagePath: frontPageImagePath!,
+                          backImagePath: backPageImagePath!,
+                          idType: 'drivers license'));
+                    }
+
+                    if (widget.idType == IdType.internationalPassport &&
+                        frontPageImagePath != null &&
+                        backPageImagePath != null) {
+                      context.read<AuthBloc>().add(SubmitVerificationDocuments(
+                          frontImagePath: frontPageImagePath!,
+                          backImagePath: backPageImagePath!,
+                          idType: 'international passport'));
+                    }
+
+                    if (widget.idType == IdType.workPermit &&
+                        workPermitImagePath != null) {
+                      context.read<AuthBloc>().add(SubmitVerificationDocuments(
+                          workPermitPath: workPermitImagePath!,
+                          idType: 'work permit'));
                     }
                   })),
           const SizedBox(height: 36),
