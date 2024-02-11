@@ -28,6 +28,7 @@ import '../../../utils/theme/theme.dart';
 import '../models/dispatch_request.m..dart';
 import '../models/message.m.dart';
 import '../models/place_coordinates.m.dart';
+import '../repo/home_repo.dart';
 
 part 'home_event.dart';
 part 'home_state.dart';
@@ -481,53 +482,74 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           final User user = auth.currentUser!;
           final SharedPreferences prefs = await SharedPreferences.getInstance();
           final String? activeRequest = prefs.getString('activeRequest');
+          final code = prefs.getString('code');
+          final String? riderId = prefs.getString('riderId');
 
-          await prefs.setString('lastTrip', uuiduuid);
+          final historyId = await HomeRepo().endTrip(
+              riderId: riderId!,
+              requestId: activeRequest!,
+              riderName: user.displayName!);
 
-          final documentReference = db
-              .collection('deliveryRequests')
-              .where('requestId', isEqualTo: activeRequest);
+          await prefs.setString('lastTrip', historyId);
 
-          final docResponse = await documentReference.get();
-          // print('Doc length: ${docResponse.docs.length}');
-          final doc = docResponse.docs.firstOrNull;
-          if (doc != null) {
-            // await doc.data().update('status', (value) => 'outForDelivery');
-
-            await db.collection('deliveryRequests').doc(doc.id).update({
-              'status': 'completed',
-              'historyId': uuiduuid,
-              'updatedAt': DateTime.now()
-            });
-
-            final newRideData = doc.data();
-            newRideData['userId'] = doc.id;
-            newRideData['riderName'] = user.displayName;
-            newRideData['status'] = 'completed';
-            newRideData['timestamp'] = DateTime.now();
-
-            await db.collection('history').doc(uuiduuid).set(newRideData);
-
-            final code = prefs.getString('code');
-            final String? riderId = prefs.getString('riderId');
-
-            await MessagingServer().sendMessage(data: {
-              'type': 'delivery-completed',
-              'data': '''{
+          await MessagingServer().sendMessage(data: {
+            'type': 'delivery-completed',
+            'data': '''{
                     'riderId': '$riderId',
                     'code': '$code',
-                    'historyId': '$uuiduuid'
+                    'historyId': '$historyId'
                   }'''
-            }, code: state.activeRequest!.code, message: "Delivery completed");
+          }, code: state.activeRequest!.code, message: "Delivery completed");
 
-            add(CancelRequest());
+          add(CancelRequest());
 
-            emit(state.copyWith(
-              actionButtonStatus: ActionButtonStatus.initialized,
-              rideStatus: RideStatus.delivered,
-            ));
-            add(GetAvailableRequests());
-          }
+          emit(state.copyWith(
+            actionButtonStatus: ActionButtonStatus.initialized,
+            rideStatus: RideStatus.delivered,
+          ));
+          add(GetAvailableRequests());
+
+          // final documentReference = db
+          //     .collection('deliveryRequests')
+          //     .where('requestId', isEqualTo: activeRequest);
+
+          // final docResponse = await documentReference.get();
+          // // print('Doc length: ${docResponse.docs.length}');
+          // final doc = docResponse.docs.firstOrNull;
+          // if (doc != null) {
+          //   // await doc.data().update('status', (value) => 'outForDelivery');
+
+          //   await db.collection('deliveryRequests').doc(doc.id).update({
+          //     'status': 'completed',
+          //     'historyId': uuiduuid,
+          //     'updatedAt': DateTime.now()
+          //   });
+
+          //   final newRideData = doc.data();
+          //   newRideData['userId'] = doc.id;
+          //   newRideData['riderName'] = user.displayName;
+          //   newRideData['status'] = 'completed';
+          //   newRideData['timestamp'] = DateTime.now();
+
+          //   await db.collection('history').doc(uuiduuid).set(newRideData);
+
+          //   await MessagingServer().sendMessage(data: {
+          //     'type': 'delivery-completed',
+          //     'data': '''{
+          //           'riderId': '$riderId',
+          //           'code': '$code',
+          //           'historyId': '$uuiduuid'
+          //         }'''
+          //   }, code: state.activeRequest!.code, message: "Delivery completed");
+
+          //   add(CancelRequest());
+
+          //   emit(state.copyWith(
+          //     actionButtonStatus: ActionButtonStatus.initialized,
+          //     rideStatus: RideStatus.delivered,
+          //   ));
+          //   add(GetAvailableRequests());
+          // }
         } catch (e) {
           print(e);
         }
@@ -554,7 +576,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             polylineCoordinates: [],
             dispatchRequests: []));
 
-        add(SetRideStatus(status: RideStatus.online));
+        add(SetRideStatus(
+            status: state.rideStatus == RideStatus.offline
+                ? RideStatus.offline
+                : RideStatus.online));
 
         print('>>>>>>>>>>>>>>>>>>>>>');
         print('Cleared Data');

@@ -39,15 +39,15 @@ class _SelectedRequestState extends State<SelectedRequest> {
                               thickness: 1,
                               width: 10),
                         ),
-                        Expanded(
-                            child: TextButton(
-                                style: TextButton.styleFrom(
-                                  backgroundColor: Colors.transparent,
-                                  minimumSize: const Size(0, 50),
-                                ),
-                                child: AppText.text('Requests',
-                                    fontSize: 16, fontWeight: FontWeight.bold),
-                                onPressed: () {})),
+                        // Expanded(
+                        //     child: TextButton(
+                        //         style: TextButton.styleFrom(
+                        //           backgroundColor: Colors.transparent,
+                        //           minimumSize: const Size(0, 50),
+                        //         ),
+                        //         child: AppText.text('Requests',
+                        //             fontSize: 16, fontWeight: FontWeight.bold),
+                        //         onPressed: () {})),
                       ],
                     ),
                   )),
@@ -202,7 +202,9 @@ class _SelectedRequestState extends State<SelectedRequest> {
                               context: context,
                               builder: (_) {
                                 return AlertDialog(
-                                  backgroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(),
+                                  backgroundColor:
+                                      const Color.fromARGB(255, 255, 255, 255),
                                   title: AppText.text('Confirmation',
                                       fontSize: 18,
                                       color: Colors.black,

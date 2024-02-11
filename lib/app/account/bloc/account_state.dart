@@ -1,10 +1,15 @@
 part of 'account_bloc.dart';
 
-abstract class AccountState extends Equatable {
-  const AccountState();
-  
-  @override
-  List<Object> get props => [];
-}
+enum AccountStatus { initialized, loading, success, failure }
 
-class AccountInitial extends AccountState {}
+class AccountState {
+  final EarningsModel? earnings;
+  final AccountStatus status;
+
+  AccountState({this.earnings, this.status = AccountStatus.initialized});
+
+  AccountState copyWith({EarningsModel? earnings, AccountStatus? status}) {
+    return AccountState(
+        earnings: earnings ?? this.earnings, status: status ?? this.status);
+  }
+}

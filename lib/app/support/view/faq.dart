@@ -12,6 +12,7 @@ class FAQView extends StatelessWidget {
       backgroundColor: AppColors.secondary,
       appBar: AppBar(
         backgroundColor: AppColors.secondary,
+        foregroundColor: Colors.white,
         elevation: 0,
         title: AppText.text('FAQ', fontWeight: FontWeight.w600, fontSize: 16),
       ),

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:bot_toast/bot_toast.dart';
 import 'package:circum_rider/app/authentication/bloc/auth_bloc.dart';
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
@@ -36,6 +37,10 @@ class _UploadIDViewState extends State<UploadIDView> {
               VerificationUploadStatus.uploaded) {
             context.read<AuthBloc>().add(const SetVerificationUploadStatus(
                 status: VerificationUploadStatus.initialized));
+            var cancel = BotToast.showSimpleNotification(
+                title: "Verification submitted successfully.",
+                backgroundColor: AppColors.success);
+
             Navigator.pop(context);
           }
         },
@@ -127,7 +132,7 @@ class _UploadIDViewState extends State<UploadIDView> {
                             if (imageSource == 'library') {
                               XFile? image = await picker.pickImage(
                                   source: ImageSource.gallery,
-                                  imageQuality: 50);
+                                  imageQuality: 10);
                               if (image != null) {
                                 if (widget.idType != IdType.workPermit) {
                                   if (activePage == 0) {

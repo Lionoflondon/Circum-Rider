@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../utils/theme/theme.dart';
 import '../bloc/account_bloc.dart';
 import 'account_details.dart';
+import 'earnings.dart';
 
 class AccountView extends StatelessWidget {
   const AccountView({Key? key}) : super(key: key);
@@ -81,14 +82,12 @@ class AccountView extends StatelessWidget {
           width: double.maxFinite,
           child: Column(
             children: [
-              TextButton(
+              AppButton.button(
                   // borderSide: BorderSide.none,
-                  // backgroundColor: AppColors.secondary,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 16),
-                  ),
-                  child: Row(
+                  backgroundColor: AppColors.secondary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  widget: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(
@@ -112,48 +111,50 @@ class AccountView extends StatelessWidget {
                         MaterialPageRoute(
                             builder: (_) => const AccountDetails()));
                   }),
-              // Divider(
-              //     height: 1,
-              //     thickness: 1,
-              //     color: const Color.fromRGBO(255, 255, 255, 1).withOpacity(0.15)),
-              // TextButton(
-              //     // borderSide: BorderSide.none,
-              //     // backgroundColor: AppColors.secondary,
-              //     style: TextButton.styleFrom(
-              //       padding: const EdgeInsets.symmetric(
-              //           horizontal: 24, vertical: 16),
-              //     ),
-              //     child: Row(
-              //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              //       children: [
-              //         Row(
-              //           children: [
-              //             SvgPicture.asset('assets/svg/earnings.svg'),
-              //             const SizedBox(width: 16),
-              //             AppText.text(
-              //               'Earnings',
-              //             )
-              //           ],
-              //         ),
-              //         Icon(
-              //           Icons.keyboard_arrow_right_rounded,
-              //           color: Colors.white.withOpacity(0.15),
-              //         )
-              //       ],
-              //     ),
-              //     onPressed: () {}),
+              Divider(
+                  height: 1,
+                  thickness: 1,
+                  color:
+                      const Color.fromRGBO(255, 255, 255, 1).withOpacity(0.15)),
+              AppButton.button(
+                  // borderSide: BorderSide.none,
+                  backgroundColor: AppColors.secondary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  widget: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          SvgPicture.asset('assets/svg/earnings.svg'),
+                          const SizedBox(width: 16),
+                          AppText.text(
+                            'Earnings',
+                          )
+                        ],
+                      ),
+                      Icon(
+                        Icons.keyboard_arrow_right_rounded,
+                        color: Colors.white.withOpacity(0.15),
+                      )
+                    ],
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const EarningsView()));
+                  }),
               Divider(
                   height: 1,
                   thickness: 1,
                   color: Colors.white.withOpacity(0.15)),
-              TextButton(
+              AppButton.button(
                   // borderSide: BorderSide.none,
-                  // backgroundColor: AppColors.secondary,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 16),
-                  ),
-                  child: Row(
+                  backgroundColor: AppColors.secondary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  widget: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(
@@ -180,14 +181,12 @@ class AccountView extends StatelessWidget {
                   height: 1,
                   thickness: 1,
                   color: Colors.white.withOpacity(0.15)),
-              TextButton(
+              AppButton.button(
                   // borderSide: BorderSide.none,
-                  // backgroundColor: AppColors.secondary,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 16),
-                  ),
-                  child: Row(
+                  backgroundColor: AppColors.secondary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  widget: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(
@@ -211,15 +210,14 @@ class AccountView extends StatelessWidget {
               Divider(
                   height: 1,
                   thickness: 1,
-                  color: Colors.white.withOpacity(0.15)),
-              TextButton(
+                  color:
+                      const Color.fromRGBO(255, 255, 255, 1).withOpacity(0.15)),
+              AppButton.button(
                   // borderSide: BorderSide.none,
-                  // backgroundColor: AppColors.secondary,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 16),
-                  ),
-                  child: Row(
+                  backgroundColor: AppColors.secondary,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  widget: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(

@@ -1,8 +1,7 @@
 part of 'account_bloc.dart';
 
-abstract class AccountEvent extends Equatable {
+abstract class AccountEvent {
   const AccountEvent();
-
-  @override
-  List<Object> get props => [];
 }
+
+class GetEarnings extends AccountEvent {}
