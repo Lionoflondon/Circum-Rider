@@ -140,6 +140,7 @@ class _DispatchRequestsState extends State<DispatchRequests> {
                                             // backgroundColor: Colors.transparent,
                                             style: TextButton.styleFrom(
                                               minimumSize: const Size(100, 55),
+                                              shape: RoundedRectangleBorder(),
                                             ),
                                             child: AppText.text('Accept',
                                                 color: AppColors.primary,
@@ -165,6 +166,7 @@ class _DispatchRequestsState extends State<DispatchRequests> {
                                             // backgroundColor: Colors.transparent,
                                             style: TextButton.styleFrom(
                                               minimumSize: const Size(100, 55),
+                                              shape: RoundedRectangleBorder(),
                                             ),
                                             child: AppText.text('Decline',
                                                 color: const Color(0xFFA75248),

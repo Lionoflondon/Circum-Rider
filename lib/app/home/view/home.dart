@@ -184,6 +184,9 @@ class _HomeViewState extends State<HomeView> {
                       }
                     },
                     child: TextButton(
+                        style: TextButton.styleFrom(
+                          shape: RoundedRectangleBorder(),
+                        ),
                         child: Row(
                           children: [
                             // const SizedBox(width: 5),

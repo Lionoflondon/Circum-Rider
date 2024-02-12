@@ -191,6 +191,7 @@ class _UploadIDViewState extends State<UploadIDView> {
                           }
                         },
                         style: TextButton.styleFrom(
+                            shape: RoundedRectangleBorder(),
                             fixedSize: Size(1.sw - 48, 1.sw - 48)),
                         child: activeImage != null
                             ? Container(

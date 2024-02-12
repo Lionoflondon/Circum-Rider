@@ -7,6 +7,8 @@ showImageBottomSheet(context) {
   return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.zero)),
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.7,
       ),

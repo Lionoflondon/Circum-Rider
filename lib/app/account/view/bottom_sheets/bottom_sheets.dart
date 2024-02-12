@@ -6,6 +6,7 @@ import '../../../../utils/theme/theme.dart';
 showEditBottomSheet(context, {String? val, required String title}) {
   return showModalBottomSheet(
       context: context,
+      shape: RoundedRectangleBorder(),
       isScrollControlled: true,
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.7,

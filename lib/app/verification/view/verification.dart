@@ -47,6 +47,7 @@ class _VerificationViewState extends State<VerificationView> {
               // borderSide: BorderSide.none,
               // backgroundColor: AppColors.secondary,
               style: TextButton.styleFrom(
+                shape: RoundedRectangleBorder(),
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               ),
@@ -85,6 +86,7 @@ class _VerificationViewState extends State<VerificationView> {
               // borderSide: BorderSide.none,
               // backgroundColor: AppColors.secondary,
               style: TextButton.styleFrom(
+                shape: RoundedRectangleBorder(),
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               ),
@@ -130,6 +132,7 @@ class _VerificationViewState extends State<VerificationView> {
               // borderSide: BorderSide.none,
               // backgroundColor: AppColors.secondary,
               style: TextButton.styleFrom(
+                shape: RoundedRectangleBorder(),
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               ),

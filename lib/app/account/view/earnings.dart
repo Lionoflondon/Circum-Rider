@@ -1,3 +1,4 @@
+import 'package:bot_toast/bot_toast.dart';
 import 'package:circum_rider/app/account/bloc/account_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -58,8 +59,37 @@ class _EarningsViewState extends State<EarningsView> {
                         minimumSize: Size(0.5.sw, 40),
                         widget: AppText.text('Withdraw',
                             fontWeight: FontWeight.w600),
-                        onPressed: () {
-                          showWithdrawalBottomSheet(context);
+                        onPressed: () async {
+                          final withdReq =
+                              await showWithdrawalBottomSheet(context);
+
+                          if (withdReq == 'req-sent') {
+                            BotToast.showCustomNotification(
+                                duration: const Duration(seconds: 8),
+                                toastBuilder: (_) {
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 10),
+                                    margin: const EdgeInsets.all(20),
+                                    decoration: const BoxDecoration(
+                                      color: Color.fromARGB(255, 50, 152, 53),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        const Icon(Icons.check_circle,
+                                            color: Colors.white),
+                                        const SizedBox(width: 4),
+                                        AppText.text(
+                                            'Request sent successfully',
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600),
+                                      ],
+                                    ),
+                                  );
+                                });
+                          }
                         })
                   ],
                 ),

@@ -162,10 +162,10 @@ class _AccountDetailsState extends State<AccountDetails> {
   Widget firstName() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return TextButton(
-          // borderSide: BorderSide.none,
           // backgroundColor: AppColors.secondary,
           style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            shape: RoundedRectangleBorder(),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -211,6 +211,7 @@ class _AccountDetailsState extends State<AccountDetails> {
           // backgroundColor: AppColors.secondary,
           style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            shape: RoundedRectangleBorder(),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -258,6 +259,7 @@ class _AccountDetailsState extends State<AccountDetails> {
               style: TextButton.styleFrom(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -291,6 +293,7 @@ class _AccountDetailsState extends State<AccountDetails> {
               style: TextButton.styleFrom(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -321,7 +324,9 @@ class _AccountDetailsState extends State<AccountDetails> {
           padding: const EdgeInsets.only(bottom: 24),
           child: TextButton(
             style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 20)),
+              padding: const EdgeInsets.symmetric(vertical: 20),
+              shape: RoundedRectangleBorder(),
+            ),
             onPressed: () {
               context.read<AuthBloc>().add(SignOut());
             },

@@ -28,6 +28,7 @@ class _SelectedRequestState extends State<SelectedRequest> {
                                 style: TextButton.styleFrom(
                                   backgroundColor: Colors.transparent,
                                   minimumSize: const Size(0, 50),
+                                  shape: RoundedRectangleBorder(),
                                 ),
                                 child: AppText.text('Current Trip',
                                     fontSize: 16, fontWeight: FontWeight.bold),
