@@ -72,8 +72,8 @@ void main() async {
   await FirebaseAppCheck.instance
       // Your personal reCaptcha public key goes here:
       .activate(
-    androidProvider: AndroidProvider.debug,
-    appleProvider: AppleProvider.debug,
+    androidProvider: AndroidProvider.playIntegrity,
+    appleProvider: AppleProvider.appAttest,
     // webProvider: ReCaptchaV3Provider(kWebRecaptchaSiteKey),
   );
 
