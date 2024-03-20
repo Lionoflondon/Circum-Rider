@@ -44,8 +44,6 @@
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSCameraUsageDescription</key>
-	<string>Circum needs to access your camera to upload profile photos and parcels</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Circum needs to use your location for accepting delivey requests</string>
 	<key>NSLocationAlwaysUsageDescription</key>
@@ -56,8 +54,10 @@
 	<string>Circum needs to use your location for accepting delivey requests</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Circum needs to access your microphone for audio calls</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Circum needs to access your camera to upload profile photos and registration documents</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Circum needs to access your photo library to select an image for upload</string>
+	<string>Circum needs to access your photo library to upload profile photos and registration documents</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>

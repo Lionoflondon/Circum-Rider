@@ -26,13 +26,17 @@ class SignupView extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                SizedBox(
+                  height: MediaQuery.of(context).padding.top,
+                ),
+                _loader(),
                 Container(
                     width: MediaQuery.of(context).size.width,
-                    margin: EdgeInsets.only(
+                    margin: const EdgeInsets.only(
                       left: 30,
-                      top: 40 + MediaQuery.of(context).padding.top,
+                      top: 40,
                     ),
-                    child: AppText.text("Create Account",
+                    child: AppText.text("Sign in",
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 28)),
@@ -42,5 +46,13 @@ class SignupView extends StatelessWidget {
                 const SizedBox(height: 40),
               ],
             )));
+  }
+
+  Widget _loader() {
+    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
+      return state.status == Status.loading
+          ? LinearProgressIndicator(color: AppColors.primary)
+          : Container();
+    });
   }
 }

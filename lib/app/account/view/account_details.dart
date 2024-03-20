@@ -1,3 +1,4 @@
+import 'package:bot_toast/bot_toast.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:circum_rider/app/account/bloc/account_bloc.dart';
 import 'package:circum_rider/utils/theme/theme.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../utils/app_state/app_state.dart';
 import '../../authentication/bloc/auth_bloc.dart';
@@ -31,30 +33,32 @@ class _AccountDetailsState extends State<AccountDetails> {
           centerTitle: true,
         ),
         backgroundColor: AppColors.secondary,
-        body: BlocListener<AuthBloc, AuthState>(
-            listener: (context, state) {
-              if (state.currentState == AppState.unauthenticated) {
-                print('signing out');
-                Navigator.popUntil(context, (route) => route.isFirst);
-              }
-            },
-            child: Column(children: [
-              header(),
-              firstName(),
-              Divider(
-                  height: 10,
-                  thickness: 1,
-                  color: Colors.white.withOpacity(0.15)),
-              surname(),
-              Divider(
-                  height: 10,
-                  thickness: 1,
-                  color: Colors.white.withOpacity(0.15)),
-              email(),
-              phone(),
-              const Spacer(),
-              logout()
-            ])));
+        body: SafeArea(
+            child: BlocListener<AuthBloc, AuthState>(
+                listener: (context, state) {
+                  if (state.currentState == AppState.unauthenticated) {
+                    print('signing out');
+                    Navigator.popUntil(context, (route) => route.isFirst);
+                  }
+                },
+                child: Column(children: [
+                  header(),
+                  firstName(),
+                  Divider(
+                      height: 10,
+                      thickness: 1,
+                      color: Colors.white.withOpacity(0.15)),
+                  surname(),
+                  Divider(
+                      height: 10,
+                      thickness: 1,
+                      color: Colors.white.withOpacity(0.15)),
+                  email(),
+                  phone(),
+                  const Spacer(),
+                  logout(),
+                  deleteAccount(),
+                ]))));
   }
 
   Widget header() {
@@ -321,18 +325,125 @@ class _AccountDetailsState extends State<AccountDetails> {
   Widget logout() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return Padding(
-          padding: const EdgeInsets.only(bottom: 24),
+          padding: const EdgeInsets.only(bottom: 0),
           child: TextButton(
             style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 20),
-              shape: RoundedRectangleBorder(),
-            ),
+                backgroundColor: AppColors.danger.withOpacity(0.5),
+                shape: RoundedRectangleBorder(),
+                padding: const EdgeInsets.symmetric(vertical: 20)),
             onPressed: () {
               context.read<AuthBloc>().add(SignOut());
             },
-            child:
-                Center(child: AppText.text('Logout', color: AppColors.danger)),
+            child: Center(
+                child: AppText.text('Logout',
+                    color: Colors.white, fontWeight: FontWeight.w500)),
           ));
     });
+  }
+
+  Widget deleteAccount() {
+    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
+      return Padding(
+          padding: const EdgeInsets.only(bottom: 0),
+          child: TextButton(
+            style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 20)),
+            onPressed: () async {
+              final deleteAccount = await deleteAccountBottomSheet(context);
+
+              if (deleteAccount == true) {
+                // ignore: use_build_context_synchronously
+                // context.read<AuthBloc>().add(DeleteAccount());
+                await launchUrl(
+                    Uri.parse('https://circumuk.com/delete-account'));
+
+                BotToast.showCustomNotification(
+                    duration: const Duration(seconds: 120),
+                    toastBuilder: (_) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 20),
+                        margin: const EdgeInsets.all(20),
+                        decoration: const BoxDecoration(
+                          color: AppColors.danger,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: AppText.text(
+                                  'Deletions are reviewed before approval. We will notify you of further actions.',
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700),
+                            )
+                          ],
+                        ),
+                      );
+                    });
+              }
+            },
+            child: Center(
+                child: AppText.text('Delete Account', color: AppColors.danger)),
+          ));
+    });
+  }
+
+  deleteAccountBottomSheet(context) {
+    return showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (_) {
+          return Container(
+            decoration: const BoxDecoration(
+              color: AppColors.secondary,
+            ),
+            height: 260,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: AppText.text('You cannot reverse this action!',
+                      fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 24),
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    TextButton(
+                        onPressed: () async {
+                          Navigator.pop(context, true);
+                        },
+                        child: const Row(
+                          children: [
+                            Icon(Icons.delete_forever, color: Colors.red),
+                            SizedBox(width: 12),
+                            Text('Delete account',
+                                style: TextStyle(color: Colors.red))
+                          ],
+                        )),
+                    const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: Divider()),
+                    TextButton(
+                        onPressed: () async {
+                          Navigator.pop(context, false);
+                        },
+                        child: const Row(children: [
+                          Icon(
+                            Icons.close,
+                            color: Colors.white,
+                          ),
+                          SizedBox(width: 6),
+                          Text('Cancel', style: TextStyle(color: Colors.white))
+                        ])),
+                    SizedBox(height: MediaQuery.of(context).padding.bottom + 20)
+                  ],
+                ),
+              ],
+            ),
+          );
+        });
   }
 }

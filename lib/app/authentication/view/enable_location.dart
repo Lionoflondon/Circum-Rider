@@ -18,10 +18,7 @@ class EnableLocation extends StatelessWidget {
               if (state.status == Status.locationRequested) {
                 context.read<AuthBloc>().add(ResetStatus());
                 // context.read<AuthBloc>().add(StartCountDown());
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => AppNavView()),
-                );
+                Navigator.popUntil(context, (route) => route.isFirst);
               }
             },
             child: WillPopScope(
@@ -60,10 +57,8 @@ class EnableLocation extends StatelessWidget {
                                 fontWeight: FontWeight.bold, fontSize: 16),
                           ),
                           onPressed: () {
-                            Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                    builder: (_) => AppNavView()));
+                            Navigator.popUntil(
+                                context, (route) => route.isFirst);
                           }))
                 ],
               ),

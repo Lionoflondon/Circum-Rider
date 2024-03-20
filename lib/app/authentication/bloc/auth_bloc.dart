@@ -144,10 +144,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             ],
           );
 
-          print(credential.email);
-          print(credential.familyName);
-          print(credential.givenName);
-          emit(state.copyWith(status: Status.signedInWithOAuth));
+          // print(credential.email);
+          // print(credential.familyName);
+          // print(credential.givenName);
+          // print(credential.identityToken);
+          emit(state.copyWith(
+              oAuthFirstName: credential.givenName,
+              oAuthLastName: credential.familyName,
+              oAuthEmail: credential.email,
+              status: Status.signedInWithOAuth));
         } catch (e) {
           print(e);
         }
@@ -193,6 +198,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         int? _resendToken;
 
         try {
+          emit(state.copyWith(status: Status.loading));
           await auth.verifyPhoneNumber(
             phoneNumber: state.phoneNumber,
             verificationCompleted: (_) {},
@@ -210,10 +216,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               print(_);
             },
           );
-          emit(state.copyWith(status: Status.success));
           await completer.future;
           emit(state.copyWith(
-              verificationId: _verificationId, resendToken: _resendToken));
+              verificationId: _verificationId,
+              resendToken: _resendToken,
+              status: Status.success));
           // print(_verificationId);
           // print(_resendToken);
         } catch (e) {
@@ -230,34 +237,42 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           // Create a PhoneAuthCredential with the code
           PhoneAuthCredential credential = PhoneAuthProvider.credential(
               verificationId: state.verificationId!, smsCode: '${state.otp}');
+          if (auth.currentUser != null) {
+            await auth.currentUser?.linkWithCredential(credential);
+          } else {
+            // Sign the user in (or link) with the credential
+            final UserCredential _userCredential =
+                await auth.signInWithCredential(credential);
 
-          // Sign the user in (or link) with the credential
-          final UserCredential _userCredential =
-              await auth.signInWithCredential(credential);
-
-          if (_userCredential.user?.displayName == null) {
-            if (state.oAuthFirstName == null) {
-              emit(state.copyWith(status: Status.incompleteData));
+            if (_userCredential.user?.displayName == null) {
+              if (state.oAuthFirstName == null) {
+                emit(state.copyWith(
+                    status: Status.incompleteData,
+                    currentState: AppState.authenticated));
+              } else {
+                add(UpdateUserProfile(
+                    username:
+                        "${state.oAuthFirstName} ${state.oAuthLastName}"));
+                emit(state.copyWith(
+                    status: Status.success,
+                    username: "${state.oAuthFirstName} ${state.oAuthLastName}",
+                    profilePhoto: state.oAuthPhotoURL,
+                    email: state.oAuthEmail,
+                    phoneNumber: _userCredential.user?.phoneNumber,
+                    currentState: AppState.authenticated));
+              }
             } else {
-              add(UpdateUserProfile(
-                  username: "${state.oAuthFirstName} ${state.oAuthLastName}"));
+              print(_userCredential.additionalUserInfo);
+              print(_userCredential.credential);
+              print(_userCredential.user);
               emit(state.copyWith(
                   status: Status.success,
-                  username: "${state.oAuthFirstName} ${state.oAuthLastName}",
-                  profilePhoto: state.oAuthPhotoURL,
-                  email: state.oAuthEmail,
-                  phoneNumber: _userCredential.user?.phoneNumber));
+                  username: _userCredential.user?.displayName,
+                  profilePhoto: _userCredential.user?.photoURL,
+                  email: _userCredential.user?.email,
+                  phoneNumber: _userCredential.user?.phoneNumber,
+                  currentState: AppState.authenticated));
             }
-          } else {
-            print(_userCredential.additionalUserInfo);
-            print(_userCredential.credential);
-            print(_userCredential.user);
-            emit(state.copyWith(
-                status: Status.success,
-                username: _userCredential.user?.displayName,
-                profilePhoto: _userCredential.user?.photoURL,
-                email: _userCredential.user?.email,
-                phoneNumber: _userCredential.user?.phoneNumber));
           }
         } on FirebaseException catch (e) {
           print(e.code);
@@ -608,6 +623,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(currentState: AppState.unauthenticated));
       },
     );
+
+    on<DeleteAccount>((event, emit) async {
+      final user = auth.currentUser!;
+      await db.collection('users').doc(user.uid).update({'deleted': true});
+      // await user.delete();
+
+      // emit(state.copyWith(currentState: AppState.unauthenticated));
+      // Navigator.pushNamedAndRemoveUntil(
+      //     context, '/onboarding', (Route<dynamic> route) => false);
+    });
   }
 
   Future<String> uploadImage({required String imagePath}) async {

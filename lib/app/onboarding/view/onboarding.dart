@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../utils/theme/theme.dart';
 import '../../authentication/bloc/auth_bloc.dart';
@@ -44,8 +45,9 @@ class OnboardingView extends StatelessWidget {
                         const SizedBox(height: 14),
                         orSignUpWith(),
                         const SizedBox(height: 14),
-                        oAuthButtons()
-                        // termsOfService()
+                        oAuthButtons(),
+                        const SizedBox(height: 10),
+                        termsOfService(),
                       ],
                     )),
               ],
@@ -118,7 +120,9 @@ class OnboardingView extends StatelessWidget {
           if (Platform.isIOS)
             Expanded(
                 child: TextButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      context.read<AuthBloc>().add(SignInWithAppleAuth());
+                    },
                     style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 13),
                         shape: RoundedRectangleBorder(
@@ -138,5 +142,28 @@ class OnboardingView extends StatelessWidget {
         ],
       );
     });
+  }
+
+  Widget termsOfService() {
+    return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          children: [
+            GestureDetector(
+                onTap: () async {
+                  await launchUrl(Uri.parse('https://circumuk.com/terms'));
+                },
+                child: AppText.text('By signing up, you are agreeing to our',
+                    fontSize: 12)),
+            GestureDetector(
+                onTap: () async {
+                  await launchUrl(Uri.parse('https://circumuk.com/terms'));
+                },
+                child: AppText.text('Terms of Service',
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                    color: Color.fromARGB(255, 203, 232, 255))),
+          ],
+        ));
   }
 }

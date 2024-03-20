@@ -63,25 +63,18 @@ class EnterOTPViewState extends State<EnterOTPView> {
           foregroundColor: Colors.white,
           backgroundColor: AppColors.secondary,
           centerTitle: true,
-          title: AppText.text('Enter 4 Digit Code',
+          title: AppText.text('Enter 6 Digit Code',
               fontSize: 16, fontWeight: FontWeight.w700),
         ),
         body: BlocListener<AuthBloc, AuthState>(
             listener: (context, state) {
               if (state.status == Status.success) {
                 context.read<AuthBloc>().add(ResetStatus());
-                // context.read<AuthBloc>().add(StartCountDown());
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => AppNavView()),
-                );
+                Navigator.popUntil(context, (route) => route.isFirst);
               }
 
               if (state.status == Status.incompleteData) {
-                context.read<AuthBloc>().add(ResetStatus());
-                // context.read<AuthBloc>().add(StartCountDown());
-                Navigator.pushReplacement(context,
-                    MaterialPageRoute(builder: (_) => const AddDetailsView()));
+                Navigator.popUntil(context, (route) => route.isFirst);
               }
             },
             child: SizedBox(

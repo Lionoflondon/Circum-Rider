@@ -21,9 +21,6 @@ class OnboardingSliderState extends State<OnboardingSlider>
 
   int currentTabIndex = 0;
   // double
-
-  late Timer timer;
-
   @override
   initState() {
     super.initState();
@@ -37,7 +34,6 @@ class OnboardingSliderState extends State<OnboardingSlider>
 
   @override
   void dispose() {
-    timer.cancel();
     onBoardingTab.dispose();
     super.dispose();
   }
@@ -93,7 +89,7 @@ class OnboardingSliderState extends State<OnboardingSlider>
                 margin: EdgeInsets.only(
                     left: screenWidth * 0.15,
                     right: screenWidth * 0.15,
-                    top: MediaQuery.of(context).viewPadding.top + 30),
+                    top: MediaQuery.of(context).viewPadding.top),
                 width: screenWidth,
                 decoration: BoxDecoration(
                     image: DecorationImage(
@@ -107,7 +103,7 @@ class OnboardingSliderState extends State<OnboardingSlider>
 
   Widget _progressIndicator() {
     return Container(
-        margin: const EdgeInsets.only(bottom: 20, top: 20),
+        margin: const EdgeInsets.only(bottom: 10, top: 10),
         // color: const Color(0xFFEDF3F8),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           AnimatedContainer(
@@ -208,7 +204,7 @@ class OnboardingSliderState extends State<OnboardingSlider>
                   color: AppColors.textDarkMode),
               const SizedBox(height: 16),
               AppText.text(
-                "Donec sollicitudin molestie malesuada. Sed porttitor lectus nibh. Nulla quis lorem ut libero malesuada feugiat.",
+                "Access delivery details, navigation, and updates right from your mobile device.",
               )
             ],
           )),

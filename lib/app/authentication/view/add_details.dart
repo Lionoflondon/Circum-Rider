@@ -20,7 +20,7 @@ class AddDetailsView extends StatelessWidget {
               if (state.status == Status.success) {
                 context.read<AuthBloc>().add(ResetStatus());
 
-                Navigator.pushReplacement(
+                Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => EnableLocation()),
                 );
