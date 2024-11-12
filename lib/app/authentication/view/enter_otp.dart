@@ -73,7 +73,8 @@ class EnterOTPViewState extends State<EnterOTPView> {
                 Navigator.popUntil(context, (route) => route.isFirst);
               }
 
-              if (state.status == Status.incompleteData) {
+              if (state.authenticatedStatus ==
+                  AuthenticatedStatus.incompleteData) {
                 Navigator.popUntil(context, (route) => route.isFirst);
               }
             },

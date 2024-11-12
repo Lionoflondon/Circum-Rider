@@ -5,6 +5,7 @@ import '../../../utils/theme/theme.dart';
 import '../../bottom_nav/view/app_nav.dart';
 import '../bloc/auth_bloc.dart';
 import 'signin_form.dart';
+import 'verify_email.dart';
 
 class SigninView extends StatelessWidget {
   const SigninView({Key? key}) : super(key: key);
@@ -17,8 +18,14 @@ class SigninView extends StatelessWidget {
             context.read<AuthBloc>().add(ResetStatus());
             // AppNavView()
             // AdvisorView()
-            Navigator.push(
-                context, MaterialPageRoute(builder: (_) => AppNavView()));
+            // Navigator.push(
+            //     context, MaterialPageRoute(builder: (_) => AppNavView()));
+          }
+
+          if (state.status == Status.unverifiedEmail) {
+            context.read<AuthBloc>().add(ResetStatus());
+            Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const VerifyEmailView()));
           }
         },
         child: Scaffold(
@@ -27,11 +34,15 @@ class SigninView extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
+                SizedBox(
+                  height: MediaQuery.of(context).padding.top,
+                ),
+                _loader(),
                 Container(
                     width: MediaQuery.of(context).size.width,
                     margin: EdgeInsets.only(
                       left: 30,
-                      top: 40 + MediaQuery.of(context).padding.top,
+                      top: 20,
                     ),
                     child: AppText.text("Sign In",
                         color: Colors.white,
@@ -40,8 +51,16 @@ class SigninView extends StatelessWidget {
                 const Expanded(
                   child: SigninForm(),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 20),
               ],
             )));
+  }
+
+  Widget _loader() {
+    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
+      return state.status == Status.loading
+          ? LinearProgressIndicator(color: AppColors.primary)
+          : Container();
+    });
   }
 }

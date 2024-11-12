@@ -29,11 +29,16 @@ class ButtSheet extends StatefulWidget {
 }
 
 class ButtSheetState extends State<ButtSheet> {
+  final TextEditingController _sortCodeTextFieldController =
+      TextEditingController();
   final TextEditingController _amountTextFieldController =
       TextEditingController();
   final TextEditingController _bankNameTextFieldController =
       TextEditingController();
   final TextEditingController _accountNumberTextFieldController =
+      TextEditingController();
+
+  final TextEditingController _addressTextFieldController =
       TextEditingController();
 
   final GlobalKey _key = GlobalKey();
@@ -53,6 +58,8 @@ class ButtSheetState extends State<ButtSheet> {
     _amountTextFieldController.text = '';
     _bankNameTextFieldController.text = '';
     _accountNumberTextFieldController.text = '';
+    _sortCodeTextFieldController.text = '';
+    _addressTextFieldController.text = '';
 
     context.read<AccountBloc>().add(GetRequests());
   }
@@ -63,11 +70,14 @@ class ButtSheetState extends State<ButtSheet> {
     _amountTextFieldController.dispose();
     _bankNameTextFieldController.dispose();
     _accountNumberTextFieldController.dispose();
+    _sortCodeTextFieldController.dispose();
+    _addressTextFieldController.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+        backgroundColor: AppColors.secondary,
         key: _key,
         body: BlocBuilder<AccountBloc, AccountState>(builder: (context, state) {
           if (state.status == AccountStatus.success) {
@@ -195,6 +205,20 @@ class ButtSheetState extends State<ButtSheet> {
                               Padding(
                                 padding:
                                     const EdgeInsets.symmetric(horizontal: 24),
+                                child: AppText.text('Sort Code'),
+                              ),
+                              const SizedBox(height: 12),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 24),
+                                child: AppTextInput.input(
+                                    keyboardType: TextInputType.number,
+                                    controller: _sortCodeTextFieldController),
+                              ),
+                              const SizedBox(height: 20),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 24),
                                 child: AppText.text('Bank Name'),
                               ),
                               const SizedBox(height: 12),
@@ -218,6 +242,20 @@ class ButtSheetState extends State<ButtSheet> {
                                     keyboardType: TextInputType.number,
                                     controller:
                                         _accountNumberTextFieldController),
+                              ),
+                              const SizedBox(height: 20),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 24),
+                                child: AppText.text('Address'),
+                              ),
+                              const SizedBox(height: 12),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 24),
+                                child: AppTextInput.input(
+                                    keyboardType: TextInputType.number,
+                                    controller: _addressTextFieldController),
                               ),
                               const SizedBox(height: 24),
                               Row(
@@ -246,44 +284,34 @@ class ButtSheetState extends State<ButtSheet> {
                                   )
                                 ],
                               ),
-                              const SizedBox(height: 40),
-                              Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 24),
-                                  child: AppButton.button(
-                                      widget: Center(
-                                          child: AppText.text('Proceed',
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600)),
-                                      onPressed: () {
-                                        if (_amountTextFieldController.text
-                                                    .trim() !=
-                                                '' &&
-                                            _bankNameTextFieldController.text
-                                                    .trim() !=
-                                                '' &&
-                                            _accountNumberTextFieldController
-                                                    .text
-                                                    .trim() !=
-                                                '' &&
-                                            balanceValid == true) {
-                                          context.read<AccountBloc>().add(
-                                              RequestWithdrawal(
-                                                  amount: _amountTextFieldController
-                                                      .text,
-                                                  bankName:
-                                                      _bankNameTextFieldController
-                                                          .text,
-                                                  accountNumber:
-                                                      _accountNumberTextFieldController
-                                                          .text,
-                                                  saveAccountDetails:
-                                                      saveAccountDetails));
-                                        }
-                                        // print(_textFieldController.text);
-                                      }))
                             ],
-                          ))))
+                          )))),
+              const SizedBox(height: 10),
+              Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: AppButton.button(
+                      widget: Center(
+                          child: AppText.text('Proceed',
+                              fontSize: 16, fontWeight: FontWeight.w600)),
+                      onPressed: () {
+                        if (_sortCodeTextFieldController.text.trim() != '' &&
+                            _amountTextFieldController.text.trim() != '' &&
+                            _bankNameTextFieldController.text.trim() != '' &&
+                            _accountNumberTextFieldController.text.trim() !=
+                                '' &&
+                            _addressTextFieldController.text.trim() != '' &&
+                            balanceValid == true) {
+                          context.read<AccountBloc>().add(RequestWithdrawal(
+                              sortCode: _sortCodeTextFieldController.text,
+                              amount: _amountTextFieldController.text,
+                              bankName: _bankNameTextFieldController.text,
+                              accountNumber:
+                                  _accountNumberTextFieldController.text,
+                              address: _addressTextFieldController.text,
+                              saveAccountDetails: saveAccountDetails));
+                        }
+                        // print(_textFieldController.text);
+                      }))
             ],
           );
         }));

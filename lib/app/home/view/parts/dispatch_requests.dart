@@ -11,8 +11,12 @@ class _DispatchRequestsState extends State<DispatchRequests> {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<HomeBloc, HomeState>(builder: (context, state) {
-      if (state.dispatchRequests != null &&
-          state.dispatchRequests!.length > 0 &&
+      if (state.dispatchRequests.isEmpty &&
+          state.requestStatus == RequestStatus.loading) {
+        return const Expanded(child: RidesLoader());
+      }
+
+      if (state.dispatchRequests.isNotEmpty &&
           state.rideStatus != RideStatus.offline) {
         return SizedBox(
             width: double.maxFinite,
@@ -28,7 +32,7 @@ class _DispatchRequestsState extends State<DispatchRequests> {
                   options: CarouselOptions(
                     floatingIndicator: false,
                   ),
-                  items: state.dispatchRequests!.asMap().entries.map((entry) {
+                  items: state.dispatchRequests.asMap().entries.map((entry) {
                     int index = entry.key;
                     final item = entry.value;
                     return Builder(
@@ -214,7 +218,32 @@ class _DispatchRequestsState extends State<DispatchRequests> {
                 )));
       }
 
-      return Container();
+      return Expanded(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SvgPicture.asset(
+              'assets/svg/message_request.svg',
+              height: 70,
+            ),
+            const SizedBox(height: 8),
+            AppText.text('There are no requests around\nyou at this time.',
+                textAlign: TextAlign.center, fontSize: 14),
+            const SizedBox(height: 18),
+            Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: AppButton.button(
+                    widget: Center(
+                      child: AppText.text('Search for requests',
+                          fontWeight: FontWeight.w600),
+                    ),
+                    onPressed: () {
+                      context.read<HomeBloc>().add(GetAvailableRequests());
+                    }))
+          ],
+        ),
+      );
     });
   }
 }

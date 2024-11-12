@@ -106,6 +106,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<GetAvailableRequests>(
       (event, emit) async {
         try {
+          emit(state.copyWith(requestStatus: RequestStatus.loading));
           final User? user = auth.currentUser;
           //  await db.collection("deliveryRequests").get()
           // Create a geoFirePoint (The location of the rider)
@@ -152,13 +153,16 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           );
           final _dispatchRequests = await _completer.future;
           docStream.cancel();
-          emit(state.copyWith(dispatchRequests: _dispatchRequests));
+          emit(state.copyWith(
+              dispatchRequests: _dispatchRequests,
+              requestStatus: RequestStatus.success));
           // Stop Stream
           // stream
           // print(state.dispatchRequests);
 
           // print(stream);
         } catch (e) {
+          emit(state.copyWith(requestStatus: RequestStatus.failure));
           print(e);
         }
       },
@@ -179,6 +183,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         final documentSnapshot = await documentReference.get();
 
         final riderData = documentSnapshot.data();
+
+        // print('riderData: $riderData');
 
         emit(state.copyWith(
             rideStatus: RideStatus.acceptedARide,
@@ -251,8 +257,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
               'data': '''{
                 'courierName': '${user?.displayName}',
                 'photoURL': '${user?.photoURL}',
-                'rating': '${riderData!['rating']}',
-                'plateNumber': '${riderData['plateNumber']}',
+                'rating': '${riderData?['rating'] ?? '0'}',
+                'plateNumber': '${riderData!['plateNumber']}',
                 'typeOfVehicle': '${riderData['typeOfVehicle']}',
                 'estimatedDeliveryTime': '$formattedDeliveryTime',
                 'phoneNumber': '${user?.phoneNumber}',
@@ -434,6 +440,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<StartDelivery>(
       (event, emit) async {
         try {
+          emit(state.copyWith(requestStatus: RequestStatus.loading));
           final SharedPreferences prefs = await SharedPreferences.getInstance();
           final String? activeRequest = prefs.getString('activeRequest');
           final documentReference = db
@@ -465,10 +472,12 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             emit(state.copyWith(
                 activeRequest: activeRide,
                 actionButtonStatus: ActionButtonStatus.outForDelivery,
-                rideStatus: RideStatus.outForDelivery));
+                rideStatus: RideStatus.outForDelivery,
+                requestStatus: RequestStatus.success));
           }
         } catch (e) {
           print(e);
+          emit(state.copyWith(requestStatus: RequestStatus.failure));
         }
       },
     );
@@ -476,6 +485,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<RideCompleted>(
       (event, emit) async {
         try {
+          emit(state.copyWith(requestStatus: RequestStatus.loading));
           final uuid1 = const Uuid().v4();
           final uuid2 = const Uuid().v4();
           final uuiduuid = '$uuid1$uuid2';
@@ -506,7 +516,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           emit(state.copyWith(
             actionButtonStatus: ActionButtonStatus.initialized,
             rideStatus: RideStatus.delivered,
+            requestStatus: RequestStatus.success,
+            dispatchRequests: [],
           ));
+
           add(GetAvailableRequests());
 
           // final documentReference = db
@@ -552,6 +565,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           // }
         } catch (e) {
           print(e);
+          emit(state.copyWith(requestStatus: RequestStatus.failure));
         }
       },
     );
@@ -576,13 +590,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             polylineCoordinates: [],
             dispatchRequests: []));
 
-        add(SetRideStatus(
-            status: state.rideStatus == RideStatus.offline
-                ? RideStatus.offline
-                : RideStatus.online));
+        // add(SetRideStatus(
+        //     status: state.rideStatus == RideStatus.offline
+        //         ? RideStatus.offline
+        //         : RideStatus.online));
 
         print('>>>>>>>>>>>>>>>>>>>>>');
-        print('Cleared Data');
+        print('Cancelled Data');
         print('>>>>>>>>>>>>>>>>>>>>>');
       },
     );
@@ -600,7 +614,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                   state.rideStatus == RideStatus.outForDelivery)) {
             final icon =
                 await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
-                    "assets/svg/motorcycle.svg");
+                    "assets/svg/bike_top.svg");
             final Marker riderLocationMarker = Marker(
                 markerId: MarkerId('rider_location_marker'),
                 position: LatLng(

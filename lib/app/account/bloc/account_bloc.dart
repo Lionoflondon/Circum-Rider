@@ -42,9 +42,11 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
         try {
           final docRef = db.collection('payoutRequests').doc();
           await docRef.set({
+            'sortCode': event.sortCode,
             'accountNumber': event.accountNumber,
             'bankName': event.bankName,
             'amount': event.amount,
+            'address': event.address,
             'saveAccountDetails': event.saveAccountDetails,
             'riderId': user!.uid
           });

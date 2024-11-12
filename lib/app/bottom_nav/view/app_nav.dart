@@ -6,9 +6,11 @@ import 'package:circum_rider/app/home/bloc/home_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_svg/svg.dart';
 import '../../../utils/theme/theme.dart';
 import '../../account/view/account.dart';
+import '../../authentication/view/enable_location.dart';
 import '../../history/view/index.dart';
 import '../../home/view/index.dart';
 import '../../home/view/maps_view.dart';
@@ -23,14 +25,27 @@ class AppNavView extends StatefulWidget {
 }
 
 class AppNavViewState extends State<AppNavView> {
+  FlutterSecureStorage storage = const FlutterSecureStorage();
   AuthBloc? authBloc;
   @override
   void initState() {
     super.initState();
     authBloc = context.read<AuthBloc>();
-    authBloc?.add(RequestLocationData());
-    Timer.periodic(const Duration(seconds: 200),
-        (timer) => authBloc?.add(RequestLocationData()));
+    // authBloc?.add(RequestLocationData());
+    checkForLocationData();
+    Timer.periodic(
+        const Duration(seconds: 200), (timer) => checkForLocationData());
+  }
+
+  checkForLocationData() async {
+    final location = (await storage.readAll())["location"];
+    if (location == null) {
+      // ignore: use_build_context_synchronously
+      Navigator.push(
+          context, MaterialPageRoute(builder: (_) => const EnableLocation()));
+    } else {
+      authBloc?.add(RequestLocationData());
+    }
   }
 
   @override
@@ -49,21 +64,24 @@ class AppNavViewState extends State<AppNavView> {
                 Column(
                   children: [
                     Expanded(
-                        child: authBloc.state.locationData == null
-                            ? Image(
-                                width: MediaQuery.of(context).size.width,
-                                image: const AssetImage(
-                                    'assets/images/maps_placeholder.png'),
-                                fit: BoxFit.fitWidth,
-                              )
-                            : MapsView()),
+                        child:
+                            //  authBloc.state.locationData == null
+                            //     ? Image(
+                            //         width: MediaQuery.of(context).size.width,
+                            //         image: const AssetImage(
+                            //             'assets/images/maps_placeholder.png'),
+                            //         fit: BoxFit.fitWidth,
+                            //       )
+                            //     :
+
+                            MapsView()),
                     const SizedBox(height: 180),
                   ],
                 ),
                 if (state.currentNavIndex >= 0) userScreens(context, 0),
-                if (state.currentNavIndex == 0 &&
-                    authBloc.state.isLocationEnabled != true)
-                  locationUnavailable(),
+                // if (state.currentNavIndex == 0 &&
+                //   authBloc.state.isLocationEnabled != true)
+                // locationUnavailable(),
                 if (state.currentNavIndex > 0)
                   Column(
                     children: [

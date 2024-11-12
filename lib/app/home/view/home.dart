@@ -18,6 +18,7 @@ import 'package:sliding_up_panel/sliding_up_panel.dart';
 // import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../utils/theme/theme.dart';
+import 'parts/requests_loader.dart';
 import 'ratings.dart';
 import 'ride_chats.dart';
 

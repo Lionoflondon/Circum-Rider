@@ -23,6 +23,8 @@ enum PanelControlStatus { initialized, isOpened, isClosed }
 
 enum BroadcastStatus { initialized, broadcasting }
 
+enum RequestStatus { initial, loading, success, failure }
+
 enum ChatStatus { initial, newMessage }
 
 enum ActionButtonStatus {
@@ -37,7 +39,7 @@ class HomeState {
   final List ongoingRequests;
   RideStatus rideStatus;
   final Position? locationData;
-  List<DispatchRequest>? dispatchRequests;
+  List<DispatchRequest> dispatchRequests;
   DispatchRequest? activeRequest;
   int? selectedRequestIndex;
   Map<MarkerId, Marker> markers;
@@ -53,27 +55,30 @@ class HomeState {
   List<Message> chatMessages;
   ChatStatus chatStatus;
   String? message;
+  RequestStatus requestStatus;
 
-  HomeState(
-      {this.ongoingRequests = const [],
-      this.rideStatus = RideStatus.offline,
-      this.locationData,
-      this.dispatchRequests,
-      this.markers = const {},
-      this.polylines = const [],
-      this.polylineCoordinates = const [],
-      this.sourceAndDestinationStatus = SourceAndDestinationStatus.unselected,
-      this.mapCameraStatus = MapCameraStatus.initialized,
-      this.panelControlStatus = PanelControlStatus.initialized,
-      this.actionButtonStatus = ActionButtonStatus.initialized,
-      this.minDrawerHeight = 180,
-      this.maxDrawerHeight = 180,
-      this.selectedRequestIndex,
-      this.activeRequest,
-      this.broadcastStatus = BroadcastStatus.initialized,
-      this.chatMessages = const [],
-      this.chatStatus = ChatStatus.initial,
-      this.message});
+  HomeState({
+    this.ongoingRequests = const [],
+    this.rideStatus = RideStatus.offline,
+    this.locationData,
+    this.dispatchRequests = const [],
+    this.markers = const {},
+    this.polylines = const [],
+    this.polylineCoordinates = const [],
+    this.sourceAndDestinationStatus = SourceAndDestinationStatus.unselected,
+    this.mapCameraStatus = MapCameraStatus.initialized,
+    this.panelControlStatus = PanelControlStatus.initialized,
+    this.actionButtonStatus = ActionButtonStatus.initialized,
+    this.minDrawerHeight = 180,
+    this.maxDrawerHeight = 180,
+    this.selectedRequestIndex,
+    this.activeRequest,
+    this.broadcastStatus = BroadcastStatus.initialized,
+    this.chatMessages = const [],
+    this.chatStatus = ChatStatus.initial,
+    this.message,
+    this.requestStatus = RequestStatus.initial,
+  });
 
   HomeState copyWith(
       {List? ongoingRequests,
@@ -94,7 +99,8 @@ class HomeState {
       DispatchRequest? activeRequest,
       List<Message>? chatMessages,
       ChatStatus? chatStatus,
-      String? message}) {
+      String? message,
+      RequestStatus? requestStatus}) {
     return HomeState(
         ongoingRequests: ongoingRequests ?? this.ongoingRequests,
         rideStatus: rideStatus ?? this.rideStatus,
@@ -115,6 +121,7 @@ class HomeState {
         activeRequest: activeRequest ?? this.activeRequest,
         chatMessages: chatMessages ?? this.chatMessages,
         chatStatus: chatStatus ?? this.chatStatus,
-        message: message ?? this.message);
+        message: message ?? this.message,
+        requestStatus: requestStatus ?? this.requestStatus);
   }
 }

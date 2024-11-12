@@ -18,12 +18,12 @@ class OnboardingView extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {
-          if (state.status == Status.signedInWithOAuth) {
-            context.read<AuthBloc>().add(ResetStatus());
-            // context.read<AuthBloc>().add(StartCountDown());
-            Navigator.push(
-                context, MaterialPageRoute(builder: (_) => const SignupView()));
-          }
+          // if (state.status == Status.signedInWithOAuth) {
+          //   context.read<AuthBloc>().add(ResetStatus());
+          //   // context.read<AuthBloc>().add(St4artCountDown());
+          //   Navigator.push(
+          //       context, MaterialPageRoute(builder: (_) => const SignupView()));
+          // }
         },
         child: Scaffold(
             backgroundColor: AppColors.secondary,
@@ -69,7 +69,7 @@ class OnboardingView extends StatelessWidget {
         },
         widget: Center(
             child: AppText.text(
-          'Get Started',
+          'Continue',
           fontSize: 16,
           fontWeight: FontWeight.w700,
         )),
@@ -84,7 +84,7 @@ class OnboardingView extends StatelessWidget {
       children: [
         const Expanded(child: Divider(color: Colors.grey)),
         const SizedBox(width: 10),
-        AppText.text('or sign up with', fontSize: 16),
+        AppText.text('or continue with', fontSize: 16),
         const SizedBox(width: 10),
         const Expanded(child: Divider(color: Colors.grey)),
       ],

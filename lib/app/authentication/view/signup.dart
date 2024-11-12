@@ -5,6 +5,7 @@ import '../../../utils/theme/theme.dart';
 import '../bloc/auth_bloc.dart';
 import 'enter_otp.dart';
 import 'signup_form.dart';
+import 'verify_email.dart';
 
 class SignupView extends StatelessWidget {
   const SignupView({Key? key}) : super(key: key);
@@ -16,8 +17,14 @@ class SignupView extends StatelessWidget {
           if (state.status == Status.success) {
             context.read<AuthBloc>().add(ResetStatus());
             // context.read<AuthBloc>().add(StartCountDown());
+            // Navigator.push(context,
+            //     MaterialPageRoute(builder: (_) => const EnterOTPView()));
+          }
+
+          if (state.status == Status.unverifiedEmail) {
+            context.read<AuthBloc>().add(ResetStatus());
             Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const EnterOTPView()));
+                MaterialPageRoute(builder: (_) => const VerifyEmailView()));
           }
         },
         child: Scaffold(
@@ -34,16 +41,16 @@ class SignupView extends StatelessWidget {
                     width: MediaQuery.of(context).size.width,
                     margin: const EdgeInsets.only(
                       left: 30,
-                      top: 40,
+                      top: 20,
                     ),
-                    child: AppText.text("Sign in",
+                    child: AppText.text("Create Account",
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                         fontSize: 28)),
-                const Expanded(
+                Expanded(
                   child: SignupForm(),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 20),
               ],
             )));
   }

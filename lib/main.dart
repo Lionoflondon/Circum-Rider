@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'package:circum_rider/app/account/bloc/account_bloc.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -8,7 +9,9 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'app.dart';
 import 'app/authentication/bloc/auth_bloc.dart';
@@ -63,7 +66,9 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 }
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   await Firebase.initializeApp();
 
@@ -82,8 +87,25 @@ void main() async {
     badge: true,
     sound: true,
   );
+  // var status = await Permission.appTrackingTransparency.status;
+  // if (status.isDenied || status.isPermanentlyDenied) {
+  //   // We didn't ask for permission yet or the permission has been denied before but not permanently.
+  //   PermissionStatus permission =
+  //       await Permission.appTrackingTransparency.request();
+
+  //   print(permission);
+
+  //   if (permission.isGranted) {
+  //     print('Permission Granted');
+  //   } else {
+  //     print('Permission denied');
+  //   }
+  // }
+
   foregoundMessage();
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  FlutterNativeSplash.remove();
 
   // Lock app in portrait mode
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(

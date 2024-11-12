@@ -66,6 +66,34 @@ class SetOTP extends AuthEvent {
   SetOTP({required this.otp});
 }
 
+class ConfirmEmailVerification extends AuthEvent {}
+
+class SetErrorMessage extends AuthEvent {
+  final String errorMessage;
+  const SetErrorMessage({required this.errorMessage});
+}
+
+class SignInWithGoogle extends AuthEvent {}
+
+class SignInWithAppleAuth extends AuthEvent {}
+
+class SignInWithEmail extends AuthEvent {
+  final String email;
+  final String password;
+  const SignInWithEmail({required this.email, required this.password});
+}
+
+class SignUpWithEmail extends AuthEvent {
+  final String email;
+  final String password;
+  const SignUpWithEmail({required this.email, required this.password});
+}
+
+class UpdatePhoneNumber extends AuthEvent {
+  final String value;
+  const UpdatePhoneNumber({required this.value});
+}
+
 class SetResetPasswordOTP extends AuthEvent {
   final String otp;
   SetResetPasswordOTP({required this.otp});
@@ -158,10 +186,11 @@ class UpdateUserProfilePhoto extends AuthEvent {
   const UpdateUserProfilePhoto({required this.imagePath});
 }
 
-class SignInWithAppleAuth extends AuthEvent {}
-
-class SignInWithGoogle extends AuthEvent {}
-
 class SignOut extends AuthEvent {}
 
 class DeleteAccount extends AuthEvent {}
+
+class ResetPassword extends AuthEvent {
+  final String email;
+  const ResetPassword({required this.email});
+}

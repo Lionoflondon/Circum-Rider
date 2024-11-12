@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:circum_rider/extension/email_validation.dart';
 import 'package:circum_rider/helper/location_helper.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dio/dio.dart';
@@ -47,21 +48,34 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<AuthEvent>((event, emit) async {
       if (event is SortSessionState) {
+        final storage = FlutterSecureStorage();
         User? user = auth.currentUser;
 
         if (user != null) {
           print("User is signed in: ${user.uid}");
+          final phone = (await storage.readAll())["phone"];
+
           final SharedPreferences prefs = await SharedPreferences.getInstance();
 
           await prefs.setString('riderId', user.uid);
           // You can also access user information like user.displayName, user.email, etc.
           emit(state.copyWith(
-            currentState: AppState.authenticated,
-            username: user.displayName,
-            phoneNumber: user.phoneNumber,
-            email: user.email,
-            profilePhoto: user.photoURL,
-          ));
+              currentState: AppState.authenticated,
+              username: user.displayName,
+              phoneNumber: user.phoneNumber ?? phone,
+              email: user.email,
+              profilePhoto: user.photoURL,
+              authenticatedStatus: AuthenticatedStatus.authenticated));
+
+          await Future.delayed(const Duration(seconds: 3));
+
+          final creationDate = DateTime.parse('${user.metadata.creationTime}');
+
+          final authChangeDate = DateTime.parse('2024-05-15');
+
+          if (authChangeDate.isAfter(creationDate)) {
+            add(SignOut());
+          }
         } else {
           print('User not signed in');
           emit(state.copyWith(currentState: AppState.unauthenticated));
@@ -98,8 +112,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
 
       if (event is SignupEmailChanged) {
-        debugPrint(event.email);
+        // debugPrint(event.email);
         emit(state.copyWith(email: event.email));
+        if (event.email!.isValidEmail()) {
+          emit(state.copyWith(isEmailValid: true));
+          // print('Valid email!');
+        } else {
+          emit(state.copyWith(isEmailValid: false));
+          // print('Invalid email!');
+        }
       }
 
       if (event is PhoneNumberChanged) {
@@ -137,22 +158,63 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       if (event is SignInWithAppleAuth) {
         try {
-          final credential = await SignInWithApple.getAppleIDCredential(
+          final appleCredential = await SignInWithApple.getAppleIDCredential(
             scopes: [
               AppleIDAuthorizationScopes.email,
               AppleIDAuthorizationScopes.fullName,
             ],
+            // nonce: nonce
           );
 
-          // print(credential.email);
-          // print(credential.familyName);
-          // print(credential.givenName);
-          // print(credential.identityToken);
+          // SignInWithApple
+
+          // print(appleCredential);
+          // print(appleCredential.email);
+          // print(appleCredential.givenName);
+          // print(appleCredential.familyName);
+
+          // final GoogleSignInAuthentication googleSignInAuthentication =
+          //     await googleSignInAccount.authentication;
+
+          // Create an `OAuthCredential` from the credential returned by Apple.
+          final oauthCredential = OAuthProvider("apple.com").credential(
+              idToken: appleCredential.identityToken,
+              accessToken: appleCredential.authorizationCode
+              // rawNonce: rawNonce,
+              );
+
+          // Sign in with credential
+          UserCredential userCredential =
+              await auth.signInWithCredential(oauthCredential);
+          // print(userCredential.user?.displayName);
+          // print(userCredential.user?.email);
+          // print(userCredential.user?.emailVerified);
+          // print('>>>>>>>>>>>>>>>>>>>>>>>>>>>');
+          // print(userCredential.user?.displayName?.split(' ').first);
+          // print(userCredential.user?.displayName?.split(' ').last);
+
           emit(state.copyWith(
-              oAuthFirstName: credential.givenName,
-              oAuthLastName: credential.familyName,
-              oAuthEmail: credential.email,
-              status: Status.signedInWithOAuth));
+              username: userCredential.user?.displayName,
+              email: userCredential.user?.email,
+              profilePhoto: userCredential.user?.photoURL,
+              status: Status.signedInWithOAuth,
+              currentState: AppState.authenticated,
+              authenticatedStatus: appleCredential.givenName == null &&
+                      userCredential.user?.displayName == null
+                  ? AuthenticatedStatus.incompleteData
+                  : AuthenticatedStatus.authenticated));
+
+          if (appleCredential.givenName != null) {
+            print('New user, updating user data');
+            // emit(state.copyWith(
+            //     authenticatedStatus: AuthenticatedStatus.authenticated));
+            add(UpdateUserProfile(
+                username:
+                    "${appleCredential.givenName} ${appleCredential.familyName}"));
+          }
+          await Future.delayed(const Duration(seconds: 2));
+
+          // await googleSignIn.signOut();
         } catch (e) {
           print(e);
         }
@@ -162,30 +224,31 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         final GoogleSignIn googleSignIn = GoogleSignIn();
         final GoogleSignInAccount? googleSignInAccount =
             await googleSignIn.signIn();
-        final GoogleSignInAuthentication googleSignInAuthentication =
-            await googleSignInAccount!.authentication;
 
-        googleSignInAccount.displayName;
-        googleSignInAccount.email;
-        googleSignInAccount.photoUrl;
-        print('>>>>>>>>>>>>>>>>>>');
-        print('>>>>>>>>>>>>>>>>>>');
-        print(googleSignInAccount.displayName);
-        print(googleSignInAccount.email);
-        print(googleSignInAccount.photoUrl);
-        print('>>>>>>>>>>>>>>>>>>');
-        print('>>>>>>>>>>>>>>>>>>');
+        if (googleSignInAccount != null) {
+          final GoogleSignInAuthentication googleSignInAuthentication =
+              await googleSignInAccount.authentication;
 
-        emit(state.copyWith(
-            oAuthFirstName:
-                googleSignInAccount.displayName!.trim().split(' ').first,
-            oAuthLastName:
-                googleSignInAccount.displayName!.trim().split(' ').last,
-            oAuthEmail: googleSignInAccount.email,
-            oAuthPhotoURL: googleSignInAccount.photoUrl,
-            status: Status.signedInWithOAuth));
+          final credential = GoogleAuthProvider.credential(
+            accessToken: googleSignInAuthentication.accessToken,
+            idToken: googleSignInAuthentication.idToken,
+          );
 
-        await googleSignIn.signOut();
+          // Sign in with credential
+          UserCredential userCredential =
+              await auth.signInWithCredential(credential);
+
+          emit(state.copyWith(
+              username: userCredential.user?.displayName,
+              email: userCredential.user?.email,
+              profilePhoto: userCredential.user?.photoURL,
+              status: Status.signedInWithOAuth,
+              currentState: AppState.authenticated,
+              authenticatedStatus: AuthenticatedStatus.authenticated));
+
+          add(UpdateUserProfile(username: userCredential.user!.displayName!));
+          // await googleSignIn.signOut();
+        }
       }
 
       if (event is RequestForOTP) {
@@ -247,7 +310,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             if (_userCredential.user?.displayName == null) {
               if (state.oAuthFirstName == null) {
                 emit(state.copyWith(
-                    status: Status.incompleteData,
+                    authenticatedStatus: AuthenticatedStatus.incompleteData,
                     currentState: AppState.authenticated));
               } else {
                 add(UpdateUserProfile(
@@ -286,15 +349,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       if (event is UpdateUserProfile) {
         try {
+          emit(state.copyWith(status: Status.loading));
           final User? user = auth.currentUser;
           await user?.updateDisplayName(event.username);
-          if (state.oAuthEmail != null) {
-            await user!.updateEmail(state.oAuthEmail!);
-          }
+          // if (state.oAuthEmail != null) {
+          //   await user!.updateEmail(state.oAuthEmail!);
+          // }
 
-          if (state.oAuthPhotoURL != null) {
-            await user!.updatePhotoURL(state.oAuthPhotoURL!);
-          }
+          // if (state.oAuthPhotoURL != null) {
+          //   await user!.updatePhotoURL(state.oAuthPhotoURL!);
+          // }
           // print(event.username);
 
           final documentReference = db.collection('riders').doc(user?.uid);
@@ -335,8 +399,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
           // print(user);
 
-          emit(
-              state.copyWith(status: Status.success, username: event.username));
+          emit(state.copyWith(
+              status: Status.success,
+              authenticatedStatus: AuthenticatedStatus.authenticated,
+              username: event.username));
         } catch (e) {
           print(e);
         }
@@ -391,8 +457,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         }
       }
 
-      if (event is ResetPassword) {}
-
       if (event is SetShowPassword) {
         emit(state.copyWith(showPassword: event.val));
       }
@@ -405,7 +469,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         // Obtain shared preferences.
         final SharedPreferences prefs = await SharedPreferences.getInstance();
         try {
+          emit(state.copyWith(status: Status.locationRequested));
           final User? user = auth.currentUser;
+
           Position locationData = await locationHelper.enableLocation();
 
           // Position myPosition = Position(
@@ -432,10 +498,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           print('Latitude: ${locationData.latitude}');
           print('Longitude: ${locationData.longitude}');
           emit(state.copyWith(
-              locationData: locationData,
-              hasLocationPermission: true,
-              isLocationEnabled: true,
-              status: Status.locationRequested));
+            locationData: locationData,
+            hasLocationPermission: true,
+            isLocationEnabled: true,
+          ));
           await db
               .collection("riders")
               .doc(user?.uid)
@@ -617,21 +683,288 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       },
     );
 
+    on<SetErrorMessage>(
+      (event, emit) {
+        emit(state.copyWith(errorMessage: event.errorMessage));
+      },
+    );
+
+    on<SignInWithEmail>(
+      (event, emit) async {
+        FlutterSecureStorage storage = const FlutterSecureStorage();
+        try {
+          emit(state.copyWith(status: Status.loading));
+          final UserCredential userCredential =
+              await auth.signInWithEmailAndPassword(
+                  email: event.email, password: event.password);
+          storage.write(key: 'password', value: event.password);
+
+          if (auth.currentUser?.emailVerified == false) {
+            print('Email not verified');
+            await auth.currentUser?.sendEmailVerification();
+            emit(state.copyWith(
+              status: Status.unverifiedEmail,
+            ));
+          } else {
+            if (userCredential.user?.displayName == null) {
+              emit(state.copyWith(
+                  authenticatedStatus: AuthenticatedStatus.incompleteData,
+                  currentState: AppState.authenticated));
+            } else {
+              print(userCredential.additionalUserInfo);
+              print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
+              print(userCredential);
+              print(userCredential.credential?.accessToken);
+              print(userCredential.credential?.providerId);
+              print(userCredential.credential?.signInMethod);
+              print(userCredential.credential?.token);
+              print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
+              print(userCredential.user);
+              emit(state.copyWith(
+                  status: Status.success,
+                  authenticatedStatus: AuthenticatedStatus.authenticated,
+                  username: userCredential.user?.displayName,
+                  profilePhoto: userCredential.user?.photoURL,
+                  email: userCredential.user?.email,
+                  verificationId: '',
+                  otp: '',
+                  phoneNumber: userCredential.user?.phoneNumber,
+                  currentState: AppState.authenticated));
+
+              User? user = auth.currentUser;
+              final documentReference = db.collection('riders').doc(user?.uid);
+              // Get the document snapshot
+              final documentSnapshot = await documentReference.get();
+
+              if (documentSnapshot.exists) {
+                // Document exists
+                // print('Document exists');
+                final userdata =
+                    await db.collection("riders").doc(user!.uid).get();
+
+                final doc = userdata.data();
+
+                // print(doc?['phone']);
+
+                await storage.write(key: 'phone', value: doc!['phone']);
+
+                emit(state.copyWith(phoneNumber: doc['phone']));
+              }
+            }
+          }
+        } on FirebaseAuthException catch (e) {
+          print(e.code);
+          emit(state.copyWith(status: Status.failure));
+          if (e.code == 'invalid-email') {
+            print('Email is invalid');
+            emit(state.copyWith(errorMessage: 'Email is invalid'));
+          }
+          if (e.code == 'user-disabled') {
+            print('User disabled');
+            emit(state.copyWith(errorMessage: 'User disabled'));
+          }
+          if (e.code == 'user-not-found') {
+            print('User not found');
+            emit(state.copyWith(errorMessage: 'User not found'));
+          }
+          if (e.code == 'wrong-password') {
+            print('Wrong password');
+            emit(state.copyWith(errorMessage: 'Password incorrect'));
+          }
+        } catch (e) {
+          print(e);
+          emit(state.copyWith(status: Status.failure));
+        }
+      },
+    );
+
+    on<SignUpWithEmail>(
+      (event, emit) async {
+        // var acs = ActionCodeSettings(
+        //     // URL you want to redirect back to. The domain (www.example.com) for this
+        //     // URL must be whitelisted in the Firebase Console.
+        //     url: 'https://circum-2797c.firebaseapp.com',
+        //     // This must be true
+        //     handleCodeInApp: true,
+        //     iOSBundleId: 'com.circum.app',
+        //     androidPackageName: 'com.circum.app',
+        //     // installIfNotAvailable
+        //     androidInstallApp: true,
+        //     // minimumVersion
+        //     androidMinimumVersion: '12');
+        FlutterSecureStorage storage = const FlutterSecureStorage();
+        try {
+          print('Signing up');
+          emit(state.copyWith(status: Status.loading));
+          final UserCredential userCredential =
+              await auth.createUserWithEmailAndPassword(
+                  email: event.email, password: event.password);
+
+          storage.write(key: 'password', value: event.password);
+
+          print('done');
+          // emit(state.copyWith(status: Status.success));
+          if (auth.currentUser?.emailVerified == false) {
+            print('Email not verified');
+            await auth.currentUser?.sendEmailVerification();
+            emit(state.copyWith(
+              status: Status.unverifiedEmail,
+            ));
+
+            // await auth
+            // await auth.signOut();
+          }
+        } on FirebaseAuthException catch (e) {
+          print(e.code);
+          emit(state.copyWith(status: Status.failure));
+          if (e.code == 'invalid-email') {
+            // print('Email is invalid');
+            emit(state.copyWith(errorMessage: 'Email is invalid'));
+          }
+          if (e.code == 'email-already-in-use') {
+            // print('User already exists');
+            emit(state.copyWith(errorMessage: 'User already exists'));
+          }
+          if (e.code == 'user-not-found') {
+            // print('User not found');
+            emit(state.copyWith(errorMessage: 'User not found'));
+          }
+          if (e.code == 'weak-password') {
+            // print('Weak password');
+            emit(state.copyWith(errorMessage: 'Use a strong password'));
+          }
+        } catch (e) {
+          // print(e);
+          emit(state.copyWith(
+              status: Status.failure, errorMessage: 'Something went wrong'));
+        }
+      },
+    );
+
+    on<UpdatePhoneNumber>(
+      (event, emit) async {
+        try {
+          User? user = auth.currentUser;
+          FlutterSecureStorage storage = const FlutterSecureStorage();
+          print(event.value);
+
+          final documentReference = db.collection('riders').doc(user?.uid);
+          // Get the document snapshot
+          final documentSnapshot = await documentReference.get();
+
+          if (documentSnapshot.exists) {
+            // Document exists
+            // print('Document exists');
+            await db.collection("riders").doc(user!.uid).update({
+              'phone': event.value,
+            });
+
+            await storage.write(key: 'phone', value: event.value);
+
+            emit(state.copyWith(phoneNumber: event.value));
+          }
+        } catch (e) {
+          print(e);
+        }
+      },
+    );
+
+    on<ConfirmEmailVerification>((event, emit) async {
+      await auth.currentUser?.reload();
+      if (auth.currentUser?.emailVerified == true) {
+        print('Email Verified');
+        if (auth.currentUser?.displayName == null) {
+          print(auth.currentUser?.displayName);
+          emit(state.copyWith(
+            authenticatedStatus: AuthenticatedStatus.incompleteData,
+            currentState: AppState.authenticated,
+          ));
+        } else {
+          emit(state.copyWith(
+            authenticatedStatus: AuthenticatedStatus.authenticated,
+            currentState: AppState.authenticated,
+            username: auth.currentUser?.displayName,
+            profilePhoto: auth.currentUser?.photoURL,
+          ));
+        }
+      } else {
+        print('Email not Verified');
+      }
+    });
+
     on<SignOut>(
       (event, emit) async {
+        FlutterSecureStorage storage = const FlutterSecureStorage();
         await auth.signOut();
+        emit(const AuthState());
         emit(state.copyWith(currentState: AppState.unauthenticated));
+        await storage.deleteAll();
       },
     );
 
     on<DeleteAccount>((event, emit) async {
+      FlutterSecureStorage storage = const FlutterSecureStorage();
       final user = auth.currentUser!;
-      await db.collection('users').doc(user.uid).update({'deleted': true});
-      // await user.delete();
+      final password = (await storage.readAll())["password"];
 
-      // emit(state.copyWith(currentState: AppState.unauthenticated));
+      // auth.currentUser.reauthenticateWithProvider(provider)
+
+      try {
+        // if(users.)
+
+        // final AuthCredential credential = PhoneAuthProvider.credential(
+        //     verificationId: state.verificationId!, smsCode: '${state.otp}');
+
+        final AuthCredential credential = EmailAuthProvider.credential(
+            email: state.email!, password: password!);
+
+        // Reauthenticate user with phone credential
+        await user.reauthenticateWithCredential(credential);
+
+        await db.collection('riders').doc(user.uid).update({'deleted': true});
+        // Reauthentication successful, proceed with account deletion
+        await user.delete();
+        await storage.deleteAll();
+        // Account deleted successfully
+        print("Account deleted successfully.");
+        emit(state.copyWith(currentState: AppState.unauthenticated));
+      } on FirebaseException catch (e) {
+        print(e.code);
+        if (e.code == 'invalid-verification-code') {
+          emit(state.copyWith(errorMessage: 'Invalid verification code'));
+        }
+      } catch (error) {
+        // An error occurred during reauthentication or account deletion
+        print("Error deleting account: $error");
+        // Handle error (e.g., display error message)
+      }
+
       // Navigator.pushNamedAndRemoveUntil(
       //     context, '/onboarding', (Route<dynamic> route) => false);
+    });
+
+    on<ResetPassword>((event, emit) async {
+      try {
+        emit(state.copyWith(status: Status.loading));
+        await auth.sendPasswordResetEmail(email: event.email);
+        emit(state.copyWith(status: Status.passwordResetEmailSent));
+      } on FirebaseAuthException catch (err) {
+        emit(state.copyWith(status: Status.failure));
+        print(err.code);
+        if (err.code == 'invalid-email') {
+          emit(state.copyWith(errorMessage: 'Invalid email'));
+        }
+
+        if (err.code == 'user-not-found') {
+          emit(state.copyWith(errorMessage: 'User not found'));
+        }
+
+        throw Exception(err.message.toString());
+      } catch (err) {
+        emit(state.copyWith(status: Status.failure));
+        print(err.toString());
+        throw Exception(err.toString());
+      }
     });
   }
 

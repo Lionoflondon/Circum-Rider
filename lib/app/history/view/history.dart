@@ -1,6 +1,7 @@
 import 'package:currency_symbols/currency_symbols.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../helper/format_date.dart';
 import '../../../utils/theme/theme.dart';
@@ -91,6 +92,24 @@ class HistoryViewState extends State<HistoryView> {
 
   Widget history() {
     return BlocBuilder<HistoryBloc, HistoryState>(builder: (context, state) {
+      if (state.ridesHistory.isEmpty) {
+        return Expanded(
+            child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: MediaQuery.of(context).size.width,
+            ),
+            SvgPicture.asset(
+              'assets/svg/delivery_history.svg',
+              color: const Color.fromARGB(255, 171, 171, 171),
+              width: 60,
+            ),
+            AppText.text('Your delivery history will appear here.',
+                color: const Color(0xFFBFBFBF))
+          ],
+        ));
+      }
       return Expanded(
           child: SizedBox(
               width: double.maxFinite,

@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+5
+version: 1.0.3+10
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -39,6 +39,7 @@ dependencies:
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
+  app_tracking_transparency: ^2.0.4
   bot_toast: ^4.0.3
   cached_network_image: ^3.3.1
   cupertino_icons: ^1.0.2
@@ -55,11 +56,13 @@ dependencies:
   flutter_firebase_chat_core: ^1.6.7
   flutter_keyboard_size: ^1.0.1
   flutter_keyboard_visibility: ^6.0.0
+  flutter_local_notifications: ^17.2.2
   flutter_polyline_points: ^2.0.0
   flutter_rating_bar: ^4.0.1
   flutter_screenutil: ^5.7.0
   flutter_secure_storage: ^9.0.0
   # flutter_stripe: ^10.0.0
+  flutter_native_splash: ^2.3.7
   flutter_svg: ^2.0.7
   geocoding: ^2.1.1
   geolocator: ^10.1.0
@@ -93,7 +96,6 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^3.0.1
   flutter_launcher_icons: "^0.13.1"
-  flutter_native_splash: ^2.3.7
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -166,3 +168,9 @@ flutter_native_splash:
   #background_image_dark: "assets/dark-background.png"
   # image_dark: assets/image/new_splash.png
   fullscreen: false
+  # for android 12 and above
+  android_12:
+    icon_background_color: "#131313"
+    image: assets/images/splash_image.png
+    icon_background_color_dark: "#131313"
+    image_dark: assets/images/splash_image.png

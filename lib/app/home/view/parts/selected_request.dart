@@ -28,7 +28,7 @@ class _SelectedRequestState extends State<SelectedRequest> {
                                 style: TextButton.styleFrom(
                                   backgroundColor: Colors.transparent,
                                   minimumSize: const Size(0, 50),
-                                  shape: RoundedRectangleBorder(),
+                                  shape: const RoundedRectangleBorder(),
                                 ),
                                 child: AppText.text('Current Trip',
                                     fontSize: 16, fontWeight: FontWeight.bold),
@@ -176,6 +176,7 @@ class _SelectedRequestState extends State<SelectedRequest> {
                 child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: AppButton.button(
+                        isLoading: state.requestStatus == RequestStatus.loading,
                         widget: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
@@ -252,7 +253,8 @@ class _SelectedRequestState extends State<SelectedRequest> {
                             }
 
                             if (state.actionButtonStatus ==
-                                ActionButtonStatus.outForDelivery) {
+                                    ActionButtonStatus.outForDelivery &&
+                                state.requestStatus != RequestStatus.loading) {
                               // ignore: use_build_context_synchronously
                               context.read<HomeBloc>().add(RideCompleted());
                             }

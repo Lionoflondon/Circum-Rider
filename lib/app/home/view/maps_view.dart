@@ -94,6 +94,7 @@ class _MapsViewState extends State<MapsView> {
       return GoogleMap(
         // key: mapKey,
         mapType: MapType.normal,
+        // myLocationEnabled: true,
         initialCameraPosition: _initialCameraPosition,
         cameraTargetBounds: CameraTargetBounds.unbounded,
         onMapCreated: (GoogleMapController controller) async {
