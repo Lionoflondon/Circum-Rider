@@ -27,7 +27,7 @@ class AccountState {
         withdrawRequest: withdrawRequest ?? this.withdrawRequest);
   }
 
-  AccountState clearWithdrawalRequest() {
+  AccountState clearWihdrawalRequest() {
     return AccountState(
         earnings: earnings,
         status: status,

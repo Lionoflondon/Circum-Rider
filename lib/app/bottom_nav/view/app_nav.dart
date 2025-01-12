@@ -8,6 +8,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_svg/svg.dart';
+import '../../../helper/notifications_helper.dart';
 import '../../../utils/theme/theme.dart';
 import '../../account/view/account.dart';
 import '../../authentication/view/enable_location.dart';
@@ -27,6 +28,7 @@ class AppNavView extends StatefulWidget {
 class AppNavViewState extends State<AppNavView> {
   FlutterSecureStorage storage = const FlutterSecureStorage();
   AuthBloc? authBloc;
+
   @override
   void initState() {
     super.initState();

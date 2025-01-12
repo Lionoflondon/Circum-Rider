@@ -3,12 +3,13 @@ import 'dart:io';
 
 import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'package:circum_rider/app/account/bloc/account_bloc.dart';
-import 'package:firebase_app_check/firebase_app_check.dart';
+// import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -21,52 +22,39 @@ import 'app/history/bloc/history_bloc.dart';
 import 'app/support/bloc/support_bloc.dart';
 import 'app/verification/bloc/verification_bloc.dart';
 import 'helper/chats_help.dart';
+import 'helper/notifications_helper.dart';
 import 'utils/nav/nav_key.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:bot_toast/bot_toast.dart';
 
+part './messaging.dart';
+
+final NotificationService _notificationService = NotificationService();
+
 final homeBloc = HomeBloc();
 
-foregoundMessage() {
-  // chatBloc.add(event);
-  FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-    print('Got a message whilst in the foreground!');
-    // print('Message data: ${message.data}');
-    if (message.data['type'] == 'message') {
-      // Remove leading and trailing whitespace
-      // String jsonString = message.data['data'].trim();
-
-      // // Replace single quotes with double quotes to make it valid JSON
-      // jsonString = jsonString.replaceAll("'", '"');
-      // print(jsonString);
-
-      // Parse the modified string into a map
-      Map<String, dynamic> msg = jsonDecode(message.data['data']);
-
-      homeBloc.add(IncomingMessage(data: msg));
-
-      await ChatsHelper().storeChat(msg);
-    }
-  });
-}
-
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  if (Firebase.apps.isEmpty) await Firebase.initializeApp();
-
-  print('Got a message whilst in the background!');
-  print('Message data: ${message.data}');
-  if (message.data['type'] == 'message') {
-    final msg = jsonDecode(message.data['data']);
-    homeBloc.add(IncomingMessage(data: msg));
-
-    await ChatsHelper().storeChat(msg);
-  }
-
-  return Future<void>.value();
-}
+// Initialize notifications plugin
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
 
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize notification settings
+  const AndroidInitializationSettings initializationSettingsAndroid =
+      AndroidInitializationSettings('@mipmap/launcher_icon');
+
+  const DarwinInitializationSettings initializationSettingsIOS =
+      DarwinInitializationSettings();
+
+  const InitializationSettings initializationSettings = InitializationSettings(
+    android: initializationSettingsAndroid,
+    iOS: initializationSettingsIOS,
+  );
+
+  await flutterLocalNotificationsPlugin.initialize(
+    initializationSettings,
+  );
 
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
@@ -74,13 +62,13 @@ void main() async {
 
   // Activate app check after initialization, but before
   // usage of any Firebase services.
-  await FirebaseAppCheck.instance
-      // Your personal reCaptcha public key goes here:
-      .activate(
-    androidProvider: AndroidProvider.playIntegrity,
-    appleProvider: AppleProvider.appAttest,
-    // webProvider: ReCaptchaV3Provider(kWebRecaptchaSiteKey),
-  );
+  // await FirebaseAppCheck.instance
+  //     // Your personal reCaptcha public key goes here:
+  //     .activate(
+  //   androidProvider: AndroidProvider.playIntegrity,
+  //   appleProvider: AppleProvider.appAttest,
+  // webProvider: ReCaptchaV3Provider(kWebRecaptchaSiteKey),
+  // );
 
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
     alert: true, // Required to display a heads up notification

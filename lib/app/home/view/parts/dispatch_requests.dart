@@ -29,7 +29,7 @@ class _DispatchRequestsState extends State<DispatchRequests> {
                         fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 24),
                 ExpandableCarousel(
-                  options: CarouselOptions(
+                  options: ExpandableCarouselOptions(
                     floatingIndicator: false,
                   ),
                   items: state.dispatchRequests.asMap().entries.map((entry) {

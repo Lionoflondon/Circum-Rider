@@ -12,7 +12,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:circum_rider/utils/app_state/app_state.dart';
-import 'package:geoflutterfire2/geoflutterfire2.dart';
+// import 'package:geoflutterfire2/geoflutterfire2.dart';
+import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:intl/intl.dart';
@@ -34,7 +35,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   AuthBloc() : super(AuthState()) {
     FirebaseAuth auth = FirebaseAuth.instance;
     // Init firestore and geoFlutterFire
-    final geo = GeoFlutterFire();
+    // final geo = GeoFlutterFire();
     LocationHelper locationHelper = LocationHelper();
 
     FirebaseFirestore db = FirebaseFirestore.instance;
@@ -492,9 +493,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'timestamp', locationData.timestamp.toIso8601String());
           await prefs.setDouble('altitude', locationData.altitude);
 
-          GeoFirePoint myLocation = geo.point(
-              latitude: locationData.latitude,
-              longitude: locationData.longitude);
+          GeoFirePoint myLocation = GeoFirePoint(
+              GeoPoint(locationData.latitude, locationData.longitude));
           print('Latitude: ${locationData.latitude}');
           print('Longitude: ${locationData.longitude}');
           emit(state.copyWith(
@@ -523,9 +523,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           final User? user = auth.currentUser;
           Position locationData = await locationHelper.enableLocation();
 
-          GeoFirePoint myLocation = geo.point(
-              latitude: locationData.latitude,
-              longitude: locationData.longitude);
+          GeoFirePoint myLocation = GeoFirePoint(
+              GeoPoint(locationData.latitude, locationData.longitude));
           print('Latitude: ${locationData.latitude}');
           print('Longitude: ${locationData.longitude}');
           emit(state.copyWith(

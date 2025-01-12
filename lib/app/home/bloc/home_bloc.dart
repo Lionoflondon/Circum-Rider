@@ -13,7 +13,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:geoflutterfire2/geoflutterfire2.dart';
+import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
+// import 'package:geoflutterfire2/geoflutterfire2.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:path_provider/path_provider.dart';
@@ -28,6 +29,7 @@ import '../../../utils/theme/theme.dart';
 import '../models/dispatch_request.m..dart';
 import '../models/message.m.dart';
 import '../models/place_coordinates.m.dart';
+import '../repo/direction_service.dart';
 import '../repo/home_repo.dart';
 
 part 'home_event.dart';
@@ -37,9 +39,16 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   HomeBloc() : super(HomeState()) {
     FirebaseAuth auth = FirebaseAuth.instance;
     // Init firestore and geoFlutterFire
-    final geo = GeoFlutterFire();
+    // final geo = GeoFlutterFire();
     FirebaseFirestore db = FirebaseFirestore.instance;
     final FirebaseMessaging firebaseMessaging = FirebaseMessaging.instance;
+
+    final DirectionsService _directionsService = DirectionsService();
+
+    List<DirectionStep> _currentRoute = [];
+    int _currentStepIndex = 0;
+
+    final User? user = auth.currentUser;
 
     on<HomeEvent>((event, emit) {
       // TODO: implement event handler
@@ -57,8 +66,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         final fcmToken = await firebaseMessaging.getToken();
         if (fcmToken != null) {
           try {
-            final User? user = auth.currentUser;
-
             final documentReference = db.collection('riders').doc(user?.uid);
 
             // Get the document snapshot
@@ -84,20 +91,38 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     );
 
     on<SetRideStatus>(
-      (event, emit) {
+      (event, emit) async {
+        final pref = await SharedPreferences.getInstance();
         if (event.status == RideStatus.offline) {
           // print('isOffline');
           add(SetDrawerHeight(
               minDrawerHeight: state.minDrawerHeight,
               maxDrawerHeight: state.minDrawerHeight));
           add(SetPanelControlStatus(status: PanelControlStatus.isClosed));
+
+          await db
+              .collection("riders")
+              .doc(user?.uid)
+              .update({'status': 'offline'}).then((value) => print("Offline"),
+                  onError: (e) => print("Error updating document $e"));
+
+          await pref.setString('status', 'offline');
         } else {
           add(GetAvailableRequests());
           add(SetDrawerHeight(
               minDrawerHeight: state.minDrawerHeight,
               maxDrawerHeight: 0.75.sh));
-
           add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
+
+          if (event.status == RideStatus.online) {
+            await db
+                .collection("riders")
+                .doc(user?.uid)
+                .update({'status': 'online'}).then((value) => print("online"),
+                    onError: (e) => print("Error updating document $e"));
+
+            await pref.setString('status', 'online');
+          }
         }
         emit(state.copyWith(rideStatus: event.status));
       },
@@ -114,28 +139,44 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           // final coordinates = new Coordinates(
           //     state.locationData!.latitude, state.locationData!.longitude);
           var address = await placemarkFromCoordinates(
-              state.locationData!.latitude, state.locationData!.longitude);
+              // state.locationData!.latitude, state.locationData!.longitude
+              51.520436,
+              -0.126741);
           print(address[0].locality);
 
-          GeoFirePoint center = geo.point(
-              latitude: state.locationData!.latitude,
-              longitude: state.locationData!.longitude);
+          GeoFirePoint center = GeoFirePoint(GeoPoint(
+              // state.locationData!.latitude, state.locationData!.longitude
+              51.520436,
+              -0.126741));
 
           // get the collection reference or query
-          var collectionReference = db
+          Query<Map<String, dynamic>> query = db
               .collection('deliveryRequests')
               .where('pickupLocality', isEqualTo: '${address[0].locality}');
+
+          CollectionReference<Map<String, dynamic>> collectionReference =
+              db.collection('deliveryRequests');
           // radius in km
           double radius = 50;
           String field = 'pickupPosition';
 
-          Stream<List<DocumentSnapshot>> stream = geo
-              .collection(collectionRef: collectionReference)
-              .within(
-                  center: center,
-                  radius: radius,
-                  field: field,
-                  strictMode: true);
+          GeoPoint geopointFrom(Map<String, dynamic> data) =>
+              (data['pickupPosition'] as Map<String, dynamic>)['geopoint']
+                  as GeoPoint;
+
+          Stream<List<DocumentSnapshot<Map<String, dynamic>>>> stream =
+              GeoCollectionReference<Map<String, dynamic>>(collectionReference)
+                  .subscribeWithin(
+            center: center,
+            radiusInKm: radius,
+            field: field,
+            strictMode: true,
+            geopointFrom: geopointFrom,
+            // queryBuilder: (Query<Map<String, dynamic>> query) {
+            //   return query.where('pickupLocality',
+            //       isEqualTo: '${address[0].locality}');
+            // },
+          );
 
           Completer<List<DispatchRequest>> _completer = Completer();
 
@@ -143,9 +184,12 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             (
               List<DocumentSnapshot> documentList,
             ) {
+              print(documentList.length);
               final dispatchRequests = documentList
                   .map((doc) => DispatchRequest.fromJson(doc.data()))
                   .toList();
+
+              // print(dispatchRequests)
 
               _completer.complete(dispatchRequests);
               print('completed');
@@ -220,24 +264,28 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
         PolylineResult startingPolylineResult =
             await points.getRouteBetweenCoordinates(
-          'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
-          PointLatLng(riderLat, riderLng),
-          PointLatLng(userPickupCoordinates.lat, userPickupCoordinates.lng),
-          travelMode: TravelMode.driving,
-        );
+                googleApiKey: 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
+                request: PolylineRequest(
+                  origin: PointLatLng(riderLat, riderLng),
+                  destination: PointLatLng(
+                      userPickupCoordinates.lat, userPickupCoordinates.lng),
+                  mode: TravelMode.driving,
+                ));
 
         PolylineResult endingPolylineResult =
             await points.getRouteBetweenCoordinates(
-          'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
-          PointLatLng(userPickupCoordinates.lat, userPickupCoordinates.lng),
-          PointLatLng(
-              userDestinationCoordinates.lat, userDestinationCoordinates.lng),
-          travelMode: TravelMode.driving,
-        );
+                googleApiKey: 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
+                request: PolylineRequest(
+                  origin: PointLatLng(
+                      userPickupCoordinates.lat, userPickupCoordinates.lng),
+                  destination: PointLatLng(userDestinationCoordinates.lat,
+                      userDestinationCoordinates.lng),
+                  mode: TravelMode.driving,
+                ));
 
         final totalTime = 120 +
-            startingPolylineResult.durationValue! +
-            endingPolylineResult.distanceValue!;
+            startingPolylineResult.totalDurationValue! +
+            endingPolylineResult.totalDistanceValue!;
 
         // print(startingPolylineResult.durationValue);
         // print(startingPolylineResult.duration);
@@ -367,40 +415,34 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
     on<GetPolylines>(
       (event, emit) async {
-        List<LatLng> latLngList = [];
+        _currentRoute = await _directionsService.getDetailedDirections(
+            LatLng(event.pickupCoordinate.lat, event.pickupCoordinate.lng),
+            LatLng(event.desinationCoordinate.lat,
+                event.desinationCoordinate.lng));
 
-        PolylinePoints points = PolylinePoints();
+        if (_currentRoute.isNotEmpty) {
+          // Create a more detailed list of points by breaking down each route step
+          List<LatLng> routePoints = _currentRoute
+              .expand((step) => step.polylinePoints.isNotEmpty
+                  ? step.polylinePoints
+                  : [step.startLocation, step.endLocation])
+              .toList();
 
-        PolylineResult polylineResult = await points.getRouteBetweenCoordinates(
-          'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
-          PointLatLng(event.pickupCoordinate.lat, event.pickupCoordinate.lng),
-          PointLatLng(
-              event.desinationCoordinate.lat, event.desinationCoordinate.lng),
-          travelMode: TravelMode.driving,
-        );
+          Polyline route = Polyline(
+            polylineId: const PolylineId('route'),
+            points: routePoints, // Use the more detailed points
+            color: AppColors.primary,
+            width: 5,
+            geodesic: true, // Helps create a more curved line on long routes
+          );
 
-        if (polylineResult.points.isNotEmpty) {
-          double tripDistance;
-          tripDistance =
-              double.parse(polylineResult.distance!.split(' ').first.trim());
-          // print(polylineResult.distance);
-          // print(polylineResult.distanceText);
-          // print(polylineResult.distanceValue);
-          polylineResult.points.forEach((ele) {
-            latLngList.add(LatLng(ele.latitude, ele.longitude));
-          });
-
-          List<Polyline> polyLines = [];
-          polyLines.add(Polyline(
-              polylineId: const PolylineId('PolylineId'),
-              points: latLngList,
-              width: 3,
-              color: AppColors.primary));
+          // Rest of your existing code remains the same
+          List<Polyline> polyLines = [route];
 
           final Marker sourceMarker = Marker(
             markerId: const MarkerId('source_marker'),
-            position: LatLng(event.pickupCoordinate.lat,
-                event.pickupCoordinate.lng), // Source address location
+            position:
+                LatLng(event.pickupCoordinate.lat, event.pickupCoordinate.lng),
             icon: BitmapDescriptor.defaultMarkerWithHue(
               BitmapDescriptor.hueAzure,
             ),
@@ -408,8 +450,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
           final Marker destinationMarker = Marker(
             markerId: const MarkerId('destination_marker'),
-            position: LatLng(event.desinationCoordinate.lat,
-                event.desinationCoordinate.lng), // Destination address location
+            position: LatLng(
+                event.desinationCoordinate.lat, event.desinationCoordinate.lng),
             icon: BitmapDescriptor.defaultMarkerWithHue(
               BitmapDescriptor.hueRed,
             ),
@@ -421,12 +463,73 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           };
 
           emit(state.copyWith(
-            polylines: polyLines, markers: markers, // distance: tripDistance
+            polylines: polyLines,
+            markers: markers,
           ));
 
           add(SetSourceAndDestinationStatus(
               status: SourceAndDestinationStatus.selected));
         }
+        // List<LatLng> latLngList = [];
+        // PolylinePoints points = PolylinePoints();
+
+        // PolylineResult polylineResult = await points.getRouteBetweenCoordinates(
+        //     googleApiKey: 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
+        //     request: PolylineRequest(
+        //       origin: PointLatLng(
+        //           event.pickupCoordinate.lat, event.pickupCoordinate.lng),
+        //       destination: PointLatLng(event.desinationCoordinate.lat,
+        //           event.desinationCoordinate.lng),
+        //       mode: TravelMode.driving,
+        //     ));
+
+        // if (polylineResult.points.isNotEmpty) {
+        //   double tripDistance;
+        //   tripDistance = polylineResult.totalDistanceValue!.toDouble();
+        //   // print(polylineResult.distance);
+        //   // print(polylineResult.distanceText);
+        //   // print(polylineResult.distanceValue);
+        //   polylineResult.points.forEach((ele) {
+        //     latLngList.add(LatLng(ele.latitude, ele.longitude));
+        //   });
+
+        //   List<Polyline> polyLines = [];
+        //   polyLines.add(Polyline(
+        //       polylineId: const PolylineId('PolylineId'),
+        //       points: latLngList,
+        //       width: 3,
+        //       color: AppColors.primary));
+
+        //   final Marker sourceMarker = Marker(
+        //     markerId: const MarkerId('source_marker'),
+        //     position: LatLng(event.pickupCoordinate.lat,
+        //         event.pickupCoordinate.lng), // Source address location
+        //     icon: BitmapDescriptor.defaultMarkerWithHue(
+        //       BitmapDescriptor.hueAzure,
+        //     ),
+        //   );
+
+        //   final Marker destinationMarker = Marker(
+        //     markerId: const MarkerId('destination_marker'),
+        //     position: LatLng(event.desinationCoordinate.lat,
+        //         event.desinationCoordinate.lng), // Destination address location
+        //     icon: BitmapDescriptor.defaultMarkerWithHue(
+        //       BitmapDescriptor.hueRed,
+        //     ),
+        //   );
+
+        //   Map<MarkerId, Marker> markers = {
+        //     const MarkerId('source_marker'): sourceMarker,
+        //     const MarkerId('destination_marker'): destinationMarker
+        //   };
+
+        //   emit(state.copyWith(
+        //     polylines: polyLines, markers: markers, // distance: tripDistance
+        //   ));
+
+        //   add(SetSourceAndDestinationStatus(
+        //       status: SourceAndDestinationStatus.selected));
+        // }
       },
     );
 
@@ -674,6 +777,18 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         final double? riderLng = prefs.getDouble('longitude');
         final double? riderLat = prefs.getDouble('latitude');
         final String? riderId = prefs.getString('riderId');
+        String? statusString = prefs.getString('status');
+        RideStatus? status;
+        if (statusString == 'online') {
+          print('online-online');
+          status = RideStatus.online;
+          add(SetRideStatus(status: RideStatus.online));
+          add(GetAvailableRequests());
+          add(SetDrawerHeight(
+              minDrawerHeight: state.minDrawerHeight,
+              maxDrawerHeight: 0.75.sh));
+          add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
+        }
         print('Checking for active requests');
         print('activeRequest: $activeRequest');
 
@@ -697,7 +812,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           PlaceCoordinate pickupCoordinates;
           PlaceCoordinate desinationCoordinate;
 
-          RideStatus? status;
           if (data['status'] == 'accepted') {
             status = RideStatus.userConfirmedRide;
             pickupCoordinates = PlaceCoordinate(lat: riderLat!, lng: riderLng!);
@@ -799,19 +913,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             'timeStamp': '${DateTime.now()}'
           };
 
-          await MessagingServer().sendMessage(
-              data: {
-                "type": "message",
-                "data": """{
+          await MessagingServer().sendMessage(data: {
+            "type": "message",
+            "data": """{
                 "requestId": "${state.activeRequest!.requestId}",
                 "senderId": "${user.uid}",
                 "message": "${event.message}",
                 "timeStamp": "${DateTime.now()}"
               }"""
-              },
-              code: state.activeRequest!.code,
-              message:
-                  '${user.displayName!.split(' ').first.trim()} will be picking up your parcel soon.');
+          }, code: state.activeRequest!.code, message: '');
 
           add(IncomingMessage(data: messageData));
 
