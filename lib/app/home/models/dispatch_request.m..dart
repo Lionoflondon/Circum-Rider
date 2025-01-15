@@ -48,7 +48,10 @@ class DispatchRequest extends Equatable {
       code: json['code'],
       price: json['price'],
       currency: json['currency'],
-      createdAt: json['createdAt'],
+      createdAt: json['createdAt'].runtimeType == Timestamp
+          ? json['createdAt']
+          : Timestamp(
+              json['createdAt']["_seconds"], json['createdAt']["_nanoseconds"]),
       riderName: json['riderName'],
       userRating: json['userRating'],
       riderRating: json['riderRating'],

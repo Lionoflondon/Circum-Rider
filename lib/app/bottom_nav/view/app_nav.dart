@@ -34,7 +34,7 @@ class AppNavViewState extends State<AppNavView> {
     super.initState();
     authBloc = context.read<AuthBloc>();
     // authBloc?.add(RequestLocationData());
-    checkForLocationData();
+    // checkForLocationData();
     Timer.periodic(
         const Duration(seconds: 200), (timer) => checkForLocationData());
   }

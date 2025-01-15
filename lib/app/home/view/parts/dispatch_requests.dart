@@ -176,7 +176,12 @@ class _DispatchRequestsState extends State<DispatchRequests> {
                                                 color: const Color(0xFFA75248),
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.bold),
-                                            onPressed: () {})),
+                                            onPressed: () {
+                                              context.read<HomeBloc>().add(
+                                                  DeclineRequest(
+                                                      requestId:
+                                                          item.requestId));
+                                            })),
                                   ],
                                 )
                               ],

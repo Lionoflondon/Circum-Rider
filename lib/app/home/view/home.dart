@@ -45,7 +45,7 @@ class _HomeViewState extends State<HomeView> {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<HomeBloc, HomeState>(builder: (context, state) {
-      SchedulerBinding.instance.addPostFrameCallback((_) {
+      SchedulerBinding.instance.addPostFrameCallback((_) async {
         //yourcode
         if (state.rideStatus == RideStatus.delivered) {
           print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>...');
@@ -54,6 +54,7 @@ class _HomeViewState extends State<HomeView> {
           context
               .read<HomeBloc>()
               .add(SetRideStatus(status: RideStatus.online));
+          await Future.delayed(Duration(seconds: 1));
           Navigator.push(
               context, MaterialPageRoute(builder: (_) => RatingsView()));
         }
@@ -148,19 +149,61 @@ class _HomeViewState extends State<HomeView> {
                 ),
                 GestureDetector(
                     onHorizontalDragStart: (details) {
-                      print('Drag started');
+                      // print('Drag started');
                     },
-                    onHorizontalDragEnd: (details) {
+                    onHorizontalDragEnd: (details) async {
                       print(details.primaryVelocity);
                       print(details.velocity);
 
                       if (details.primaryVelocity != null &&
                           (details.primaryVelocity!) > 100) {
-                        print('Dragged right');
+                        // print('Dragged right');
+                        if (state.rideStatus == RideStatus.online) {
+                          final confirmed = await showCupertinoDialog(
+                              barrierDismissible: true,
+                              context: context,
+                              builder: (_) {
+                                return AlertDialog(
+                                  shape: RoundedRectangleBorder(),
+                                  backgroundColor:
+                                      const Color.fromARGB(255, 255, 255, 255),
+                                  title: AppText.text('Go offline?',
+                                      fontSize: 18,
+                                      color: Colors.black,
+                                      fontWeight: FontWeight.w600),
+                                  content: AppText.text(
+                                    "You won’t receive new ride requests while offline.",
+                                    fontSize: 16,
+                                    color: Colors.black,
+                                  ),
+                                  actions: [
+                                    AppButton.button(
+                                        widget: AppText.text('confirm',
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600),
+                                        onPressed: () {
+                                          Navigator.pop(_, true);
+                                        }),
+                                    AppButton.button(
+                                        backgroundColor: AppColors.danger,
+                                        widget: AppText.text('cancel',
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600),
+                                        onPressed: () {
+                                          Navigator.pop(_, false);
+                                        }),
+                                  ],
+                                );
+                              });
+
+                          if (confirmed == false) {
+                            return;
+                          }
+                        }
 
                         if (context.read<AuthBloc>().state.locationData !=
                             null) {
-                          print('Location available');
+                          // print('Location available');
                           context.read<HomeBloc>().add(SetHomeLocationData(
                               locationData: context
                                   .read<AuthBloc>()
@@ -181,7 +224,7 @@ class _HomeViewState extends State<HomeView> {
 
                       if (details.primaryVelocity != null &&
                           (details.primaryVelocity!) < -100) {
-                        print('Dragged left');
+                        // print('Dragged left');
                       }
                     },
                     child: TextButton(

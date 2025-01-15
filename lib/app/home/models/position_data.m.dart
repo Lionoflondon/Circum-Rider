@@ -10,7 +10,12 @@ class PositionData {
   });
 
   factory PositionData.fromJson(dynamic json) {
-    return PositionData(geohash: json['geohash'], geopoint: json['geopoint']);
+    // print(json);
+    final GeoPoint geoPoint = json['geopoint'].runtimeType == GeoPoint
+        ? json['geopoint']
+        : GeoPoint(
+            json['geopoint']['_latitude'], json['geopoint']['_longitude']);
+    return PositionData(geohash: json['geohash'], geopoint: geoPoint);
   }
 
   Map<String, dynamic> toJson() {

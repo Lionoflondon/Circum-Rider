@@ -40,7 +40,10 @@ class MessagingServer {
         FirebaseSend(
           validateOnly: false,
           message: FirebaseMessage(
-            apns: const FirebaseApnsConfig(payload: {
+            apns: const FirebaseApnsConfig(headers: {
+              'apns-priority': '10', // High priority
+              'apns-push-type': 'background', // Silent notification
+            }, payload: {
               'aps': {'content-available': 1}
             }),
             token:
@@ -51,22 +54,25 @@ class MessagingServer {
             //   title: title,
             //   body: message,
             // ),
-            // android: FirebaseAndroidConfig(
-            // ttl: '3s',
-            /// Add Delay in String. If you want to add 1 minute delat then add it like "60s"
-            // notification: FirebaseAndroidNotification(
-            //   title: title,
-            //   body: message,
-            //   // icon: 'ic_notification',
-            //   // color: '#009999',
-            // ),
-            // ),
+            android: const FirebaseAndroidConfig(
+              priority: AndroidMessagePriority.high,
+              ttl: '1s',
+              // Add Delay in String. If you want to add 1 minute delat then add it like "60s"
+              // notification: FirebaseAndroidNotification(
+              //   title: title,
+              //   body: message,
+              //   // icon: 'ic_notification',
+              //   // color: '#009999',
+              // ),
+            ),
           ),
         ),
       );
 
+      print('sent');
+
       /// Print Request response
-      print(result.toString());
+      // print(result.toString());
     } catch (err) {
       print(err);
     }

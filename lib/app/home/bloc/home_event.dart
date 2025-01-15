@@ -97,3 +97,8 @@ class RateUser extends HomeEvent {
 
   RateUser({required this.rating});
 }
+
+class DeclineRequest extends HomeEvent {
+  String? requestId;
+  DeclineRequest({required this.requestId});
+}

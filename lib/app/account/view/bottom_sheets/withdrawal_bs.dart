@@ -288,7 +288,8 @@ class ButtSheetState extends State<ButtSheet> {
                           )))),
               const SizedBox(height: 10),
               Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: const EdgeInsets.symmetric(horizontal: 24)
+                      .copyWith(bottom: MediaQuery.of(context).padding.bottom),
                   child: AppButton.button(
                       widget: Center(
                           child: AppText.text('Proceed',
