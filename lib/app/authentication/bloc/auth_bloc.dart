@@ -223,6 +223,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       if (event is SignInWithGoogle) {
         final GoogleSignIn googleSignIn = GoogleSignIn();
+        await googleSignIn.signOut();
         final GoogleSignInAccount? googleSignInAccount =
             await googleSignIn.signIn();
 
