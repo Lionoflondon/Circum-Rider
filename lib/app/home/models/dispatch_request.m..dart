@@ -41,20 +41,31 @@ class DispatchRequest extends Equatable {
       ];
 
   static DispatchRequest fromJson(dynamic json) {
+    final createdAtValue = json['createdAt'];
+    Timestamp? createdAt;
+
+    if (createdAtValue is Timestamp) {
+      createdAt = createdAtValue;
+    } else if (createdAtValue is Map &&
+        createdAtValue['_seconds'] != null &&
+        createdAtValue['_nanoseconds'] != null) {
+      createdAt = Timestamp(
+        createdAtValue['_seconds'],
+        createdAtValue['_nanoseconds'],
+      );
+    }
+
     return DispatchRequest(
       pickupData: ContactInfo.fromJson(json['pickupDetails']),
       dropoffData: ContactInfo.fromJson(json['dropoffDetails']),
-      requestId: json['requestId'],
-      code: json['code'],
-      price: json['price'],
-      currency: json['currency'],
-      createdAt: json['createdAt'].runtimeType == Timestamp
-          ? json['createdAt']
-          : Timestamp(
-              json['createdAt']["_seconds"], json['createdAt']["_nanoseconds"]),
+      requestId: json['requestId'] ?? '',
+      code: json['code'] ?? '',
+      price: (json['price'] as num?)?.toDouble() ?? 0,
+      currency: json['currency'] ?? 'GBP',
+      createdAt: createdAt,
       riderName: json['riderName'],
-      userRating: json['userRating'],
-      riderRating: json['riderRating'],
+      userRating: (json['userRating'] as num?)?.toDouble(),
+      riderRating: (json['riderRating'] as num?)?.toDouble(),
     );
   }
 

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:circum_rider/app/authentication/bloc/auth_bloc.dart';
 import 'package:circum_rider/app/bottom_nav/view/index.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -46,7 +47,7 @@ class EnableLocation extends StatelessWidget {
                       textAlign: TextAlign.center,
                       fontSize: 20,
                       fontWeight: FontWeight.w600),
-                  if (Platform.isAndroid)
+                  if (!kIsWeb && Platform.isAndroid)
                     Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 24),
                         child: Column(

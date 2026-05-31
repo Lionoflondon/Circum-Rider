@@ -195,13 +195,8 @@ class _DispatchRequestsState extends State<DispatchRequests> {
       }
 
       if (state.rideStatus != RideStatus.offline &&
-          (state.dispatchRequests == null || state.dispatchRequests == [])) {
-        Timer.periodic(Duration(seconds: 4), (tik) {
-          print(">>>>>>>>>>>>>>>>>>>>>");
-          print("Getting available rides");
-          print(">>>>>>>>>>>>>>>>>>>>>>");
-          context.read<HomeBloc>().add(GetAvailableRequests());
-        });
+          state.dispatchRequests.isEmpty &&
+          state.requestStatus == RequestStatus.success) {
         return Expanded(
             child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -219,6 +214,15 @@ class _DispatchRequestsState extends State<DispatchRequests> {
                       backgroundColor: Color(0xFF1F292E),
                       color: AppColors.primary,
                     ),
+                    const SizedBox(height: 24),
+                    AppButton.button(
+                        widget: Center(
+                          child: AppText.text('Refresh requests',
+                              fontWeight: FontWeight.w600),
+                        ),
+                        onPressed: () {
+                          context.read<HomeBloc>().add(GetAvailableRequests());
+                        }),
                   ],
                 )));
       }

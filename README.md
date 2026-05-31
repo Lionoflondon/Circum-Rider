@@ -1,16 +1,37 @@
-# circum_rider
+# Circum Rider
 
-A new Flutter project.
+Flutter rider app for receiving and completing delivery requests from the
+Circum customer app.
 
-## Getting Started
+## Request Flow
 
-This project is a starting point for a Flutter application.
+- Riders go online from the home screen.
+- The Circum customer app calls `sendPackage`, which broadcasts
+  `broadcast-request` notifications to nearby online riders.
+- The rider app refreshes available requests when a broadcast is received.
+- Riders can accept, decline, start delivery, message the customer, and mark the
+  delivery complete.
 
-A few resources to get you started if this is your first Flutter project:
+Rider-to-customer push updates now go through the backend callable
+`sendRiderUpdate`. Deploy the matching Cloud Function from the Circum customer
+backend before testing accept, location-broadcast, message, or completion flows.
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Run Locally
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```sh
+flutter pub get
+flutter run
+```
+
+## Backend
+
+Deploy Cloud Functions from the Circum customer app repository:
+
+```sh
+cd server/functions
+npm install
+firebase deploy --only functions
+```
+
+Never place Firebase Admin service-account JSON or private keys in the Flutter
+client.

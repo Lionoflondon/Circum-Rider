@@ -7,6 +7,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
@@ -77,10 +78,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     // if (Firebase.apps.isEmpty) print('Firebase not initialized');
     // if (Firebase.apps.isEmpty) await Firebase.initializeApp();
     final User? user = auth.currentUser;
-    if (Platform.isIOS) {
+    if (!kIsWeb && Platform.isIOS) {
       await firebaseMessaging.requestPermission();
     }
-    final apnsToken = await firebaseMessaging.getAPNSToken();
+    final apnsToken =
+        !kIsWeb && Platform.isIOS ? await firebaseMessaging.getAPNSToken() : null;
     print('apnsToken: $apnsToken');
     final fcmToken = await firebaseMessaging.getToken();
     if (fcmToken != null) {

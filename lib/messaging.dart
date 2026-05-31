@@ -17,6 +17,11 @@ foregoundMessage() {
     }
 
     if (message.data['type'] == 'broadcast-request') {
+      homeBloc.add(GetAvailableRequests());
+      homeBloc.add(SetDrawerHeight(
+          minDrawerHeight: homeBloc.state.minDrawerHeight,
+          maxDrawerHeight: 0.75.sh));
+      homeBloc.add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
       notifyUser(
           body: 'You have a new delivery request waiting!', title: 'Circum');
     }
@@ -38,6 +43,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   }
 
   if (message.data['type'] == 'broadcast-request') {
+    homeBloc.add(GetAvailableRequests());
     notifyUser(
         body: 'You have a new delivery request waiting!', title: 'Circum');
   }

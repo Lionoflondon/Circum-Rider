@@ -1,14 +1,14 @@
 buildscript {
-    ext.kotlin_version = '1.9.22'
+    ext.kotlin_version = '2.3.20'
     repositories {
         google()
         mavenCentral()
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.3.1'
+        classpath 'com.android.tools.build:gradle:9.0.1'
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-        classpath 'com.google.gms:google-services:4.3.8'
+        classpath 'com.google.gms:google-services:4.4.4'
     }
 }
 
@@ -31,6 +31,14 @@ subprojects {
 }
 subprojects {
     project.evaluationDependsOn(':app')
+}
+
+subprojects { subproject ->
+    if (subproject.plugins.hasPlugin("com.android.library")) {
+        subproject.android {
+            compileSdk = 36
+        }
+    }
 }
 
 tasks.register("clean", Delete) {
