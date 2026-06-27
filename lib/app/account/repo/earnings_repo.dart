@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/earnings.m.dart';
 
@@ -9,10 +10,16 @@ class EarningsRepo {
     Dio dio = Dio();
 
     try {
+      final idToken = await FirebaseAuth.instance.currentUser?.getIdToken();
+      if (idToken == null) {
+        throw Exception("You must be signed in to fetch earnings");
+      }
+
       var response = await dio.post(
         "https://us-central1-circum-2797c.cloudfunctions.net/calculateEarnings",
         data: {'riderId': riderId},
         options: Options(
+          headers: {'Authorization': 'Bearer $idToken'},
           followRedirects: false,
           validateStatus: (status) {
             return status! < 500;
