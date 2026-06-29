@@ -81,8 +81,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     if (!kIsWeb && Platform.isIOS) {
       await firebaseMessaging.requestPermission();
     }
-    final apnsToken =
-        !kIsWeb && Platform.isIOS ? await firebaseMessaging.getAPNSToken() : null;
+    final apnsToken = !kIsWeb && Platform.isIOS
+        ? await firebaseMessaging.getAPNSToken()
+        : null;
     print('apnsToken: $apnsToken');
     final fcmToken = await firebaseMessaging.getToken();
     if (fcmToken != null) {
@@ -247,6 +248,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       // print(endingPolylineResult.duration);
 
       final formattedDeliveryTime = formattedTimeAfterSeconds(totalTime);
+      final riderPhone = riderData?['phone'] ?? user?.phoneNumber ?? '';
 
       // final userData = await firebaseMessaging
       //     .subscribeToTopic('your_topic_name')
@@ -263,7 +265,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                 'plateNumber': '${riderData!['plateNumber']}',
                 'typeOfVehicle': '${riderData['typeOfVehicle']}',
                 'estimatedDeliveryTime': '$formattedDeliveryTime',
-                'phoneNumber': '${user?.phoneNumber}',
+                'phoneNumber': '$riderPhone',
                 'riderId': '${user?.uid}',
                 'code': '${riderData['fcmToken']}'
               }'''
@@ -277,7 +279,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       await prefs.setString('plateNumber', '${riderData['plateNumber']}');
       await prefs.setString('typeOfVehicle', '${riderData['typeOfVehicle']}');
       await prefs.setString('estimatedDeliveryTime', formattedDeliveryTime);
-      await prefs.setString('phoneNumber', '${user?.phoneNumber}');
+      await prefs.setString('phoneNumber', '$riderPhone');
       await prefs.setString('riderId', '${user?.uid}');
       await prefs.setString('code', '${riderData['fcmToken']}');
       await prefs.setString('userCode', event.code);

@@ -6,6 +6,7 @@ import '../bloc/auth_bloc.dart';
 import 'enter_otp.dart';
 import 'signup_form.dart';
 import 'verify_email.dart';
+import 'widgets/step_progress.dart';
 
 class SignupView extends StatelessWidget {
   const SignupView({Key? key}) : super(key: key);
@@ -15,10 +16,11 @@ class SignupView extends StatelessWidget {
     return BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {
           if (state.status == Status.success) {
-            context.read<AuthBloc>().add(ResetStatus());
-            // context.read<AuthBloc>().add(StartCountDown());
-            // Navigator.push(context,
-            //     MaterialPageRoute(builder: (_) => const EnterOTPView()));
+            if (state.isPhoneOtpSent && state.isPhoneVerified != true) {
+              context.read<AuthBloc>().add(ResetStatus());
+              Navigator.push(context,
+                  MaterialPageRoute(builder: (_) => const EnterOTPView()));
+            }
           }
 
           if (state.status == Status.unverifiedEmail) {
@@ -39,16 +41,26 @@ class SignupView extends StatelessWidget {
                 _loader(),
                 Container(
                     width: MediaQuery.of(context).size.width,
-                    margin: const EdgeInsets.only(
-                      left: 30,
-                      top: 20,
-                    ),
-                    child: AppText.text("Create Account",
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                    child: AppText.text("Become a Circum Rider",
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
-                        fontSize: 28)),
+                        fontSize: 30)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: AppText.text(
+                    "Join the UK's most trusted delivery network.",
+                    color: AppColors.textGrey,
+                    fontSize: 15,
+                  ),
+                ),
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(24, 18, 24, 0),
+                  child: StepProgress(currentStep: 1),
+                ),
                 Expanded(
-                  child: SignupForm(),
+                  child: const SignupForm(),
                 ),
                 const SizedBox(height: 20),
               ],

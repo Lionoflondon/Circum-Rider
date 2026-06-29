@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../app/authentication/bloc/auth_bloc.dart';
 import '../app/onboarding/onboarding.dart';
 import 'app/authentication/view/add_details.dart';
+import 'app/authentication/view/application_submitted.dart';
 import 'utils/nav/nav_key.dart';
 
 import '../app/authentication/view/index.dart';
@@ -30,6 +31,10 @@ class App extends StatelessWidget {
           if (state.currentState == AppState.authenticated &&
               state.authenticatedStatus == AuthenticatedStatus.incompleteData)
             const MaterialPage(child: AddDetailsView()),
+
+          if (state.currentState == AppState.authenticated &&
+              state.authenticatedStatus == AuthenticatedStatus.pendingApproval)
+            const MaterialPage(child: ApplicationSubmittedView()),
 
           // Authenticated app state
           if (state.currentState == AppState.authenticated &&

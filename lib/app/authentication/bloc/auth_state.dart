@@ -11,7 +11,12 @@ enum Status {
   passwordResetEmailSent,
 }
 
-enum AuthenticatedStatus { initial, incompleteData, authenticated }
+enum AuthenticatedStatus {
+  initial,
+  incompleteData,
+  authenticated,
+  pendingApproval
+}
 
 enum AppLocationStatus {
   denied,
@@ -51,8 +56,12 @@ class AuthState extends AuthInitial {
   final String? gender;
   final String? pin;
   final String? otp;
+  final String? otpCode;
   final String? resetPasswordOtp;
   final String? errorMessage;
+  final bool isPhoneOtpSent;
+  final bool isPhoneVerified;
+  final String? otpErrorMessage;
   final int? verificationCode;
   final String? verificationType;
   final bool showPassword;
@@ -99,8 +108,12 @@ class AuthState extends AuthInitial {
         gender,
         pin,
         otp,
+        otpCode,
         resetPasswordOtp,
         errorMessage,
+        isPhoneOtpSent,
+        isPhoneVerified,
+        otpErrorMessage,
         verificationCode,
         verificationType,
         status,
@@ -140,10 +153,14 @@ class AuthState extends AuthInitial {
     this.dateOfBirth,
     this.gender,
     this.otp,
+    this.otpCode,
     this.resetPasswordOtp,
     this.pin,
     this.isLoading = false,
     this.errorMessage,
+    this.isPhoneOtpSent = false,
+    this.isPhoneVerified = false,
+    this.otpErrorMessage,
     this.verificationCode,
     this.verificationType,
     this.status = Status.initial,
@@ -183,10 +200,14 @@ class AuthState extends AuthInitial {
       String? dateOfBirth,
       String? gender,
       String? otp,
+      String? otpCode,
       String? resetPasswordOtp,
       String? pin,
       bool? isLoading,
       String? errorMessage,
+      bool? isPhoneOtpSent,
+      bool? isPhoneVerified,
+      String? otpErrorMessage,
       int? verificationCode,
       String? verificationType,
       Status? status,
@@ -224,10 +245,14 @@ class AuthState extends AuthInitial {
         dateOfBirth: dateOfBirth ?? this.dateOfBirth,
         gender: gender ?? this.gender,
         otp: otp ?? this.otp,
+        otpCode: otpCode ?? this.otpCode,
         resetPasswordOtp: resetPasswordOtp ?? this.resetPasswordOtp,
         pin: pin ?? this.pin,
         isLoading: isLoading ?? this.isLoading,
         errorMessage: errorMessage,
+        isPhoneOtpSent: isPhoneOtpSent ?? this.isPhoneOtpSent,
+        isPhoneVerified: isPhoneVerified ?? this.isPhoneVerified,
+        otpErrorMessage: otpErrorMessage,
         verificationCode: verificationCode ?? this.verificationCode,
         verificationType: verificationType ?? this.verificationType,
         status: status ?? this.status,

@@ -40,6 +40,36 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     FirebaseFirestore db = FirebaseFirestore.instance;
 
+    void logRiderAuthError({
+      required Object error,
+      required String path,
+      required String step,
+      String? riderDocumentId,
+    }) {
+      final uid = auth.currentUser?.uid;
+      if (error is FirebaseException) {
+        debugPrint(
+            'Rider onboarding Firebase error step=$step code=${error.code} '
+            'message=${error.message} path=$path authUid=$uid '
+            'riderDocumentId=$riderDocumentId');
+      } else {
+        debugPrint('Rider onboarding error step=$step error=$error path=$path '
+            'authUid=$uid riderDocumentId=$riderDocumentId');
+      }
+    }
+
+    Future<void> upsertRiderOnboarding({
+      required User user,
+      required Map<String, dynamic> data,
+    }) async {
+      await db.collection('riders').doc(user.uid).set({
+        'uid': user.uid,
+        'email': user.email,
+        'updatedAt': FieldValue.serverTimestamp(),
+        ...data,
+      }, SetOptions(merge: true));
+    }
+
     void listenForPermissionStatus() async {
       final permission = await permission_handler.Permission.location.status;
       print(permission);
@@ -55,6 +85,30 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         if (user != null) {
           print("User is signed in: ${user.uid}");
           final phone = (await storage.readAll())["phone"];
+          String? riderPhone = phone;
+          bool phoneVerified = false;
+          var authenticatedStatus = AuthenticatedStatus.authenticated;
+          try {
+            final riderDoc = await db.collection('riders').doc(user.uid).get();
+            final riderData = riderDoc.data();
+            riderPhone = riderData?['phone'] as String? ?? phone;
+            phoneVerified = riderData?['phoneVerified'] == true;
+            final onboardingStatus = riderData?['onboardingStatus'];
+            final driverStatus = riderData?['driverStatus'];
+            final approvalStatus = riderData?['approvalStatus'];
+            if (onboardingStatus == 'application_submitted' ||
+                driverStatus == 'pending' ||
+                approvalStatus == 'pending') {
+              authenticatedStatus = AuthenticatedStatus.pendingApproval;
+            }
+          } catch (error) {
+            logRiderAuthError(
+              error: error,
+              path: 'riders/${user.uid}',
+              step: 'session_restore',
+              riderDocumentId: user.uid,
+            );
+          }
 
           final SharedPreferences prefs = await SharedPreferences.getInstance();
 
@@ -63,10 +117,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(state.copyWith(
               currentState: AppState.authenticated,
               username: user.displayName,
-              phoneNumber: user.phoneNumber ?? phone,
+              phoneNumber: riderPhone ?? user.phoneNumber,
               email: user.email,
               profilePhoto: user.photoURL,
-              authenticatedStatus: AuthenticatedStatus.authenticated));
+              isPhoneVerified: phoneVerified,
+              authenticatedStatus: authenticatedStatus));
 
           await Future.delayed(const Duration(seconds: 3));
 
@@ -149,7 +204,151 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
 
       if (event is SetOTP) {
-        emit(state.copyWith(otp: event.otp));
+        emit(state.copyWith(otp: event.otp, otpCode: event.otp));
+      }
+
+      if (event is PhoneOtpChanged) {
+        emit(state.copyWith(otpCode: event.otpCode, otpErrorMessage: null));
+      }
+
+      if (event is SendPhoneOtp || event is ResendPhoneOtp) {
+        final phoneNumber = state.phoneNumber;
+        if (phoneNumber == null || phoneNumber.trim().isEmpty) {
+          emit(state.copyWith(
+              status: Status.failure,
+              otpErrorMessage: 'Add a mobile number to continue.'));
+          return;
+        }
+
+        final completer = Completer<void>();
+        String? verificationId;
+        int? resendToken;
+
+        try {
+          emit(state.copyWith(status: Status.loading, otpErrorMessage: null));
+          await auth.verifyPhoneNumber(
+            phoneNumber: phoneNumber,
+            forceResendingToken:
+                event is ResendPhoneOtp ? state.resendToken : null,
+            verificationCompleted: (credential) {},
+            verificationFailed: (error) {
+              logRiderAuthError(
+                error: error,
+                path: 'riders/${auth.currentUser?.uid ?? 'unknown'}',
+                step: 'phone_otp_send',
+                riderDocumentId: auth.currentUser?.uid,
+              );
+              if (!completer.isCompleted) completer.completeError(error);
+            },
+            codeSent: (id, token) {
+              verificationId = id;
+              resendToken = token;
+              if (!completer.isCompleted) completer.complete();
+            },
+            codeAutoRetrievalTimeout: (id) {
+              verificationId = id;
+            },
+          );
+          await completer.future;
+          emit(state.copyWith(
+            verificationId: verificationId,
+            resendToken: resendToken ?? state.resendToken,
+            isPhoneOtpSent: true,
+            status: Status.success,
+            otpErrorMessage: null,
+          ));
+        } catch (error) {
+          emit(state.copyWith(
+            status: Status.failure,
+            otpErrorMessage:
+                'We could not send the code. Please check the number.',
+          ));
+        }
+      }
+
+      if (event is VerifyPhoneOtp) {
+        final user = auth.currentUser;
+        final verificationId = state.verificationId;
+        if (user == null || verificationId == null) {
+          emit(state.copyWith(
+            status: Status.failure,
+            otpErrorMessage: 'We could not verify this session. Try again.',
+          ));
+          return;
+        }
+
+        try {
+          emit(state.copyWith(status: Status.loading, otpErrorMessage: null));
+          final credential = PhoneAuthProvider.credential(
+            verificationId: verificationId,
+            smsCode: event.otpCode,
+          );
+          try {
+            await user.linkWithCredential(credential);
+          } on FirebaseAuthException catch (error) {
+            if (error.code != 'provider-already-linked' &&
+                error.code != 'credential-already-in-use') {
+              rethrow;
+            }
+            logRiderAuthError(
+              error: error,
+              path: 'riders/${user.uid}',
+              step: 'phone_credential_already_linked',
+              riderDocumentId: user.uid,
+            );
+          }
+
+          await upsertRiderOnboarding(user: user, data: {
+            'phone': state.phoneNumber,
+            'phoneVerified': true,
+            'phoneVerifiedAt': FieldValue.serverTimestamp(),
+            'onboardingStatus': 'phone_verified',
+          });
+          await user.sendEmailVerification();
+
+          emit(state.copyWith(
+            otpCode: event.otpCode,
+            isPhoneVerified: true,
+            status: Status.unverifiedEmail,
+            otpErrorMessage: null,
+          ));
+        } on FirebaseAuthException catch (error) {
+          logRiderAuthError(
+            error: error,
+            path: 'riders/${user.uid}',
+            step: 'phone_otp_verify',
+            riderDocumentId: user.uid,
+          );
+          emit(state.copyWith(
+            status: Status.failure,
+            otpErrorMessage: error.code == 'invalid-verification-code'
+                ? 'That code is invalid or expired.'
+                : 'We could not verify that code. Please try again.',
+          ));
+        } catch (error) {
+          logRiderAuthError(
+            error: error,
+            path: 'riders/${user.uid}',
+            step: 'phone_otp_verify',
+            riderDocumentId: user.uid,
+          );
+          emit(state.copyWith(
+            status: Status.failure,
+            otpErrorMessage: 'We could not verify that code. Please try again.',
+          ));
+        }
+      }
+
+      if (event is ResendVerificationEmail) {
+        try {
+          emit(state.copyWith(status: Status.loading));
+          await auth.currentUser?.sendEmailVerification();
+          emit(state.copyWith(status: Status.success));
+        } catch (error) {
+          emit(state.copyWith(
+              status: Status.failure,
+              errorMessage: 'We could not resend the email. Try again.'));
+        }
       }
 
       if (event is SetPin) {
@@ -353,7 +552,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         try {
           emit(state.copyWith(status: Status.loading));
           final User? user = auth.currentUser;
-          await user?.updateDisplayName(event.username);
+          if (user == null) {
+            emit(state.copyWith(
+                status: Status.failure,
+                errorMessage: 'Please sign in again to continue.'));
+            return;
+          }
+          await user.updateDisplayName(event.username);
           // if (state.oAuthEmail != null) {
           //   await user!.updateEmail(state.oAuthEmail!);
           // }
@@ -363,10 +568,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           // }
           // print(event.username);
 
-          final documentReference = db.collection('riders').doc(user?.uid);
+          final documentReference = db.collection('riders').doc(user.uid);
           final SharedPreferences prefs = await SharedPreferences.getInstance();
 
-          await prefs.setString('riderId', user!.uid);
+          await prefs.setString('riderId', user.uid);
 
           // Get the document snapshot
           final documentSnapshot = await documentReference.get();
@@ -374,11 +579,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           if (documentSnapshot.exists) {
             // Document exists
             // print('Document exists');
-            await db.collection("riders").doc(user?.uid).update({
+            await db.collection("riders").doc(user.uid).update({
               'name': event.username,
-              'role': 'delivery',
-              'phone': user?.phoneNumber,
+              'role': 'rider',
+              'roles': ['rider'],
+              'phone': user.phoneNumber ?? state.phoneNumber,
+              'phoneVerified': state.isPhoneVerified,
+              if (state.isPhoneVerified)
+                'phoneVerifiedAt': FieldValue.serverTimestamp(),
               'status': 'offline',
+              'approvalStatus': 'pending',
+              'verificationStatus': 'pending',
+              'driverStatus': 'pending',
+              'riderRank': 'agent',
               'rating': '0.0',
               'plateNumber': '',
               'typeOfVehicle': '',
@@ -387,11 +600,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           } else {
             // Document does not exist
             // print('Document does not exist');
-            await db.collection("riders").doc(user?.uid).set({
+            await db.collection("riders").doc(user.uid).set({
               'name': event.username,
-              "role": 'delivery',
-              'phone': user?.phoneNumber,
+              "role": 'rider',
+              'roles': ['rider'],
+              'phone': user.phoneNumber ?? state.phoneNumber,
+              'phoneVerified': state.isPhoneVerified,
+              if (state.isPhoneVerified)
+                'phoneVerifiedAt': FieldValue.serverTimestamp(),
               'status': 'offline',
+              'approvalStatus': 'pending',
+              'verificationStatus': 'pending',
+              'driverStatus': 'pending',
+              'riderRank': 'agent',
               'rating': '0.0',
               'plateNumber': '',
               'typeOfVehicle': '',
@@ -503,12 +724,25 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             hasLocationPermission: true,
             isLocationEnabled: true,
           ));
-          await db
-              .collection("riders")
-              .doc(user?.uid)
-              .update({'position': myLocation.data}).then(
-                  (value) => print("DocumentSnapshot successfully updated!"),
-                  onError: (e) => print("Error updating document $e"));
+          await db.collection("riders").doc(user?.uid).update({
+            'position': myLocation.data,
+            'locationEnabled': true,
+            'approvalStatus': 'pending',
+            'verificationStatus': 'pending',
+            'onboardingStatus': 'application_submitted',
+            'driverStatus': 'pending',
+            'role': 'rider',
+            'roles': ['rider'],
+            'riderRank': 'agent',
+            'submittedAt': FieldValue.serverTimestamp(),
+          }).then((value) => print("DocumentSnapshot successfully updated!"),
+              onError: (e) => print("Error updating document $e"));
+          await db.collection('riderOnboardingEvents').add({
+            'riderId': user.uid,
+            'eventType': 'application_submitted',
+            'timestamp': FieldValue.serverTimestamp(),
+            'statusAfterEvent': 'application_submitted',
+          });
         } catch (e) {
           print(e);
           if (e == 'Location permissions are permanently denied') {
@@ -550,6 +784,41 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             final _openLocationSettings = await Geolocator.openAppSettings();
             print(_openLocationSettings);
           }
+        }
+      }
+
+      if (event is CompleteRiderApplication) {
+        final user = auth.currentUser;
+        if (user == null) return;
+        try {
+          await upsertRiderOnboarding(user: user, data: {
+            'locationEnabled': event.locationEnabled,
+            'approvalStatus': 'pending',
+            'verificationStatus': 'pending',
+            'onboardingStatus': 'application_submitted',
+            'driverStatus': 'pending',
+            'role': 'rider',
+            'roles': ['rider'],
+            'riderRank': 'agent',
+            'submittedAt': FieldValue.serverTimestamp(),
+          });
+          await db.collection('riderOnboardingEvents').add({
+            'riderId': user.uid,
+            'eventType': 'application_submitted',
+            'timestamp': FieldValue.serverTimestamp(),
+            'statusAfterEvent': 'application_submitted',
+          });
+          emit(state.copyWith(status: Status.locationRequested));
+        } catch (error) {
+          logRiderAuthError(
+            error: error,
+            path: 'riders/${user.uid}',
+            step: 'application_submit',
+            riderDocumentId: user.uid,
+          );
+          emit(state.copyWith(
+              status: Status.failure,
+              errorMessage: 'We could not submit your application.'));
         }
       }
     });
@@ -720,36 +989,38 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               print(userCredential.credential?.token);
               print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
               print(userCredential.user);
+              User? user = auth.currentUser;
+              final documentReference = db.collection('riders').doc(user?.uid);
+              // Get the document snapshot
+              final documentSnapshot = await documentReference.get();
+              String? riderPhone = userCredential.user?.phoneNumber;
+              var authenticatedStatus = AuthenticatedStatus.authenticated;
+
+              if (documentSnapshot.exists) {
+                final doc = documentSnapshot.data();
+                riderPhone = doc?['phone'] as String? ?? riderPhone;
+                final onboardingStatus = doc?['onboardingStatus'];
+                final driverStatus = doc?['driverStatus'];
+                final approvalStatus = doc?['approvalStatus'];
+                if (onboardingStatus == 'application_submitted' ||
+                    driverStatus == 'pending' ||
+                    approvalStatus == 'pending') {
+                  authenticatedStatus = AuthenticatedStatus.pendingApproval;
+                }
+                if (riderPhone != null) {
+                  await storage.write(key: 'phone', value: riderPhone);
+                }
+              }
               emit(state.copyWith(
                   status: Status.success,
-                  authenticatedStatus: AuthenticatedStatus.authenticated,
+                  authenticatedStatus: authenticatedStatus,
                   username: userCredential.user?.displayName,
                   profilePhoto: userCredential.user?.photoURL,
                   email: userCredential.user?.email,
                   verificationId: '',
                   otp: '',
-                  phoneNumber: userCredential.user?.phoneNumber,
+                  phoneNumber: riderPhone,
                   currentState: AppState.authenticated));
-
-              User? user = auth.currentUser;
-              final documentReference = db.collection('riders').doc(user?.uid);
-              // Get the document snapshot
-              final documentSnapshot = await documentReference.get();
-
-              if (documentSnapshot.exists) {
-                // Document exists
-                // print('Document exists');
-                final userdata =
-                    await db.collection("riders").doc(user!.uid).get();
-
-                final doc = userdata.data();
-
-                // print(doc?['phone']);
-
-                await storage.write(key: 'phone', value: doc!['phone']);
-
-                emit(state.copyWith(phoneNumber: doc['phone']));
-              }
             }
           }
         } on FirebaseAuthException catch (e) {
@@ -801,19 +1072,42 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                   email: event.email, password: event.password);
 
           storage.write(key: 'password', value: event.password);
+          final user = userCredential.user;
+          final fullName =
+              '${state.firstName ?? ''} ${state.lastName ?? ''}'.trim();
+          if (user != null && fullName.isNotEmpty) {
+            await user.updateDisplayName(fullName);
+            await upsertRiderOnboarding(user: user, data: {
+              'name': fullName,
+              'role': 'rider',
+              'roles': ['rider'],
+              'riderRank': 'agent',
+              'phone': state.phoneNumber,
+              'phoneVerified': false,
+              'approvalStatus': 'pending',
+              'verificationStatus': 'pending',
+              'onboardingStatus': 'account_created',
+              'driverStatus': 'pending',
+              'status': 'offline',
+              'rating': '0.0',
+              'plateNumber': '',
+              'typeOfVehicle': '',
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+            await db.collection('riderOnboardingEvents').add({
+              'riderId': user.uid,
+              'eventType': 'account_created',
+              'timestamp': FieldValue.serverTimestamp(),
+              'statusAfterEvent': 'account_created',
+            });
+          }
 
           print('done');
-          // emit(state.copyWith(status: Status.success));
-          if (auth.currentUser?.emailVerified == false) {
-            print('Email not verified');
-            await auth.currentUser?.sendEmailVerification();
-            emit(state.copyWith(
-              status: Status.unverifiedEmail,
-            ));
-
-            // await auth
-            // await auth.signOut();
-          }
+          emit(state.copyWith(
+            username: fullName.isEmpty ? state.username : fullName,
+            status: Status.initial,
+          ));
+          add(SendPhoneOtp());
         } on FirebaseAuthException catch (e) {
           print(e.code);
           emit(state.copyWith(status: Status.failure));
@@ -873,16 +1167,32 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       await auth.currentUser?.reload();
       if (auth.currentUser?.emailVerified == true) {
         print('Email Verified');
-        if (auth.currentUser?.displayName == null) {
-          print(auth.currentUser?.displayName);
+        final user = auth.currentUser;
+        if (user != null) {
+          await upsertRiderOnboarding(user: user, data: {
+            'onboardingStatus': 'email_verified',
+            'emailVerified': true,
+            'emailVerifiedAt': FieldValue.serverTimestamp(),
+          });
+        }
+        if (user != null &&
+            user.displayName == null &&
+            (state.firstName?.trim().isNotEmpty ?? false)) {
+          final name =
+              '${state.firstName ?? ''} ${state.lastName ?? ''}'.trim();
+          await user.updateDisplayName(name);
+          await upsertRiderOnboarding(user: user, data: {'name': name});
           emit(state.copyWith(
-            authenticatedStatus: AuthenticatedStatus.incompleteData,
-            currentState: AppState.authenticated,
+            status: Status.success,
+            username: name,
           ));
+        } else if (user?.displayName == null) {
+          emit(state.copyWith(
+              authenticatedStatus: AuthenticatedStatus.incompleteData,
+              currentState: AppState.authenticated));
         } else {
           emit(state.copyWith(
-            authenticatedStatus: AuthenticatedStatus.authenticated,
-            currentState: AppState.authenticated,
+            status: Status.success,
             username: auth.currentUser?.displayName,
             profilePhoto: auth.currentUser?.photoURL,
           ));
