@@ -50,6 +50,10 @@ class AuthState extends AuthInitial {
   final String? username;
   final String? email;
   final String? phoneNumber;
+  final String? vehicleType;
+  final String? vehicleMakeModel;
+  final String? vehicleColour;
+  final String? vehicleRegistration;
   final String? password;
   final String? confirmPassword;
   final String? dateOfBirth;
@@ -102,6 +106,10 @@ class AuthState extends AuthInitial {
         username,
         email,
         phoneNumber,
+        vehicleType,
+        vehicleMakeModel,
+        vehicleColour,
+        vehicleRegistration,
         password,
         confirmPassword,
         dateOfBirth,
@@ -148,6 +156,10 @@ class AuthState extends AuthInitial {
     this.username,
     this.email,
     this.phoneNumber,
+    this.vehicleType,
+    this.vehicleMakeModel,
+    this.vehicleColour,
+    this.vehicleRegistration,
     this.password,
     this.confirmPassword,
     this.dateOfBirth,
@@ -195,6 +207,10 @@ class AuthState extends AuthInitial {
       String? username,
       String? email,
       String? phoneNumber,
+      String? vehicleType,
+      String? vehicleMakeModel,
+      String? vehicleColour,
+      String? vehicleRegistration,
       String? password,
       String? confirmPassword,
       String? dateOfBirth,
@@ -240,6 +256,10 @@ class AuthState extends AuthInitial {
         username: username ?? this.username,
         email: email ?? this.email,
         phoneNumber: phoneNumber ?? this.phoneNumber,
+        vehicleType: vehicleType ?? this.vehicleType,
+        vehicleMakeModel: vehicleMakeModel ?? this.vehicleMakeModel,
+        vehicleColour: vehicleColour ?? this.vehicleColour,
+        vehicleRegistration: vehicleRegistration ?? this.vehicleRegistration,
         password: password ?? this.password,
         confirmPassword: confirmPassword ?? this.confirmPassword,
         dateOfBirth: dateOfBirth ?? this.dateOfBirth,

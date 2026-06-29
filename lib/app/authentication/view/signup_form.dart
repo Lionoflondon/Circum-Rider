@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,6 +7,7 @@ import 'package:intl_phone_field/intl_phone_field.dart';
 import '../../../utils/theme/theme.dart';
 import '../bloc/auth_bloc.dart';
 import 'signin.dart';
+import 'widgets/rider_onboarding_shell.dart';
 
 class SignupForm extends StatefulWidget {
   const SignupForm({Key? key}) : super(key: key);
@@ -22,6 +21,10 @@ class SignupFormState extends State<SignupForm> {
   final _lastNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _vehicleTypeController = TextEditingController();
+  final _vehicleMakeModelController = TextEditingController();
+  final _vehicleColourController = TextEditingController();
+  final _vehicleRegistrationController = TextEditingController();
   bool _acceptedTerms = false;
   var _country = countries.firstWhere((element) => element.code == 'GB');
 
@@ -31,150 +34,238 @@ class SignupFormState extends State<SignupForm> {
     _lastNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _vehicleTypeController.dispose();
+    _vehicleMakeModelController.dispose();
+    _vehicleColourController.dispose();
+    _vehicleRegistrationController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-      return SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(32),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-            child: Container(
-              padding: const EdgeInsets.all(22),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.07),
-                borderRadius: BorderRadius.circular(32),
-                border: Border.all(color: Colors.white.withOpacity(0.14)),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withOpacity(0.18),
-                    blurRadius: 38,
-                    offset: const Offset(0, 18),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _trustChips(),
-                  const SizedBox(height: 22),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _textField(
-                          label: 'First name',
-                          controller: _firstNameController,
-                          onChanged: (value) => context
-                              .read<AuthBloc>()
-                              .add(FirstNameChanged(firstName: value)),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _textField(
-                          label: 'Last name',
-                          controller: _lastNameController,
-                          onChanged: (value) => context
-                              .read<AuthBloc>()
-                              .add(LastNameChanged(lastName: value)),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _textField(
-                    label: 'Email',
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    onChanged: (value) => context
-                        .read<AuthBloc>()
-                        .add(SignupEmailChanged(email: value)),
-                  ),
-                  const SizedBox(height: 16),
-                  _phoneField(state),
-                  const SizedBox(height: 16),
-                  _textField(
-                    label: 'Password',
-                    controller: _passwordController,
-                    obscureText: !state.showPassword,
-                    onChanged: (value) => context
-                        .read<AuthBloc>()
-                        .add(SignupPasswordChanged(password: value)),
-                    suffix: IconButton(
-                      onPressed: () => context
-                          .read<AuthBloc>()
-                          .add(SetShowPassword(val: !state.showPassword)),
-                      icon: Icon(
-                        state.showPassword
-                            ? CupertinoIcons.eye
-                            : CupertinoIcons.eye_slash,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    value: _acceptedTerms,
-                    activeColor: AppColors.primary,
+      final valid = state.isEmailValid == true &&
+          state.isPhoneNumberValid == true &&
+          (state.password?.length ?? 0) >= 8 &&
+          _vehicleTypeController.text.trim().isNotEmpty &&
+          _vehicleMakeModelController.text.trim().isNotEmpty &&
+          _vehicleColourController.text.trim().isNotEmpty &&
+          _vehicleRegistrationController.text.trim().isNotEmpty &&
+          _firstNameController.text.trim().isNotEmpty &&
+          _lastNameController.text.trim().isNotEmpty &&
+          _acceptedTerms;
+      return RiderGlassCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _trustChips(),
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                Expanded(
+                  child: RiderGlassTextField(
+                    label: 'First name',
+                    controller: _firstNameController,
                     onChanged: (value) {
-                      setState(() => _acceptedTerms = value ?? false);
+                      setState(() {});
+                      context
+                          .read<AuthBloc>()
+                          .add(FirstNameChanged(firstName: value));
                     },
-                    title: AppText.text(
-                      'I agree to Circum rider onboarding checks and terms.',
-                      color: AppColors.textGrey,
-                      fontSize: 12,
-                    ),
                   ),
-                  if (state.errorMessage?.isNotEmpty ?? false)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: AppText.text(
-                        state.errorMessage!,
-                        color: AppColors.danger,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  SizedBox(
-                    width: double.infinity,
-                    child: AppButton.button(
-                      isLoading: state.status == Status.loading,
-                      onPressed: () => _submit(state),
-                      widget: AppText.text(
-                        'Create account',
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: RiderGlassTextField(
+                    label: 'Last name',
+                    controller: _lastNameController,
+                    onChanged: (value) {
+                      setState(() {});
+                      context
+                          .read<AuthBloc>()
+                          .add(LastNameChanged(lastName: value));
+                    },
                   ),
-                  const SizedBox(height: 18),
-                  Center(
-                    child: GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const SigninView(),
-                          ),
-                        );
-                      },
-                      child: AppText.text(
-                        'Already have an account? Sign in',
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w700,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            RiderGlassTextField(
+              label: 'Email',
+              controller: _emailController,
+              keyboardType: TextInputType.emailAddress,
+              onChanged: (value) => context
+                  .read<AuthBloc>()
+                  .add(SignupEmailChanged(email: value)),
+              suffix: state.isEmailValid == true
+                  ? const Icon(CupertinoIcons.check_mark_circled,
+                      color: AppColors.primary)
+                  : null,
+            ),
+            const SizedBox(height: 16),
+            _phoneField(state),
+            const SizedBox(height: 16),
+            RiderGlassTextField(
+              label: 'Vehicle type',
+              controller: _vehicleTypeController,
+              onChanged: (value) {
+                setState(() {});
+                context.read<AuthBloc>().add(
+                      VehicleDetailsChanged(
+                        vehicleType: value,
+                        vehicleMakeModel: _vehicleMakeModelController.text,
+                        vehicleColour: _vehicleColourController.text,
+                        vehicleRegistration:
+                            _vehicleRegistrationController.text,
                       ),
-                    ),
+                    );
+              },
+            ),
+            const SizedBox(height: 16),
+            RiderGlassTextField(
+              label: 'Vehicle make/model',
+              controller: _vehicleMakeModelController,
+              onChanged: (value) {
+                setState(() {});
+                context.read<AuthBloc>().add(
+                      VehicleDetailsChanged(
+                        vehicleType: _vehicleTypeController.text,
+                        vehicleMakeModel: value,
+                        vehicleColour: _vehicleColourController.text,
+                        vehicleRegistration:
+                            _vehicleRegistrationController.text,
+                      ),
+                    );
+              },
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: RiderGlassTextField(
+                    label: 'Vehicle colour',
+                    controller: _vehicleColourController,
+                    onChanged: (value) {
+                      setState(() {});
+                      context.read<AuthBloc>().add(
+                            VehicleDetailsChanged(
+                              vehicleType: _vehicleTypeController.text,
+                              vehicleMakeModel:
+                                  _vehicleMakeModelController.text,
+                              vehicleColour: value,
+                              vehicleRegistration:
+                                  _vehicleRegistrationController.text,
+                            ),
+                          );
+                    },
                   ),
-                ],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: RiderGlassTextField(
+                    label: 'Registration',
+                    controller: _vehicleRegistrationController,
+                    onChanged: (value) {
+                      setState(() {});
+                      context.read<AuthBloc>().add(
+                            VehicleDetailsChanged(
+                              vehicleType: _vehicleTypeController.text,
+                              vehicleMakeModel:
+                                  _vehicleMakeModelController.text,
+                              vehicleColour: _vehicleColourController.text,
+                              vehicleRegistration: value,
+                            ),
+                          );
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            RiderGlassTextField(
+              label: 'Password',
+              controller: _passwordController,
+              obscureText: !state.showPassword,
+              onChanged: (value) {
+                setState(() {});
+                context
+                    .read<AuthBloc>()
+                    .add(SignupPasswordChanged(password: value));
+              },
+              suffix: IconButton(
+                onPressed: () => context
+                    .read<AuthBloc>()
+                    .add(SetShowPassword(val: !state.showPassword)),
+                icon: Icon(
+                  state.showPassword
+                      ? CupertinoIcons.eye
+                      : CupertinoIcons.eye_slash,
+                  color: AppColors.primary,
+                ),
               ),
             ),
-          ),
+            const SizedBox(height: 8),
+            _passwordStrength(state.password ?? ''),
+            const SizedBox(height: 14),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: _acceptedTerms,
+              activeColor: AppColors.primary,
+              checkColor: Colors.white,
+              onChanged: (value) {
+                setState(() => _acceptedTerms = value ?? false);
+              },
+              title: AppText.text(
+                'I agree to Circum rider onboarding checks and terms.',
+                color: AppColors.textGrey,
+                fontSize: 12,
+              ),
+            ),
+            if (state.errorMessage?.isNotEmpty ?? false)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: AppText.text(
+                  state.errorMessage!,
+                  color: AppColors.danger,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            RiderPrimaryButton(
+              label: 'Create account',
+              isLoading: state.status == Status.loading,
+              enabled: valid && state.status != Status.loading,
+              onPressed: () => _submit(state),
+            ),
+            if (!valid)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: AppText.text(
+                  'Complete all fields to continue.',
+                  color: AppColors.textGrey,
+                  fontSize: 12,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            const SizedBox(height: 18),
+            Center(
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SigninView(),
+                    ),
+                  );
+                },
+                child: AppText.text(
+                  'Already have an account? Sign in',
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
         ),
       );
     });
@@ -190,66 +281,7 @@ class SignupFormState extends State<SignupForm> {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: chips
-          .map((chip) => Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: AppColors.primary.withOpacity(0.34),
-                  ),
-                ),
-                child: AppText.text(
-                  chip,
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ))
-          .toList(),
-    );
-  }
-
-  Widget _textField({
-    required String label,
-    required TextEditingController controller,
-    required ValueChanged<String> onChanged,
-    TextInputType? keyboardType,
-    bool obscureText = false,
-    Widget? suffix,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AppText.text(label, color: Colors.white, fontWeight: FontWeight.w700),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          onChanged: onChanged,
-          keyboardType: keyboardType,
-          obscureText: obscureText,
-          style: const TextStyle(color: Colors.white, fontFamily: 'OpenSans'),
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: AppColors.input.withOpacity(0.9),
-            suffixIcon: suffix,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: AppColors.primary),
-            ),
-          ),
-        ),
-      ],
+      children: chips.map((chip) => RiderTrustChip(label: chip)).toList(),
     );
   }
 
@@ -265,22 +297,7 @@ class SignupFormState extends State<SignupForm> {
           dropdownTextStyle:
               const TextStyle(color: Colors.white, fontFamily: 'OpenSans'),
           initialCountryCode: 'GB',
-          decoration: InputDecoration(
-            filled: true,
-            fillColor: AppColors.input.withOpacity(0.9),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: const BorderSide(color: AppColors.primary),
-            ),
-          ),
+          decoration: riderInputDecoration(),
           onCountryChanged: (country) => _country = country,
           onChanged: (value) {
             final valid = value.number.length >= _country.minLength &&
@@ -291,6 +308,47 @@ class SignupFormState extends State<SignupForm> {
                 .add(PhoneNumberChanged(phoneNumber: value.completeNumber));
           },
         ),
+      ],
+    );
+  }
+
+  Widget _passwordStrength(String password) {
+    final score = password.length >= 12
+        ? 3
+        : password.length >= 10
+            ? 2
+            : password.length >= 8
+                ? 1
+                : 0;
+    final label = score == 0
+        ? 'Use 8+ characters'
+        : score == 1
+            ? 'Password strength: fair'
+            : score == 2
+                ? 'Password strength: good'
+                : 'Password strength: strong';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: List.generate(3, (index) {
+            return Expanded(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                height: 4,
+                margin: EdgeInsets.only(right: index == 2 ? 0 : 6),
+                decoration: BoxDecoration(
+                  color: index < score
+                      ? AppColors.primary
+                      : Colors.white.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 6),
+        AppText.text(label, color: AppColors.textGrey, fontSize: 11),
       ],
     );
   }
@@ -311,6 +369,14 @@ class SignupFormState extends State<SignupForm> {
           const SetErrorMessage(errorMessage: 'Add a valid mobile number.'));
       return;
     }
+    if (_vehicleTypeController.text.trim().isEmpty ||
+        _vehicleMakeModelController.text.trim().isEmpty ||
+        _vehicleColourController.text.trim().isEmpty ||
+        _vehicleRegistrationController.text.trim().isEmpty) {
+      bloc.add(const SetErrorMessage(
+          errorMessage: 'Add your vehicle type, model, colour, and plate.'));
+      return;
+    }
     if ((state.password?.length ?? 0) < 8) {
       bloc.add(const SetErrorMessage(
           errorMessage: 'Use a password with at least 8 characters.'));
@@ -321,6 +387,12 @@ class SignupFormState extends State<SignupForm> {
           errorMessage: 'Accept the rider onboarding terms to continue.'));
       return;
     }
+    bloc.add(VehicleDetailsChanged(
+      vehicleType: _vehicleTypeController.text.trim(),
+      vehicleMakeModel: _vehicleMakeModelController.text.trim(),
+      vehicleColour: _vehicleColourController.text.trim(),
+      vehicleRegistration: _vehicleRegistrationController.text.trim(),
+    ));
     bloc.add(SignUpWithEmail(email: state.email!, password: state.password!));
   }
 }

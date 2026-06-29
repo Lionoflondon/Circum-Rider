@@ -39,6 +39,19 @@ class PhoneNumberChanged extends AuthEvent {
   PhoneNumberChanged({required this.phoneNumber});
 }
 
+class VehicleDetailsChanged extends AuthEvent {
+  final String? vehicleType;
+  final String? vehicleMakeModel;
+  final String? vehicleColour;
+  final String? vehicleRegistration;
+  const VehicleDetailsChanged({
+    this.vehicleType,
+    this.vehicleMakeModel,
+    this.vehicleColour,
+    this.vehicleRegistration,
+  });
+}
+
 class ConfirmPasswordChanged extends AuthEvent {
   final String password;
   ConfirmPasswordChanged({required this.password});

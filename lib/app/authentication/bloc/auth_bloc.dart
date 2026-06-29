@@ -183,6 +183,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(phoneNumber: event.phoneNumber));
       }
 
+      if (event is VehicleDetailsChanged) {
+        emit(state.copyWith(
+          vehicleType: event.vehicleType,
+          vehicleMakeModel: event.vehicleMakeModel,
+          vehicleColour: event.vehicleColour,
+          vehicleRegistration: event.vehicleRegistration,
+        ));
+      }
+
       if (event is SignupPasswordChanged) {
         emit(state.copyWith(password: event.password));
       }
@@ -593,8 +602,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'driverStatus': 'pending',
               'riderRank': 'agent',
               'rating': '0.0',
-              'plateNumber': '',
-              'typeOfVehicle': '',
+              'vehicle': {
+                'type': state.vehicleType?.trim(),
+                'makeModel': state.vehicleMakeModel?.trim(),
+                'colour': state.vehicleColour?.trim(),
+                'plateNumber': state.vehicleRegistration?.trim(),
+              },
+              'vehicleType': state.vehicleType?.trim(),
+              'vehicleMakeModel': state.vehicleMakeModel?.trim(),
+              'vehicleColour': state.vehicleColour?.trim(),
+              'vehicleRegistration': state.vehicleRegistration?.trim(),
+              'plateNumber': state.vehicleRegistration?.trim(),
+              'typeOfVehicle': state.vehicleType?.trim(),
             }).then((value) => print("DocumentSnapshot successfully updated!"),
                 onError: (e) => print("Error updating document $e"));
           } else {
@@ -614,8 +633,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'driverStatus': 'pending',
               'riderRank': 'agent',
               'rating': '0.0',
-              'plateNumber': '',
-              'typeOfVehicle': '',
+              'vehicle': {
+                'type': state.vehicleType?.trim(),
+                'makeModel': state.vehicleMakeModel?.trim(),
+                'colour': state.vehicleColour?.trim(),
+                'plateNumber': state.vehicleRegistration?.trim(),
+              },
+              'vehicleType': state.vehicleType?.trim(),
+              'vehicleMakeModel': state.vehicleMakeModel?.trim(),
+              'vehicleColour': state.vehicleColour?.trim(),
+              'vehicleRegistration': state.vehicleRegistration?.trim(),
+              'plateNumber': state.vehicleRegistration?.trim(),
+              'typeOfVehicle': state.vehicleType?.trim(),
             }).then((value) => print("DocumentSnapshot successfully created!"),
                 onError: (e) => print("Error updating document $e"));
           }
@@ -1077,6 +1106,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               '${state.firstName ?? ''} ${state.lastName ?? ''}'.trim();
           if (user != null && fullName.isNotEmpty) {
             await user.updateDisplayName(fullName);
+            final vehicleRegistration = state.vehicleRegistration?.trim();
             await upsertRiderOnboarding(user: user, data: {
               'name': fullName,
               'role': 'rider',
@@ -1090,8 +1120,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'driverStatus': 'pending',
               'status': 'offline',
               'rating': '0.0',
-              'plateNumber': '',
-              'typeOfVehicle': '',
+              'vehicle': {
+                'type': state.vehicleType?.trim(),
+                'makeModel': state.vehicleMakeModel?.trim(),
+                'colour': state.vehicleColour?.trim(),
+                'plateNumber': vehicleRegistration,
+              },
+              'vehicleType': state.vehicleType?.trim(),
+              'vehicleMakeModel': state.vehicleMakeModel?.trim(),
+              'vehicleColour': state.vehicleColour?.trim(),
+              'vehicleRegistration': vehicleRegistration,
+              'plateNumber': vehicleRegistration,
+              'typeOfVehicle': state.vehicleType?.trim(),
               'createdAt': FieldValue.serverTimestamp(),
             });
             await db.collection('riderOnboardingEvents').add({
