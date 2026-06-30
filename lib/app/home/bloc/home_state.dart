@@ -55,6 +55,8 @@ class HomeState {
   List<Message> chatMessages;
   ChatStatus chatStatus;
   String? message;
+  bool canGoOnline;
+  List<String> verificationChecklist;
   RequestStatus requestStatus;
 
   HomeState({
@@ -77,6 +79,8 @@ class HomeState {
     this.chatMessages = const [],
     this.chatStatus = ChatStatus.initial,
     this.message,
+    this.canGoOnline = false,
+    this.verificationChecklist = const [],
     this.requestStatus = RequestStatus.initial,
   });
 
@@ -100,6 +104,8 @@ class HomeState {
       List<Message>? chatMessages,
       ChatStatus? chatStatus,
       String? message,
+      bool? canGoOnline,
+      List<String>? verificationChecklist,
       RequestStatus? requestStatus}) {
     return HomeState(
         ongoingRequests: ongoingRequests ?? this.ongoingRequests,
@@ -122,6 +128,9 @@ class HomeState {
         chatMessages: chatMessages ?? this.chatMessages,
         chatStatus: chatStatus ?? this.chatStatus,
         message: message ?? this.message,
+        canGoOnline: canGoOnline ?? this.canGoOnline,
+        verificationChecklist:
+            verificationChecklist ?? this.verificationChecklist,
         requestStatus: requestStatus ?? this.requestStatus);
   }
 }

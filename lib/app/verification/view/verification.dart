@@ -167,6 +167,68 @@ class _VerificationViewState extends State<VerificationView> {
               }),
           Divider(
               height: 1, thickness: 1, color: Colors.white.withOpacity(0.15)),
+          const SizedBox(height: 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: AppText.text('Vehicle verification',
+                fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 19),
+          TextButton(
+              style: TextButton.styleFrom(
+                shape: RoundedRectangleBorder(),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        SvgPicture.asset(
+                          'assets/svg/unselected_radio.svg',
+                          color: AppColors.borderColor,
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              AppText.text(
+                                'Vehicle Registration (V5C/MOT)',
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Upload either your V5C (logbook) or your MOT certificate to verify your vehicle.',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.62),
+                                  fontSize: 12,
+                                  height: 1.3,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.keyboard_arrow_right_rounded,
+                    color: Colors.white.withOpacity(0.15),
+                  )
+                ],
+              ),
+              onPressed: () async {
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const UploadIDView(
+                              idType: IdType.vehicleRegistration,
+                            )));
+              }),
+          Divider(
+              height: 1, thickness: 1, color: Colors.white.withOpacity(0.15)),
         ],
       )),
     );

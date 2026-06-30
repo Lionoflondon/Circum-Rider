@@ -76,6 +76,7 @@ class AuthState extends AuthInitial {
   final Position? locationData;
   final bool? isLocationEnabled;
   final bool? hasLocationPermission;
+  final String? vehicleRegistrationDocumentStatus;
 
 // information extracted when the uses 0Auth sign in method
   final String? oAuthFirstName;
@@ -134,6 +135,7 @@ class AuthState extends AuthInitial {
         locationData,
         isLocationEnabled,
         hasLocationPermission,
+        vehicleRegistrationDocumentStatus,
         appLocationStatus,
         profilePhoto,
         oAuthFirstName,
@@ -185,6 +187,7 @@ class AuthState extends AuthInitial {
     this.locationData,
     this.isLocationEnabled,
     this.hasLocationPermission,
+    this.vehicleRegistrationDocumentStatus,
     this.appLocationStatus = AppLocationStatus.unavailalbe,
     this.profilePhoto,
     this.oAuthFirstName,
@@ -236,6 +239,7 @@ class AuthState extends AuthInitial {
       Position? locationData,
       bool? isLocationEnabled,
       bool? hasLocationPermission,
+      String? vehicleRegistrationDocumentStatus,
       AppLocationStatus? appLocationStatus,
       AuthenticatedStatus? authenticatedStatus,
       String? profilePhoto,
@@ -286,6 +290,8 @@ class AuthState extends AuthInitial {
         isLocationEnabled: isLocationEnabled ?? this.isLocationEnabled,
         hasLocationPermission:
             hasLocationPermission ?? this.hasLocationPermission,
+        vehicleRegistrationDocumentStatus: vehicleRegistrationDocumentStatus ??
+            this.vehicleRegistrationDocumentStatus,
         appLocationStatus: appLocationStatus ?? this.appLocationStatus,
         authenticatedStatus: authenticatedStatus ?? this.authenticatedStatus,
         profilePhoto: profilePhoto ?? this.profilePhoto,

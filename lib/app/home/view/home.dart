@@ -130,6 +130,52 @@ class _HomeViewState extends State<HomeView> {
                   ],
                 ),
           const SizedBox(height: 32),
+          if (state.rideStatus == RideStatus.offline &&
+              !state.canGoOnline &&
+              state.verificationChecklist.isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              margin: const EdgeInsets.only(bottom: 18),
+              decoration: BoxDecoration(
+                color: const Color(0xFF111B22),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withOpacity(0.10)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppText.text('Complete your verification to start earning.',
+                      fontSize: 15, fontWeight: FontWeight.bold),
+                  const SizedBox(height: 8),
+                  ...state.verificationChecklist.map((item) => Padding(
+                        padding: const EdgeInsets.only(bottom: 5),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.radio_button_unchecked,
+                                color: AppColors.primary, size: 16),
+                            const SizedBox(width: 8),
+                            Expanded(
+                                child: AppText.text(item,
+                                    color: Colors.white.withOpacity(0.76),
+                                    fontSize: 13)),
+                          ],
+                        ),
+                      )),
+                ],
+              ),
+            ),
+          ],
+          if (state.message != null &&
+              state.rideStatus == RideStatus.offline) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: AppText.text(state.message!,
+                  color: AppColors.primary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600),
+            ),
+          ],
           if (state.rideStatus == RideStatus.online ||
               state.rideStatus == RideStatus.offline)
             Stack(

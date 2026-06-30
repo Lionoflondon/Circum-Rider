@@ -49,6 +49,45 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   List<DirectionStep> _currentRoute = [];
   int _currentStepIndex = 0;
 
+  List<String> _remainingVerificationItems(Map<String, dynamic>? riderData) {
+    final remaining = <String>[];
+    final docs = riderData?['documentChecklist'];
+    bool approved(String key) {
+      if (docs is Map && '${docs[key] ?? ''}' == 'approved') return true;
+      return '${riderData?['${key}Status'] ?? ''}' == 'approved' ||
+          riderData?['${key}Approved'] == true;
+    }
+
+    if (riderData?['phoneVerified'] != true) {
+      remaining.add('Phone verification');
+    }
+    if (!approved('identityDocument')) remaining.add('Identity document');
+    if (!approved('rightToWork')) remaining.add('Right to work');
+    if (!approved('drivingLicence')) remaining.add('Driving licence');
+    if (!approved('insurance')) remaining.add('Insurance');
+    final vehicle = riderData?['vehicle'];
+    final vehicleType =
+        '${riderData?['vehicleType'] ?? (vehicle is Map ? vehicle['type'] : '')}'
+            .toLowerCase();
+    if (vehicleType.contains('car') || vehicleType.contains('van')) {
+      if ('${riderData?['vehicleRegistrationDocumentStatus'] ?? ''}' !=
+              'approved' &&
+          !approved('vehicleRegistration')) {
+        remaining.add('Vehicle Registration (V5C/MOT)');
+      }
+    }
+    if ('${riderData?['approvalStatus'] ?? ''}' != 'approved') {
+      remaining.add('Admin approval');
+    }
+    return remaining;
+  }
+
+  Future<List<String>> _loadRemainingVerificationItems(String? uid) async {
+    if (uid == null || uid.isEmpty) return ['Rider profile'];
+    final riderDoc = await db.collection('riders').doc(uid).get();
+    return _remainingVerificationItems(riderDoc.data());
+  }
+
   HomeBloc() : super(HomeState()) {
     on<CheckForPushToken>(_handleCheckForPushToken);
     on<SetRideStatus>(_handleSetRideStatus);
@@ -94,6 +133,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         final documentSnapshot = await documentReference.get();
         if (documentSnapshot.exists) {
           print('FCMToken: $fcmToken');
+          final remaining =
+              _remainingVerificationItems(documentSnapshot.data());
+          emit(state.copyWith(
+              canGoOnline: remaining.isEmpty,
+              verificationChecklist: remaining));
           await db
               .collection("riders")
               .doc(user?.uid)
@@ -129,6 +173,16 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       await pref.setString('status', 'offline');
     } else {
+      final remaining = await _loadRemainingVerificationItems(user?.uid);
+      if (event.status == RideStatus.online && remaining.isNotEmpty) {
+        emit(state.copyWith(
+          rideStatus: RideStatus.offline,
+          canGoOnline: false,
+          verificationChecklist: remaining,
+          message: 'Complete your verification to start earning.',
+        ));
+        return;
+      }
       add(GetAvailableRequests());
       add(SetDrawerHeight(
           minDrawerHeight: state.minDrawerHeight, maxDrawerHeight: 0.75.sh));

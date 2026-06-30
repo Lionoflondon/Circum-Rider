@@ -70,6 +70,30 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }, SetOptions(merge: true));
     }
 
+    String riderAuthStatus(Map<String, dynamic>? data) {
+      final onboardingStatus = '${data?['onboardingStatus'] ?? ''}';
+      if (onboardingStatus == 'profile_complete' ||
+          onboardingStatus == 'verification_pending' ||
+          onboardingStatus == 'under_review' ||
+          data?['profileCompletionStatus'] == 'complete') {
+        return 'dashboard';
+      }
+      if (onboardingStatus == 'application_submitted') {
+        return 'pending';
+      }
+      return 'dashboard';
+    }
+
+    Future<String?> vehicleRegistrationDocumentStatus(String uid) async {
+      final doc = await db
+          .collection('riderDocuments')
+          .doc('${uid}_vehicle_registration')
+          .get();
+      if (!doc.exists) return null;
+      return '${doc.data()?['status'] ?? doc.data()?['verificationStatus'] ?? ''}'
+          .trim();
+    }
+
     void listenForPermissionStatus() async {
       final permission = await permission_handler.Permission.location.status;
       print(permission);
@@ -87,20 +111,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           final phone = (await storage.readAll())["phone"];
           String? riderPhone = phone;
           bool phoneVerified = false;
+          String? vehicleDocStatus;
           var authenticatedStatus = AuthenticatedStatus.authenticated;
           try {
             final riderDoc = await db.collection('riders').doc(user.uid).get();
             final riderData = riderDoc.data();
             riderPhone = riderData?['phone'] as String? ?? phone;
             phoneVerified = riderData?['phoneVerified'] == true;
-            final onboardingStatus = riderData?['onboardingStatus'];
-            final driverStatus = riderData?['driverStatus'];
-            final approvalStatus = riderData?['approvalStatus'];
-            if (onboardingStatus == 'application_submitted' ||
-                driverStatus == 'pending' ||
-                approvalStatus == 'pending') {
+            if (riderAuthStatus(riderData) == 'pending') {
               authenticatedStatus = AuthenticatedStatus.pendingApproval;
             }
+            vehicleDocStatus =
+                await vehicleRegistrationDocumentStatus(user.uid);
           } catch (error) {
             logRiderAuthError(
               error: error,
@@ -121,6 +143,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               email: user.email,
               profilePhoto: user.photoURL,
               isPhoneVerified: phoneVerified,
+              vehicleRegistrationDocumentStatus: vehicleDocStatus,
               authenticatedStatus: authenticatedStatus));
 
           await Future.delayed(const Duration(seconds: 3));
@@ -598,8 +621,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 'phoneVerifiedAt': FieldValue.serverTimestamp(),
               'status': 'offline',
               'approvalStatus': 'pending',
-              'verificationStatus': 'pending',
-              'driverStatus': 'pending',
+              'verificationStatus': 'verification_pending',
+              'profileCompletionStatus': 'complete',
+              'onboardingStatus': 'profile_complete',
+              'driverStatus': 'offline',
               'riderRank': 'agent',
               'rating': '0.0',
               'vehicle': {
@@ -629,8 +654,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 'phoneVerifiedAt': FieldValue.serverTimestamp(),
               'status': 'offline',
               'approvalStatus': 'pending',
-              'verificationStatus': 'pending',
-              'driverStatus': 'pending',
+              'verificationStatus': 'verification_pending',
+              'profileCompletionStatus': 'complete',
+              'onboardingStatus': 'profile_complete',
+              'driverStatus': 'offline',
               'riderRank': 'agent',
               'rating': '0.0',
               'vehicle': {
@@ -757,9 +784,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             'position': myLocation.data,
             'locationEnabled': true,
             'approvalStatus': 'pending',
-            'verificationStatus': 'pending',
-            'onboardingStatus': 'application_submitted',
-            'driverStatus': 'pending',
+            'verificationStatus': 'verification_pending',
+            'profileCompletionStatus': 'complete',
+            'onboardingStatus': 'profile_complete',
+            'driverStatus': 'offline',
             'role': 'rider',
             'roles': ['rider'],
             'riderRank': 'agent',
@@ -768,9 +796,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               onError: (e) => print("Error updating document $e"));
           await db.collection('riderOnboardingEvents').add({
             'riderId': user.uid,
-            'eventType': 'application_submitted',
+            'eventType': 'profile_complete',
             'timestamp': FieldValue.serverTimestamp(),
-            'statusAfterEvent': 'application_submitted',
+            'statusAfterEvent': 'profile_complete',
           });
         } catch (e) {
           print(e);
@@ -823,9 +851,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await upsertRiderOnboarding(user: user, data: {
             'locationEnabled': event.locationEnabled,
             'approvalStatus': 'pending',
-            'verificationStatus': 'pending',
-            'onboardingStatus': 'application_submitted',
-            'driverStatus': 'pending',
+            'verificationStatus': 'verification_pending',
+            'profileCompletionStatus': 'complete',
+            'onboardingStatus': 'profile_complete',
+            'driverStatus': 'offline',
             'role': 'rider',
             'roles': ['rider'],
             'riderRank': 'agent',
@@ -833,9 +862,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           });
           await db.collection('riderOnboardingEvents').add({
             'riderId': user.uid,
-            'eventType': 'application_submitted',
+            'eventType': 'profile_complete',
             'timestamp': FieldValue.serverTimestamp(),
-            'statusAfterEvent': 'application_submitted',
+            'statusAfterEvent': 'profile_complete',
           });
           emit(state.copyWith(status: Status.locationRequested));
         } catch (error) {
@@ -893,6 +922,121 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<SetVerificationUploadStatus>((event, emit) =>
         emit(state.copyWith(verificationUploadStatus: event.status)));
 
+    String documentKeyForIdType(String idType) {
+      switch (idType) {
+        case 'drivers license':
+          return 'driving_licence';
+        case 'international passport':
+          return 'identity_document';
+        case 'work permit':
+          return 'right_to_work';
+        case 'vehicle registration':
+          return 'vehicle_registration';
+        default:
+          return idType.trim().toLowerCase().replaceAll(' ', '_');
+      }
+    }
+
+    String documentDisplayName(String idType) {
+      switch (idType) {
+        case 'drivers license':
+          return 'Driving licence';
+        case 'international passport':
+          return 'Identity document';
+        case 'work permit':
+          return 'Right to work';
+        case 'vehicle registration':
+          return 'Vehicle Registration (V5C/MOT)';
+        default:
+          return idType;
+      }
+    }
+
+    String riderStatusFieldForDocumentKey(String key) {
+      switch (key) {
+        case 'driving_licence':
+          return 'drivingLicenceStatus';
+        case 'identity_document':
+          return 'identityDocumentStatus';
+        case 'right_to_work':
+          return 'rightToWorkStatus';
+        case 'vehicle_registration':
+          return 'vehicleRegistrationDocumentStatus';
+        default:
+          return '${key}Status';
+      }
+    }
+
+    Future<void> writeRiderDocumentRecord({
+      required String uid,
+      required String idType,
+      String? frontImageURL,
+      String? backImageURL,
+      String? imageURL,
+    }) async {
+      final key = documentKeyForIdType(idType);
+      final documentRef = db.collection('riderDocuments').doc('${uid}_$key');
+      final existing = await documentRef.get();
+      final existingData = existing.data();
+      final archivedVersion = existingData == null
+          ? null
+          : {
+              'frontImageURL': existingData['frontImageURL'],
+              'backImageURL': existingData['backImageURL'],
+              'downloadUrl': existingData['downloadUrl'],
+              'imageURL': existingData['imageURL'],
+              'status': existingData['status'],
+              'verificationStatus': existingData['verificationStatus'],
+              'uploadedAt': existingData['uploadedAt'],
+              'reviewedAt': existingData['reviewedAt'],
+              'reviewedBy': existingData['reviewedBy'],
+              'reviewer': existingData['reviewer'],
+              'rejectionReason': existingData['rejectionReason'],
+              'expiryDate': existingData['expiryDate'],
+              'archivedAt': Timestamp.now(),
+            };
+      final displayName = documentDisplayName(idType);
+      final statusEntry = {
+        'status': 'under_review',
+        'timestamp': Timestamp.now(),
+        'actor': uid,
+        'note': '$displayName uploaded by rider.',
+      };
+      await documentRef.set({
+        'riderId': uid,
+        'uid': uid,
+        'documentType': key,
+        'type': displayName,
+        'displayName': displayName,
+        if (frontImageURL != null) 'frontImageURL': frontImageURL,
+        if (backImageURL != null) 'backImageURL': backImageURL,
+        if (imageURL != null) 'downloadUrl': imageURL,
+        if (imageURL != null) 'imageURL': imageURL,
+        'status': 'under_review',
+        'verificationStatus': 'under_review',
+        'active': true,
+        'uploadedAt': FieldValue.serverTimestamp(),
+        'uploadTimestamp': FieldValue.serverTimestamp(),
+        'reviewedAt': null,
+        'reviewTimestamp': null,
+        'reviewedBy': null,
+        'reviewer': null,
+        'rejectionReason': null,
+        'expiryDate': null,
+        'statusHistory': FieldValue.arrayUnion([statusEntry]),
+        if (archivedVersion != null)
+          'archivedVersions': FieldValue.arrayUnion([archivedVersion]),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      final statusField = riderStatusFieldForDocumentKey(key);
+      await db.collection('riders').doc(uid).set({
+        statusField: 'under_review',
+        'documentChecklist.$key': 'under_review',
+        'verificationStatus': 'under_review',
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+
     on<SubmitVerificationDocuments>(
       (event, emit) async {
         final User? user = auth.currentUser;
@@ -916,9 +1060,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
             await db.collection("riders").doc(user?.uid).update({
               'verificationData': verificationData,
-              'verificationStatus': 'pending'
+              'verificationStatus': 'under_review'
             }).then((value) => print("DocumentSnapshot successfully updated!"),
                 onError: (e) => print("Error updating document $e"));
+            final uid = user?.uid;
+            if (uid != null) {
+              await writeRiderDocumentRecord(
+                uid: uid,
+                idType: event.idType!,
+                frontImageURL: frontImageURL,
+                backImageURL: backImageURL,
+              );
+            }
 
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.uploaded));
@@ -944,10 +1097,103 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
             await db.collection("riders").doc(user?.uid).update({
               'verificationData': verificationData,
-              'verificationStatus': 'pending'
+              'verificationStatus': 'under_review'
             }).then((value) => print("DocumentSnapshot successfully updated!"),
                 onError: (e) => print("Error updating document $e"));
+            final uid = user?.uid;
+            if (uid != null) {
+              await writeRiderDocumentRecord(
+                uid: uid,
+                idType: event.idType!,
+                imageURL: imageURL,
+              );
+            }
             emit(state.copyWith(
+                verificationUploadStatus: VerificationUploadStatus.uploaded));
+          } catch (e) {
+            emit(state.copyWith(
+                verificationUploadStatus: VerificationUploadStatus.failure));
+            print(e);
+          }
+        }
+
+        if (event.idType == 'vehicle registration') {
+          try {
+            emit(state.copyWith(
+                verificationUploadStatus: VerificationUploadStatus.loading));
+            final imageURL =
+                await uploadImage(imagePath: event.workPermitPath!);
+            final uid = user?.uid;
+            if (uid == null) {
+              emit(state.copyWith(
+                  verificationUploadStatus: VerificationUploadStatus.failure));
+              return;
+            }
+            final documentRef = db
+                .collection('riderDocuments')
+                .doc('${uid}_vehicle_registration');
+            final existing = await documentRef.get();
+            final existingData = existing.data();
+            final archivedVersion = existingData == null
+                ? null
+                : {
+                    'downloadUrl': existingData['downloadUrl'],
+                    'imageURL': existingData['imageURL'],
+                    'status': existingData['status'],
+                    'verificationStatus': existingData['verificationStatus'],
+                    'uploadedAt': existingData['uploadedAt'],
+                    'reviewedAt': existingData['reviewedAt'],
+                    'reviewedBy': existingData['reviewedBy'],
+                    'reviewer': existingData['reviewer'],
+                    'rejectionReason': existingData['rejectionReason'],
+                    'expiryDate': existingData['expiryDate'],
+                    'archivedAt': Timestamp.now(),
+                  };
+            final statusEntry = {
+              'status': 'under_review',
+              'timestamp': Timestamp.now(),
+              'actor': uid,
+              'note': 'Vehicle registration document uploaded by rider.',
+            };
+            final data = {
+              'riderId': uid,
+              'uid': uid,
+              'documentType': 'vehicle_registration',
+              'type': 'Vehicle Registration (V5C/MOT)',
+              'displayName': 'Vehicle Registration (V5C/MOT)',
+              'downloadUrl': imageURL,
+              'imageURL': imageURL,
+              'status': 'under_review',
+              'verificationStatus': 'under_review',
+              'active': true,
+              'uploadedAt': FieldValue.serverTimestamp(),
+              'uploadTimestamp': FieldValue.serverTimestamp(),
+              'reviewedAt': null,
+              'reviewTimestamp': null,
+              'reviewedBy': null,
+              'reviewer': null,
+              'rejectionReason': null,
+              'expiryDate': null,
+              'statusHistory': FieldValue.arrayUnion([statusEntry]),
+              if (archivedVersion != null)
+                'archivedVersions': FieldValue.arrayUnion([archivedVersion]),
+              'updatedAt': FieldValue.serverTimestamp(),
+            };
+            await documentRef.set(data, SetOptions(merge: true));
+            await db.collection('riders').doc(uid).set({
+              'vehicleRegistrationDocument': {
+                'documentId': documentRef.id,
+                'downloadUrl': imageURL,
+                'status': 'under_review',
+                'uploadedAt': FieldValue.serverTimestamp(),
+              },
+              'vehicleRegistrationDocumentStatus': 'under_review',
+              'documentChecklist.vehicle_registration': 'under_review',
+              'verificationStatus': 'under_review',
+              'updatedAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
+            emit(state.copyWith(
+                vehicleRegistrationDocumentStatus: 'under_review',
                 verificationUploadStatus: VerificationUploadStatus.uploaded));
           } catch (e) {
             emit(state.copyWith(
@@ -1028,12 +1274,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               if (documentSnapshot.exists) {
                 final doc = documentSnapshot.data();
                 riderPhone = doc?['phone'] as String? ?? riderPhone;
-                final onboardingStatus = doc?['onboardingStatus'];
-                final driverStatus = doc?['driverStatus'];
-                final approvalStatus = doc?['approvalStatus'];
-                if (onboardingStatus == 'application_submitted' ||
-                    driverStatus == 'pending' ||
-                    approvalStatus == 'pending') {
+                if (riderAuthStatus(doc) == 'pending') {
                   authenticatedStatus = AuthenticatedStatus.pendingApproval;
                 }
                 if (riderPhone != null) {
@@ -1115,8 +1356,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'phone': state.phoneNumber,
               'phoneVerified': false,
               'approvalStatus': 'pending',
-              'verificationStatus': 'pending',
-              'onboardingStatus': 'account_created',
+              'verificationStatus': 'verification_pending',
+              'profileCompletionStatus': 'started',
+              'onboardingStatus': 'profile_started',
               'driverStatus': 'pending',
               'status': 'offline',
               'rating': '0.0',

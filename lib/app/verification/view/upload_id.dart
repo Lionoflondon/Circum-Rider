@@ -29,6 +29,60 @@ class _UploadIDViewState extends State<UploadIDView> {
   String? activeImage;
   int activePage = 0;
 
+  bool get _singlePageUpload =>
+      widget.idType == IdType.workPermit ||
+      widget.idType == IdType.vehicleRegistration;
+
+  String get _title {
+    return switch (widget.idType) {
+      IdType.workPermit => 'Upload right to work permit',
+      IdType.vehicleRegistration => 'Vehicle Registration (V5C/MOT)',
+      _ => 'Upload ID',
+    };
+  }
+
+  String get _helperText {
+    return switch (widget.idType) {
+      IdType.vehicleRegistration =>
+        'Upload either your V5C (logbook) or your MOT certificate to verify your vehicle.',
+      IdType.workPermit => 'Upload your right to work document.',
+      _ => 'Upload clear photos of the front and back of your document.',
+    };
+  }
+
+  String get _submitIdType {
+    return switch (widget.idType) {
+      IdType.driversLicense => 'drivers license',
+      IdType.internationalPassport => 'international passport',
+      IdType.workPermit => 'work permit',
+      IdType.vehicleRegistration => 'vehicle registration',
+    };
+  }
+
+  Future<bool> _confirmReplacementIfNeeded(AuthState state) async {
+    if (widget.idType != IdType.vehicleRegistration) return true;
+    final existing = state.vehicleRegistrationDocumentStatus?.trim();
+    if (existing != 'approved' && existing != 'under_review') return true;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Replace vehicle document?'),
+        content: const Text(
+          'Uploading a new document will replace the current approved document and send it for review again.',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Replace')),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocListener<AuthBloc, AuthState>(
@@ -49,12 +103,8 @@ class _UploadIDViewState extends State<UploadIDView> {
           appBar: AppBar(
             backgroundColor: AppColors.secondary,
             elevation: 0,
-            title: AppText.text(
-                widget.idType == IdType.workPermit
-                    ? 'Upload right to work permit'
-                    : 'Upload ID',
-                fontSize: 16,
-                fontWeight: FontWeight.bold),
+            title:
+                AppText.text(_title, fontSize: 16, fontWeight: FontWeight.bold),
             centerTitle: true,
           ),
           body: SafeArea(
@@ -65,7 +115,19 @@ class _UploadIDViewState extends State<UploadIDView> {
                   height: 1,
                   thickness: 1,
                   color: Colors.white.withOpacity(0.15)),
-              if (widget.idType != IdType.workPermit)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24)
+                    .copyWith(top: 16),
+                child: Text(
+                  _helperText,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.72),
+                    fontSize: 14,
+                    height: 1.35,
+                  ),
+                ),
+              ),
+              if (!_singlePageUpload)
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 24)
                       .copyWith(top: 16),
@@ -134,7 +196,7 @@ class _UploadIDViewState extends State<UploadIDView> {
                                   source: ImageSource.gallery,
                                   imageQuality: 10);
                               if (image != null) {
-                                if (widget.idType != IdType.workPermit) {
+                                if (!_singlePageUpload) {
                                   if (activePage == 0) {
                                     setState(() {
                                       frontPageImagePath = image.path;
@@ -163,7 +225,7 @@ class _UploadIDViewState extends State<UploadIDView> {
                               XFile? image = await picker.pickImage(
                                   source: ImageSource.camera, imageQuality: 50);
                               if (image != null) {
-                                if (widget.idType != IdType.workPermit) {
+                                if (!_singlePageUpload) {
                                   if (activePage == 0) {
                                     setState(() {
                                       frontPageImagePath = image.path;
@@ -255,12 +317,16 @@ class _UploadIDViewState extends State<UploadIDView> {
                                       idType: 'international passport'));
                             }
 
-                            if (widget.idType == IdType.workPermit &&
+                            if (_singlePageUpload &&
                                 workPermitImagePath != null) {
-                              context.read<AuthBloc>().add(
-                                  SubmitVerificationDocuments(
-                                      workPermitPath: workPermitImagePath!,
-                                      idType: 'work permit'));
+                              _confirmReplacementIfNeeded(state)
+                                  .then((confirmed) {
+                                if (!confirmed || !mounted) return;
+                                context.read<AuthBloc>().add(
+                                    SubmitVerificationDocuments(
+                                        workPermitPath: workPermitImagePath!,
+                                        idType: _submitIdType));
+                              });
                             }
                           }
                         }));
