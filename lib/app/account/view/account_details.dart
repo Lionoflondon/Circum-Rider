@@ -1,6 +1,5 @@
 import 'package:bot_toast/bot_toast.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:circum_rider/app/account/bloc/account_bloc.dart';
 import 'package:circum_rider/utils/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -40,6 +39,15 @@ class _AccountDetailsState extends State<AccountDetails> {
                     // print('signing out');
                     Navigator.popUntil(context, (route) => route.isFirst);
                   }
+                  if (state.errorMessage != null &&
+                      state.errorMessage!.isNotEmpty) {
+                    BotToast.showSimpleNotification(
+                        title: state.errorMessage!,
+                        backgroundColor: AppColors.secondary);
+                    context
+                        .read<AuthBloc>()
+                        .add(const SetErrorMessage(errorMessage: ''));
+                  }
                 },
                 child: Column(children: [
                   header(),
@@ -63,12 +71,12 @@ class _AccountDetailsState extends State<AccountDetails> {
 
   Widget header() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
+      final hasPhoto = state.profilePhoto != null &&
+          state.profilePhoto!.trim().isNotEmpty &&
+          state.profilePhoto != 'null';
       return Stack(
         children: [
-          Container(
-            height: 130,
-            // color: AppColors.primary,
-          ),
+          Container(height: 190),
           Container(
             height: 80,
             color: AppColors.primary,
@@ -77,30 +85,7 @@ class _AccountDetailsState extends State<AccountDetails> {
               bottom: 0,
               // left: (MediaQuery.of(context).size.width / 2) - 28,
               child: GestureDetector(
-                  onTap: () async {
-                    final ImagePicker picker = ImagePicker();
-                    final imageSource = await showImageBottomSheet(context);
-                    if (imageSource == 'library') {
-                      XFile? image = await picker.pickImage(
-                          source: ImageSource.gallery, imageQuality: 1);
-                      if (image != null) {
-                        // ignore: use_build_context_synchronously
-                        context
-                            .read<AuthBloc>()
-                            .add(UpdateUserProfilePhoto(imagePath: image.path));
-                      }
-                    }
-                    if (imageSource == 'camera') {
-                      XFile? image = await picker.pickImage(
-                          source: ImageSource.camera, imageQuality: 1);
-                      if (image != null) {
-                        // ignore: use_build_context_synchronously
-                        context
-                            .read<AuthBloc>()
-                            .add(UpdateUserProfilePhoto(imagePath: image.path));
-                      }
-                    }
-                  },
+                  onTap: () => _pickProfilePhoto(context),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
@@ -112,8 +97,7 @@ class _AccountDetailsState extends State<AccountDetails> {
                             borderRadius: BorderRadius.circular(100),
                             color: AppColors.input,
                           ),
-                          child: state.profilePhoto != null &&
-                                  state.profilePhoto != ''
+                          child: hasPhoto
                               ? CachedNetworkImage(
                                   imageUrl: state.profilePhoto!,
                                   imageBuilder: (context, imageProvider) =>
@@ -147,13 +131,31 @@ class _AccountDetailsState extends State<AccountDetails> {
                                   ],
                                 )),
                       const SizedBox(height: 6),
-                      Row(
+                      AppText.text(
+                        'Add a profile photo to help customers recognise you.',
+                        color: AppColors.textGrey,
+                        fontSize: 12,
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 10,
+                        runSpacing: 8,
                         children: [
-                          SvgPicture.asset('assets/svg/edit.svg'),
-                          const SizedBox(width: 4),
-                          AppText.text('Edit Image',
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w600)
+                          TextButton.icon(
+                            onPressed: () => _pickProfilePhoto(context),
+                            icon: SvgPicture.asset('assets/svg/edit.svg',
+                                height: 14),
+                            label: Text(
+                                hasPhoto ? 'Replace photo' : 'Upload photo'),
+                          ),
+                          if (hasPhoto)
+                            TextButton(
+                              onPressed: () => context
+                                  .read<AuthBloc>()
+                                  .add(const RemoveUserProfilePhoto()),
+                              child: const Text('Remove photo'),
+                            ),
                         ],
                       )
                     ],
@@ -161,6 +163,22 @@ class _AccountDetailsState extends State<AccountDetails> {
         ],
       );
     });
+  }
+
+  Future<void> _pickProfilePhoto(BuildContext context) async {
+    final ImagePicker picker = ImagePicker();
+    final imageSource = await showImageBottomSheet(context);
+    XFile? image;
+    if (imageSource == 'library') {
+      image = await picker.pickImage(
+          source: ImageSource.gallery, imageQuality: 72, maxWidth: 1024);
+    }
+    if (imageSource == 'camera') {
+      image = await picker.pickImage(
+          source: ImageSource.camera, imageQuality: 72, maxWidth: 1024);
+    }
+    if (image == null || !context.mounted) return;
+    context.read<AuthBloc>().add(UpdateUserProfilePhoto(imagePath: image.path));
   }
 
   Widget firstName() {

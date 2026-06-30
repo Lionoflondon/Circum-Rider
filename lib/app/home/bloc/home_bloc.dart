@@ -303,6 +303,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       final formattedDeliveryTime = formattedTimeAfterSeconds(totalTime);
       final riderPhone = riderData?['phone'] ?? user?.phoneNumber ?? '';
+      final riderPhoto =
+          '${riderData?['photoURL'] ?? riderData?['photoUrl'] ?? user?.photoURL ?? ''}';
 
       // final userData = await firebaseMessaging
       //     .subscribeToTopic('your_topic_name')
@@ -314,7 +316,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             'status': 'accepted',
             'data': '''{
                 'courierName': '${user?.displayName}',
-                'photoURL': '${user?.photoURL}',
+                'photoURL': '$riderPhoto',
                 'rating': '${riderData?['rating'] ?? '0'}',
                 'plateNumber': '${riderData!['plateNumber']}',
                 'typeOfVehicle': '${riderData['typeOfVehicle']}',
@@ -632,6 +634,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         print('code: ${state.activeRequest!.code}');
         // final SharedPreferences prefs = await SharedPreferences.getInstance();
         final courierName = prefs.getString('courierName');
+        Map<String, dynamic>? riderSnapshotData;
+        try {
+          riderSnapshotData =
+              (await db.collection('riders').doc(riderId).get()).data();
+        } catch (_) {}
+        final riderPhoto =
+            '${riderSnapshotData?['photoURL'] ?? riderSnapshotData?['photoUrl'] ?? auth.currentUser?.photoURL ?? ''}';
         final rating = prefs.getString('rating');
         final plateNumber = prefs.getString('plateNumber');
         final typeOfVehicle = prefs.getString('typeOfVehicle');
@@ -646,7 +655,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                 'latitude': '$riderLat',
                 'longitude': '$riderLng',
                 'courierName': '$courierName',
-                'photoURL': '${auth.currentUser?.photoURL}',
+                'photoURL': '$riderPhoto',
                 'rating': '$rating',
                 'plateNumber': '$plateNumber',
                 'typeOfVehicle': '$typeOfVehicle',

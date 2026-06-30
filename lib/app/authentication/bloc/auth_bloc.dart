@@ -112,11 +112,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           String? riderPhone = phone;
           bool phoneVerified = false;
           String? vehicleDocStatus;
+          String? riderPhoto;
           var authenticatedStatus = AuthenticatedStatus.authenticated;
           try {
             final riderDoc = await db.collection('riders').doc(user.uid).get();
             final riderData = riderDoc.data();
             riderPhone = riderData?['phone'] as String? ?? phone;
+            riderPhoto =
+                '${riderData?['photoURL'] ?? riderData?['photoUrl'] ?? riderData?['profilePhotoUrl'] ?? ''}'
+                    .trim();
+            if (riderPhoto.isEmpty || riderPhoto == 'null') riderPhoto = null;
             phoneVerified = riderData?['phoneVerified'] == true;
             if (riderAuthStatus(riderData) == 'pending') {
               authenticatedStatus = AuthenticatedStatus.pendingApproval;
@@ -141,7 +146,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               username: user.displayName,
               phoneNumber: riderPhone ?? user.phoneNumber,
               email: user.email,
-              profilePhoto: user.photoURL,
+              profilePhoto: riderPhoto ?? user.photoURL,
               isPhoneVerified: phoneVerified,
               vehicleRegistrationDocumentStatus: vehicleDocStatus,
               authenticatedStatus: authenticatedStatus));
@@ -1206,23 +1211,97 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<UpdateUserProfilePhoto>(
       (event, emit) async {
-        // print('uploading image');
         try {
           User? user = auth.currentUser;
-          final fileName = user!.uid;
+          if (user == null) return;
           File imageFile = File(event.imagePath);
+          final extension = event.imagePath.split('.').last.toLowerCase();
+          const allowed = {'jpg', 'jpeg', 'png', 'webp'};
+          if (!allowed.contains(extension)) {
+            emit(state.copyWith(
+                errorMessage: 'Please choose a JPG, PNG or WEBP image.'));
+            return;
+          }
+          final fileSize = await imageFile.length();
+          if (fileSize > 5 * 1024 * 1024) {
+            emit(state.copyWith(
+                errorMessage: 'Profile photo must be smaller than 5MB.'));
+            return;
+          }
 
           final storageRef = FirebaseStorage.instance;
-          await storageRef.ref('profile-photos/$fileName').putFile(imageFile);
-          final downloadUrl =
-              await storageRef.ref('profile-photos/$fileName').getDownloadURL();
-
-          print(downloadUrl);
+          final path = 'rider-profile-photos/${user.uid}/profile.jpg';
+          final ref = storageRef.ref(path);
+          await ref.putFile(
+            imageFile,
+            SettableMetadata(
+              contentType: 'image/${extension == 'jpg' ? 'jpeg' : extension}',
+              customMetadata: {
+                'riderId': user.uid,
+                'source': 'rider_profile_photo',
+              },
+            ),
+          );
+          final downloadUrl = await ref.getDownloadURL();
 
           await user.updatePhotoURL(downloadUrl);
-          emit(state.copyWith(profilePhoto: downloadUrl));
+          final patch = {
+            'photoURL': downloadUrl,
+            'photoUrl': downloadUrl,
+            'photoPath': path,
+            'profilePhotoUrl': downloadUrl,
+            'photoUpdatedAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          };
+          await db
+              .collection('riders')
+              .doc(user.uid)
+              .set(patch, SetOptions(merge: true));
+          await db
+              .collection('riderProfiles')
+              .doc(user.uid)
+              .set(patch, SetOptions(merge: true));
+          emit(state.copyWith(
+              profilePhoto: downloadUrl,
+              errorMessage: 'Profile photo updated.'));
+        } catch (_) {
+          emit(state.copyWith(
+              errorMessage: 'Profile photo could not be updated.'));
+        }
+      },
+    );
+
+    on<RemoveUserProfilePhoto>(
+      (event, emit) async {
+        try {
+          final user = auth.currentUser;
+          if (user == null) return;
+          const empty = '';
+          final path = 'rider-profile-photos/${user.uid}/profile.jpg';
+          await FirebaseStorage.instance.ref(path).delete().catchError((_) {});
+          await user.updatePhotoURL(null);
+          final patch = {
+            'photoURL': FieldValue.delete(),
+            'photoUrl': FieldValue.delete(),
+            'photoPath': FieldValue.delete(),
+            'profilePhotoUrl': FieldValue.delete(),
+            'photoUpdatedAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          };
+          await db
+              .collection('riders')
+              .doc(user.uid)
+              .set(patch, SetOptions(merge: true));
+          await db
+              .collection('riderProfiles')
+              .doc(user.uid)
+              .set(patch, SetOptions(merge: true));
+          emit(state.copyWith(
+              profilePhoto: empty, errorMessage: 'Profile photo removed.'));
         } catch (e) {
           print(e);
+          emit(state.copyWith(
+              errorMessage: 'Profile photo could not be removed.'));
         }
       },
     );

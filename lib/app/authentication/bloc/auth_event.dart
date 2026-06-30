@@ -220,6 +220,10 @@ class UpdateUserProfilePhoto extends AuthEvent {
   const UpdateUserProfilePhoto({required this.imagePath});
 }
 
+class RemoveUserProfilePhoto extends AuthEvent {
+  const RemoveUserProfilePhoto();
+}
+
 class SignOut extends AuthEvent {}
 
 class DeleteAccount extends AuthEvent {}
