@@ -20,6 +20,7 @@ import 'app/authentication/bloc/auth_bloc.dart';
 import 'app/bottom_nav/bloc/navbar_bloc.dart';
 import 'app/home/bloc/home_bloc.dart';
 import 'app/history/bloc/history_bloc.dart';
+import 'app/rider_jobs/rider_job_offer_screen.dart';
 import 'app/support/bloc/support_bloc.dart';
 import 'app/verification/bloc/verification_bloc.dart';
 import 'helper/chats_help.dart';
@@ -126,6 +127,11 @@ class CircumRider extends StatelessWidget {
         minTextAdapt: true,
         builder: (_, __) {
           final botToastBuilder = BotToastInit();
+          final localWebPreview = kIsWeb &&
+              (Uri.base.host == '127.0.0.1' || Uri.base.host == 'localhost') &&
+              (Uri.base.path.contains('/rider/jobs/offers') ||
+                  Uri.base.fragment.contains('/rider/jobs/offers') ||
+                  Uri.base.queryParameters['preview'] == '1');
           return MaterialApp(
               // navigatorKey: NavKey.navKey,
               // onGenerateRoute: (_) => null,
@@ -143,34 +149,48 @@ class CircumRider extends StatelessWidget {
               theme: ThemeData.light(),
               darkTheme: ThemeData.dark(),
               navigatorObservers: [BotToastNavigatorObserver()],
-              home: WillPopScope(
-                onWillPop: () async =>
-                    !await NavKey.navKey.currentState!.maybePop(),
-                child: MultiBlocProvider(providers: [
-                  BlocProvider<AuthBloc>(
-                    create: (BuildContext context) =>
-                        AuthBloc()..add(SortSessionState()),
-                  ),
-                  BlocProvider(
-                    create: (context) => NavbarBloc(),
-                  ),
-                  BlocProvider(
-                    create: (context) => VerificationBloc(),
-                  ),
-                  BlocProvider<HomeBloc>(
-                    create: (BuildContext context) => homeBloc,
-                  ),
-                  BlocProvider<HistoryBloc>(
-                    create: (BuildContext context) => HistoryBloc(),
-                  ),
-                  BlocProvider<SupportBloc>(
-                    create: (BuildContext context) => SupportBloc(),
-                  ),
-                  BlocProvider<AccountBloc>(
-                    create: (BuildContext context) => AccountBloc(),
-                  ),
-                ], child: const App()),
-              ));
+              routes: {
+                RiderJobOfferScreen.routeName: (_) => kDebugMode && kIsWeb
+                    ? RiderJobOfferScreen(
+                        previewOffers: RiderJobOfferPreview.offers(),
+                      )
+                    : const RiderJobOfferScreen(),
+                '/rider/jobs/offers/preview': (_) => RiderJobOfferScreen(
+                      previewOffers: RiderJobOfferPreview.offers(),
+                    ),
+              },
+              home: localWebPreview
+                  ? RiderJobOfferScreen(
+                      previewOffers: RiderJobOfferPreview.offers(),
+                    )
+                  : WillPopScope(
+                      onWillPop: () async =>
+                          !await NavKey.navKey.currentState!.maybePop(),
+                      child: MultiBlocProvider(providers: [
+                        BlocProvider<AuthBloc>(
+                          create: (BuildContext context) =>
+                              AuthBloc()..add(SortSessionState()),
+                        ),
+                        BlocProvider(
+                          create: (context) => NavbarBloc(),
+                        ),
+                        BlocProvider(
+                          create: (context) => VerificationBloc(),
+                        ),
+                        BlocProvider<HomeBloc>(
+                          create: (BuildContext context) => homeBloc,
+                        ),
+                        BlocProvider<HistoryBloc>(
+                          create: (BuildContext context) => HistoryBloc(),
+                        ),
+                        BlocProvider<SupportBloc>(
+                          create: (BuildContext context) => SupportBloc(),
+                        ),
+                        BlocProvider<AccountBloc>(
+                          create: (BuildContext context) => AccountBloc(),
+                        ),
+                      ], child: const App()),
+                    ));
         });
   }
 }
