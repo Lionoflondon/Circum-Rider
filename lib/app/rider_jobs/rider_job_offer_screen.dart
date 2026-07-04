@@ -682,12 +682,13 @@ enum RiderDeliveryStage {
   accepted,
   navigatingToPickup,
   arrivedAtPickup,
-  parcelVerificationRequired,
-  parcelVerified,
+  pickupVerification,
+  pickupVerified,
   collected,
   navigatingToDropoff,
   arrivedAtDropoff,
-  dropoffVerificationRequired,
+  waiting,
+  pinRequired,
   delivered,
   issueReported,
 }
@@ -697,12 +698,13 @@ class RiderDeliveryStagePolicy {
     RiderDeliveryStage.accepted,
     RiderDeliveryStage.navigatingToPickup,
     RiderDeliveryStage.arrivedAtPickup,
-    RiderDeliveryStage.parcelVerificationRequired,
-    RiderDeliveryStage.parcelVerified,
+    RiderDeliveryStage.pickupVerification,
+    RiderDeliveryStage.pickupVerified,
     RiderDeliveryStage.collected,
     RiderDeliveryStage.navigatingToDropoff,
     RiderDeliveryStage.arrivedAtDropoff,
-    RiderDeliveryStage.dropoffVerificationRequired,
+    RiderDeliveryStage.waiting,
+    RiderDeliveryStage.pinRequired,
     RiderDeliveryStage.delivered,
   ];
 
@@ -715,18 +717,21 @@ class RiderDeliveryStagePolicy {
         return RiderDeliveryStage.arrivedAtPickup;
       case 'pickup_verification':
       case 'parcel_verification_required':
-        return RiderDeliveryStage.parcelVerificationRequired;
+        return RiderDeliveryStage.pickupVerification;
       case 'pickup_verified':
       case 'parcel_verified':
-        return RiderDeliveryStage.parcelVerified;
+        return RiderDeliveryStage.pickupVerified;
       case 'collected':
         return RiderDeliveryStage.collected;
       case 'navigating_to_dropoff':
         return RiderDeliveryStage.navigatingToDropoff;
       case 'arrived_at_dropoff':
         return RiderDeliveryStage.arrivedAtDropoff;
+      case 'waiting':
+        return RiderDeliveryStage.waiting;
+      case 'pin_required':
       case 'dropoff_verification_required':
-        return RiderDeliveryStage.dropoffVerificationRequired;
+        return RiderDeliveryStage.pinRequired;
       case 'delivered':
         return RiderDeliveryStage.delivered;
       case 'issue_reported':
@@ -742,9 +747,9 @@ class RiderDeliveryStagePolicy {
         return 'navigating_to_pickup';
       case RiderDeliveryStage.arrivedAtPickup:
         return 'arrived_at_pickup';
-      case RiderDeliveryStage.parcelVerificationRequired:
+      case RiderDeliveryStage.pickupVerification:
         return 'pickup_verification';
-      case RiderDeliveryStage.parcelVerified:
+      case RiderDeliveryStage.pickupVerified:
         return 'pickup_verified';
       case RiderDeliveryStage.collected:
         return 'collected';
@@ -752,8 +757,10 @@ class RiderDeliveryStagePolicy {
         return 'navigating_to_dropoff';
       case RiderDeliveryStage.arrivedAtDropoff:
         return 'arrived_at_dropoff';
-      case RiderDeliveryStage.dropoffVerificationRequired:
-        return 'dropoff_verification_required';
+      case RiderDeliveryStage.waiting:
+        return 'waiting';
+      case RiderDeliveryStage.pinRequired:
+        return 'pin_required';
       case RiderDeliveryStage.delivered:
         return 'delivered';
       case RiderDeliveryStage.issueReported:
@@ -775,21 +782,23 @@ class RiderDeliveryStagePolicy {
         return RiderDeliveryStage.arrivedAtPickup;
       case RiderDeliveryStage.arrivedAtPickup:
         return verificationRequired
-            ? RiderDeliveryStage.parcelVerificationRequired
+            ? RiderDeliveryStage.pickupVerification
             : RiderDeliveryStage.collected;
-      case RiderDeliveryStage.parcelVerificationRequired:
-        return RiderDeliveryStage.parcelVerified;
-      case RiderDeliveryStage.parcelVerified:
+      case RiderDeliveryStage.pickupVerification:
+        return RiderDeliveryStage.pickupVerified;
+      case RiderDeliveryStage.pickupVerified:
         return RiderDeliveryStage.collected;
       case RiderDeliveryStage.collected:
         return RiderDeliveryStage.navigatingToDropoff;
       case RiderDeliveryStage.navigatingToDropoff:
         return RiderDeliveryStage.arrivedAtDropoff;
       case RiderDeliveryStage.arrivedAtDropoff:
+        return RiderDeliveryStage.waiting;
+      case RiderDeliveryStage.waiting:
         return pinRequired
-            ? RiderDeliveryStage.dropoffVerificationRequired
+            ? RiderDeliveryStage.pinRequired
             : RiderDeliveryStage.delivered;
-      case RiderDeliveryStage.dropoffVerificationRequired:
+      case RiderDeliveryStage.pinRequired:
         return RiderDeliveryStage.delivered;
       case RiderDeliveryStage.delivered:
       case RiderDeliveryStage.issueReported:
@@ -840,11 +849,10 @@ class RiderDeliveryStagePolicy {
       'updatedAt': Timestamp.fromDate(timestamp),
       'updatedBy': riderId,
       'riderId': riderId,
-      'validationComplete': to != RiderDeliveryStage.parcelVerificationRequired,
-      'verificationRequired':
-          to == RiderDeliveryStage.parcelVerificationRequired,
+      'validationComplete': to != RiderDeliveryStage.pickupVerification,
+      'verificationRequired': to == RiderDeliveryStage.pickupVerification,
       'verificationComplete':
-          to.index > RiderDeliveryStage.parcelVerificationRequired.index,
+          to.index > RiderDeliveryStage.pickupVerification.index,
       'history': FieldValue.arrayUnion([event]),
     };
     if (to == RiderDeliveryStage.arrivedAtPickup ||
@@ -1025,6 +1033,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                     title: nextTitle,
                     subtitle: _navigationSubtitle(_stage),
                   ),
+                  const SizedBox(height: 10),
+                  _CompactProgressIndicator(stage: _stage),
                   const Spacer(),
                   _AcceptedBottomPanel(
                     offer: widget.offer,
@@ -1053,18 +1063,20 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       case RiderDeliveryStage.navigatingToPickup:
         return 'I\'ve Arrived';
       case RiderDeliveryStage.arrivedAtPickup:
-        return _verificationRequired ? 'Verify Pickup' : 'Confirm Pickup';
-      case RiderDeliveryStage.parcelVerificationRequired:
+        return _verificationRequired ? 'Verify Parcel' : 'Confirm Pickup';
+      case RiderDeliveryStage.pickupVerification:
         return 'Confirm Pickup';
-      case RiderDeliveryStage.parcelVerified:
+      case RiderDeliveryStage.pickupVerified:
         return 'Confirm Pickup';
       case RiderDeliveryStage.collected:
-      case RiderDeliveryStage.navigatingToDropoff:
         return 'Navigate to Drop-off';
+      case RiderDeliveryStage.navigatingToDropoff:
+        return 'I\'ve Arrived';
       case RiderDeliveryStage.arrivedAtDropoff:
+      case RiderDeliveryStage.waiting:
         return _pinRequired ? 'Verify PIN' : 'Complete Delivery';
-      case RiderDeliveryStage.dropoffVerificationRequired:
-        return 'Verify PIN';
+      case RiderDeliveryStage.pinRequired:
+        return 'Complete Delivery';
       case RiderDeliveryStage.delivered:
         return 'Delivery Complete';
       case RiderDeliveryStage.issueReported:
@@ -1076,8 +1088,110 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     if (stage.index < RiderDeliveryStage.collected.index) {
       return '${widget.offer.pickupAddress} - ${widget.offer.timeText} away';
     }
+    if (stage == RiderDeliveryStage.arrivedAtDropoff ||
+        stage == RiderDeliveryStage.waiting) {
+      return 'Receiver notified - 3 minute wait timer active';
+    }
     if (stage == RiderDeliveryStage.delivered) return widget.offer.dropoffArea;
     return '${widget.offer.dropoffAddress} - ${widget.offer.timeText} away';
+  }
+}
+
+class _CompactProgressIndicator extends StatelessWidget {
+  final RiderDeliveryStage stage;
+
+  const _CompactProgressIndicator({required this.stage});
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = [
+      'Accepted',
+      'Pickup',
+      'Verified',
+      'Collected',
+      'Drop-off',
+      'PIN',
+      'Delivered',
+    ];
+    final currentIndex = _progressIndex(stage);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0B1020).withOpacity(0.62),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.10)),
+      ),
+      child: Row(
+        children: List.generate(labels.length, (index) {
+          final complete = index < currentIndex;
+          final active = index == currentIndex;
+          return Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: complete || active
+                        ? const Color(0xFF3B82F6)
+                        : Colors.white.withOpacity(0.08),
+                    border: Border.all(
+                      color: complete || active
+                          ? const Color(0xFF60A5FA)
+                          : Colors.white.withOpacity(0.10),
+                    ),
+                  ),
+                  child: complete
+                      ? const Icon(Icons.check_rounded,
+                          size: 14, color: Colors.white)
+                      : null,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  labels[index],
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color:
+                        active ? Colors.white : Colors.white.withOpacity(0.52),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  static int _progressIndex(RiderDeliveryStage stage) {
+    switch (stage) {
+      case RiderDeliveryStage.accepted:
+        return 0;
+      case RiderDeliveryStage.navigatingToPickup:
+      case RiderDeliveryStage.arrivedAtPickup:
+        return 1;
+      case RiderDeliveryStage.pickupVerification:
+      case RiderDeliveryStage.pickupVerified:
+        return 2;
+      case RiderDeliveryStage.collected:
+        return 3;
+      case RiderDeliveryStage.navigatingToDropoff:
+      case RiderDeliveryStage.arrivedAtDropoff:
+      case RiderDeliveryStage.waiting:
+        return 4;
+      case RiderDeliveryStage.pinRequired:
+        return 5;
+      case RiderDeliveryStage.delivered:
+        return 6;
+      case RiderDeliveryStage.issueReported:
+        return 4;
+    }
   }
 }
 
@@ -1205,8 +1319,8 @@ class _AcceptedBottomPanel extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
-      constraints: BoxConstraints(maxHeight: expanded ? 620 : 350),
-      padding: const EdgeInsets.all(20),
+      constraints: BoxConstraints(maxHeight: expanded ? 560 : 330),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: const Color(0xFF0B1020).withOpacity(0.84),
         borderRadius: BorderRadius.circular(28),
@@ -1589,8 +1703,8 @@ class _StageTracker extends StatelessWidget {
         return 'Navigate to Pickup';
       case RiderDeliveryStage.arrivedAtPickup:
         return 'I\'ve Arrived';
-      case RiderDeliveryStage.parcelVerificationRequired:
-      case RiderDeliveryStage.parcelVerified:
+      case RiderDeliveryStage.pickupVerification:
+      case RiderDeliveryStage.pickupVerified:
         return 'Verify Parcel';
       case RiderDeliveryStage.collected:
         return 'Collected Parcel';
@@ -1598,7 +1712,8 @@ class _StageTracker extends StatelessWidget {
         return 'Navigate to Drop-off';
       case RiderDeliveryStage.arrivedAtDropoff:
         return 'I\'ve Arrived';
-      case RiderDeliveryStage.dropoffVerificationRequired:
+      case RiderDeliveryStage.waiting:
+      case RiderDeliveryStage.pinRequired:
         return 'Verify PIN';
       case RiderDeliveryStage.delivered:
         return 'Delivery Complete';

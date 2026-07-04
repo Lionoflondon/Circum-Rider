@@ -179,7 +179,7 @@ void main() {
       await tester.tap(find.widgetWithText(ElevatedButton, 'I\'ve Arrived'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Verify Pickup'), findsWidgets);
+      expect(find.text('Verify Parcel'), findsWidgets);
       expect(find.text('Navigate to Drop-off'), findsNothing);
     });
 
@@ -224,7 +224,23 @@ void main() {
           verificationRequired: true,
           pinRequired: true,
         ),
-        RiderDeliveryStage.parcelVerificationRequired,
+        RiderDeliveryStage.pickupVerification,
+      );
+      expect(
+        RiderDeliveryStagePolicy.nextStage(
+          RiderDeliveryStage.arrivedAtDropoff,
+          verificationRequired: true,
+          pinRequired: true,
+        ),
+        RiderDeliveryStage.waiting,
+      );
+      expect(
+        RiderDeliveryStagePolicy.nextStage(
+          RiderDeliveryStage.waiting,
+          verificationRequired: true,
+          pinRequired: true,
+        ),
+        RiderDeliveryStage.pinRequired,
       );
     });
 
