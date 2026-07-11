@@ -1001,6 +1001,7 @@ class RiderAcceptedJobScreen extends StatefulWidget {
 
 class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   late RiderDeliveryStage _stage;
+  RiderEvidenceUploader? _evidenceUploader;
   bool _expanded = false;
   bool _transitioning = false;
   String? _transitionError;
@@ -1039,6 +1040,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     )) return;
     final action = _actionForTransition(_stage, next);
     String? pin;
+    Map<String, dynamic>? evidence;
     if (_pinRequired &&
         (action == 'verify_collection_pin' ||
             action == 'verify_receiver_pin')) {
@@ -1046,6 +1048,13 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
         action == 'verify_collection_pin' ? 'Pickup PIN' : 'Delivery PIN',
       );
       if (pin == null) return;
+    }
+    if ((action == 'verify_collection_pin' && _verificationRequired) ||
+        (action == 'verify_receiver_pin' && _pinRequired)) {
+      evidence = await _captureEvidence(
+        pickup: action == 'verify_collection_pin',
+      );
+      if (evidence == null) return;
     }
     final controller = widget.deliveryController;
     if (controller == null && widget.firestore == null) {
@@ -1057,8 +1066,13 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       _transitionError = null;
     });
     try {
-      final result = await (controller ?? CallableRiderDeliveryController())
-          .transition(deliveryId: widget.offer.id, action: action, pin: pin);
+      final result =
+          await (controller ?? CallableRiderDeliveryController()).transition(
+        deliveryId: widget.offer.id,
+        action: action,
+        pin: pin,
+        evidence: evidence,
+      );
       if (!mounted) return;
       setState(() => _stage = RiderDeliveryStagePolicy.fromRaw(result.status));
     } on FirebaseFunctionsException catch (error) {
@@ -1073,12 +1087,209 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     }
   }
 
+  Future<Map<String, dynamic>?> _captureEvidence({required bool pickup}) async {
+    setState(() => _transitioning = true);
+    try {
+      final photoUrl =
+          await (_evidenceUploader ??= RiderEvidenceUploader()).capture(
+        deliveryId: widget.offer.id,
+        stage: pickup ? 'pickup' : 'handover',
+      );
+      if (photoUrl == null || !mounted) return null;
+      final recipient = TextEditingController();
+      final actualWeight = TextEditingController();
+      var conditionConfirmed = false;
+      var declarationAccepted = false;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title:
+                Text(pickup ? 'Confirm Pickup Evidence' : 'Confirm Handover'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (pickup) ...[
+                  CheckboxListTile(
+                    value: conditionConfirmed,
+                    onChanged: (value) => setDialogState(
+                      () => conditionConfirmed = value == true,
+                    ),
+                    title: const Text('Parcel condition confirmed'),
+                  ),
+                  CheckboxListTile(
+                    value: declarationAccepted,
+                    onChanged: (value) => setDialogState(
+                      () => declarationAccepted = value == true,
+                    ),
+                    title: const Text('I confirm this evidence is accurate'),
+                  ),
+                  if (widget.offer.raw['weightVerificationRequired'] == true)
+                    TextField(
+                      controller: actualWeight,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                          labelText: 'Actual weight (kg)'),
+                    ),
+                ] else
+                  TextField(
+                    controller: recipient,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Recipient name',
+                    ),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  final valid = pickup
+                      ? conditionConfirmed && declarationAccepted
+                      : recipient.text.trim().isNotEmpty;
+                  if (valid) Navigator.pop(context, true);
+                },
+                child: const Text('Continue'),
+              ),
+            ],
+          ),
+        ),
+      );
+      final recipientName = recipient.text.trim();
+      final actualWeightKg = double.tryParse(actualWeight.text.trim());
+      recipient.dispose();
+      actualWeight.dispose();
+      if (confirmed != true) return null;
+      return {
+        'photoUrl': photoUrl,
+        if (pickup) 'conditionConfirmed': conditionConfirmed,
+        if (pickup) 'riderDeclarationAccepted': declarationAccepted,
+        if (pickup && actualWeightKg != null) 'actualWeightKg': actualWeightKg,
+        if (!pickup) 'recipientName': recipientName,
+        if (!pickup) 'recipientConfirmed': true,
+      };
+    } catch (_) {
+      if (mounted) {
+        setState(() => _transitionError =
+            'Evidence upload failed. Check your connection and retry.');
+      }
+      return null;
+    } finally {
+      if (mounted) setState(() => _transitioning = false);
+    }
+  }
+
+  Future<void> _reportIssue() async {
+    final notes = TextEditingController();
+    var category = 'other';
+    final submit = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Report Delivery Issue'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: category,
+                items: const {
+                  'sender_unavailable': 'Sender unavailable',
+                  'recipient_unavailable': 'Recipient unavailable',
+                  'address_problem': 'Address problem',
+                  'parcel_mismatch': 'Parcel mismatch',
+                  'unsafe_situation': 'Unsafe situation',
+                  'damaged_parcel': 'Damaged parcel',
+                  'vehicle_suitability': 'Vehicle suitability problem',
+                  'other': 'Other',
+                }
+                    .entries
+                    .map((item) => DropdownMenuItem(
+                          value: item.key,
+                          child: Text(item.value),
+                        ))
+                    .toList(),
+                onChanged: (value) =>
+                    setDialogState(() => category = value ?? 'other'),
+                decoration: const InputDecoration(labelText: 'Issue'),
+              ),
+              TextField(
+                controller: notes,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Notes'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Report'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final detail = notes.text.trim();
+    notes.dispose();
+    if (submit != true) return;
+    setState(() => _transitioning = true);
+    try {
+      final controller =
+          widget.deliveryController ?? CallableRiderDeliveryController();
+      if (category == 'parcel_mismatch' || category == 'vehicle_suitability') {
+        final photoUrl =
+            await (_evidenceUploader ??= RiderEvidenceUploader()).capture(
+          deliveryId: widget.offer.id,
+          stage: 'discrepancy',
+        );
+        if (photoUrl == null) return;
+        await controller.reportDiscrepancy(
+          deliveryId: widget.offer.id,
+          reason: category == 'vehicle_suitability'
+              ? 'dimensions_exceeded'
+              : 'item_differs_from_booking',
+          evidencePhotos: [photoUrl],
+          notes: detail,
+        );
+        if (mounted) {
+          setState(() => _transitionError =
+              'Discrepancy submitted for Circum review. Do not collect yet.');
+        }
+        return;
+      }
+      final result = await controller.transition(
+        deliveryId: widget.offer.id,
+        action: 'report_issue',
+        issue: {'category': category, 'notes': detail},
+      );
+      if (mounted) {
+        setState(
+            () => _stage = RiderDeliveryStagePolicy.fromRaw(result.status));
+      }
+    } catch (_) {
+      if (mounted)
+        setState(() => _transitionError = 'Issue report failed. Retry.');
+    } finally {
+      if (mounted) setState(() => _transitioning = false);
+    }
+  }
+
   String _actionForTransition(
     RiderDeliveryStage current,
     RiderDeliveryStage next,
   ) {
-    if (current == RiderDeliveryStage.pickupVerified ||
-        current == RiderDeliveryStage.collected) {
+    if (current == RiderDeliveryStage.pickupVerified) {
+      return 'confirm_collected';
+    }
+    if (current == RiderDeliveryStage.collected) {
       return 'start_delivery';
     }
     switch (next) {
@@ -1169,6 +1380,17 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                   ),
                   const SizedBox(height: 10),
                   _CompactProgressIndicator(stage: _stage),
+                  if ((_stage == RiderDeliveryStage.arrivedAtPickup ||
+                          _stage == RiderDeliveryStage.waiting) &&
+                      widget.firestore != null) ...[
+                    const SizedBox(height: 10),
+                    _WaitingPolicyCard(
+                      firestore: widget.firestore!,
+                      deliveryId: widget.offer.id,
+                      controller: widget.deliveryController ??
+                          CallableRiderDeliveryController(),
+                    ),
+                  ],
                   if (_transitionError != null) ...[
                     const SizedBox(height: 10),
                     Semantics(
@@ -1189,6 +1411,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                     verificationRequired: _verificationRequired,
                     cta: _transitioning ? 'Updating...' : nextTitle,
                     onToggle: () => setState(() => _expanded = !_expanded),
+                    onIssue: _transitioning ? null : _reportIssue,
                     onPrimary: _transitioning ? null : _advance,
                   ),
                 ],
@@ -1238,6 +1461,96 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     }
     if (stage == RiderDeliveryStage.delivered) return widget.offer.dropoffArea;
     return '${widget.offer.dropoffAddress} - ${widget.offer.timeText} away';
+  }
+}
+
+class _WaitingPolicyCard extends StatelessWidget {
+  final FirebaseFirestore firestore;
+  final String deliveryId;
+  final RiderDeliveryController controller;
+
+  const _WaitingPolicyCard({
+    required this.firestore,
+    required this.deliveryId,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream:
+          firestore.collection('deliveryRequests').doc(deliveryId).snapshots(),
+      builder: (context, snapshot) {
+        final data = snapshot.data?.data() ?? const <String, dynamic>{};
+        final waiting = data['waiting'] is Map
+            ? Map<String, dynamic>.from(data['waiting'] as Map)
+            : const <String, dynamic>{};
+        final rawDeadline = waiting['noShowAvailableAt'];
+        final deadline = rawDeadline is Timestamp
+            ? rawDeadline.toDate()
+            : rawDeadline is num
+                ? DateTime.fromMillisecondsSinceEpoch(rawDeadline.toInt())
+                : null;
+        return StreamBuilder<int>(
+          stream: Stream<int>.periodic(
+              const Duration(seconds: 1), (value) => value),
+          builder: (context, _) {
+            final remaining = deadline == null
+                ? const Duration(minutes: 3)
+                : deadline.difference(DateTime.now());
+            final noShowReady = deadline != null && remaining <= Duration.zero;
+            final seconds = remaining.isNegative ? 0 : remaining.inSeconds;
+            final label =
+                '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
+            return Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0B1020).withOpacity(0.9),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Colors.white.withOpacity(0.14)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Sender notified',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800)),
+                        Text(
+                          noShowReady
+                              ? 'No-show review available'
+                              : 'Free wait $label',
+                          style:
+                              TextStyle(color: Colors.white.withOpacity(0.7)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => controller.reportWaitingContext(
+                      deliveryId: deliveryId,
+                      type: 'waiting_for_building_access',
+                      note: 'Contact established by rider',
+                    ),
+                    child: const Text('Contact made'),
+                  ),
+                  if (noShowReady)
+                    TextButton(
+                      onPressed: () =>
+                          controller.markNoShow(deliveryId: deliveryId),
+                      child: const Text('No Show'),
+                    ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }
 
@@ -1445,6 +1758,7 @@ class _AcceptedBottomPanel extends StatelessWidget {
   final String cta;
   final VoidCallback onToggle;
   final VoidCallback? onPrimary;
+  final VoidCallback? onIssue;
 
   const _AcceptedBottomPanel({
     required this.offer,
@@ -1456,6 +1770,7 @@ class _AcceptedBottomPanel extends StatelessWidget {
     required this.cta,
     required this.onToggle,
     required this.onPrimary,
+    required this.onIssue,
   });
 
   @override
@@ -1541,6 +1856,12 @@ class _AcceptedBottomPanel extends StatelessWidget {
                         verificationRequired: verificationRequired),
                     const SizedBox(height: 10),
                     _SecondaryContactRow(vanguard: vanguard),
+                    const SizedBox(height: 10),
+                    TextButton.icon(
+                      onPressed: onIssue,
+                      icon: const Icon(Icons.report_outlined),
+                      label: const Text('Report an issue'),
+                    ),
                   ],
                 ),
               ),

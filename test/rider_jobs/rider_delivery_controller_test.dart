@@ -12,6 +12,8 @@ class _RecordingController implements RiderDeliveryController {
     required String deliveryId,
     required String action,
     String? pin,
+    Map<String, dynamic>? evidence,
+    Map<String, dynamic>? issue,
   }) async {
     calls += 1;
     this.deliveryId = deliveryId;
@@ -19,6 +21,28 @@ class _RecordingController implements RiderDeliveryController {
     this.pin = pin;
     return const RiderDeliveryTransitionResult('pickup_verified');
   }
+
+  @override
+  Future<Map<String, dynamic>> markNoShow({required String deliveryId}) async =>
+      {'success': true};
+
+  @override
+  Future<Map<String, dynamic>> reportDiscrepancy({
+    required String deliveryId,
+    required String reason,
+    required List<String> evidencePhotos,
+    double? observedWeightKg,
+    String? notes,
+  }) async =>
+      {'success': true};
+
+  @override
+  Future<Map<String, dynamic>> reportWaitingContext({
+    required String deliveryId,
+    required String type,
+    String? note,
+  }) async =>
+      {'success': true};
 }
 
 void main() {
