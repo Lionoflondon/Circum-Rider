@@ -37,6 +37,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
   late final RiderAcceptController _acceptController;
   int _activeIndex = 0;
   bool _accepting = false;
+  bool _accepted = false;
   String? _statusMessage;
 
   @override
@@ -58,6 +59,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
         offers: previewOffers,
         activeIndex: _activeIndex,
         accepting: _accepting,
+        accepted: _accepted,
         riderRank: 'Sentinel',
         statusMessage: _statusMessage,
         onIndexChanged: (index) {
@@ -66,13 +68,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
             _statusMessage = null;
           });
         },
-        onAccept: (offer) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => RiderAcceptedJobScreen(offer: offer),
-            ),
-          );
-        },
+        onAccept: _acceptPreview,
       );
     }
 
@@ -137,11 +133,13 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
               offers: offers,
               activeIndex: safeIndex,
               accepting: _accepting,
+              accepted: _accepted,
               riderRank: rider.riderRank ?? 'Sentinel',
               statusMessage: _statusMessage,
               onIndexChanged: (index) {
                 setState(() {
                   _activeIndex = index;
+                  _accepted = false;
                   _statusMessage = null;
                 });
               },
@@ -249,10 +247,13 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
 
     setState(() {
       _accepting = false;
+      _accepted = result.accepted;
       _statusMessage = result.message;
     });
 
     if (result.accepted) {
+      await Future<void>.delayed(const Duration(milliseconds: 650));
+      if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => RiderAcceptedJobScreen(
@@ -265,12 +266,23 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       );
     }
   }
+
+  Future<void> _acceptPreview(RiderJobOffer offer) async {
+    if (_accepting || _accepted) return;
+    setState(() => _accepted = true);
+    await Future<void>.delayed(const Duration(milliseconds: 650));
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => RiderAcceptedJobScreen(offer: offer)),
+    );
+  }
 }
 
 class _OfferExperience extends StatelessWidget {
   final List<RiderJobOffer> offers;
   final int activeIndex;
   final bool accepting;
+  final bool accepted;
   final String riderRank;
   final String? statusMessage;
   final ValueChanged<int> onIndexChanged;
@@ -280,6 +292,7 @@ class _OfferExperience extends StatelessWidget {
     required this.offers,
     required this.activeIndex,
     required this.accepting,
+    required this.accepted,
     required this.riderRank,
     required this.statusMessage,
     required this.onIndexChanged,
@@ -295,7 +308,7 @@ class _OfferExperience extends StatelessWidget {
       backgroundColor: const Color(0xFF07090F),
       body: Stack(
         children: [
-          _OfferMapBackground(offer: activeOffer),
+          _OfferMapBackground(offer: activeOffer, focusPickup: accepted),
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -324,6 +337,7 @@ class _OfferExperience extends StatelessWidget {
                     offers: offers,
                     activeIndex: safeIndex,
                     accepting: accepting,
+                    accepted: accepted,
                     riderRank: riderRank,
                     onIndexChanged: onIndexChanged,
                     onAccept: onAccept,
@@ -463,22 +477,52 @@ class _OfferHeader extends StatelessWidget {
   }
 }
 
-class _OfferMapBackground extends StatelessWidget {
+class _OfferMapBackground extends StatefulWidget {
   final RiderJobOffer offer;
+  final bool focusPickup;
 
-  const _OfferMapBackground({required this.offer});
+  const _OfferMapBackground({required this.offer, this.focusPickup = false});
+
+  @override
+  State<_OfferMapBackground> createState() => _OfferMapBackgroundState();
+}
+
+class _OfferMapBackgroundState extends State<_OfferMapBackground> {
+  GoogleMapController? _controller;
+
+  @override
+  void didUpdateWidget(covariant _OfferMapBackground oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.focusPickup && widget.focusPickup) {
+      _focusPickup();
+    }
+  }
+
+  void _focusPickup() {
+    final pickup = _latLng(
+        widget.offer.raw['pickupDetails'] ?? widget.offer.raw['pickup']);
+    if (pickup == null) return;
+    _controller?.animateCamera(CameraUpdate.newCameraPosition(
+      CameraPosition(target: pickup, zoom: 15.5),
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
-    final pickup = _latLng(offer.raw['pickupDetails'] ?? offer.raw['pickup']);
-    final dropoff =
-        _latLng(offer.raw['dropoffDetails'] ?? offer.raw['dropoff']);
+    final pickup = _latLng(
+        widget.offer.raw['pickupDetails'] ?? widget.offer.raw['pickup']);
+    final dropoff = _latLng(
+        widget.offer.raw['dropoffDetails'] ?? widget.offer.raw['dropoff']);
 
     if (pickup == null || dropoff == null) {
       return const _MapFallback();
     }
 
     return GoogleMap(
+      onMapCreated: (controller) {
+        _controller = controller;
+        if (widget.focusPickup) _focusPickup();
+      },
       initialCameraPosition: CameraPosition(
         target: LatLng(
           (pickup.latitude + dropoff.latitude) / 2,

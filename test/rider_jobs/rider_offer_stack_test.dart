@@ -4,8 +4,17 @@ import 'package:circum_rider/app/rider_jobs/rider_offer_stack.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:io';
 
 void main() {
+  test('offer earnings presentation has no bonus reward system', () {
+    final source =
+        File('lib/app/rider_jobs/rider_offer_card.dart').readAsStringSync();
+    expect(source.toLowerCase(), isNot(contains('bonus')));
+    expect(source, contains('Estimated earnings'));
+    expect(source, contains('Trust Points'));
+  });
+
   group('RiderOfferStack', () {
     setUp(() {
       TestWidgetsFlutterBinding.ensureInitialized()
@@ -86,7 +95,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('£12.00'), findsOneWidget);
       expect(find.text('Sentinel'), findsOneWidget);
-      expect(find.text('+6 Trust'), findsOneWidget);
+      expect(find.text('+6 Trust Points'), findsOneWidget);
       expect(find.text('Health+'), findsWidgets);
       expect(find.text('Vanguard'), findsOneWidget);
       expect(find.text('Bike minimum'), findsOneWidget);

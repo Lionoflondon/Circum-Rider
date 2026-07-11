@@ -10,6 +10,7 @@ class RiderOfferStack extends StatefulWidget {
   final ValueChanged<int> onIndexChanged;
   final ValueChanged<RiderJobOffer> onAccept;
   final bool accepting;
+  final bool accepted;
   final String riderRank;
 
   const RiderOfferStack({
@@ -19,6 +20,7 @@ class RiderOfferStack extends StatefulWidget {
     required this.onIndexChanged,
     required this.onAccept,
     required this.accepting,
+    this.accepted = false,
     required this.riderRank,
   });
 
@@ -75,6 +77,7 @@ class _RiderOfferStackState extends State<RiderOfferStack> {
                         offer: previous,
                         riderRank: widget.riderRank,
                         accepting: false,
+                        accepted: false,
                         onAccept: () {},
                       ),
                     ),
@@ -93,6 +96,7 @@ class _RiderOfferStackState extends State<RiderOfferStack> {
                         offer: next,
                         riderRank: widget.riderRank,
                         accepting: false,
+                        accepted: false,
                         onAccept: () {},
                       ),
                     ),
@@ -109,6 +113,7 @@ class _RiderOfferStackState extends State<RiderOfferStack> {
                 offer: active,
                 riderRank: widget.riderRank,
                 accepting: widget.accepting,
+                accepted: widget.accepted,
                 onAccept: () => widget.onAccept(active),
               ),
             ),

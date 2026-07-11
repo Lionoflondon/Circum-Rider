@@ -181,6 +181,7 @@ class RiderOfferCard extends StatelessWidget {
   final RiderJobOffer offer;
   final String riderRank;
   final bool accepting;
+  final bool accepted;
   final VoidCallback onAccept;
 
   const RiderOfferCard({
@@ -188,6 +189,7 @@ class RiderOfferCard extends StatelessWidget {
     required this.offer,
     required this.riderRank,
     required this.accepting,
+    this.accepted = false,
     required this.onAccept,
   });
 
@@ -195,148 +197,164 @@ class RiderOfferCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final points = offer.points;
     final chips = _orderedChips(points.label);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-        child: Container(
-          padding: const EdgeInsets.all(22),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0B1020).withOpacity(0.78),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withOpacity(0.16)),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF2563EB).withOpacity(0.22),
-                blurRadius: 34,
-                offset: const Offset(0, 18),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  _money(offer.earnings, offer.currency),
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 34,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 0,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  'Estimated earnings',
-                                  style: TextStyle(
-                                    color: Colors.white.withOpacity(0.62),
-                                    fontSize: 13,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          _RankTrustColumn(
-                            rank: riderRank,
-                            trustPoints: points.points,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Wrap(
-                        spacing: 7,
-                        runSpacing: 7,
-                        children: chips
-                            .map((chip) => _Chip(
-                                  label: chip,
-                                  highlighted: chip == points.label,
-                                ))
-                            .toList(),
-                      ),
-                      const SizedBox(height: 18),
-                      _RouteSummary(
-                        pickup: offer.pickupArea,
-                        dropoff: offer.dropoffArea,
-                      ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _InfoTile(
-                              icon: Icons.route_rounded,
-                              label: offer.distanceText,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: _InfoTile(
-                              icon: Icons.schedule_rounded,
-                              label: offer.timeText,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      _ParcelGuidance(text: offer.parcelGuidance),
-                      const SizedBox(height: 10),
-                      _MetadataRow(
-                        vehicle: offer.minimumVehicle,
-                        weight: offer.weightText,
-                        timing: offer.pickupTiming,
-                      ),
-                    ],
-                  ),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        boxShadow: accepted
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF60A5FA).withOpacity(0.65),
+                  blurRadius: 48,
+                  spreadRadius: 3,
                 ),
-              ),
-              const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: accepting ? null : onAccept,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF3B82F6),
-                    disabledBackgroundColor:
-                        const Color(0xFF3B82F6).withOpacity(0.42),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
+              ]
+            : const [],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(28),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+          child: Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0B1020).withOpacity(0.78),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.white.withOpacity(0.16)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF2563EB).withOpacity(0.22),
+                  blurRadius: 34,
+                  offset: const Offset(0, 18),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const ClampingScrollPhysics(),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _money(offer.earnings, offer.currency),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 34,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: 0,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Estimated earnings',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.62),
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            _RankTrustColumn(
+                              rank: riderRank,
+                              trustPoints: points.points,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Wrap(
+                          spacing: 7,
+                          runSpacing: 7,
+                          children: chips
+                              .map((chip) => _Chip(
+                                    label: chip,
+                                    highlighted: chip == points.label,
+                                  ))
+                              .toList(),
+                        ),
+                        const SizedBox(height: 18),
+                        _RouteSummary(
+                          pickup: offer.pickupArea,
+                          dropoff: offer.dropoffArea,
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _InfoTile(
+                                icon: Icons.route_rounded,
+                                label: offer.distanceText,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _InfoTile(
+                                icon: Icons.schedule_rounded,
+                                label: offer.timeText,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        _ParcelGuidance(text: offer.parcelGuidance),
+                        const SizedBox(height: 10),
+                        _MetadataRow(
+                          vehicle: offer.minimumVehicle,
+                          weight: offer.weightText,
+                          timing: offer.pickupTiming,
+                        ),
+                      ],
                     ),
                   ),
-                  child: accepting
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.4,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : const Text(
-                          'Accept Delivery',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: accepting ? null : onAccept,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF3B82F6),
+                      disabledBackgroundColor:
+                          const Color(0xFF3B82F6).withOpacity(0.42),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    child: accepting
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.4,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : Text(
+                            accepted ? 'Accepted ✓' : 'Accept Delivery',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -399,7 +417,7 @@ class _RankTrustColumn extends StatelessWidget {
                   fontSize: 13,
                   fontWeight: FontWeight.w900)),
           const SizedBox(height: 2),
-          Text('+$trustPoints Trust',
+          Text('+$trustPoints Trust Points',
               style: TextStyle(
                   color: Colors.white.withOpacity(0.74),
                   fontSize: 11,
