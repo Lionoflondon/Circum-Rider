@@ -80,8 +80,7 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                             QuerySnapshot<Map<String, dynamic>>>(
                           stream: FirebaseFirestore.instance
                               .collection('deliveryRequests')
-                              .where('status',
-                                  whereIn: const ['available', 'pending'])
+                              .where('status', isEqualTo: 'requested')
                               .limit(8)
                               .snapshots(),
                           builder: (context, offersSnapshot) {
@@ -810,7 +809,7 @@ class _PriorityJobsCard extends StatelessWidget {
         ? 'Go online to receive eligible delivery offers.'
         : count == 0
             ? 'New eligible jobs will appear here when available.'
-            : 'Open the marketplace to review delivery details.';
+            : 'Open delivery offers to review the swipeable card stack.';
     return _ActionRow(
       icon: Icons.map_outlined,
       iconColor: RiderPalette.blue,

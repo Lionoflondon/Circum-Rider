@@ -24,7 +24,8 @@ void main() {
     test('old four-tab shell is gone', () {
       expect(
           nav, contains("['Home', 'Jobs', 'Action', 'Earnings', 'Profile']"));
-      expect(nav, contains("label: 'Open schedule'"));
+      expect(nav, contains("label: 'Open delivery offers'"));
+      expect(nav, contains('_CentralAction(onTap: () => onSelect(1))'));
       expect(nav, isNot(contains("label: 'History'")));
       expect(nav, isNot(contains("label: 'Live Chat'")));
       expect(nav, isNot(contains("label: 'Account'")));
@@ -54,6 +55,7 @@ void main() {
       expect(dashboard, contains("collection('riderProfiles')"));
       expect(dashboard, contains("collection('riderEarnings')"));
       expect(dashboard, contains("collection('deliveryRequests')"));
+      expect(dashboard, contains("where('status', isEqualTo: 'requested')"));
       expect(dashboard, contains('Good '));
       expect(dashboard, contains('Go online'));
       expect(dashboard, contains('Priority operations'));
@@ -62,6 +64,8 @@ void main() {
       expect(dashboard, contains('CIRCUM RIDER'));
       expect(dashboard, contains('No eligible jobs'));
       expect(dashboard, contains('No scheduled deliveries'));
+      expect(dashboard, contains('Open delivery offers'));
+      expect(dashboard, isNot(contains('Open the marketplace')));
     });
 
     test('jobs expose Taken state and scheduled handoff', () {

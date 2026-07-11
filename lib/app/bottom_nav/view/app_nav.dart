@@ -89,7 +89,7 @@ class _RiderDashboardNav extends StatelessWidget {
                 selected: currentIndex == 1,
                 onTap: () => onSelect(1),
               ),
-              _CentralAction(onTap: () => onSelect(2)),
+              _CentralAction(onTap: () => onSelect(1)),
               _NavItem(
                 icon: Icons.account_balance_wallet_outlined,
                 selectedIcon: Icons.account_balance_wallet_rounded,
@@ -172,7 +172,7 @@ class _CentralAction extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: 'Open schedule',
+      label: 'Open delivery offers',
       child: GestureDetector(
         onTap: onTap,
         child: Transform.translate(
