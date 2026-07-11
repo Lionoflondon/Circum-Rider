@@ -1,11 +1,12 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
 
 import '../../../utils/theme/theme.dart';
+import '../../communication/rider_conversation_view.dart';
 import '../../rider_design/rider_ui.dart';
 import '../bloc/support_bloc.dart';
-import 'chat.dart';
 import 'faq.dart';
 
 class SupportView extends StatelessWidget {
@@ -70,7 +71,12 @@ class SupportView extends StatelessWidget {
                         Navigator.push(
                             context,
                             MaterialPageRoute(
-                                builder: (_) => const ChatPageView()));
+                                builder: (_) => RiderConversationView(
+                                      chatId:
+                                          'admin_rider_${FirebaseAuth.instance.currentUser?.uid ?? 'unknown'}_general',
+                                      title: 'Circum Support',
+                                      subtitle: 'Rider support conversation',
+                                    )));
                       }),
                   Divider(
                       height: 1,

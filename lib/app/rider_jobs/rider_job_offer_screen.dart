@@ -10,7 +10,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../home/view/ride_chats.dart';
+import '../communication/rider_conversation_view.dart';
 import '../home/bloc/home_bloc.dart';
 import '../founder_access/founder_rider_access.dart';
 import '../rider_truth/rider_truth.dart';
@@ -97,7 +97,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       );
     }
 
-    final home = context.watch<HomeBloc>().state;
+    context.watch<HomeBloc>().state;
     return FutureBuilder<bool>(
         future: FounderRiderAccess.enabled(),
         builder: (context, founderSnapshot) {
@@ -117,13 +117,16 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                   };
                   final rider =
                       _riderProfile(user.uid, riderData, founder: founder);
+                  final online = {'online', 'available', 'busy'}.contains(
+                      '${riderData['availabilityStatus'] ?? riderData['status'] ?? ''}'
+                          .toLowerCase());
 
                   if (!rider.canAcceptJobs)
                     return _StateScaffold(
                         title: 'Account action required',
                         message: rider.blockedReason ??
                             'Your Rider account cannot receive jobs right now.');
-                  if (home.rideStatus == RideStatus.offline)
+                  if (!online)
                     return _StateScaffold(
                         title: "You're offline",
                         message:
@@ -2552,7 +2555,12 @@ class _SecondaryContactRow extends StatelessWidget {
                 onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                          builder: (_) => const RideChatPageView()),
+                          builder: (_) => RiderConversationView(
+                                chatId: offer.requestId,
+                                title: 'Delivery chat',
+                                subtitle:
+                                    '${offer.pickupArea} to ${offer.dropoffArea}',
+                              )),
                     ))),
         const SizedBox(width: 8),
         Expanded(

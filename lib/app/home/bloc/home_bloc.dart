@@ -28,6 +28,7 @@ import '../../../helper/chats_help.dart';
 import '../../../helper/formatted_string_after_seconds.dart';
 import '../../../helper/messaging_server.dart';
 import '../../../utils/theme/theme.dart';
+import '../../communication/rider_communication_service.dart';
 import '../../rider_account/rider_account_state.dart';
 import '../models/dispatch_request.m..dart';
 import '../models/message.m.dart';
@@ -46,6 +47,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   final FirebaseMessaging firebaseMessaging = FirebaseMessaging.instance;
 
   final DirectionsService _directionsService = DirectionsService();
+  final RiderCommunicationService _communicationService =
+      RiderCommunicationService();
 
   List<DirectionStep> _currentRoute = [];
   int _currentStepIndex = 0;
@@ -178,21 +181,24 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     final founder = user == null
         ? false
         : (await user.getIdTokenResult()).claims?['founderRider'] == true;
-    final pref = await SharedPreferences.getInstance();
+    if (user == null) {
+      emit(state.copyWith(
+          message: 'Sign in before changing Rider availability.'));
+      return;
+    }
     if (event.status == RideStatus.offline) {
-      // print('isOffline');
-      add(SetDrawerHeight(
-          minDrawerHeight: state.minDrawerHeight,
-          maxDrawerHeight: state.minDrawerHeight));
-      add(SetPanelControlStatus(status: PanelControlStatus.isClosed));
-
-      await db
-          .collection("riders")
-          .doc(user?.uid)
-          .update({'status': 'offline'}).then((value) => print("Offline"),
-              onError: (e) => print("Error updating document $e"));
-
-      await pref.setString('status', 'offline');
+      try {
+        await FirebaseFunctions.instanceFor(region: 'us-central1')
+            .httpsCallable('goOffline')
+            .call();
+        emit(state.copyWith(
+            rideStatus: RideStatus.offline,
+            message: null,
+            requestStatus: RequestStatus.initial));
+      } on FirebaseFunctionsException catch (error) {
+        emit(state.copyWith(message: error.message ?? 'Could not go offline.'));
+      }
+      return;
     } else {
       final accountState = await _loadAccountState(user?.uid);
       if (!founder && !RiderAccountStateResolver.canOperate(accountState)) {
@@ -215,23 +221,31 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         ));
         return;
       }
-      add(GetAvailableRequests());
-      add(SetDrawerHeight(
-          minDrawerHeight: state.minDrawerHeight, maxDrawerHeight: 0.75.sh));
-      add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
-
       if (event.status == RideStatus.online) {
-        emit(state.copyWith(rideStatus: event.status));
-        await db
-            .collection("riders")
-            .doc(user?.uid)
-            .update({'status': 'online'}).then((value) => print("online"),
-                onError: (e) => print("Error updating document $e"));
-
-        await pref.setString('status', 'online');
+        try {
+          await FirebaseFunctions.instanceFor(region: 'us-central1')
+              .httpsCallable('goOnline')
+              .call();
+          emit(state.copyWith(
+              rideStatus: RideStatus.online, canGoOnline: true, message: null));
+          add(GetAvailableRequests());
+          add(SetDrawerHeight(
+              minDrawerHeight: state.minDrawerHeight,
+              maxDrawerHeight: 0.75.sh));
+          add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
+        } on FirebaseFunctionsException catch (error) {
+          emit(state.copyWith(
+              rideStatus: RideStatus.offline,
+              message: error.message ?? 'Could not go online. Try again.'));
+        } catch (_) {
+          emit(state.copyWith(
+              rideStatus: RideStatus.offline,
+              message:
+                  'Could not go online. Check your connection and retry.'));
+        }
+        return;
       }
     }
-    emit(state.copyWith(rideStatus: event.status));
   }
 
   void _handleGetAvailableRequests(event, emit) async {
@@ -842,15 +856,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         'timeStamp': '${DateTime.now()}'
       };
 
-      await MessagingServer().sendMessage(data: {
-        "type": "message",
-        "data": """{
-                "requestId": "${state.activeRequest!.requestId}",
-                "senderId": "${user.uid}",
-                "message": "${event.message}",
-                "timeStamp": "${DateTime.now()}"
-              }"""
-      }, code: state.activeRequest!.code, message: '');
+      await _communicationService.sendText(
+        chatId: state.activeRequest!.requestId,
+        message: event.message,
+      );
 
       add(IncomingMessage(data: messageData));
 

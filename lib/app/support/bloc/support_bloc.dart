@@ -2,12 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:bloc/bloc.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../helper/chats_help.dart';
+import '../../communication/rider_communication_service.dart';
 import '../../home/models/message.m.dart';
 
 part 'support_event.dart';
@@ -16,7 +15,7 @@ part 'support_state.dart';
 class SupportBloc extends Bloc<SupportEvent, SupportState> {
   SupportBloc() : super(SupportState()) {
     FirebaseAuth auth = FirebaseAuth.instance;
-    FirebaseFirestore db = FirebaseFirestore.instance;
+    final communication = RiderCommunicationService();
     on<SupportEvent>((event, emit) {
       // TODO: implement event handler
     });
@@ -46,14 +45,14 @@ class SupportBloc extends Bloc<SupportEvent, SupportState> {
           String msg = event.message;
 
           emit(state.copyWith(message: ''));
+          final chatId = 'admin_rider_${user!.uid}_general';
+          await communication.sendText(chatId: chatId, message: msg);
           final messageData = {
             "requestId": "support",
-            'senderId': user!.uid,
+            'senderId': user.uid,
             'message': msg,
             'timeStamp': '${DateTime.now()}'
           };
-
-          await db.collection('messages').doc().set(messageData);
 
           add(IncomingSupportMessage(data: messageData));
 

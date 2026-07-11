@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../authentication/bloc/auth_bloc.dart';
+import '../communication/rider_communication_service.dart';
 import '../home/bloc/home_bloc.dart';
 import '../founder_access/founder_rider_access.dart';
 import '../notifications/rider_notifications_view.dart';
@@ -79,73 +80,96 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                         .toList();
                     final recent = deliveries.where(_isFinished).toList()
                       ..sort((a, b) => _millis(b).compareTo(_millis(a)));
-                    return BlocBuilder<HomeBloc, HomeState>(
-                      builder: (context, home) => CustomScrollView(
-                        key: const PageStorageKey('rider-dashboard'),
-                        slivers: [
-                          SliverSafeArea(
-                            bottom: false,
-                            sliver: SliverPadding(
-                              padding:
-                                  const EdgeInsets.fromLTRB(18, 14, 18, 28),
-                              sliver: SliverList.list(children: [
-                                _Header(
-                                  profile: profile,
-                                  onNotifications: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          const RiderNotificationsView(),
-                                    ),
-                                  ),
-                                ),
-                                const FounderRiderBadge(),
-                                const SizedBox(height: 18),
-                                _AvailabilityCard(
-                                  state: home,
-                                  onToggle: () => context.read<HomeBloc>().add(
-                                        SetRideStatus(
-                                          status: home.rideStatus ==
-                                                  RideStatus.offline
-                                              ? RideStatus.online
-                                              : RideStatus.offline,
+                    return StreamBuilder<
+                        DocumentSnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('riderPresence')
+                          .doc(uid)
+                          .snapshots(),
+                      builder: (context, presenceSnapshot) =>
+                          BlocBuilder<HomeBloc, HomeState>(
+                        builder: (context, homeState) {
+                          final presence = presenceSnapshot.data?.data();
+                          final online = presence?['isOnline'] == true &&
+                              '${presence?['availabilityStatus'] ?? ''}' !=
+                                  'offline';
+                          final home = homeState.copyWith(
+                              rideStatus: online
+                                  ? RideStatus.online
+                                  : RideStatus.offline);
+                          return CustomScrollView(
+                            key: const PageStorageKey('rider-dashboard'),
+                            slivers: [
+                              SliverSafeArea(
+                                bottom: false,
+                                sliver: SliverPadding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(18, 14, 18, 28),
+                                  sliver: SliverList.list(children: [
+                                    _Header(
+                                      profile: profile,
+                                      onNotifications: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              RiderNotificationsView(
+                                            onNavigateTab: widget.onSelectTab,
+                                          ),
                                         ),
                                       ),
+                                    ),
+                                    const FounderRiderBadge(),
+                                    const SizedBox(height: 18),
+                                    _AvailabilityCard(
+                                      state: home,
+                                      onToggle: () =>
+                                          context.read<HomeBloc>().add(
+                                                SetRideStatus(
+                                                  status: home.rideStatus ==
+                                                          RideStatus.offline
+                                                      ? RideStatus.online
+                                                      : RideStatus.offline,
+                                                ),
+                                              ),
+                                    ),
+                                    const SizedBox(height: 14),
+                                    _RankCard(profile: profile),
+                                    const SizedBox(height: 14),
+                                    _TodayGrid(earnings: earnings),
+                                    const SizedBox(height: 22),
+                                    RiderSectionTitle('Priority operations',
+                                        action: 'View jobs',
+                                        onAction: () => widget.onSelectTab(1)),
+                                    const SizedBox(height: 10),
+                                    _JobsSummary(
+                                      home: home,
+                                      onOpenJobs: () => widget.onSelectTab(1),
+                                    ),
+                                    const SizedBox(height: 22),
+                                    RiderSectionTitle('Upcoming schedule',
+                                        action: 'View all',
+                                        onAction: () => widget.onSelectTab(2)),
+                                    const SizedBox(height: 10),
+                                    _ScheduledSummary(
+                                      job: scheduled.isEmpty
+                                          ? null
+                                          : scheduled.first,
+                                      onTap: () => widget.onSelectTab(2),
+                                    ),
+                                    const SizedBox(height: 22),
+                                    const RiderSectionTitle('Recent activity'),
+                                    const SizedBox(height: 10),
+                                    _RecentSummary(
+                                        items: recent.take(3).toList()),
+                                    const SizedBox(height: 22),
+                                    _QuickActions(
+                                        onSelectTab: widget.onSelectTab),
+                                  ]),
                                 ),
-                                const SizedBox(height: 14),
-                                _RankCard(profile: profile),
-                                const SizedBox(height: 14),
-                                _TodayGrid(earnings: earnings),
-                                const SizedBox(height: 22),
-                                RiderSectionTitle('Priority operations',
-                                    action: 'View jobs',
-                                    onAction: () => widget.onSelectTab(1)),
-                                const SizedBox(height: 10),
-                                _JobsSummary(
-                                  home: home,
-                                  onOpenJobs: () => widget.onSelectTab(1),
-                                ),
-                                const SizedBox(height: 22),
-                                RiderSectionTitle('Upcoming schedule',
-                                    action: 'View all',
-                                    onAction: () => widget.onSelectTab(2)),
-                                const SizedBox(height: 10),
-                                _ScheduledSummary(
-                                  job: scheduled.isEmpty
-                                      ? null
-                                      : scheduled.first,
-                                  onTap: () => widget.onSelectTab(2),
-                                ),
-                                const SizedBox(height: 22),
-                                const RiderSectionTitle('Recent activity'),
-                                const SizedBox(height: 10),
-                                _RecentSummary(items: recent.take(3).toList()),
-                                const SizedBox(height: 22),
-                                _QuickActions(onSelectTab: widget.onSelectTab),
-                              ]),
-                            ),
-                          ),
-                        ],
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     );
                   },
@@ -234,7 +258,34 @@ class _Header extends StatelessWidget {
       IconButton(
         tooltip: 'Notifications',
         onPressed: onNotifications,
-        icon: const Icon(Icons.notifications_none_rounded),
+        icon: StreamBuilder<int?>(
+          stream: RiderCommunicationService().watchUnreadNotificationCount(),
+          builder: (context, snapshot) {
+            final unread = snapshot.data ?? 0;
+            return Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.notifications_none_rounded),
+                if (snapshot.hasData && unread > 0)
+                  Positioned(
+                    right: -1,
+                    top: -1,
+                    child: Semantics(
+                      label: '$unread unread notifications',
+                      child: Container(
+                        width: 9,
+                        height: 9,
+                        decoration: const BoxDecoration(
+                          color: RiderPalette.red,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
         color: RiderPalette.paper,
       ),
       const SizedBox(width: 4),

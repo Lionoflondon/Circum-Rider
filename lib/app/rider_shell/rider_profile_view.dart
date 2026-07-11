@@ -94,8 +94,11 @@ class RiderProfileView extends StatelessWidget {
                           _ProfileAction(
                             icon: Icons.notifications_none_rounded,
                             title: 'Notifications',
-                            onTap: () =>
-                                _open(context, const RiderNotificationsView()),
+                            onTap: () => _open(
+                              context,
+                              RiderNotificationsView(
+                                  onNavigateTab: onSelectTab),
+                            ),
                           ),
                           _ProfileAction(
                             icon: Icons.history_rounded,
