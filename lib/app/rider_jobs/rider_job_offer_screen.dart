@@ -465,14 +465,13 @@ class _TakenState extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: 420),
               child: Padding(
                 padding: const EdgeInsets.all(22),
-                child: Container(
+                child: RiderGlassSurface(
                   padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0D111C),
-                    borderRadius: BorderRadius.circular(24),
-                    border:
-                        Border.all(color: Colors.white.withValues(alpha: .09)),
-                  ),
+                  radius: 24,
+                  opacity: .70,
+                  blur: 20,
+                  edgeColor: RiderPalette.red,
+                  borderColor: Colors.white.withValues(alpha: .14),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
                     Container(
                       width: 54,
