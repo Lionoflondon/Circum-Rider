@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:circum_rider/extension/email_validation.dart';
 import 'package:circum_rider/helper/location_helper.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:dio/dio.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -23,11 +22,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:uuid/uuid.dart';
 
-import '../../../utils/validator/validator.dart';
 import '../../onboarding/rider_roth_onboarding.dart';
 import '../../rider_account/rider_account_state.dart';
 import '../rider_auth_error.dart';
-import '../repo/auth_repo.dart';
 // import '../../onboarding/view/onboarding.dart';
 
 part 'auth_event.dart';
@@ -232,11 +229,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
 
       if (event is SignupPasswordChanged) {
-        emit(state.copyWith(password: event.password));
+        // Passwords must never be persisted in bloc state. The canonical
+        // email auth flow passes credentials directly to Firebase Auth.
+        emit(state.copyWith(password: null));
       }
 
       if (event is ConfirmPasswordChanged) {
-        emit(state.copyWith(confirmPassword: event.password));
+        emit(state.copyWith(confirmPassword: null));
       }
       if (event is DateOfBirthChanged) {
         if (event.dateOfBirth.length == 10) {
@@ -501,7 +500,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
 
       if (event is RequestForOTP) {
-        print({'phoneNumber': state.phoneNumber, 'password': state.password});
         // emit(state.copyWith(isLoading: true, status: Status.loading));
 
         var completer = Completer<bool>();
@@ -574,9 +572,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                     currentState: AppState.authenticated));
               }
             } else {
-              print(_userCredential.additionalUserInfo);
-              print(_userCredential.credential);
-              print(_userCredential.user);
               emit(state.copyWith(
                   status: Status.success,
                   username: _userCredential.user?.displayName,
@@ -733,17 +728,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
 
       if (event is LoginUser) {
-        const storage = FlutterSecureStorage();
-        await storage.write(key: 'password', value: state.password);
         emit(state.copyWith(isLoading: true, status: Status.loading));
-        try {
-          Validator.validateLogin(
-              data: {'email': state.email, 'password': state.password});
-        } catch (e) {
-          emit(state.copyWith(
-              errorMessage: e.toString().split(':').last.trim(),
-              isLoading: false));
-        }
+        emit(state.copyWith(
+          status: Status.failure,
+          isLoading: false,
+          errorMessage: 'Please use the secure email sign-in flow.',
+        ));
       }
       if (event is SetResetPasswordOTP) {
         emit(state.copyWith(resetPasswordOtp: event.otp));
@@ -1338,13 +1328,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<SignInWithEmail>(
       (event, emit) async {
-        FlutterSecureStorage storage = const FlutterSecureStorage();
         try {
           emit(state.copyWith(status: Status.loading));
           final UserCredential userCredential =
               await auth.signInWithEmailAndPassword(
                   email: event.email, password: event.password);
-          storage.write(key: 'password', value: event.password);
+          const storage = FlutterSecureStorage();
 
           if (auth.currentUser?.emailVerified == false) {
             print('Email not verified');
@@ -1428,15 +1417,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         //     androidInstallApp: true,
         //     // minimumVersion
         //     androidMinimumVersion: '12');
-        FlutterSecureStorage storage = const FlutterSecureStorage();
         try {
-          print('Signing up');
           emit(state.copyWith(status: Status.loading));
           final UserCredential userCredential =
               await auth.createUserWithEmailAndPassword(
                   email: event.email, password: event.password);
 
-          storage.write(key: 'password', value: event.password);
           final user = userCredential.user;
           final fullName =
               '${state.firstName ?? ''} ${state.lastName ?? ''}'.trim();
@@ -1595,32 +1581,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<DeleteAccount>((event, emit) async {
       FlutterSecureStorage storage = const FlutterSecureStorage();
-      final user = auth.currentUser!;
-      final password = (await storage.readAll())["password"];
 
       // auth.currentUser.reauthenticateWithProvider(provider)
 
       try {
-        // if(users.)
-
-        // final AuthCredential credential = PhoneAuthProvider.credential(
-        //     verificationId: state.verificationId!, smsCode: '${state.otp}');
-
-        final AuthCredential credential = EmailAuthProvider.credential(
-            email: state.email!, password: password!);
-
-        // Reauthenticate user with phone credential
-        await user.reauthenticateWithCredential(credential);
-
-        await db.collection('riders').doc(user.uid).update({'deleted': true});
-        // Reauthentication successful, proceed with account deletion
-        await user.delete();
-        await storage.deleteAll();
-        // Account deleted successfully
-        print("Account deleted successfully.");
-        emit(state.copyWith(currentState: AppState.unauthenticated));
+        await storage.delete(key: 'password');
+        emit(state.copyWith(
+          status: Status.failure,
+          errorMessage:
+              'For security, please sign in again before closing your account.',
+        ));
       } on FirebaseException catch (e) {
-        print(e.code);
         if (e.code == 'invalid-verification-code') {
           emit(state.copyWith(errorMessage: 'Invalid verification code'));
         }

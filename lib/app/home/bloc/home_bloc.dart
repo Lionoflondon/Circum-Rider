@@ -5,17 +5,12 @@ import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:flutter_svg/flutter_svg.dart';
-import 'package:geocoding/geocoding.dart';
-import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 // import 'package:geoflutterfire2/geoflutterfire2.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -141,10 +136,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     if (!kIsWeb && Platform.isIOS) {
       await firebaseMessaging.requestPermission();
     }
-    final apnsToken = !kIsWeb && Platform.isIOS
-        ? await firebaseMessaging.getAPNSToken()
-        : null;
-    print('apnsToken: $apnsToken');
+    if (!kIsWeb && Platform.isIOS) {
+      await firebaseMessaging.getAPNSToken();
+    }
     final fcmToken = await firebaseMessaging.getToken();
     if (fcmToken != null) {
       try {
@@ -153,7 +147,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         // Get the document snapshot
         final documentSnapshot = await documentReference.get();
         if (documentSnapshot.exists) {
-          print('FCMToken: $fcmToken');
           final remaining =
               _remainingVerificationItems(documentSnapshot.data());
           emit(state.copyWith(
@@ -163,16 +156,14 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
               .collection("riders")
               .doc(user?.uid)
               .update({'fcmToken': fcmToken, 'updatedAt': DateTime.now()}).then(
-                  (value) => print("DocumentSnapshot successfully updated!"),
-                  onError: (e) => print("Error updating document $e"));
+                  (value) {},
+                  onError: (e) {});
         }
       } catch (e) {
-        print('Push Token update error');
-        print(e);
+        debugPrint('Push token update failed');
       }
     } else {
-      print('fcmToken Is null');
-      print('apnsToken: $apnsToken');
+      debugPrint('Push token unavailable');
     }
   }
 
