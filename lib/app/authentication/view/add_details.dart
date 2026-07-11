@@ -1,15 +1,13 @@
-import 'package:circum_rider/app/authentication/view/enable_location.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../../../utils/theme/text_field.dart';
 import '../../../utils/theme/theme.dart';
-import '../../bottom_nav/view/index.dart';
+import '../../onboarding/rider_guide_view.dart';
 import '../bloc/auth_bloc.dart';
 
 class AddDetailsView extends StatelessWidget {
-  const AddDetailsView({Key? key}) : super(key: key);
+  const AddDetailsView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -26,8 +24,8 @@ class AddDetailsView extends StatelessWidget {
                 // );
               }
             },
-            child: WillPopScope(
-                onWillPop: () async => false,
+            child: PopScope(
+                canPop: false,
                 child: SizedBox(
                     width: MediaQuery.of(context).size.width,
                     height: MediaQuery.of(context).size.height,
@@ -49,6 +47,24 @@ class AddDetailsView extends StatelessWidget {
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 24)),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton.icon(
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const RiderGuideView(
+                                    authenticated: true,
+                                  ),
+                                ),
+                              ),
+                              icon: const Icon(Icons.explore_outlined),
+                              label: const Text('Rider Guide'),
+                            ),
+                          ),
+                        ),
                         const SizedBox(height: 44),
                         Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 30),
@@ -127,7 +143,7 @@ class AddDetailsView extends StatelessWidget {
   Widget _loader() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return state.status == Status.loading
-          ? LinearProgressIndicator(color: AppColors.primary)
+          ? const LinearProgressIndicator(color: AppColors.primary)
           : Container();
     });
   }

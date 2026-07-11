@@ -9,6 +9,8 @@ import '../communication/rider_communication_service.dart';
 import '../founder_access/founder_rider_access.dart';
 import '../home/bloc/home_bloc.dart';
 import '../notifications/rider_notifications_view.dart';
+import '../onboarding/rider_guide_view.dart';
+import '../rider_account/rider_account_state.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
 
@@ -262,6 +264,8 @@ class _DashboardSurface extends StatelessWidget {
                     online: data.isOnline,
                     onToggle: onToggleAvailability,
                   ),
+                  const SizedBox(height: 14),
+                  _DashboardGuideEntry(profile: data.profile),
                   const SizedBox(height: 14),
                   _RankCard(profile: data.profile),
                   const SizedBox(height: 18),
@@ -570,6 +574,35 @@ class _AvailabilityCard extends StatelessWidget {
             },
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DashboardGuideEntry extends StatelessWidget {
+  const _DashboardGuideEntry({required this.profile});
+
+  final Map<String, dynamic> profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final progress = RiderApprovalProgress.fromBackend(
+      accountExists: user != null,
+      firebaseEmailVerified: user?.emailVerified == true,
+      rider: profile,
+    );
+    return RiderGuideEntryCard(
+      progress: progress,
+      compact: true,
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => RiderGuideView(
+            authenticated: true,
+            progress: progress,
+          ),
+        ),
       ),
     );
   }

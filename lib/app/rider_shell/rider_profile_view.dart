@@ -14,6 +14,7 @@ import '../authentication/bloc/auth_bloc.dart';
 import '../founder_access/founder_rider_access.dart';
 import '../history/view/history.dart';
 import '../notifications/rider_notifications_view.dart';
+import '../onboarding/rider_guide_view.dart';
 import '../rider_account/rider_account_state.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
@@ -267,6 +268,23 @@ class _OptionsScreen extends StatelessWidget {
                 _OptionsSection(
                   label: 'Support',
                   children: [
+                    _OptionRow(
+                      icon: Icons.explore_outlined,
+                      iconColor: RiderPalette.blue,
+                      title: 'Rider Guide',
+                      subtitle: 'Learn how Circum Rider works',
+                      onTap: () => _open(
+                        context,
+                        RiderGuideView(
+                          authenticated: true,
+                          progress: RiderApprovalProgress.fromBackend(
+                            accountExists: true,
+                            firebaseEmailVerified: user.emailVerified,
+                            rider: profile,
+                          ),
+                        ),
+                      ),
+                    ),
                     _OptionRow(
                       icon: Icons.help_outline_rounded,
                       iconColor: RiderPalette.blue,

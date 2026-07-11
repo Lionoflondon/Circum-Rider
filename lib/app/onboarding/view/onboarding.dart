@@ -8,6 +8,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../authentication/bloc/auth_bloc.dart';
+import '../rider_guide_view.dart';
 import '../../rider_design/rider_ui.dart';
 
 enum _RiderAuthStep { welcome, createAccount, signIn, phoneOtp, location }
@@ -32,6 +33,20 @@ class _OnboardingViewState extends State<OnboardingView> {
   bool _privacy = false;
   bool _rightToWork = false;
   bool _showPassword = false;
+  bool _checkingIntro = true;
+  bool _showIntro = true;
+
+  @override
+  void initState() {
+    super.initState();
+    RiderGuideView.hasViewedIntro().then((viewed) {
+      if (!mounted) return;
+      setState(() {
+        _showIntro = !viewed;
+        _checkingIntro = false;
+      });
+    });
+  }
 
   @override
   void dispose() {
@@ -61,6 +76,22 @@ class _OnboardingViewState extends State<OnboardingView> {
         }
       },
       builder: (context, state) {
+        if (_checkingIntro) {
+          return const Scaffold(
+            backgroundColor: RiderPalette.background,
+            body: Center(
+              child: CircularProgressIndicator(color: RiderPalette.blue),
+            ),
+          );
+        }
+        if (_showIntro) {
+          return RiderGuideView(
+            authenticated: false,
+            onGetStarted: () => _finishIntro(_RiderAuthStep.createAccount),
+            onSignIn: () => _finishIntro(_RiderAuthStep.signIn),
+            onClose: () => _finishIntro(_RiderAuthStep.welcome),
+          );
+        }
         return Scaffold(
           backgroundColor: const Color(0xFF05070A),
           body: SafeArea(
@@ -95,6 +126,13 @@ class _OnboardingViewState extends State<OnboardingView> {
         );
       },
     );
+  }
+
+  void _finishIntro(_RiderAuthStep nextStep) {
+    setState(() {
+      _showIntro = false;
+      _step = nextStep;
+    });
   }
 
   Widget _buildStep(BuildContext context, AuthState state) {

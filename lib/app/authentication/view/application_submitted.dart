@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../utils/theme/theme.dart';
+import '../../onboarding/rider_guide_view.dart';
 import '../../rider_account/rider_account_state.dart';
 import '../bloc/auth_bloc.dart';
 
@@ -57,6 +58,21 @@ class ApplicationSubmittedView extends StatelessWidget {
                 fontSize: 16,
               ),
               const SizedBox(height: 24),
+              RiderGuideEntryCard(
+                progress: progress,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => RiderGuideView(
+                      authenticated: true,
+                      progress: progress,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              RiderGuideProgressCard(progress: progress),
+              const SizedBox(height: 24),
               ClipRRect(
                 borderRadius: BorderRadius.circular(30),
                 child: BackdropFilter(
@@ -65,9 +81,10 @@ class ApplicationSubmittedView extends StatelessWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.07),
+                      color: Colors.white.withValues(alpha: 0.07),
                       borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: Colors.white.withOpacity(0.14)),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.14)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -76,10 +93,11 @@ class ApplicationSubmittedView extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
-                            color: AppColors.warning.withOpacity(0.14),
+                            color: AppColors.warning.withValues(alpha: 0.14),
                             borderRadius: BorderRadius.circular(999),
                             border: Border.all(
-                                color: AppColors.warning.withOpacity(0.4)),
+                                color:
+                                    AppColors.warning.withValues(alpha: 0.4)),
                           ),
                           child: AppText.text(
                             'Pending Review',
@@ -102,8 +120,9 @@ class ApplicationSubmittedView extends StatelessWidget {
               ),
               const SizedBox(height: 24),
               AppButton.button(
-                backgroundColor: Colors.white.withOpacity(0.08),
-                borderSide: BorderSide(color: Colors.white.withOpacity(0.16)),
+                backgroundColor: Colors.white.withValues(alpha: 0.08),
+                borderSide:
+                    BorderSide(color: Colors.white.withValues(alpha: 0.16)),
                 onPressed: () => context.read<AuthBloc>().add(SignOut()),
                 widget: AppText.text(
                   'Sign out',

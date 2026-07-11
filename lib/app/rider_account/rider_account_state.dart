@@ -164,6 +164,11 @@ class RiderApprovalProgress {
   const RiderApprovalProgress({
     required this.accountCreated,
     required this.emailVerified,
+    required this.phoneVerified,
+    required this.documentsSubmitted,
+    required this.vehicleDetails,
+    required this.rothWalletSetup,
+    required this.payoutSetup,
     required this.applicationSubmitted,
     required this.underReview,
     required this.approved,
@@ -172,6 +177,11 @@ class RiderApprovalProgress {
 
   final bool accountCreated;
   final bool emailVerified;
+  final bool phoneVerified;
+  final bool documentsSubmitted;
+  final bool vehicleDetails;
+  final bool rothWalletSetup;
+  final bool payoutSetup;
   final bool applicationSubmitted;
   final bool underReview;
   final bool approved;
@@ -213,10 +223,42 @@ class RiderApprovalProgress {
         rider['onboardingCompleted'] == true ||
         const {'complete', 'completed', 'profile_complete'}
             .contains(onboarding);
+    final phoneVerified = rider['phoneVerified'] == true ||
+        rider['phoneNumberVerified'] == true ||
+        rider['phoneVerifiedAt'] != null ||
+        _normalised(rider['phoneStatus']) == 'verified';
+    final documentsSubmitted = rider['documentsSubmittedAt'] != null ||
+        rider['identityVerified'] == true ||
+        rider['documentsVerified'] == true ||
+        const {
+          'submitted',
+          'pending',
+          'under_review',
+          'approved',
+          'verified',
+        }.contains(_normalised(rider['verificationStatus']));
+    final vehicleDetails = rider['vehicle'] != null ||
+        rider['vehicles'] is List && (rider['vehicles'] as List).isNotEmpty ||
+        '${rider['vehicleType'] ?? rider['typeOfVehicle'] ?? ''}'
+            .trim()
+            .isNotEmpty;
+    final rothWalletSetup = rider['rothOnboardingComplete'] == true ||
+        rider['rothWalletId'] != null ||
+        const {'complete', 'completed', 'connected', 'active'}
+            .contains(_normalised(rider['rothOnboardingStatus']));
+    final payoutSetup = rider['payoutSetupComplete'] == true ||
+        rider['stripeConnectReady'] == true ||
+        const {'ready', 'verified', 'active'}
+            .contains(_normalised(rider['stripeConnectStatus']));
 
     return RiderApprovalProgress(
       accountCreated: accountExists,
       emailVerified: firebaseEmailVerified,
+      phoneVerified: phoneVerified,
+      documentsSubmitted: documentsSubmitted,
+      vehicleDetails: vehicleDetails,
+      rothWalletSetup: rothWalletSetup,
+      payoutSetup: payoutSetup,
       applicationSubmitted: applicationSubmitted,
       underReview: underReview,
       approved: approved,
