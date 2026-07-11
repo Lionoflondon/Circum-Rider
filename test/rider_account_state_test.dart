@@ -70,8 +70,9 @@ void main() {
             'status': 'pending',
           },
           riderProfile: const {
-            'approvalStatus': 'approved',
-            'verificationStatus': 'approved',
+            'approvalStatus': 'needs_information',
+            'verificationStatus': 'verification_pending',
+            'onboardingStatus': 'approved',
           },
         ),
         RiderAccountState.approved,
