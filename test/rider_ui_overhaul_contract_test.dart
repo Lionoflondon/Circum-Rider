@@ -73,11 +73,30 @@ void main() {
       expect(schedule, contains('assignedRider'));
       expect(schedule,
           anyOf(contains('expected earnings'), contains('riderEarning')));
+      expect(earnings, contains('getRiderEarningsSummary'));
       expect(earnings, contains("collection('riderEarnings')"));
       expect(earnings, contains("collection('payoutRequests')"));
       expect(earnings, contains("collection('riderWalletTransactions')"));
       expect(accountBloc, contains('requestRiderWithdrawal'));
       expect(earnings, contains('Roth remains separate'));
+      expect(earnings, contains('CASH EARNINGS'));
+      expect(earnings, contains('Available to withdraw'));
+      expect(earnings, contains('Payout history'));
+      expect(earnings, contains('Earnings activity'));
+      expect(earnings, contains('WAITING / NO-SHOW'));
+      expect(earnings, contains('Adjustment Credit'));
+      expect(earnings, contains('Adjustment Debit'));
+      expect(earnings, contains('Withdrawal processing'));
+      expect(earnings, contains('Withdrawal failed'));
+      expect(earnings, contains('Review required'));
+      expect(earnings, isNot(contains('£284.60')));
+      expect(earnings, isNot(contains('£238.40')));
+      expect(earnings, isNot(contains('£120.00')));
+      expect(earnings, isNot(contains('08/07/2026')));
+      expect(earnings, isNot(contains('Marketplace · Camden to Islington')));
+      expect(earnings, isNot(contains('v2.4.1')));
+      expect(earnings, isNot(contains('Roth withdrawal')));
+      expect(earnings, isNot(contains('Paid to Wallet')));
     });
 
     test('profile tab hosts the canonical Rider Options screen', () {
