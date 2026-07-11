@@ -2,12 +2,14 @@
 
 import 'dart:async';
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import 'rider_accept_controller.dart';
+import 'rider_delivery_controller.dart';
 import 'rider_offer_card.dart';
 import 'rider_offer_stack.dart';
 
@@ -982,6 +984,7 @@ class RiderAcceptedJobScreen extends StatefulWidget {
   final String riderRank;
   final String riderId;
   final FirebaseFirestore? firestore;
+  final RiderDeliveryController? deliveryController;
 
   const RiderAcceptedJobScreen({
     super.key,
@@ -989,6 +992,7 @@ class RiderAcceptedJobScreen extends StatefulWidget {
     this.riderRank = 'Sentinel',
     this.riderId = 'preview-rider',
     this.firestore,
+    this.deliveryController,
   });
 
   @override
@@ -998,6 +1002,8 @@ class RiderAcceptedJobScreen extends StatefulWidget {
 class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   late RiderDeliveryStage _stage;
   bool _expanded = false;
+  bool _transitioning = false;
+  String? _transitionError;
 
   bool get _vanguard =>
       widget.offer.warningChips.contains('Vanguard') ||
@@ -1016,6 +1022,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   }
 
   Future<void> _advance() async {
+    if (_transitioning) return;
     final next = RiderDeliveryStagePolicy.nextStage(
       _stage,
       verificationRequired: _verificationRequired,
@@ -1030,19 +1037,102 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       verificationRequired: _verificationRequired,
       pinRequired: _pinRequired,
     )) return;
-    final patch = RiderDeliveryStagePolicy.transitionPatch(
-      deliveryId: widget.offer.id,
-      riderId: widget.riderId,
-      from: _stage,
-      to: next,
-    );
-    if (widget.firestore != null) {
-      await widget.firestore!
-          .collection('deliveryRequests')
-          .doc(widget.offer.id)
-          .update(patch);
+    final action = _actionForTransition(_stage, next);
+    String? pin;
+    if (_pinRequired &&
+        (action == 'verify_collection_pin' ||
+            action == 'verify_receiver_pin')) {
+      pin = await _requestPin(
+        action == 'verify_collection_pin' ? 'Pickup PIN' : 'Delivery PIN',
+      );
+      if (pin == null) return;
     }
-    setState(() => _stage = next);
+    final controller = widget.deliveryController;
+    if (controller == null && widget.firestore == null) {
+      setState(() => _stage = next);
+      return;
+    }
+    setState(() {
+      _transitioning = true;
+      _transitionError = null;
+    });
+    try {
+      final result = await (controller ?? CallableRiderDeliveryController())
+          .transition(deliveryId: widget.offer.id, action: action, pin: pin);
+      if (!mounted) return;
+      setState(() => _stage = RiderDeliveryStagePolicy.fromRaw(result.status));
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(() => _transitionError = error.message ?? 'Action failed.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _transitionError =
+          'We could not update this delivery. Check your connection and retry.');
+    } finally {
+      if (mounted) setState(() => _transitioning = false);
+    }
+  }
+
+  String _actionForTransition(
+    RiderDeliveryStage current,
+    RiderDeliveryStage next,
+  ) {
+    if (current == RiderDeliveryStage.pickupVerified ||
+        current == RiderDeliveryStage.collected) {
+      return 'start_delivery';
+    }
+    switch (next) {
+      case RiderDeliveryStage.navigatingToPickup:
+        return 'start_heading_to_pickup';
+      case RiderDeliveryStage.arrivedAtPickup:
+        return 'arrived_at_pickup';
+      case RiderDeliveryStage.pickupVerification:
+      case RiderDeliveryStage.pickupVerified:
+      case RiderDeliveryStage.collected:
+        return 'verify_collection_pin';
+      case RiderDeliveryStage.navigatingToDropoff:
+        return 'start_delivery';
+      case RiderDeliveryStage.arrivedAtDropoff:
+      case RiderDeliveryStage.waiting:
+        return 'arrived_at_dropoff';
+      case RiderDeliveryStage.pinRequired:
+      case RiderDeliveryStage.delivered:
+        return 'verify_receiver_pin';
+      case RiderDeliveryStage.issueReported:
+        return 'report_issue';
+      case RiderDeliveryStage.accepted:
+        throw StateError('Accepted is not a forward transition.');
+    }
+  }
+
+  Future<String?> _requestPin(String title) async {
+    final input = TextEditingController();
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: input,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          obscureText: true,
+          decoration: const InputDecoration(labelText: 'Enter 6-digit PIN'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, input.text.trim()),
+            child: const Text('Verify'),
+          ),
+        ],
+      ),
+    );
+    input.dispose();
+    return value != null && RegExp(r'^\d{6}$').hasMatch(value) ? value : null;
   }
 
   @override
@@ -1079,6 +1169,16 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                   ),
                   const SizedBox(height: 10),
                   _CompactProgressIndicator(stage: _stage),
+                  if (_transitionError != null) ...[
+                    const SizedBox(height: 10),
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        _transitionError!,
+                        style: const TextStyle(color: Color(0xFFFF8A8A)),
+                      ),
+                    ),
+                  ],
                   const Spacer(),
                   _AcceptedBottomPanel(
                     offer: widget.offer,
@@ -1087,9 +1187,9 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                     expanded: _expanded,
                     vanguard: _vanguard,
                     verificationRequired: _verificationRequired,
-                    cta: nextTitle,
+                    cta: _transitioning ? 'Updating...' : nextTitle,
                     onToggle: () => setState(() => _expanded = !_expanded),
-                    onPrimary: _advance,
+                    onPrimary: _transitioning ? null : _advance,
                   ),
                 ],
               ),
@@ -1344,7 +1444,7 @@ class _AcceptedBottomPanel extends StatelessWidget {
   final bool verificationRequired;
   final String cta;
   final VoidCallback onToggle;
-  final VoidCallback onPrimary;
+  final VoidCallback? onPrimary;
 
   const _AcceptedBottomPanel({
     required this.offer,
@@ -1456,7 +1556,7 @@ class _AcceptedEssentialSummary extends StatelessWidget {
   final RiderJobOffer offer;
   final String riderRank;
   final String cta;
-  final VoidCallback onPrimary;
+  final VoidCallback? onPrimary;
 
   const _AcceptedEssentialSummary({
     required this.offer,
