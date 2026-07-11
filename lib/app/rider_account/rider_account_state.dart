@@ -15,6 +15,29 @@ enum RiderAccountState {
 /// Operational access is deliberately opt-in: only an explicitly approved,
 /// active record can enter the Rider home experience.
 class RiderAccountStateResolver {
+  static RiderAccountState resolveRecords({
+    Map<String, dynamic>? rider,
+    Map<String, dynamic>? riderProfile,
+  }) {
+    final reconciled = <String, dynamic>{...?rider};
+    const adminReviewFields = {
+      'approvalStatus',
+      'verificationStatus',
+      'onboardingStatus',
+      'profileCompletionStatus',
+      'driverStatus',
+      'approvedAt',
+      'onboardingReviewedAt',
+      'onboardingComplete',
+      'onboardingCompleted',
+    };
+    for (final field in adminReviewFields) {
+      final value = riderProfile?[field];
+      if (value != null) reconciled[field] = value;
+    }
+    return resolve(reconciled);
+  }
+
   static RiderAccountState resolve(Map<String, dynamic>? rider) {
     if (rider == null || rider.isEmpty) {
       return RiderAccountState.onboardingNotStarted;

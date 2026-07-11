@@ -61,6 +61,37 @@ void main() {
           isFalse);
     });
 
+    test('reconciles Admin approval without losing Rider restrictions', () {
+      expect(
+        RiderAccountStateResolver.resolveRecords(
+          rider: const {
+            'approvalStatus': 'pending',
+            'status': 'pending',
+          },
+          riderProfile: const {
+            'approvalStatus': 'approved',
+            'verificationStatus': 'approved',
+            'driverStatus': 'active',
+          },
+        ),
+        RiderAccountState.approved,
+      );
+
+      expect(
+        RiderAccountStateResolver.resolveRecords(
+          rider: const {
+            'approvalStatus': 'pending',
+            'isSuspended': true,
+          },
+          riderProfile: const {
+            'approvalStatus': 'approved',
+            'driverStatus': 'active',
+          },
+        ),
+        RiderAccountState.suspended,
+      );
+    });
+
     test('does not invent vehicle defaults', () {
       final record = <String, dynamic>{'onboardingStatus': 'profile_started'};
       expect(record.containsKey('vehicle'), isFalse);

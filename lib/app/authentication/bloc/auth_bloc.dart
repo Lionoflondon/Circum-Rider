@@ -108,9 +108,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               db.collection('riders').doc(user.uid).get(),
               db.collection('riderProfiles').doc(user.uid).get(),
             ]);
+            final riderRecord = records[0].data() ?? const <String, dynamic>{};
+            final riderProfile = records[1].data() ?? const <String, dynamic>{};
             final riderData = <String, dynamic>{
-              ...(records[1].data() ?? const <String, dynamic>{}),
-              ...(records[0].data() ?? const <String, dynamic>{}),
+              ...riderProfile,
+              ...riderRecord,
             };
             riderPhone = riderData['phone'] as String? ?? phone;
             riderPhoto =
@@ -118,7 +120,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                     .trim();
             if (riderPhoto.isEmpty || riderPhoto == 'null') riderPhoto = null;
             phoneVerified = riderData['phoneVerified'] == true;
-            riderAccountState = RiderAccountStateResolver.resolve(riderData);
+            riderAccountState = RiderAccountStateResolver.resolveRecords(
+              rider: riderRecord,
+              riderProfile: riderProfile,
+            );
             if (!RiderAccountStateResolver.canOperate(riderAccountState)) {
               authenticatedStatus =
                   riderAccountState == RiderAccountState.onboardingNotStarted ||
