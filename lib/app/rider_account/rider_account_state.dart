@@ -69,6 +69,8 @@ class RiderAccountStateResolver {
     final approval = _value(rider, 'approvalStatus', 'verificationStatus');
     final onboarding =
         _value(rider, 'onboardingStatus', 'profileCompletionStatus');
+    final rothStatus =
+        '${rider['rothOnboardingStatus'] ?? ''}'.trim().toLowerCase();
     final operational = _value(rider, 'riderStatus', 'driverStatus', 'status');
 
     if (_bool(rider, 'isClosed', 'closed') ||
@@ -95,6 +97,11 @@ class RiderAccountStateResolver {
             {'more_information_required', 'information_required'})) {
       return RiderAccountState.moreInformationRequired;
     }
+    if (_matches(onboarding, {'roth_onboarding_required'}) ||
+        rothStatus == 'required' ||
+        rothStatus == 'incomplete') {
+      return RiderAccountState.onboardingInProgress;
+    }
     if (_matches(approval, {'approved', 'verified'}) &&
         !_matches(operational, {'pending', 'inactive'})) {
       return RiderAccountState.approved;
@@ -108,6 +115,7 @@ class RiderAccountStateResolver {
       'email_verified',
       'in_progress',
       'started',
+      'roth_onboarding_required',
     })) {
       return RiderAccountState.onboardingInProgress;
     }

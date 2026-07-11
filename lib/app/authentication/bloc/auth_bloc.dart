@@ -24,6 +24,7 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../utils/validator/validator.dart';
+import '../../onboarding/rider_roth_onboarding.dart';
 import '../../rider_account/rider_account_state.dart';
 import '../rider_auth_error.dart';
 import '../repo/auth_repo.dart';
@@ -41,6 +42,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     LocationHelper locationHelper = LocationHelper();
 
     FirebaseFirestore db = FirebaseFirestore.instance;
+    const rothOnboarding = RiderRothOnboarding();
 
     void logRiderAuthError({
       required Object error,
@@ -690,6 +692,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 onError: (e) => print("Error updating document $e"));
           }
 
+          await rothOnboarding.ensureWalletForRider(
+            riderId: user.uid,
+            email: user.email,
+          );
+
           // print(user);
 
           emit(state.copyWith(
@@ -814,6 +821,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             'timestamp': FieldValue.serverTimestamp(),
             'statusAfterEvent': 'profile_complete',
           });
+          await rothOnboarding.ensureWalletForRider(
+            riderId: user.uid,
+            email: user.email,
+          );
         } catch (e) {
           print(e);
           if (e == 'Location permissions are permanently denied') {
@@ -880,6 +891,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             'timestamp': FieldValue.serverTimestamp(),
             'statusAfterEvent': 'profile_complete',
           });
+          await rothOnboarding.ensureWalletForRider(
+            riderId: user.uid,
+            email: user.email,
+          );
           emit(state.copyWith(status: Status.locationRequested));
         } catch (error) {
           logRiderAuthError(
@@ -1462,6 +1477,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'timestamp': FieldValue.serverTimestamp(),
               'statusAfterEvent': 'account_created',
             });
+            await rothOnboarding.ensureWalletForRider(
+              riderId: user.uid,
+              email: user.email,
+            );
           }
 
           print('done');

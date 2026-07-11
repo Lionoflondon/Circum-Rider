@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../rider_jobs/rider_job_offer_screen.dart';
+import '../rider_jobs/rider_offer_card.dart';
 import '../rider_design/rider_ui.dart';
 
 enum _ScheduleFilter { all, today, week, vanguard }
@@ -405,6 +407,24 @@ class _ScheduledJobCard extends StatelessWidget {
   }
 
   void _showDetails(BuildContext context, _ScheduleJob job) {
+    if (job.ready) {
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => RiderAcceptedJobScreen(
+              offer: RiderJobOffer.fromFirestore(
+                docId: job.id,
+                data: job.raw,
+              ),
+              riderId: uid,
+              riderRank: 'Agent',
+            ),
+          ),
+        );
+        return;
+      }
+    }
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: RiderPalette.background,
@@ -590,7 +610,17 @@ class _ScheduleJob {
     return scheduled && !hidden.contains(status);
   }
 
-  bool get ready => scheduledAt.isBefore(DateTime.now());
+  bool get ready {
+    final readiness =
+        '${raw['scheduleReadiness'] ?? raw['operationalWindowStatus'] ?? raw['readyState'] ?? ''}'
+            .trim()
+            .toLowerCase();
+    return raw['readyToStart'] == true ||
+        raw['canStart'] == true ||
+        readiness == 'ready' ||
+        readiness == 'ready_to_start' ||
+        status == 'ready_to_start';
+  }
 
   String get earningLabel {
     final earning = raw['riderEarning'] ?? raw['riderPay'];
