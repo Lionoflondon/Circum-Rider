@@ -28,8 +28,17 @@ void main() {
     final signup =
         File('lib/app/authentication/view/signup_form.dart').readAsStringSync();
     expect(entry, contains("title: 'What\\'s your email?'"));
+    expect(entry, contains("label: 'Enter your email'"));
     expect(entry, isNot(contains('phone number or email')));
     expect(signup, isNot(contains("label: 'Mobile number'")));
+  });
+
+  test('Rider Hosting prevents stale authentication shell assets', () {
+    final hosting = File('firebase.json').readAsStringSync();
+    expect(hosting, contains('"source": "/index.html"'));
+    expect(hosting, contains('"source": "/main.dart.js"'));
+    expect(hosting, contains('"source": "/flutter_service_worker.js"'));
+    expect(hosting, contains('no-cache, no-store, must-revalidate'));
   });
 
   test('sign-in form exposes email, password, reset and account navigation',

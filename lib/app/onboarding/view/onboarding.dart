@@ -52,7 +52,7 @@ class _OnboardingViewState extends State<OnboardingView> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             RiderGlassTextField(
-              label: 'Email address',
+              label: 'Enter your email',
               controller: _identity,
               keyboardType: TextInputType.emailAddress,
               onChanged: (_) => setState(() {}),
