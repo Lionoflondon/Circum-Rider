@@ -6,10 +6,13 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../home/view/ride_chats.dart';
+import '../home/bloc/home_bloc.dart';
+import '../rider_truth/rider_truth.dart';
 import '../support/view/support.dart';
 import 'rider_accept_controller.dart';
 import 'rider_delivery_controller.dart';
@@ -91,73 +94,101 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       );
     }
 
+    final home = context.watch<HomeBloc>().state;
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: _firestore.collection('riders').doc(user.uid).snapshots(),
       builder: (context, riderSnapshot) {
-        final riderData = riderSnapshot.data?.data() ?? {};
-        final rider = _riderProfile(user.uid, riderData);
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream:
+              _firestore.collection('riderProfiles').doc(user.uid).snapshots(),
+          builder: (context, profileSnapshot) {
+            final riderData = <String, dynamic>{
+              ...?profileSnapshot.data?.data(),
+              ...?riderSnapshot.data?.data()
+            };
+            final rider = _riderProfile(user.uid, riderData);
 
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: _firestore
-              .collection('deliveryRequests')
-              .where('status', isEqualTo: 'requested')
-              .limit(20)
-              .snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return const _StateScaffold(
-                title: 'Network error',
-                message: 'We could not load offers. Please try again.',
-              );
-            }
+            if (!rider.canAcceptJobs)
+              return _StateScaffold(
+                  title: 'Account action required',
+                  message: rider.blockedReason ??
+                      'Your Rider account cannot receive jobs right now.');
+            if (home.rideStatus == RideStatus.offline)
+              return _StateScaffold(
+                  title: "You're offline",
+                  message: 'Go online to receive eligible delivery offers.',
+                  actionLabel: 'Go Online',
+                  onAction: () => context
+                      .read<HomeBloc>()
+                      .add(SetRideStatus(status: RideStatus.online)));
 
-            if (!snapshot.hasData ||
-                riderSnapshot.connectionState == ConnectionState.waiting) {
-              return const _StateScaffold(
-                title: 'Loading offers',
-                message: 'Checking nearby delivery requests.',
-                loading: true,
-              );
-            }
+            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+              stream: _firestore
+                  .collection('deliveryRequests')
+                  .where('status', isEqualTo: 'requested')
+                  .limit(20)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return const _StateScaffold(
+                    title: 'Network error',
+                    message: 'We could not load offers. Please try again.',
+                  );
+                }
 
-            final offers = _filterOffers(
-              docs: snapshot.data!.docs,
-              riderId: user.uid,
-              riderVehicle: rider.riderVehicle,
-            );
+                if (!snapshot.hasData ||
+                    (riderSnapshot.connectionState == ConnectionState.waiting &&
+                        profileSnapshot.connectionState ==
+                            ConnectionState.waiting)) {
+                  return const _StateScaffold(
+                    title: 'Loading offers',
+                    message: 'Checking nearby delivery requests.',
+                    loading: true,
+                  );
+                }
 
-            if (_activeIndex >= offers.length && offers.isNotEmpty) {
-              scheduleMicrotask(() {
-                if (mounted) setState(() => _activeIndex = offers.length - 1);
-              });
-            }
+                final offers = _filterOffers(
+                  docs: snapshot.data!.docs,
+                  riderId: user.uid,
+                  riderVehicle: rider.riderVehicle,
+                );
 
-            if (offers.isEmpty) {
-              return const _StateScaffold(
-                title: 'No offers nearby',
-                message: 'New delivery offers will appear here when available.',
-              );
-            }
+                if (_activeIndex >= offers.length && offers.isNotEmpty) {
+                  scheduleMicrotask(() {
+                    if (mounted)
+                      setState(() => _activeIndex = offers.length - 1);
+                  });
+                }
 
-            final safeIndex = _activeIndex.clamp(0, offers.length - 1);
-            return _OfferExperience(
-              offers: offers,
-              activeIndex: safeIndex,
-              accepting: _accepting,
-              accepted: _accepted,
-              riderRank: rider.riderRank ?? 'Sentinel',
-              statusMessage: _statusMessage,
-              acceptStatus: _acceptStatus,
-              onBackToFeed: _resetTakenState,
-              onIndexChanged: (index) {
-                setState(() {
-                  _activeIndex = index;
-                  _accepted = false;
-                  _statusMessage = null;
-                  _acceptStatus = null;
-                });
+                if (offers.isEmpty) {
+                  return const _StateScaffold(
+                    title: 'No offers nearby',
+                    message:
+                        'New delivery offers will appear here when available.',
+                  );
+                }
+
+                final safeIndex = _activeIndex.clamp(0, offers.length - 1);
+                return _OfferExperience(
+                  offers: offers,
+                  activeIndex: safeIndex,
+                  accepting: _accepting,
+                  accepted: _accepted,
+                  riderRank: rider.riderRank ?? 'Sentinel',
+                  statusMessage: _statusMessage,
+                  acceptStatus: _acceptStatus,
+                  onBackToFeed: _resetTakenState,
+                  onIndexChanged: (index) {
+                    setState(() {
+                      _activeIndex = index;
+                      _accepted = false;
+                      _statusMessage = null;
+                      _acceptStatus = null;
+                    });
+                  },
+                  onAccept: (offer) => _accept(offer, rider),
+                );
               },
-              onAccept: (offer) => _accept(offer, rider),
             );
           },
         );
@@ -182,7 +213,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       riderId: uid,
       riderName: displayName.isEmpty ? null : displayName,
       riderVehicle: vehicle.trim().isEmpty ? null : vehicle.trim(),
-      riderRank: '${riderData['riderRank'] ?? riderData['rank'] ?? 'Sentinel'}',
+      riderRank: RiderRankSnapshot.from(riderData)?.rank,
       canAcceptJobs: canAccept,
       blockedReason:
           canAccept ? null : RiderOnboardingPolicy.blockedReason(riderData),
@@ -284,7 +315,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
             offer: offer,
             firestore: _firestore,
             riderId: rider.riderId,
-            riderRank: rider.riderRank ?? 'Sentinel',
+            riderRank: rider.riderRank ?? 'Agent',
           ),
         ),
       );
@@ -779,11 +810,15 @@ class _StateScaffold extends StatelessWidget {
   final String title;
   final String message;
   final bool loading;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   const _StateScaffold({
     required this.title,
     required this.message,
     this.loading = false,
+    this.actionLabel,
+    this.onAction,
   });
 
   @override
@@ -810,6 +845,13 @@ class _StateScaffold extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
+                if (actionLabel != null) ...[
+                  const SizedBox(height: 18),
+                  SizedBox(
+                      width: 220,
+                      child: FilledButton(
+                          onPressed: onAction, child: Text(actionLabel!))),
+                ],
                 const SizedBox(height: 10),
                 Text(
                   message,

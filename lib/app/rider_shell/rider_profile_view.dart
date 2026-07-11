@@ -10,6 +10,7 @@ import '../authentication/bloc/auth_bloc.dart';
 import '../history/view/history.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../rider_design/rider_ui.dart';
+import '../rider_truth/rider_truth.dart';
 import '../support/view/support.dart';
 import '../verification/view/verification.dart';
 
@@ -63,13 +64,7 @@ class RiderProfileView extends StatelessWidget {
                       const SizedBox(height: 16),
                       _IdentityCard(profile: profile),
                       const SizedBox(height: 14),
-                      RiderGlassCard(
-                        child: RiderRankProgress(
-                          rank:
-                              '${profile['riderRank'] ?? profile['rank'] ?? 'Agent'}',
-                          trustPoints: _int(profile['trustPoints']),
-                        ),
-                      ),
+                      _ProfileRank(profile: profile),
                       const SizedBox(height: 14),
                       _Performance(profile: profile),
                       const SizedBox(height: 22),
@@ -143,7 +138,6 @@ class RiderProfileView extends StatelessWidget {
     );
   }
 
-  static int _int(Object? value) => value is num ? value.toInt() : 0;
   static void _open(BuildContext context, Widget page) =>
       Navigator.push(context, MaterialPageRoute(builder: (_) => page));
   static String _documentStatus(Map<String, dynamic> profile) =>
@@ -223,7 +217,7 @@ class _Performance extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rating = profile['averageRating'] ?? profile['rating'];
-    final jobs = profile['completedDeliveries'] ?? profile['totalTrips'];
+    final jobs = profile['completedDeliveries'];
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
@@ -234,7 +228,9 @@ class _Performance extends StatelessWidget {
         RiderMetric(
             value: rating is num ? '★ ${rating.toStringAsFixed(2)}' : '—',
             label: 'RATING'),
-        RiderMetric(value: jobs is num ? '$jobs' : '—', label: 'DELIVERIES'),
+        RiderMetric(
+            value: jobs is num ? '${jobs.toInt()}' : 'Unavailable',
+            label: 'DELIVERIES'),
       ],
     );
   }
@@ -272,43 +268,80 @@ class _Vehicles extends StatelessWidget {
       );
     }
     return Column(
-      children: vehicles
-          .map((vehicle) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: RiderGlassCard(
-                  child: Row(children: [
-                    const Icon(Icons.two_wheeler_rounded,
-                        color: RiderPalette.blue),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                                '${vehicle['type'] ?? vehicle['vehicleType'] ?? 'Vehicle'}',
-                                style: const TextStyle(
-                                    color: RiderPalette.paper,
-                                    fontWeight: FontWeight.w800)),
-                            const SizedBox(height: 4),
-                            Text(
-                                '${vehicle['registration'] ?? vehicle['registrationPlate'] ?? vehicle['plate'] ?? 'No registration required'}',
-                                style: const TextStyle(
-                                    color: RiderPalette.muted,
-                                    fontFamily: RiderTypography.mono,
-                                    fontSize: 12)),
-                          ]),
-                    ),
-                    RiderStatusBadge(
-                      vehicle['verified'] == true ? 'VERIFIED' : 'REGISTERED',
-                      color: vehicle['verified'] == true
-                          ? RiderPalette.green
-                          : RiderPalette.blue,
-                    ),
-                  ]),
-                ),
-              ))
-          .toList(),
+      children: vehicles.indexed.map((entry) {
+        final vehicle = RiderVehicleSnapshot.from(entry.$2,
+            primary: entry.$1 == 0 || entry.$2['primary'] == true);
+        final incompletePlate =
+            vehicle.registrationRequired && vehicle.registration == null;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: RiderGlassCard(
+            child: Row(children: [
+              const Icon(Icons.two_wheeler_rounded, color: RiderPalette.blue),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                          vehicle.type.isEmpty
+                              ? 'Vehicle details incomplete'
+                              : [vehicle.type, vehicle.makeModel]
+                                  .whereType<String>()
+                                  .join(' · '),
+                          style: const TextStyle(
+                              color: RiderPalette.paper,
+                              fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 4),
+                      Text(
+                          incompletePlate
+                              ? 'Registration required'
+                              : (vehicle.registration ??
+                                  'No registration required'),
+                          style: const TextStyle(
+                              color: RiderPalette.muted,
+                              fontFamily: RiderTypography.mono,
+                              fontSize: 12)),
+                    ]),
+              ),
+              RiderStatusBadge(
+                vehicle.primary
+                    ? '${vehicle.status} · PRIMARY'
+                    : vehicle.status,
+                color: vehicle.status == 'VERIFIED'
+                    ? RiderPalette.green
+                    : incompletePlate
+                        ? RiderPalette.red
+                        : RiderPalette.amber,
+              ),
+            ]),
+          ),
+        );
+      }).toList(),
     );
+  }
+}
+
+class _ProfileRank extends StatelessWidget {
+  const _ProfileRank({required this.profile});
+  final Map<String, dynamic> profile;
+  @override
+  Widget build(BuildContext context) {
+    final rank = RiderRankSnapshot.from(profile);
+    if (rank == null)
+      return const RiderEmptyState(
+          icon: Icons.sync_problem_rounded,
+          title: 'Rank unavailable',
+          message: 'Rider rank and trust data are still synchronising.');
+    return RiderGlassCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      RiderRankProgress(rank: rank.rank, trustPoints: rank.trustPoints),
+      if (rank.overrideReason != null) ...[
+        const SizedBox(height: 8),
+        Text(rank.overrideReason!,
+            style: const TextStyle(color: RiderPalette.amber, fontSize: 11))
+      ]
+    ]));
   }
 }
 

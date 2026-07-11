@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../rider_design/rider_ui.dart';
+import '../../rider_truth/rider_truth.dart';
 import '../bloc/account_bloc.dart';
 
 class EarningsView extends StatefulWidget {
@@ -62,6 +63,11 @@ class _EarningsViewState extends State<EarningsView> {
                         context.read<AccountBloc>().add(GetEarnings()),
                   );
                 }
+                if (!earningsSnapshot.hasData ||
+                    !payoutSnapshot.hasData ||
+                    !transactionSnapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
                 final wallet = earningsSnapshot.data?.data() ?? const {};
                 final payouts = payoutSnapshot.data?.docs
                         .map((doc) => {'id': doc.id, ...doc.data()})
@@ -111,13 +117,14 @@ class _EarningsContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final available =
-        _num(wallet['availableBalance'] ?? wallet['accountBalance']);
-    final pending = _num(wallet['pendingBalance'] ?? wallet['pendingEarnings']);
-    final delivery = _sumType(transactions, ['delivery', 'earning']);
-    final tips = _sumType(transactions, ['tip']);
-    final waiting = _sumType(transactions, ['waiting', 'no_show']);
-    final adjustments = _sumType(transactions, ['adjustment', 'refund']);
+    final summary = RiderEarningsSummary.from(wallet);
+    if (summary == null) return const _EarningsFailure(onRetry: null);
+    final available = summary.available;
+    final pending = summary.pending;
+    final delivery = summary.delivery;
+    final tips = summary.tips;
+    final waiting = summary.waiting;
+    final adjustments = summary.adjustments;
     final pendingPayout = payouts.any((item) => {
           'requested',
           'pending',
@@ -127,6 +134,11 @@ class _EarningsContent extends StatelessWidget {
             '${item['status'] ?? item['payoutStatus'] ?? ''}'.toLowerCase()));
     final sortedPayouts = [...payouts]
       ..sort((a, b) => _millis(b).compareTo(_millis(a)));
+    final activePayout = sortedPayouts
+        .where((item) => {'requested', 'pending', 'approved', 'processing'}
+            .contains('${item['status'] ?? item['payoutStatus'] ?? ''}'
+                .toLowerCase()))
+        .firstOrNull;
     final sortedTransactions = [...transactions]
       ..sort((a, b) => _millis(b).compareTo(_millis(a)));
     return BlocBuilder<AccountBloc, AccountState>(
@@ -170,6 +182,10 @@ class _EarningsContent extends StatelessWidget {
                     ? null
                     : () => _requestWithdrawal(context, available),
               ),
+              if (activePayout != null) ...[
+                const SizedBox(height: 12),
+                _ActivePayoutCard(activePayout)
+              ],
               const SizedBox(height: 10),
               const Text(
                 'Cash payouts use your approved Stripe Connect account. Roth remains separate and cannot be withdrawn.',
@@ -298,14 +314,6 @@ class _EarningsContent extends StatelessWidget {
         ));
   }
 
-  static double _sumType(List<Map<String, dynamic>> rows, List<String> types) {
-    return rows.where((item) {
-      final value = '${item['type'] ?? item['category'] ?? ''}'.toLowerCase();
-      return types.any(value.contains);
-    }).fold(0, (sum, item) => sum + _num(item['amount']));
-  }
-
-  static double _num(Object? value) => value is num ? value.toDouble() : 0;
   static String _money(double value) => '£${value.toStringAsFixed(2)}';
   static int _millis(Map<String, dynamic> item) {
     final value = item['createdAt'] ?? item['updatedAt'] ?? item['paidAt'];
@@ -373,7 +381,7 @@ class _TransactionRow extends StatelessWidget {
 
 class _EarningsFailure extends StatelessWidget {
   const _EarningsFailure({required this.onRetry});
-  final VoidCallback onRetry;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -393,6 +401,43 @@ class _EarningsFailure extends StatelessWidget {
           ),
         ]),
       );
+}
+
+class _ActivePayoutCard extends StatelessWidget {
+  const _ActivePayoutCard(this.item);
+  final Map<String, dynamic> item;
+  @override
+  Widget build(BuildContext context) {
+    final status = '${item['status'] ?? item['payoutStatus'] ?? 'requested'}'
+        .toLowerCase();
+    final amount = item['amount'];
+    final destination =
+        '${item['destinationSummary'] ?? item['bankAccountSummary'] ?? 'Approved payout account'}';
+    final next = status == 'processing'
+        ? 'Stripe is processing this payout.'
+        : 'Circum will review and begin processing this request.';
+    return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+            color: Colors.white.withOpacity(.04),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: RiderPalette.blue.withOpacity(.2))),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(
+              amount is num
+                  ? '£${amount.toStringAsFixed(2)} · ${_title(status)}'
+                  : _title(status),
+              style: const TextStyle(
+                  color: RiderPalette.paper, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text('${_date(item)} · $destination',
+              style: const TextStyle(color: RiderPalette.muted, fontSize: 11)),
+          const SizedBox(height: 4),
+          Text(next,
+              style: const TextStyle(color: RiderPalette.muted, fontSize: 11)),
+        ]));
+  }
 }
 
 String _title(String value) => value

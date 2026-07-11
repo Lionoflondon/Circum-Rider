@@ -8,6 +8,7 @@ import '../authentication/bloc/auth_bloc.dart';
 import '../home/bloc/home_bloc.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../rider_design/rider_ui.dart';
+import '../rider_truth/rider_truth.dart';
 
 class RiderDashboardView extends StatefulWidget {
   const RiderDashboardView({super.key, required this.onSelectTab});
@@ -110,13 +111,7 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                                       ),
                                 ),
                                 const SizedBox(height: 14),
-                                RiderGlassCard(
-                                  child: RiderRankProgress(
-                                    rank:
-                                        '${profile['riderRank'] ?? profile['rank'] ?? 'Agent'}',
-                                    trustPoints: _int(profile['trustPoints']),
-                                  ),
-                                ),
+                                _RankCard(profile: profile),
                                 const SizedBox(height: 14),
                                 _TodayGrid(earnings: earnings),
                                 const SizedBox(height: 22),
@@ -178,8 +173,30 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
     final value = item['completedAt'] ?? item['updatedAt'] ?? item['createdAt'];
     return value is Timestamp ? value.millisecondsSinceEpoch : 0;
   }
+}
 
-  static int _int(Object? value) => value is num ? value.toInt() : 0;
+class _RankCard extends StatelessWidget {
+  const _RankCard({required this.profile});
+  final Map<String, dynamic> profile;
+  @override
+  Widget build(BuildContext context) {
+    final rank = RiderRankSnapshot.from(profile);
+    if (rank == null) {
+      return const RiderEmptyState(
+          icon: Icons.sync_problem_rounded,
+          title: 'Rank unavailable',
+          message: 'Rider rank and trust data are still synchronising.');
+    }
+    return RiderGlassCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      RiderRankProgress(rank: rank.rank, trustPoints: rank.trustPoints),
+      if (rank.overrideReason != null) ...[
+        const SizedBox(height: 8),
+        Text(rank.overrideReason!,
+            style: const TextStyle(color: RiderPalette.amber, fontSize: 11))
+      ],
+    ]));
+  }
 }
 
 class _Header extends StatelessWidget {
@@ -332,14 +349,16 @@ class _JobsSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (home.rideStatus == RideStatus.offline) {
-      return RiderEmptyState(
-        icon: Icons.wifi_off_rounded,
-        title: 'Go online to receive jobs',
-        message:
-            'Available jobs are shown only when your approved Rider account is online.',
-        actionLabel: 'Open jobs',
-        onAction: onOpenJobs,
-      );
+      return RiderGlassCard(
+          onTap: onOpenJobs,
+          child: const Row(children: [
+            Icon(Icons.fact_check_outlined, color: RiderPalette.blue),
+            SizedBox(width: 12),
+            Expanded(
+                child: Text('No priority operational action right now.',
+                    style: TextStyle(color: RiderPalette.muted))),
+            Icon(Icons.chevron_right_rounded, color: RiderPalette.muted)
+          ]));
     }
     if (home.requestStatus == RequestStatus.loading) {
       return const RiderGlassCard(
