@@ -35,6 +35,7 @@ void main() {
 
   test('Rider Hosting prevents stale authentication shell assets', () {
     final hosting = File('firebase.json').readAsStringSync();
+    expect(hosting, contains('"source": "**"'));
     expect(hosting, contains('"source": "/index.html"'));
     expect(hosting, contains('"source": "/main.dart.js"'));
     expect(hosting, contains('"source": "/flutter_service_worker.js"'));
