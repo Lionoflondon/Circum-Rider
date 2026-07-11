@@ -43,8 +43,8 @@ class RiderGlassSurface extends StatelessWidget {
     required this.child,
     this.padding = const EdgeInsets.all(20),
     this.radius = 22,
-    this.opacity = .64,
-    this.blur = 20,
+    this.opacity = .72,
+    this.blur = 10,
     this.borderColor,
     this.edgeColor = RiderPalette.blue,
     this.width,
@@ -64,8 +64,9 @@ class RiderGlassSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
-    final effectiveBlur = reduceMotion ? blur * .55 : blur;
-    final clampedOpacity = opacity.clamp(.50, .82).toDouble();
+    final effectiveBlur =
+        (reduceMotion ? blur * .45 : blur.clamp(0, 12)).toDouble();
+    final clampedOpacity = opacity.clamp(.58, .86).toDouble();
     final shape = BorderRadius.circular(radius);
     final content = ClipRRect(
       borderRadius: shape,
@@ -81,26 +82,26 @@ class RiderGlassSurface extends StatelessWidget {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Colors.white.withValues(alpha: .105),
+                Colors.white.withValues(alpha: .055),
                 RiderPalette.panel.withValues(alpha: clampedOpacity),
-                const Color(0xFF050814).withValues(alpha: clampedOpacity + .08),
+                const Color(0xFF050814).withValues(alpha: clampedOpacity + .04),
               ],
               stops: const [0, .42, 1],
             ),
             border: Border.all(
-              color: borderColor ?? Colors.white.withValues(alpha: .16),
+              color: borderColor ?? Colors.white.withValues(alpha: .09),
             ),
             boxShadow: [
               BoxShadow(
-                color: edgeColor.withValues(alpha: .18),
-                blurRadius: 34,
-                spreadRadius: -8,
-                offset: const Offset(0, 16),
+                color: edgeColor.withValues(alpha: .07),
+                blurRadius: 18,
+                spreadRadius: -10,
+                offset: const Offset(0, 10),
               ),
               BoxShadow(
-                color: Colors.black.withValues(alpha: .32),
-                blurRadius: 28,
-                offset: const Offset(0, 12),
+                color: Colors.black.withValues(alpha: .22),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
@@ -113,8 +114,8 @@ class RiderGlassSurface extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.center,
                 colors: [
-                  Colors.white.withValues(alpha: .10),
-                  Colors.white.withValues(alpha: .012),
+                  Colors.white.withValues(alpha: .045),
+                  Colors.white.withValues(alpha: .006),
                 ],
               ),
             ),

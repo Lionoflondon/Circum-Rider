@@ -77,6 +77,17 @@ void main() {
       expect(schedule, contains('assignedRider'));
       expect(schedule,
           anyOf(contains('expected earnings'), contains('riderEarning')));
+      expect(schedule, contains('_ScheduleFilter'));
+      expect(schedule, contains("'All'"));
+      expect(schedule, contains("'Today'"));
+      expect(schedule, contains("'This week'"));
+      expect(schedule, contains("'Vanguard'"));
+      expect(schedule, contains('_DayGroup'));
+      expect(schedule, contains('Ready to start'));
+      expect(schedule, contains('Starts in'));
+      expect(schedule, contains('Gifts by CIRCUM'));
+      expect(schedule, contains('Health+'));
+      expect(schedule, contains('RiderGlassSurface'));
       expect(earnings, contains('getRiderEarningsSummary'));
       expect(earnings, contains("collection('riderEarnings')"));
       expect(earnings, contains("collection('payoutRequests')"));
@@ -101,6 +112,15 @@ void main() {
       expect(earnings, isNot(contains('v2.4.1')));
       expect(earnings, isNot(contains('Roth withdrawal')));
       expect(earnings, isNot(contains('Paid to Wallet')));
+    });
+
+    test('rider glass is restrained rather than excessive', () {
+      final riderUi =
+          File('lib/app/rider_design/rider_ui.dart').readAsStringSync();
+      expect(riderUi, contains('this.blur = 10'));
+      expect(riderUi, contains('blur.clamp(0, 12)'));
+      expect(riderUi, contains('withValues(alpha: .07)'));
+      expect(riderUi, isNot(contains('blurRadius: 34')));
     });
 
     test('profile tab hosts the canonical Rider Options screen', () {
