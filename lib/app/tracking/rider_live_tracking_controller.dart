@@ -24,6 +24,83 @@ enum RiderLiveTrackingStatus {
   error,
 }
 
+extension RiderLiveTrackingStatusModel on RiderLiveTrackingStatus {
+  String get internalValue => switch (this) {
+        RiderLiveTrackingStatus.live => 'live',
+        RiderLiveTrackingStatus.acquiring => 'acquiringLocation',
+        RiderLiveTrackingStatus.poorAccuracy => 'poorGpsAccuracy',
+        RiderLiveTrackingStatus.foregroundOnly => 'foregroundOnly',
+        RiderLiveTrackingStatus.backgroundActive => 'backgroundTrackingActive',
+        RiderLiveTrackingStatus.offline => 'offline',
+        RiderLiveTrackingStatus.reconnecting => 'reconnecting',
+        RiderLiveTrackingStatus.permissionRequired => 'permissionRequired',
+        RiderLiveTrackingStatus.permissionDenied => 'permissionRequired',
+        RiderLiveTrackingStatus.permissionPermanentlyDenied =>
+          'permissionRequired',
+        RiderLiveTrackingStatus.servicesDisabled => 'locationServicesDisabled',
+        RiderLiveTrackingStatus.arrivedAtPickup => 'arrivedAtPickup',
+        RiderLiveTrackingStatus.arrivedAtDropoff => 'arrivedAtDropoff',
+        RiderLiveTrackingStatus.stopped => 'trackingStopped',
+        RiderLiveTrackingStatus.idle => 'trackingStopped',
+        RiderLiveTrackingStatus.error => 'reconnecting',
+      };
+
+  String get title => switch (this) {
+        RiderLiveTrackingStatus.live => 'Live tracking',
+        RiderLiveTrackingStatus.acquiring => 'Finding your location...',
+        RiderLiveTrackingStatus.poorAccuracy => 'Weak GPS signal',
+        RiderLiveTrackingStatus.foregroundOnly => 'Foreground tracking only',
+        RiderLiveTrackingStatus.backgroundActive =>
+          'Background tracking active',
+        RiderLiveTrackingStatus.offline => 'Offline - waiting for connection',
+        RiderLiveTrackingStatus.reconnecting => 'Reconnecting...',
+        RiderLiveTrackingStatus.permissionRequired ||
+        RiderLiveTrackingStatus.permissionDenied ||
+        RiderLiveTrackingStatus.permissionPermanentlyDenied =>
+          'Location permission required',
+        RiderLiveTrackingStatus.servicesDisabled =>
+          'Location services disabled',
+        RiderLiveTrackingStatus.arrivedAtPickup => 'Arrived at pickup',
+        RiderLiveTrackingStatus.arrivedAtDropoff => 'Arrived at drop-off',
+        RiderLiveTrackingStatus.stopped ||
+        RiderLiveTrackingStatus.idle =>
+          'Tracking stopped',
+        RiderLiveTrackingStatus.error => 'Tracking needs attention',
+      };
+
+  String get supportingText => switch (this) {
+        RiderLiveTrackingStatus.live =>
+          'Your location is updating for this delivery.',
+        RiderLiveTrackingStatus.acquiring => 'Finding your location...',
+        RiderLiveTrackingStatus.poorAccuracy =>
+          'Continue tracking cautiously until signal improves.',
+        RiderLiveTrackingStatus.foregroundOnly =>
+          'Keep the app open so Circum can update this delivery.',
+        RiderLiveTrackingStatus.backgroundActive =>
+          'Background tracking active',
+        RiderLiveTrackingStatus.offline => 'Offline - waiting for connection.',
+        RiderLiveTrackingStatus.reconnecting => 'Reconnecting...',
+        RiderLiveTrackingStatus.permissionRequired ||
+        RiderLiveTrackingStatus.permissionDenied =>
+          'Location is required while you have an active delivery.',
+        RiderLiveTrackingStatus.permissionPermanentlyDenied =>
+          'Open settings to allow delivery tracking.',
+        RiderLiveTrackingStatus.servicesDisabled =>
+          'Turn on device location services to continue tracking.',
+        RiderLiveTrackingStatus.arrivedAtPickup =>
+          'Pickup verification is now available.',
+        RiderLiveTrackingStatus.arrivedAtDropoff =>
+          'Drop-off verification is now available.',
+        RiderLiveTrackingStatus.stopped ||
+        RiderLiveTrackingStatus.idle =>
+          'Live tracking has ended for this delivery.',
+        RiderLiveTrackingStatus.error =>
+          'Check your signal and retry tracking.',
+      };
+
+  String get accessibilityLabel => '$title. $supportingText';
+}
+
 enum RiderTrackingArrivalPhase { pickup, dropoff }
 
 class RiderGeoPoint {
@@ -85,6 +162,7 @@ class RiderLiveTrackingPolicy {
   static const nearDestinationMoveMeters = 10.0;
   static const poorAccuracyMeters = 80.0;
   static const arrivalRadiusMeters = 70.0;
+  static const impossibleJumpMetersPerSecond = 55.0;
   static const maxQueuedUpdates = 8;
   static const staleUpdateAfter = Duration(minutes: 3);
 
@@ -159,6 +237,30 @@ class RiderLiveTrackingPolicy {
 
   static bool isUsableAccuracy(Position position) {
     return position.accuracy <= poorAccuracyMeters;
+  }
+
+  static bool isStalePosition(Position position, {DateTime? now}) {
+    final timestamp = position.timestamp;
+    final current = now ?? DateTime.now();
+    return current.difference(timestamp).abs() > staleUpdateAfter;
+  }
+
+  static bool isImpossibleJump({
+    required Position previous,
+    required Position next,
+  }) {
+    final elapsed =
+        next.timestamp.difference(previous.timestamp).inMilliseconds.abs();
+    if (elapsed == 0) return false;
+    final distance = Geolocator.distanceBetween(
+      previous.latitude,
+      previous.longitude,
+      next.latitude,
+      next.longitude,
+    );
+    final metersPerSecond = distance / (elapsed / 1000);
+    return metersPerSecond > impossibleJumpMetersPerSecond &&
+        next.accuracy > previous.accuracy;
   }
 
   static bool nearDestination(Position position, RiderGeoPoint destination) {
@@ -395,6 +497,29 @@ class RiderLiveTrackingController {
     final status = _trackingStatus;
     if (deliveryId == null || riderId == null || status == null) return;
     final now = DateTime.now();
+    if (RiderLiveTrackingPolicy.isStalePosition(position, now: now)) {
+      _emit(_snapshot.copyWith(
+        status: RiderLiveTrackingStatus.reconnecting,
+        message: RiderLiveTrackingStatus.reconnecting.supportingText,
+        queueDepth: _queue.length,
+      ));
+      return;
+    }
+    final previous = _lastPublishedPosition ?? _snapshot.position;
+    if (previous != null &&
+        RiderLiveTrackingPolicy.isImpossibleJump(
+          previous: previous,
+          next: position,
+        )) {
+      _emit(_snapshot.copyWith(
+        status: RiderLiveTrackingStatus.poorAccuracy,
+        position: previous,
+        message: RiderLiveTrackingStatus.poorAccuracy.supportingText,
+        accuracyMeters: position.accuracy,
+        queueDepth: _queue.length,
+      ));
+      return;
+    }
     final destination = _activeDestination(status);
     final nearDestination = destination != null &&
         RiderLiveTrackingPolicy.nearDestination(position, destination);
@@ -402,7 +527,7 @@ class RiderLiveTrackingController {
     _emit(_snapshot.copyWith(
       status: trackingStatus,
       position: position,
-      message: _messageForStatus(trackingStatus),
+      message: trackingStatus.supportingText,
       accuracyMeters: position.accuracy,
       backgroundCapable: !kIsWeb,
       queueDepth: _queue.length,
@@ -439,21 +564,6 @@ class RiderLiveTrackingController {
       return RiderLiveTrackingStatus.foregroundOnly;
     }
     return RiderLiveTrackingStatus.live;
-  }
-
-  String _messageForStatus(RiderLiveTrackingStatus status) {
-    switch (status) {
-      case RiderLiveTrackingStatus.poorAccuracy:
-        return 'Poor GPS accuracy';
-      case RiderLiveTrackingStatus.foregroundOnly:
-        return 'Foreground tracking active';
-      case RiderLiveTrackingStatus.backgroundActive:
-        return 'Background tracking active';
-      case RiderLiveTrackingStatus.live:
-        return 'Live tracking';
-      default:
-        return 'Tracking active';
-    }
   }
 
   void _recordArrivalHit(Position position, String status, DateTime now) {

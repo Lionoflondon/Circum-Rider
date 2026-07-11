@@ -37,6 +37,107 @@ class RiderMobileFrame extends StatelessWidget {
       );
 }
 
+class RiderGlassSurface extends StatelessWidget {
+  const RiderGlassSurface({
+    super.key,
+    required this.child,
+    this.padding = const EdgeInsets.all(20),
+    this.radius = 22,
+    this.opacity = .64,
+    this.blur = 20,
+    this.borderColor,
+    this.edgeColor = RiderPalette.blue,
+    this.width,
+    this.onTap,
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+  final double radius;
+  final double opacity;
+  final double blur;
+  final Color? borderColor;
+  final Color edgeColor;
+  final double? width;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    final effectiveBlur = reduceMotion ? blur * .55 : blur;
+    final clampedOpacity = opacity.clamp(.50, .82).toDouble();
+    final shape = BorderRadius.circular(radius);
+    final content = ClipRRect(
+      borderRadius: shape,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: effectiveBlur,
+          sigmaY: effectiveBlur,
+        ),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: shape,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Colors.white.withValues(alpha: .105),
+                RiderPalette.panel.withValues(alpha: clampedOpacity),
+                const Color(0xFF050814).withValues(alpha: clampedOpacity + .08),
+              ],
+              stops: const [0, .42, 1],
+            ),
+            border: Border.all(
+              color: borderColor ?? Colors.white.withValues(alpha: .16),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: edgeColor.withValues(alpha: .18),
+                blurRadius: 34,
+                spreadRadius: -8,
+                offset: const Offset(0, 16),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: .32),
+                blurRadius: 28,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Container(
+            width: width,
+            padding: padding,
+            foregroundDecoration: BoxDecoration(
+              borderRadius: shape,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.center,
+                colors: [
+                  Colors.white.withValues(alpha: .10),
+                  Colors.white.withValues(alpha: .012),
+                ],
+              ),
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+    if (onTap == null) return content;
+    return Semantics(
+      button: true,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: shape,
+          child: content,
+        ),
+      ),
+    );
+  }
+}
+
 class RiderGlassCard extends StatelessWidget {
   const RiderGlassCard({
     super.key,
@@ -51,34 +152,15 @@ class RiderGlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final card = ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          padding: padding,
-          decoration: BoxDecoration(
-            color: RiderPalette.panel.withOpacity(.92),
-            borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: Colors.white.withOpacity(.09)),
-            boxShadow: const [
-              BoxShadow(
-                  color: Color(0x33000000),
-                  blurRadius: 28,
-                  offset: Offset(0, 14)),
-            ],
-          ),
-          child: child,
-        ),
-      ),
+    final card = RiderGlassSurface(
+      padding: padding,
+      radius: 22,
+      opacity: .66,
+      onTap: onTap,
+      child: child,
     );
     if (onTap == null) return card;
-    return Semantics(
-        button: true,
-        child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(22),
-            child: card));
+    return card;
   }
 }
 
@@ -92,8 +174,8 @@ class RiderStatusBadge extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         decoration: BoxDecoration(
-          color: color.withOpacity(.14),
-          border: Border.all(color: color.withOpacity(.42)),
+          color: color.withValues(alpha: .14),
+          border: Border.all(color: color.withValues(alpha: .42)),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(label,
@@ -186,7 +268,7 @@ class RiderPrimaryButton extends StatelessWidget {
           style: FilledButton.styleFrom(
             backgroundColor: color,
             foregroundColor: Colors.white,
-            disabledBackgroundColor: color.withOpacity(.35),
+            disabledBackgroundColor: color.withValues(alpha: .35),
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
@@ -218,8 +300,9 @@ class RiderEmptyState extends StatelessWidget {
             height: 46,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: RiderPalette.blue.withOpacity(.12),
-              border: Border.all(color: RiderPalette.blue.withOpacity(.25)),
+              color: RiderPalette.blue.withValues(alpha: .12),
+              border:
+                  Border.all(color: RiderPalette.blue.withValues(alpha: .25)),
             ),
             child: Icon(icon, color: RiderPalette.blue),
           ),
@@ -288,7 +371,7 @@ class RiderRankProgress extends StatelessWidget {
         child: LinearProgressIndicator(
           value: progress,
           minHeight: 5,
-          backgroundColor: Colors.white.withOpacity(.07),
+          backgroundColor: Colors.white.withValues(alpha: .07),
           color: _rankColor(_ranks[index]),
         ),
       ),
@@ -323,9 +406,9 @@ class RiderMetric extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(.035),
+          color: Colors.white.withValues(alpha: .035),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withOpacity(.075)),
+          border: Border.all(color: Colors.white.withValues(alpha: .075)),
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(value,

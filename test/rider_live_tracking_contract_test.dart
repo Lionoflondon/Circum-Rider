@@ -127,6 +127,55 @@ void main() {
       final position = _position(lat: 51.5, lng: -0.1, accuracy: 120);
       expect(RiderLiveTrackingPolicy.isUsableAccuracy(position), false);
     });
+
+    test('canonical tracking statuses expose one presentation model', () {
+      final values = {
+        RiderLiveTrackingStatus.live: 'live',
+        RiderLiveTrackingStatus.acquiring: 'acquiringLocation',
+        RiderLiveTrackingStatus.poorAccuracy: 'poorGpsAccuracy',
+        RiderLiveTrackingStatus.foregroundOnly: 'foregroundOnly',
+        RiderLiveTrackingStatus.backgroundActive: 'backgroundTrackingActive',
+        RiderLiveTrackingStatus.offline: 'offline',
+        RiderLiveTrackingStatus.reconnecting: 'reconnecting',
+        RiderLiveTrackingStatus.permissionRequired: 'permissionRequired',
+        RiderLiveTrackingStatus.servicesDisabled: 'locationServicesDisabled',
+        RiderLiveTrackingStatus.arrivedAtPickup: 'arrivedAtPickup',
+        RiderLiveTrackingStatus.arrivedAtDropoff: 'arrivedAtDropoff',
+        RiderLiveTrackingStatus.stopped: 'trackingStopped',
+      };
+
+      for (final entry in values.entries) {
+        expect(entry.key.internalValue, entry.value);
+        expect(entry.key.title, isNotEmpty);
+        expect(entry.key.supportingText, isNotEmpty);
+        expect(entry.key.accessibilityLabel, contains(entry.key.title));
+      }
+    });
+
+    test('stale and impossible GPS readings are rejected cautiously', () {
+      final now = DateTime.utc(2026, 7, 11, 10);
+      final stale = _position(
+        lat: 51.5,
+        lng: -0.1,
+        time: now.subtract(const Duration(minutes: 4)),
+      );
+      final previous = _position(lat: 51.5, lng: -0.1, time: now);
+      final impossible = _position(
+        lat: 52.5,
+        lng: -1.1,
+        accuracy: 30,
+        time: now.add(const Duration(seconds: 10)),
+      );
+
+      expect(RiderLiveTrackingPolicy.isStalePosition(stale, now: now), true);
+      expect(
+        RiderLiveTrackingPolicy.isImpossibleJump(
+          previous: previous,
+          next: impossible,
+        ),
+        true,
+      );
+    });
   });
 
   group('Rider live tracking integration contract', () {
@@ -153,12 +202,22 @@ void main() {
     });
 
     test('tracking UI renders mandatory states and recovery actions', () {
-      expect(accepted, contains('Live tracking'));
-      expect(accepted, contains('Foreground tracking active'));
-      expect(accepted, contains('Offline - tracking queued'));
-      expect(accepted, contains('Location permission blocked'));
+      expect(source, contains('Live tracking'));
+      expect(source, contains('Foreground tracking only'));
+      expect(source, contains('Offline - waiting for connection'));
+      expect(source, contains('Location permission required'));
+      expect(accepted, contains('_TrackingEtaCard'));
+      expect(accepted, contains('_TrackingPermissionCard'));
       expect(accepted, contains('Geolocator.openAppSettings'));
       expect(accepted, contains('Geolocator.openLocationSettings'));
+    });
+
+    test('accepted delivery keeps tracking overlays in the Rider glass system',
+        () {
+      expect(accepted, contains('RiderGlassSurface'));
+      expect(accepted, contains("CircleId('rider-live-pulse')"));
+      expect(accepted, contains('accessibilityLabel'));
+      expect(accepted, contains('RiderTypography.mono'));
     });
 
     test('Android has one background location permission declaration', () {

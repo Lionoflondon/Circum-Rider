@@ -38,13 +38,12 @@ class AppNavView extends StatelessWidget {
           child: Scaffold(
             backgroundColor: RiderPalette.background,
             body: IndexedStack(index: nav.currentNavIndex, children: screens),
-            bottomNavigationBar: DecoratedBox(
-              decoration: BoxDecoration(
-                color: const Color(0xF20D111C),
-                border: Border(
-                  top: BorderSide(color: Colors.white.withOpacity(.08)),
-                ),
-              ),
+            bottomNavigationBar: RiderGlassSurface(
+              radius: 0,
+              opacity: .58,
+              blur: 18,
+              padding: EdgeInsets.zero,
+              borderColor: Colors.white.withValues(alpha: .10),
               child: SafeArea(
                 top: false,
                 child: NavigationBar(
@@ -52,7 +51,7 @@ class AppNavView extends StatelessWidget {
                   selectedIndex: nav.currentNavIndex,
                   onDestinationSelected: select,
                   backgroundColor: Colors.transparent,
-                  indicatorColor: RiderPalette.blue.withOpacity(.16),
+                  indicatorColor: RiderPalette.blue.withValues(alpha: .18),
                   labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
                   destinations: const [
                     NavigationDestination(

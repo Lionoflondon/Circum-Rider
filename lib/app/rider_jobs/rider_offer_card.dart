@@ -1,9 +1,8 @@
 // ignore_for_file: deprecated_member_use
 
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 
+import '../rider_design/rider_ui.dart';
 import 'rider_points_rules.dart';
 
 class RiderJobOffer {
@@ -205,157 +204,142 @@ class RiderOfferCard extends StatelessWidget {
         boxShadow: accepted
             ? [
                 BoxShadow(
-                  color: const Color(0xFF60A5FA).withOpacity(0.65),
+                  color: const Color(0xFF60A5FA).withValues(alpha: 0.65),
                   blurRadius: 48,
                   spreadRadius: 3,
                 ),
               ]
             : const [],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-          child: Container(
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0B1020).withOpacity(0.78),
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: Colors.white.withOpacity(0.16)),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF2563EB).withOpacity(0.22),
-                  blurRadius: 34,
-                  offset: const Offset(0, 18),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    physics: const ClampingScrollPhysics(),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+      child: RiderGlassSurface(
+        radius: 28,
+        opacity: .62,
+        blur: 22,
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    _money(offer.earnings, offer.currency),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 34,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 0,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Estimated earnings',
-                                    style: TextStyle(
-                                      color: Colors.white.withOpacity(0.62),
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _money(offer.earnings, offer.currency),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0,
+                                ),
                               ),
-                            ),
-                            _RankTrustColumn(
-                              rank: riderRank,
-                              trustPoints: points.points,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Wrap(
-                          spacing: 7,
-                          runSpacing: 7,
-                          children: chips
-                              .map((chip) => _Chip(
-                                    label: chip,
-                                    highlighted: chip == points.label,
-                                  ))
-                              .toList(),
-                        ),
-                        const SizedBox(height: 18),
-                        _RouteSummary(
-                          pickup: offer.pickupArea,
-                          dropoff: offer.dropoffArea,
-                        ),
-                        const SizedBox(height: 14),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _InfoTile(
-                                icon: Icons.route_rounded,
-                                label: offer.distanceText,
+                              const SizedBox(height: 4),
+                              Text(
+                                'Estimated earnings',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.62),
+                                  fontSize: 13,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: _InfoTile(
-                                icon: Icons.schedule_rounded,
-                                label: offer.timeText,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                        const SizedBox(height: 12),
-                        _ParcelGuidance(text: offer.parcelGuidance),
-                        const SizedBox(height: 10),
-                        _MetadataRow(
-                          vehicle: offer.minimumVehicle,
-                          weight: offer.weightText,
-                          timing: offer.pickupTiming,
+                        _RankTrustColumn(
+                          rank: riderRank,
+                          trustPoints: points.points,
                         ),
                       ],
                     ),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: accepting ? null : onAccept,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF3B82F6),
-                      disabledBackgroundColor:
-                          const Color(0xFF3B82F6).withOpacity(0.42),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
+                    const SizedBox(height: 16),
+                    Wrap(
+                      spacing: 7,
+                      runSpacing: 7,
+                      children: chips
+                          .map((chip) => _Chip(
+                                label: chip,
+                                highlighted: chip == points.label,
+                              ))
+                          .toList(),
                     ),
-                    child: accepting
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.4,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : Text(
-                            accepted ? 'Accepted ✓' : 'Accept Delivery',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                            ),
+                    const SizedBox(height: 18),
+                    _RouteSummary(
+                      pickup: offer.pickupArea,
+                      dropoff: offer.dropoffArea,
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _InfoTile(
+                            icon: Icons.route_rounded,
+                            label: offer.distanceText,
                           ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _InfoTile(
+                            icon: Icons.schedule_rounded,
+                            label: offer.timeText,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _ParcelGuidance(text: offer.parcelGuidance),
+                    const SizedBox(height: 10),
+                    _MetadataRow(
+                      vehicle: offer.minimumVehicle,
+                      weight: offer.weightText,
+                      timing: offer.pickupTiming,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: accepting ? null : onAccept,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3B82F6),
+                  disabledBackgroundColor:
+                      const Color(0xFF3B82F6).withValues(alpha: 0.42),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
                   ),
                 ),
-              ],
+                child: accepting
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.4,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Text(
+                        accepted ? 'Accepted ✓' : 'Accept Delivery',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -403,9 +387,10 @@ class _RankTrustColumn extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF38BDF8).withOpacity(0.15),
+        color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF60A5FA).withOpacity(0.38)),
+        border:
+            Border.all(color: const Color(0xFF60A5FA).withValues(alpha: 0.38)),
       ),
       child: Column(
         children: [
@@ -419,7 +404,7 @@ class _RankTrustColumn extends StatelessWidget {
           const SizedBox(height: 2),
           Text('+$trustPoints Trust Points',
               style: TextStyle(
-                  color: Colors.white.withOpacity(0.74),
+                  color: Colors.white.withValues(alpha: 0.74),
                   fontSize: 11,
                   fontWeight: FontWeight.w700)),
         ],
@@ -440,19 +425,20 @@ class _Chip extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
         color: highlighted
-            ? const Color(0xFF2563EB).withOpacity(0.28)
-            : Colors.white.withOpacity(0.08),
+            ? const Color(0xFF2563EB).withValues(alpha: 0.28)
+            : Colors.white.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
           color: highlighted
-              ? const Color(0xFF60A5FA).withOpacity(0.48)
-              : Colors.white.withOpacity(0.12),
+              ? const Color(0xFF60A5FA).withValues(alpha: 0.48)
+              : Colors.white.withValues(alpha: 0.12),
         ),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: highlighted ? Colors.white : Colors.white.withOpacity(0.76),
+          color:
+              highlighted ? Colors.white : Colors.white.withValues(alpha: 0.76),
           fontWeight: FontWeight.w700,
           fontSize: 12,
         ),
@@ -493,9 +479,9 @@ class _InfoTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.07),
+        color: Colors.white.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.white.withOpacity(0.09)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.09)),
       ),
       child: Row(
         children: [
@@ -505,7 +491,7 @@ class _InfoTile extends StatelessWidget {
             child: Text(label,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
+                    color: Colors.white.withValues(alpha: 0.8),
                     fontSize: 12,
                     fontWeight: FontWeight.w700)),
           ),
@@ -526,9 +512,9 @@ class _ParcelGuidance extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF07090F).withOpacity(0.58),
+        color: const Color(0xFF07090F).withValues(alpha: 0.58),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: Row(
         children: [
@@ -540,7 +526,7 @@ class _ParcelGuidance extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                    color: Colors.white.withOpacity(0.82),
+                    color: Colors.white.withValues(alpha: 0.82),
                     fontSize: 13,
                     fontWeight: FontWeight.w600)),
           ),
@@ -585,14 +571,14 @@ class _MetaChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
+        color: Colors.white.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Text(
         label,
         style: TextStyle(
-          color: Colors.white.withOpacity(0.68),
+          color: Colors.white.withValues(alpha: 0.68),
           fontSize: 11,
           fontWeight: FontWeight.w700,
         ),

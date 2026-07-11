@@ -1,7 +1,6 @@
 // ignore_for_file: deprecated_member_use, prefer_const_constructors, curly_braces_in_flow_control_structures
 
 import 'dart:async';
-import 'dart:ui';
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -15,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../communication/rider_conversation_view.dart';
 import '../home/bloc/home_bloc.dart';
 import '../founder_access/founder_rider_access.dart';
+import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
 import '../support/view/support.dart';
 import '../tracking/rider_live_tracking_controller.dart';
@@ -60,6 +60,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.previewOffers != null) return;
     _firestore = widget.firestore ?? FirebaseFirestore.instance;
     _auth = widget.auth ?? FirebaseAuth.instance;
     _acceptController = widget.acceptController ??
@@ -414,8 +415,8 @@ class _OfferExperience extends StatelessWidget {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  const Color(0xFF07090F).withOpacity(0.22),
-                  const Color(0xFF07090F).withOpacity(0.72),
+                  const Color(0xFF07090F).withValues(alpha: 0.22),
+                  const Color(0xFF07090F).withValues(alpha: 0.72),
                   const Color(0xFF07090F),
                 ],
               ),
@@ -469,7 +470,8 @@ class _TakenState extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: const Color(0xFF0D111C),
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white.withOpacity(.09)),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: .09)),
                   ),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
                     Container(
@@ -477,7 +479,7 @@ class _TakenState extends StatelessWidget {
                       height: 54,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: const Color(0xFFF87171).withOpacity(.12),
+                        color: const Color(0xFFF87171).withValues(alpha: .12),
                       ),
                       child: const Icon(Icons.work_off_outlined,
                           color: Color(0xFFF87171)),
@@ -493,7 +495,8 @@ class _TakenState extends StatelessWidget {
                     Text('Another Rider accepted this delivery first.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                            color: Colors.white.withOpacity(.62), height: 1.4)),
+                            color: Colors.white.withValues(alpha: .62),
+                            height: 1.4)),
                     const SizedBox(height: 18),
                     SizedBox(
                       width: double.infinity,
@@ -596,23 +599,28 @@ class _OfferHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-          decoration: BoxDecoration(
-            color: const Color(0xFF0B1020).withOpacity(0.72),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: Colors.white.withOpacity(0.14)),
-          ),
-          child: Text(
-            '$count Available Offers',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
+        Flexible(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: RiderGlassSurface(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              radius: 999,
+              opacity: .58,
+              blur: 16,
+              child: Text(
+                '$count Available Offers',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
           ),
         ),
-        const Spacer(),
+        const SizedBox(width: 12),
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
@@ -626,7 +634,7 @@ class _OfferHeader extends StatelessWidget {
             Text(
               'Swipe to view more',
               style: TextStyle(
-                color: Colors.white.withOpacity(0.58),
+                color: Colors.white.withValues(alpha: 0.58),
                 fontSize: 12,
               ),
             ),
@@ -661,6 +669,23 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
     if (!oldWidget.focusPickup && widget.focusPickup) {
       _focusPickup();
     }
+    final oldPosition = oldWidget.riderPosition;
+    final nextPosition = widget.riderPosition;
+    if (nextPosition != null &&
+        (oldPosition == null ||
+            Geolocator.distanceBetween(
+                  oldPosition.latitude,
+                  oldPosition.longitude,
+                  nextPosition.latitude,
+                  nextPosition.longitude,
+                ) >
+                8)) {
+      _controller?.animateCamera(
+        CameraUpdate.newLatLng(
+          LatLng(nextPosition.latitude, nextPosition.longitude),
+        ),
+      );
+    }
   }
 
   void _focusPickup() {
@@ -682,6 +707,13 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
     if (pickup == null || dropoff == null) {
       return const _MapFallback();
     }
+
+    final riderLatLng = widget.riderPosition == null
+        ? null
+        : LatLng(
+            widget.riderPosition!.latitude,
+            widget.riderPosition!.longitude,
+          );
 
     return GoogleMap(
       onMapCreated: (controller) {
@@ -714,10 +746,7 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
         if (widget.riderPosition != null)
           Marker(
             markerId: const MarkerId('rider'),
-            position: LatLng(
-              widget.riderPosition!.latitude,
-              widget.riderPosition!.longitude,
-            ),
+            position: riderLatLng!,
             rotation: widget.riderPosition!.heading.isFinite
                 ? widget.riderPosition!.heading
                 : 0,
@@ -733,6 +762,17 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
           color: const Color(0xFF60A5FA),
           width: 5,
         ),
+      },
+      circles: {
+        if (riderLatLng != null)
+          Circle(
+            circleId: const CircleId('rider-live-pulse'),
+            center: riderLatLng,
+            radius: widget.riderPosition!.accuracy.clamp(12, 42).toDouble(),
+            fillColor: const Color(0xFF38BDF8).withValues(alpha: .16),
+            strokeColor: const Color(0xFF60A5FA).withValues(alpha: .58),
+            strokeWidth: 2,
+          ),
       },
     );
   }
@@ -811,7 +851,7 @@ class _RouteFallbackPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final gridPaint = Paint()
-      ..color = Colors.white.withOpacity(0.04)
+      ..color = Colors.white.withValues(alpha: 0.04)
       ..strokeWidth = 1;
     for (var x = 0.0; x < size.width; x += 42) {
       canvas.drawLine(Offset(x, 0), Offset(x + 80, size.height), gridPaint);
@@ -821,7 +861,7 @@ class _RouteFallbackPainter extends CustomPainter {
     }
 
     final routePaint = Paint()
-      ..color = const Color(0xFF60A5FA).withOpacity(0.72)
+      ..color = const Color(0xFF60A5FA).withValues(alpha: 0.72)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 5
       ..strokeCap = StrokeCap.round;
@@ -849,18 +889,17 @@ class _InlineStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return RiderGlassSurface(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0B1020).withOpacity(0.82),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF60A5FA).withOpacity(0.26)),
-      ),
+      radius: 16,
+      opacity: .62,
+      blur: 18,
+      borderColor: const Color(0xFF60A5FA).withValues(alpha: .26),
       child: Text(
         message,
         style: TextStyle(
-          color: Colors.white.withOpacity(0.86),
+          color: Colors.white.withValues(alpha: 0.86),
           fontSize: 13,
           fontWeight: FontWeight.w700,
         ),
@@ -920,7 +959,7 @@ class _StateScaffold extends StatelessWidget {
                   message,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.68),
+                    color: Colors.white.withValues(alpha: 0.68),
                     fontSize: 15,
                     height: 1.45,
                   ),
@@ -1218,6 +1257,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   StreamSubscription<RiderLiveTrackingSnapshot>? _trackingSub;
   RiderLiveTrackingSnapshot _trackingSnapshot =
       const RiderLiveTrackingSnapshot(status: RiderLiveTrackingStatus.idle);
+  Timer? _markerTweenTimer;
+  Position? _displayRiderPosition;
   bool _expanded = false;
   bool _transitioning = false;
   bool _arrivalTransitioning = false;
@@ -1247,6 +1288,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
 
   @override
   void dispose() {
+    _markerTweenTimer?.cancel();
     unawaited(_trackingSub?.cancel());
     _trackingController?.dispose();
     super.dispose();
@@ -1255,6 +1297,9 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   void _handleTrackingState(RiderLiveTrackingSnapshot snapshot) {
     if (!mounted) return;
     setState(() => _trackingSnapshot = snapshot);
+    if (snapshot.position != null) {
+      _animateRiderMarker(snapshot.position!);
+    }
     final phase = snapshot.arrivalPhase;
     if (phase == null || _arrivalTransitioning) return;
     if (phase == RiderTrackingArrivalPhase.pickup &&
@@ -1265,6 +1310,45 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
         _stage == RiderDeliveryStage.navigatingToDropoff) {
       unawaited(_autoArrival(RiderDeliveryStage.arrivedAtDropoff));
     }
+  }
+
+  void _animateRiderMarker(Position next) {
+    final previous = _displayRiderPosition ?? next;
+    _markerTweenTimer?.cancel();
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
+    if (reduceMotion || identical(previous, next)) {
+      setState(() => _displayRiderPosition = next);
+      return;
+    }
+    const steps = 8;
+    var tick = 0;
+    _markerTweenTimer =
+        Timer.periodic(const Duration(milliseconds: 45), (timer) {
+      tick += 1;
+      final t = (tick / steps).clamp(0, 1).toDouble();
+      final eased = Curves.easeOutCubic.transform(t);
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        _displayRiderPosition = Position(
+          latitude:
+              previous.latitude + (next.latitude - previous.latitude) * eased,
+          longitude: previous.longitude +
+              (next.longitude - previous.longitude) * eased,
+          timestamp: next.timestamp,
+          accuracy: next.accuracy,
+          altitude: next.altitude,
+          altitudeAccuracy: next.altitudeAccuracy,
+          heading: next.heading,
+          headingAccuracy: next.headingAccuracy,
+          speed: next.speed,
+          speedAccuracy: next.speedAccuracy,
+        );
+      });
+      if (tick >= steps) timer.cancel();
+    });
   }
 
   Future<void> _advance() async {
@@ -1720,7 +1804,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
         children: [
           _OfferMapBackground(
             offer: widget.offer,
-            riderPosition: _trackingSnapshot.position,
+            riderPosition: _displayRiderPosition ?? _trackingSnapshot.position,
             focusPickup: _stage.index < RiderDeliveryStage.collected.index,
           ),
           Container(
@@ -1729,9 +1813,9 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  const Color(0xFF07090F).withOpacity(0.10),
-                  const Color(0xFF07090F).withOpacity(0.34),
-                  const Color(0xFF07090F).withOpacity(0.78),
+                  const Color(0xFF07090F).withValues(alpha: 0.10),
+                  const Color(0xFF07090F).withValues(alpha: 0.34),
+                  const Color(0xFF07090F).withValues(alpha: 0.78),
                 ],
               ),
             ),
@@ -1749,6 +1833,20 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                       onRetry: _trackingController?.retry,
                     ),
                     const SizedBox(height: 10),
+                    _TrackingEtaCard(
+                      offer: widget.offer,
+                      snapshot: _trackingSnapshot,
+                      stage: _stage,
+                    ),
+                    const SizedBox(height: 10),
+                    if (_TrackingPermissionCard.shouldShow(
+                        _trackingSnapshot.status)) ...[
+                      _TrackingPermissionCard(
+                        snapshot: _trackingSnapshot,
+                        onRetry: _trackingController?.retry,
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                   ],
                   _NavigationInstructionCard(
                     title: nextTitle,
@@ -1861,7 +1959,7 @@ class _DeliveryCompleteView extends StatelessWidget {
         backgroundColor: const Color(0xFF07090F),
         body: Stack(children: [
           _OfferMapBackground(offer: offer),
-          Container(color: const Color(0xFF07090F).withOpacity(.78)),
+          Container(color: const Color(0xFF07090F).withValues(alpha: .78)),
           SafeArea(
               child: Center(
                   child: SingleChildScrollView(
@@ -1891,7 +1989,7 @@ class _DeliveryCompleteView extends StatelessWidget {
                             Text(
                                 'Reference ${delivery['requestId'] ?? offer.id}',
                                 style: TextStyle(
-                                    color: Colors.white.withOpacity(.62),
+                                    color: Colors.white.withValues(alpha: .62),
                                     fontSize: 12)),
                             const SizedBox(height: 18),
                             _CompletionRow(
@@ -1959,7 +2057,7 @@ class _CompletionRow extends StatelessWidget {
         Expanded(
             child: Text(label,
                 style: TextStyle(
-                    color: Colors.white.withOpacity(.7),
+                    color: Colors.white.withValues(alpha: .7),
                     fontWeight: strong ? FontWeight.w800 : FontWeight.w500))),
         Text('£${amount.toStringAsFixed(2)}',
             style: TextStyle(
@@ -2006,14 +2104,13 @@ class _WaitingPolicyCard extends StatelessWidget {
             final seconds = remaining.isNegative ? 0 : remaining.inSeconds;
             final label =
                 '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
-            return Container(
+            return RiderGlassSurface(
               width: double.infinity,
               padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0B1020).withOpacity(0.9),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: Colors.white.withOpacity(0.14)),
-              ),
+              radius: 18,
+              opacity: .64,
+              blur: 18,
+              borderColor: Colors.white.withValues(alpha: .16),
               child: Row(
                 children: [
                   Expanded(
@@ -2028,8 +2125,8 @@ class _WaitingPolicyCard extends StatelessWidget {
                           noShowReady
                               ? 'No-show review available'
                               : 'Free wait $label',
-                          style:
-                              TextStyle(color: Colors.white.withOpacity(0.7)),
+                          style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.7)),
                         ),
                       ],
                     ),
@@ -2079,9 +2176,9 @@ class _CompactProgressIndicator extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0B1020).withOpacity(0.62),
+        color: const Color(0xFF0B1020).withValues(alpha: 0.62),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.10)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
       ),
       child: Row(
         children: List.generate(labels.length, (index) {
@@ -2098,11 +2195,11 @@ class _CompactProgressIndicator extends StatelessWidget {
                     shape: BoxShape.circle,
                     color: complete || active
                         ? const Color(0xFF3B82F6)
-                        : Colors.white.withOpacity(0.08),
+                        : Colors.white.withValues(alpha: 0.08),
                     border: Border.all(
                       color: complete || active
                           ? const Color(0xFF60A5FA)
-                          : Colors.white.withOpacity(0.10),
+                          : Colors.white.withValues(alpha: 0.10),
                     ),
                   ),
                   child: complete
@@ -2116,8 +2213,9 @@ class _CompactProgressIndicator extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color:
-                        active ? Colors.white : Colors.white.withOpacity(0.52),
+                    color: active
+                        ? Colors.white
+                        : Colors.white.withValues(alpha: 0.52),
                     fontSize: 9,
                     fontWeight: FontWeight.w800,
                   ),
@@ -2167,13 +2265,12 @@ class _AcceptedTopPill extends StatelessWidget {
     if (labels.isEmpty) labels.add('Accepted');
     return Align(
       alignment: Alignment.centerLeft,
-      child: Container(
+      child: RiderGlassSurface(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0B1020).withOpacity(0.78),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: const Color(0xFF60A5FA).withOpacity(0.25)),
-        ),
+        radius: 999,
+        opacity: .58,
+        blur: 16,
+        borderColor: const Color(0xFF60A5FA).withValues(alpha: .28),
         child: Text(
           labels.join(' - '),
           style: const TextStyle(
@@ -2198,144 +2295,144 @@ class _TrackingStatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = _copy(snapshot.status);
-    final warning = {
-      RiderLiveTrackingStatus.permissionDenied,
-      RiderLiveTrackingStatus.permissionPermanentlyDenied,
-      RiderLiveTrackingStatus.servicesDisabled,
-      RiderLiveTrackingStatus.poorAccuracy,
-      RiderLiveTrackingStatus.offline,
-      RiderLiveTrackingStatus.error,
-    }.contains(snapshot.status);
+    final color = _color(snapshot.status);
+    final warning = color == RiderPalette.amber || color == RiderPalette.red;
     final action = _action(snapshot.status);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
-          decoration: BoxDecoration(
-            color: const Color(0xCC0B1020),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: warning
-                  ? const Color(0xFFF5A623).withOpacity(.38)
-                  : const Color(0xFF60A5FA).withOpacity(.28),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF2563EB).withOpacity(.16),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
-              )
-            ],
-          ),
-          child: Row(
-            children: [
+    return Semantics(
+      label: snapshot.status.accessibilityLabel,
+      liveRegion: true,
+      child: RiderGlassSurface(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+        radius: 999,
+        opacity: .62,
+        blur: 18,
+        borderColor: color.withValues(alpha: warning ? .40 : .30),
+        edgeColor: color,
+        child: Row(
+          children: [
+            Icon(_icon(snapshot.status), color: color, size: 16),
+            if (snapshot.status == RiderLiveTrackingStatus.live ||
+                snapshot.status == RiderLiveTrackingStatus.backgroundActive)
               Container(
-                width: 9,
-                height: 9,
+                margin: const EdgeInsets.only(left: 5),
+                width: 8,
+                height: 8,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: warning
-                      ? const Color(0xFFF5A623)
-                      : const Color(0xFF22C55E),
+                  color: color.withValues(alpha: .86),
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: .42),
+                      blurRadius: 12,
+                      spreadRadius: 2,
+                    )
+                  ],
                 ),
               ),
-              const SizedBox(width: 9),
-              Expanded(
-                child: Semantics(
-                  liveRegion: true,
-                  child: Text(
-                    status,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Text(
+                snapshot.status.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              if (snapshot.accuracyMeters != null) ...[
-                Text(
-                  '${snapshot.accuracyMeters!.round()}m',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(.62),
-                    fontSize: 11,
-                    fontFamily: 'OpenSans',
-                    fontWeight: FontWeight.w700,
-                  ),
+            ),
+            if (snapshot.accuracyMeters != null) ...[
+              Text(
+                '${snapshot.accuracyMeters!.round()}m',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: .62),
+                  fontSize: 11,
+                  fontFamily: RiderTypography.mono,
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(width: 8),
-              ],
-              if (action != null)
-                GestureDetector(
-                  onTap: () {
-                    if (snapshot.status ==
-                        RiderLiveTrackingStatus.permissionPermanentlyDenied) {
-                      Geolocator.openAppSettings();
-                      return;
-                    }
-                    if (snapshot.status ==
-                        RiderLiveTrackingStatus.servicesDisabled) {
-                      Geolocator.openLocationSettings();
-                      return;
-                    }
-                    onRetry?.call();
-                  },
-                  child: Text(
-                    action,
-                    style: const TextStyle(
-                      color: Color(0xFF60A5FA),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
+              ),
+              const SizedBox(width: 8),
             ],
-          ),
+            if (action != null)
+              GestureDetector(
+                onTap: () {
+                  if (snapshot.status ==
+                      RiderLiveTrackingStatus.permissionPermanentlyDenied) {
+                    Geolocator.openAppSettings();
+                    return;
+                  }
+                  if (snapshot.status ==
+                      RiderLiveTrackingStatus.servicesDisabled) {
+                    Geolocator.openLocationSettings();
+                    return;
+                  }
+                  onRetry?.call();
+                },
+                child: Text(
+                  action,
+                  style: const TextStyle(
+                    color: Color(0xFF60A5FA),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
   }
 
-  static String _copy(RiderLiveTrackingStatus status) {
-    switch (status) {
-      case RiderLiveTrackingStatus.idle:
-        return 'Tracking ready';
-      case RiderLiveTrackingStatus.acquiring:
-        return 'Acquiring location';
-      case RiderLiveTrackingStatus.live:
-        return 'Live tracking';
-      case RiderLiveTrackingStatus.foregroundOnly:
-        return 'Foreground tracking active';
-      case RiderLiveTrackingStatus.backgroundActive:
-        return 'Background tracking active';
-      case RiderLiveTrackingStatus.permissionRequired:
-      case RiderLiveTrackingStatus.permissionDenied:
-        return 'Location permission required';
-      case RiderLiveTrackingStatus.permissionPermanentlyDenied:
-        return 'Location permission blocked';
-      case RiderLiveTrackingStatus.servicesDisabled:
-        return 'Location services disabled';
-      case RiderLiveTrackingStatus.poorAccuracy:
-        return 'Poor GPS accuracy';
-      case RiderLiveTrackingStatus.offline:
-        return 'Offline - tracking queued';
-      case RiderLiveTrackingStatus.reconnecting:
-        return 'Reconnecting tracking';
-      case RiderLiveTrackingStatus.arrivedAtPickup:
-        return 'Arrived at pickup';
-      case RiderLiveTrackingStatus.arrivedAtDropoff:
-        return 'Arrived at drop-off';
-      case RiderLiveTrackingStatus.stopped:
-        return 'Tracking stopped';
-      case RiderLiveTrackingStatus.error:
-        return 'Tracking needs attention';
-    }
+  static IconData _icon(RiderLiveTrackingStatus status) {
+    return switch (status) {
+      RiderLiveTrackingStatus.live ||
+      RiderLiveTrackingStatus.backgroundActive =>
+        Icons.radar_rounded,
+      RiderLiveTrackingStatus.acquiring => Icons.gps_fixed_rounded,
+      RiderLiveTrackingStatus.poorAccuracy => Icons.gps_not_fixed_rounded,
+      RiderLiveTrackingStatus.foregroundOnly => Icons.phone_iphone_rounded,
+      RiderLiveTrackingStatus.offline => Icons.cloud_off_rounded,
+      RiderLiveTrackingStatus.reconnecting => Icons.sync_rounded,
+      RiderLiveTrackingStatus.permissionRequired ||
+      RiderLiveTrackingStatus.permissionDenied ||
+      RiderLiveTrackingStatus.permissionPermanentlyDenied =>
+        Icons.location_disabled_rounded,
+      RiderLiveTrackingStatus.servicesDisabled => Icons.location_off_rounded,
+      RiderLiveTrackingStatus.arrivedAtPickup ||
+      RiderLiveTrackingStatus.arrivedAtDropoff =>
+        Icons.where_to_vote_rounded,
+      RiderLiveTrackingStatus.stopped ||
+      RiderLiveTrackingStatus.idle =>
+        Icons.pause_circle_outline_rounded,
+      RiderLiveTrackingStatus.error => Icons.error_outline_rounded,
+    };
+  }
+
+  static Color _color(RiderLiveTrackingStatus status) {
+    return switch (status) {
+      RiderLiveTrackingStatus.live ||
+      RiderLiveTrackingStatus.backgroundActive ||
+      RiderLiveTrackingStatus.arrivedAtPickup ||
+      RiderLiveTrackingStatus.arrivedAtDropoff =>
+        RiderPalette.blue,
+      RiderLiveTrackingStatus.acquiring ||
+      RiderLiveTrackingStatus.poorAccuracy ||
+      RiderLiveTrackingStatus.foregroundOnly ||
+      RiderLiveTrackingStatus.offline ||
+      RiderLiveTrackingStatus.reconnecting =>
+        RiderPalette.amber,
+      RiderLiveTrackingStatus.permissionRequired ||
+      RiderLiveTrackingStatus.permissionDenied ||
+      RiderLiveTrackingStatus.permissionPermanentlyDenied ||
+      RiderLiveTrackingStatus.servicesDisabled ||
+      RiderLiveTrackingStatus.error =>
+        RiderPalette.red,
+      RiderLiveTrackingStatus.stopped ||
+      RiderLiveTrackingStatus.idle =>
+        RiderPalette.muted,
+    };
   }
 
   static String? _action(RiderLiveTrackingStatus status) {
@@ -2355,6 +2452,292 @@ class _TrackingStatusPill extends StatelessWidget {
   }
 }
 
+class _TrackingEtaCard extends StatelessWidget {
+  const _TrackingEtaCard({
+    required this.offer,
+    required this.snapshot,
+    required this.stage,
+  });
+
+  final RiderJobOffer offer;
+  final RiderLiveTrackingSnapshot snapshot;
+  final RiderDeliveryStage stage;
+
+  @override
+  Widget build(BuildContext context) {
+    final toDropoff = stage.index >= RiderDeliveryStage.collected.index;
+    final label = toDropoff ? 'To drop-off' : 'To pickup';
+    final lastRefresh = _lastRefreshLabel(snapshot.lastPublishedAt);
+    final subdued = snapshot.status == RiderLiveTrackingStatus.offline ||
+        snapshot.status == RiderLiveTrackingStatus.reconnecting ||
+        snapshot.status == RiderLiveTrackingStatus.stopped ||
+        snapshot.status == RiderLiveTrackingStatus.idle;
+    return RiderGlassSurface(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      radius: 22,
+      opacity: subdued ? .70 : .58,
+      blur: 18,
+      borderColor: const Color(0xFF60A5FA).withValues(alpha: .24),
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFF38BDF8).withValues(alpha: .14),
+              border: Border.all(
+                color: const Color(0xFF60A5FA).withValues(alpha: .28),
+              ),
+            ),
+            child: Icon(
+              toDropoff ? Icons.flag_circle_rounded : Icons.my_location_rounded,
+              color: const Color(0xFF60A5FA),
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .64),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: .6,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Flexible(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 180),
+                        child: Text(
+                          offer.timeText.isEmpty
+                              ? 'ETA unavailable'
+                              : offer.timeText,
+                          key: ValueKey(offer.timeText),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontFamily: RiderTypography.mono,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        offer.distanceText.isEmpty
+                            ? 'Route loading'
+                            : offer.distanceText,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: .72),
+                          fontSize: 12,
+                          fontFamily: RiderTypography.mono,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (lastRefresh != null) ...[
+            const SizedBox(width: 10),
+            Text(
+              lastRefresh,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: .50),
+                fontSize: 10,
+                fontFamily: RiderTypography.mono,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static String? _lastRefreshLabel(DateTime? value) {
+    if (value == null) return null;
+    final elapsed = DateTime.now().difference(value);
+    if (elapsed.inSeconds < 10) return 'now';
+    if (elapsed.inMinutes < 1) return '${elapsed.inSeconds}s';
+    if (elapsed.inHours < 1) return '${elapsed.inMinutes}m';
+    return '${elapsed.inHours}h';
+  }
+}
+
+class _TrackingPermissionCard extends StatelessWidget {
+  const _TrackingPermissionCard({
+    required this.snapshot,
+    required this.onRetry,
+  });
+
+  final RiderLiveTrackingSnapshot snapshot;
+  final Future<void> Function()? onRetry;
+
+  static bool shouldShow(RiderLiveTrackingStatus status) {
+    return switch (status) {
+      RiderLiveTrackingStatus.permissionRequired ||
+      RiderLiveTrackingStatus.permissionDenied ||
+      RiderLiveTrackingStatus.permissionPermanentlyDenied ||
+      RiderLiveTrackingStatus.servicesDisabled ||
+      RiderLiveTrackingStatus.foregroundOnly ||
+      RiderLiveTrackingStatus.poorAccuracy ||
+      RiderLiveTrackingStatus.offline ||
+      RiderLiveTrackingStatus.reconnecting =>
+        true,
+      _ => false,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final actionLabel = _actionLabel(snapshot.status);
+    return Semantics(
+      label: snapshot.status.accessibilityLabel,
+      liveRegion: true,
+      child: RiderGlassSurface(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        radius: 22,
+        opacity: .72,
+        blur: 18,
+        borderColor: _color(snapshot.status).withValues(alpha: .30),
+        edgeColor: _color(snapshot.status),
+        child: Row(
+          children: [
+            Icon(
+              _icon(snapshot.status),
+              color: _color(snapshot.status),
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    snapshot.status.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    snapshot.message ?? snapshot.status.supportingText,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: .68),
+                      fontSize: 12,
+                      height: 1.28,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (actionLabel != null) ...[
+              const SizedBox(width: 10),
+              TextButton(
+                onPressed: _onAction,
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(44, 36),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  foregroundColor: const Color(0xFF60A5FA),
+                ),
+                child: Text(actionLabel),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  VoidCallback? get _onAction {
+    switch (snapshot.status) {
+      case RiderLiveTrackingStatus.permissionPermanentlyDenied:
+        return () => Geolocator.openAppSettings();
+      case RiderLiveTrackingStatus.servicesDisabled:
+        return () => Geolocator.openLocationSettings();
+      case RiderLiveTrackingStatus.permissionRequired:
+      case RiderLiveTrackingStatus.permissionDenied:
+      case RiderLiveTrackingStatus.offline:
+      case RiderLiveTrackingStatus.reconnecting:
+      case RiderLiveTrackingStatus.poorAccuracy:
+        return () => onRetry?.call();
+      default:
+        return null;
+    }
+  }
+
+  static String? _actionLabel(RiderLiveTrackingStatus status) {
+    return switch (status) {
+      RiderLiveTrackingStatus.permissionPermanentlyDenied ||
+      RiderLiveTrackingStatus.servicesDisabled =>
+        'Settings',
+      RiderLiveTrackingStatus.permissionRequired ||
+      RiderLiveTrackingStatus.permissionDenied ||
+      RiderLiveTrackingStatus.offline ||
+      RiderLiveTrackingStatus.reconnecting ||
+      RiderLiveTrackingStatus.poorAccuracy =>
+        'Retry',
+      _ => null,
+    };
+  }
+
+  static IconData _icon(RiderLiveTrackingStatus status) {
+    return switch (status) {
+      RiderLiveTrackingStatus.permissionRequired ||
+      RiderLiveTrackingStatus.permissionDenied ||
+      RiderLiveTrackingStatus.permissionPermanentlyDenied =>
+        Icons.location_disabled_rounded,
+      RiderLiveTrackingStatus.servicesDisabled => Icons.location_off_rounded,
+      RiderLiveTrackingStatus.foregroundOnly => Icons.phone_iphone_rounded,
+      RiderLiveTrackingStatus.poorAccuracy => Icons.gps_not_fixed_rounded,
+      RiderLiveTrackingStatus.offline => Icons.cloud_off_rounded,
+      RiderLiveTrackingStatus.reconnecting => Icons.sync_rounded,
+      _ => Icons.info_outline_rounded,
+    };
+  }
+
+  static Color _color(RiderLiveTrackingStatus status) {
+    return switch (status) {
+      RiderLiveTrackingStatus.poorAccuracy ||
+      RiderLiveTrackingStatus.foregroundOnly ||
+      RiderLiveTrackingStatus.offline ||
+      RiderLiveTrackingStatus.reconnecting =>
+        RiderPalette.amber,
+      RiderLiveTrackingStatus.permissionRequired ||
+      RiderLiveTrackingStatus.permissionDenied ||
+      RiderLiveTrackingStatus.permissionPermanentlyDenied ||
+      RiderLiveTrackingStatus.servicesDisabled =>
+        RiderPalette.red,
+      _ => RiderPalette.blue,
+    };
+  }
+}
+
 class _NavigationInstructionCard extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -2364,28 +2747,20 @@ class _NavigationInstructionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return RiderGlassSurface(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0B1020).withOpacity(0.82),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFF60A5FA).withOpacity(0.26)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF2563EB).withOpacity(0.18),
-            blurRadius: 28,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
+      radius: 24,
+      opacity: .62,
+      blur: 20,
+      borderColor: const Color(0xFF60A5FA).withValues(alpha: .26),
       child: Row(
         children: [
           Container(
             width: 42,
             height: 42,
             decoration: BoxDecoration(
-              color: const Color(0xFF3B82F6).withOpacity(0.22),
+              color: const Color(0xFF3B82F6).withValues(alpha: 0.22),
               borderRadius: BorderRadius.circular(16),
             ),
             child:
@@ -2408,7 +2783,7 @@ class _NavigationInstructionCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        color: Colors.white.withOpacity(0.68),
+                        color: Colors.white.withValues(alpha: 0.68),
                         fontSize: 13,
                         fontWeight: FontWeight.w600)),
               ],
@@ -2447,99 +2822,95 @@ class _AcceptedBottomPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
+    return AnimatedSize(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOutCubic,
-      constraints: BoxConstraints(maxHeight: expanded ? 560 : 330),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0B1020).withOpacity(0.84),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withOpacity(0.15)),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF2563EB).withOpacity(0.18),
-            blurRadius: 34,
-            offset: const Offset(0, 18),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          GestureDetector(
-            key: const Key('accepted_panel_toggle'),
-            behavior: HitTestBehavior.opaque,
-            onTap: onToggle,
-            child: SizedBox(
-              width: double.infinity,
-              height: 20,
-              child: Center(
-                child: Container(
-                  width: 46,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.22),
-                    borderRadius: BorderRadius.circular(999),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: expanded ? 560 : 330),
+        child: RiderGlassSurface(
+          padding: const EdgeInsets.all(18),
+          radius: 28,
+          opacity: .66,
+          blur: 22,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                key: const Key('accepted_panel_toggle'),
+                behavior: HitTestBehavior.opaque,
+                onTap: onToggle,
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 20,
+                  child: Center(
+                    child: Container(
+                      width: 46,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.22),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          _AcceptedEssentialSummary(
-            offer: offer,
-            riderRank: riderRank,
-            cta: cta,
-            onPrimary: onPrimary,
-          ),
-          if (expanded) ...[
-            const SizedBox(height: 14),
-            Expanded(
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (vanguard) ...[
-                      const _VanguardGuidance(),
-                      const SizedBox(height: 10),
-                    ],
-                    _ExpandedLine(title: 'Pickup', body: offer.pickupAddress),
-                    _ExpandedLine(
-                        title: 'Drop-off', body: offer.dropoffAddress),
-                    _ExpandedLine(
-                      title: 'IRIS Brief',
-                      body:
-                          '${offer.parcelGuidance}\nVehicle: ${offer.minimumVehicle} - Weight: ${offer.weightText}',
-                    ),
-                    _PickupWorkflowPanel(
-                      vanguard: vanguard,
-                      verificationRequired: verificationRequired,
-                    ),
-                    const SizedBox(height: 10),
-                    _ExpandedLine(
-                      title: 'Verification',
-                      body: verificationRequired
-                          ? 'Parcel condition verification is required before collection.'
-                          : 'Check parcel condition at pickup.',
-                    ),
-                    _StageTracker(
-                        stage: stage,
-                        verificationRequired: verificationRequired),
-                    const SizedBox(height: 10),
-                    _SecondaryContactRow(offer: offer, vanguard: vanguard),
-                    const SizedBox(height: 10),
-                    TextButton.icon(
-                      onPressed: onIssue,
-                      icon: const Icon(Icons.report_outlined),
-                      label: const Text('Report an issue'),
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 8),
+              _AcceptedEssentialSummary(
+                offer: offer,
+                riderRank: riderRank,
+                cta: cta,
+                onPrimary: onPrimary,
               ),
-            ),
-          ],
-        ],
+              if (expanded) ...[
+                const SizedBox(height: 14),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (vanguard) ...[
+                          const _VanguardGuidance(),
+                          const SizedBox(height: 10),
+                        ],
+                        _ExpandedLine(
+                            title: 'Pickup', body: offer.pickupAddress),
+                        _ExpandedLine(
+                            title: 'Drop-off', body: offer.dropoffAddress),
+                        _ExpandedLine(
+                          title: 'IRIS Brief',
+                          body:
+                              '${offer.parcelGuidance}\nVehicle: ${offer.minimumVehicle} - Weight: ${offer.weightText}',
+                        ),
+                        _PickupWorkflowPanel(
+                          vanguard: vanguard,
+                          verificationRequired: verificationRequired,
+                        ),
+                        const SizedBox(height: 10),
+                        _ExpandedLine(
+                          title: 'Verification',
+                          body: verificationRequired
+                              ? 'Parcel condition verification is required before collection.'
+                              : 'Check parcel condition at pickup.',
+                        ),
+                        _StageTracker(
+                            stage: stage,
+                            verificationRequired: verificationRequired),
+                        const SizedBox(height: 10),
+                        _SecondaryContactRow(offer: offer, vanguard: vanguard),
+                        const SizedBox(height: 10),
+                        TextButton.icon(
+                          onPressed: onIssue,
+                          icon: const Icon(Icons.report_outlined),
+                          label: const Text('Report an issue'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -2584,7 +2955,7 @@ class _AcceptedEssentialSummary extends StatelessWidget {
         const SizedBox(height: 2),
         Text('+$points Trust',
             style: TextStyle(
-                color: Colors.white.withOpacity(0.72),
+                color: Colors.white.withValues(alpha: 0.72),
                 fontSize: 13,
                 fontWeight: FontWeight.w800)),
         const SizedBox(height: 11),
@@ -2592,7 +2963,7 @@ class _AcceptedEssentialSummary extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-                color: Colors.white.withOpacity(0.72),
+                color: Colors.white.withValues(alpha: 0.72),
                 fontSize: 12,
                 fontWeight: FontWeight.w700)),
         const SizedBox(height: 10),
@@ -2608,7 +2979,7 @@ class _AcceptedEssentialSummary extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-                color: Colors.white.withOpacity(0.76),
+                color: Colors.white.withValues(alpha: 0.76),
                 fontSize: 13,
                 fontWeight: FontWeight.w700)),
         const SizedBox(height: 8),
@@ -2616,7 +2987,7 @@ class _AcceptedEssentialSummary extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-                color: Colors.white.withOpacity(0.62),
+                color: Colors.white.withValues(alpha: 0.62),
                 fontSize: 12,
                 fontWeight: FontWeight.w700)),
         const SizedBox(height: 14),
@@ -2663,9 +3034,10 @@ class _VanguardGuidance extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF2563EB).withOpacity(0.13),
+        color: const Color(0xFF2563EB).withValues(alpha: 0.13),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFF60A5FA).withOpacity(0.26)),
+        border:
+            Border.all(color: const Color(0xFF60A5FA).withValues(alpha: 0.26)),
       ),
       child: const Text(
         'Vanguard Protection\nThis delivery requires enhanced handling. Follow IRIS handling guidance, verify parcel condition, maintain secure custody, and complete every required verification step.',
@@ -2700,7 +3072,7 @@ class _ExpandedLine extends StatelessWidget {
           const SizedBox(height: 4),
           Text(body,
               style: TextStyle(
-                  color: Colors.white.withOpacity(0.72),
+                  color: Colors.white.withValues(alpha: 0.72),
                   fontSize: 12,
                   height: 1.35,
                   fontWeight: FontWeight.w600)),
@@ -2738,9 +3110,9 @@ class _PickupWorkflowPanel extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(13),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.055),
+        color: Colors.white.withValues(alpha: 0.055),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2769,7 +3141,7 @@ class _PickupWorkflowPanel extends StatelessWidget {
                     child: Text(
                       step,
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.72),
+                        color: Colors.white.withValues(alpha: 0.72),
                         fontSize: 12,
                         height: 1.25,
                         fontWeight: FontWeight.w600,
@@ -2814,17 +3186,19 @@ class _StageTracker extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
           decoration: BoxDecoration(
             color: active
-                ? const Color(0xFF3B82F6).withOpacity(0.25)
-                : Colors.white.withOpacity(0.06),
+                ? const Color(0xFF3B82F6).withValues(alpha: 0.25)
+                : Colors.white.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
                 color: active
-                    ? const Color(0xFF60A5FA).withOpacity(0.4)
-                    : Colors.white.withOpacity(0.08)),
+                    ? const Color(0xFF60A5FA).withValues(alpha: 0.4)
+                    : Colors.white.withValues(alpha: 0.08)),
           ),
           child: Text(label,
               style: TextStyle(
-                  color: active ? Colors.white : Colors.white.withOpacity(0.58),
+                  color: active
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.58),
                   fontSize: 11,
                   fontWeight: FontWeight.w700)),
         );
@@ -2929,9 +3303,9 @@ class _SecondaryButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.06),
+          color: Colors.white.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
