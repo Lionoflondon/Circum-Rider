@@ -35,6 +35,32 @@ class RiderAccountStateResolver {
       final value = riderProfile?[field];
       if (value != null) reconciled[field] = value;
     }
+    final profileApproval = _value(
+      riderProfile ?? const <String, dynamic>{},
+      'approvalStatus',
+      'verificationStatus',
+    );
+    final profileOperational = _value(
+      riderProfile ?? const <String, dynamic>{},
+      'driverStatus',
+      'riderStatus',
+      'status',
+    );
+    final riderOperational = _value(
+      rider ?? const <String, dynamic>{},
+      'riderStatus',
+      'driverStatus',
+      'status',
+    );
+    final restricted = _bool(reconciled, 'isClosed', 'closed') ||
+        _bool(reconciled, 'isFrozen', 'frozen') ||
+        _bool(reconciled, 'isSuspended', 'suspended') ||
+        _matches(riderOperational, {'closed', 'frozen', 'suspended'});
+    if (!restricted &&
+        _matches(profileApproval, {'approved', 'verified'}) &&
+        _matches(profileOperational, {'active', 'approved'})) {
+      reconciled['riderStatus'] = 'active';
+    }
     return resolve(reconciled);
   }
 

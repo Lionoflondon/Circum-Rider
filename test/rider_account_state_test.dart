@@ -66,6 +66,7 @@ void main() {
         RiderAccountStateResolver.resolveRecords(
           rider: const {
             'approvalStatus': 'pending',
+            'riderStatus': 'pending',
             'status': 'pending',
           },
           riderProfile: const {
