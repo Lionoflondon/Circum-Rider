@@ -80,59 +80,63 @@ void main() {
       expect(earnings, contains('Roth remains separate'));
     });
 
-    test('profile is the Rider Operations & Account hub', () {
-      expect(profile, contains('Operations & Account'));
-      expect(profile, contains('Ready to work'));
-      expect(profile, contains('Work preferences'));
+    test('profile is a short personal Rider profile', () {
+      expect(profile, contains("'Profile'"));
+      expect(profile, contains('Personal details'));
       expect(profile, contains('Vehicles'));
       expect(profile, contains('Documents'));
-      expect(profile, contains('App permissions'));
-      expect(profile, contains('Safety & support'));
-      expect(profile, contains('Performance'));
-      expect(profile, contains('Earnings and payouts'));
-      expect(profile, contains('Account and legal'));
-      expect(profile, contains('RiderGlassSurface'));
+      expect(profile, contains('Notifications'));
+      expect(profile, contains('Accessibility'));
+      expect(profile, contains('Support'));
+      expect(profile, contains('Safety guidance'));
+      expect(profile, contains('Privacy'));
+      expect(profile, contains('Terms'));
+      expect(profile, contains('Rider agreement'));
+      expect(profile, contains('Close account'));
+      expect(profile, contains('Sign out'));
+      expect(profile, contains('_UnifiedProfileSurface'));
+      expect(profile, isNot(contains('Operations & Account')));
+      expect(profile, isNot(contains('Ready to work')));
+      expect(profile, isNot(contains('Work preferences')));
+      expect(profile, isNot(contains('App permissions')));
+      expect(profile, isNot(contains('Performance')));
+      expect(profile, isNot(contains('Earnings and payouts')));
+      expect(profile, isNot(contains('Account milestones')));
+      expect(profile, isNot(contains('RiderStatusBadge')));
+      expect(profile, isNot(contains('RiderMetric')));
+      expect(profile, isNot(contains('SwitchListTile')));
     });
 
-    test('profile supports readiness, protected fields and vehicles', () {
-      expect(profile, contains('RiderReadinessSnapshot'));
+    test('profile keeps protected fields read only and routes to details', () {
       expect(profile, contains('RiderAccountStateResolver.resolveRecords'));
-      expect(profile, contains('RiderRankProgress'));
-      expect(profile, contains('rawVehicles.take(2)'));
+      expect(profile, contains('RiderRankSnapshot.from'));
       expect(profile, contains('rank'));
       expect(profile, contains('trustPoints'));
+      expect(profile, contains('VerificationView'));
+      expect(profile, contains('AccountDetails'));
       expect(profile, isNot(contains('updateRank')));
       expect(profile, isNot(contains('updateTrust')));
       expect(profile, isNot(contains('approvalStatus\':')));
     });
 
-    test('profile keeps existing contextual routes and adds permissions', () {
-      expect(profile, contains('RiderNotificationsView'));
-      expect(profile, contains('HistoryView'));
-      expect(profile, contains('SupportView'));
-      expect(profile, contains('Permission.notification'));
-      expect(profile, contains('Permission.camera'));
-      expect(profile, contains('Geolocator.checkPermission'));
-      expect(profile, contains('backgroundLocation'));
-    });
-
-    test('profile persists work preferences without duplicating protected data',
+    test('profile keeps existing contextual routes without permission panels',
         () {
+      expect(profile, contains('RiderNotificationsView'));
+      expect(profile, contains('SupportView'));
       expect(profile, contains("collection('riderProfiles')"));
-      expect(profile, contains('workPreferences.'));
-      expect(profile, contains('Preferred working areas'));
-      expect(profile, contains('Health+'));
-      expect(profile, contains('Vanguard'));
-      expect(profile, contains('Heavy Duty'));
-      expect(profile, contains('\$label delivery preference'));
+      expect(profile, contains("collection('riders')"));
+      expect(profile, isNot(contains('Permission.notification')));
+      expect(profile, isNot(contains('Permission.camera')));
+      expect(profile, isNot(contains('Geolocator.checkPermission')));
+      expect(profile, isNot(contains('backgroundLocation')));
     });
 
-    test('profile earnings shortcuts avoid rider-facing tax language', () {
-      expect(profile, contains('Available earnings'));
-      expect(profile, contains('pending earnings'));
-      expect(profile, contains('Payout history'));
-      expect(profile, contains('Payout status'));
-      expect(profile, contains('Transaction history'));
+    test('profile avoids dashboard and rider-facing tax language', () {
+      expect(profile, isNot(contains('Available earnings')));
+      expect(profile, isNot(contains('pending earnings')));
+      expect(profile, isNot(contains('Payout history')));
+      expect(profile, isNot(contains('Payout status')));
+      expect(profile, isNot(contains('Transaction history')));
       expect(profile.toLowerCase(), isNot(contains('hmrc')));
       expect(profile.toLowerCase(), isNot(contains('tax advice')));
       expect(profile.toLowerCase(), isNot(contains('tax filing')));
