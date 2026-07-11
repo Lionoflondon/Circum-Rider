@@ -80,12 +80,62 @@ void main() {
       expect(earnings, contains('Roth remains separate'));
     });
 
-    test('profile supports rank, trust, two vehicles and contextual tools', () {
+    test('profile is the Rider Operations & Account hub', () {
+      expect(profile, contains('Operations & Account'));
+      expect(profile, contains('Ready to work'));
+      expect(profile, contains('Work preferences'));
+      expect(profile, contains('Vehicles'));
+      expect(profile, contains('Documents'));
+      expect(profile, contains('App permissions'));
+      expect(profile, contains('Safety & support'));
+      expect(profile, contains('Performance'));
+      expect(profile, contains('Earnings and payouts'));
+      expect(profile, contains('Account and legal'));
+      expect(profile, contains('RiderGlassSurface'));
+    });
+
+    test('profile supports readiness, protected fields and vehicles', () {
+      expect(profile, contains('RiderReadinessSnapshot'));
+      expect(profile, contains('RiderAccountStateResolver.resolveRecords'));
       expect(profile, contains('RiderRankProgress'));
       expect(profile, contains('rawVehicles.take(2)'));
+      expect(profile, contains('rank'));
+      expect(profile, contains('trustPoints'));
+      expect(profile, isNot(contains('updateRank')));
+      expect(profile, isNot(contains('updateTrust')));
+      expect(profile, isNot(contains('approvalStatus\':')));
+    });
+
+    test('profile keeps existing contextual routes and adds permissions', () {
       expect(profile, contains('RiderNotificationsView'));
       expect(profile, contains('HistoryView'));
       expect(profile, contains('SupportView'));
+      expect(profile, contains('Permission.notification'));
+      expect(profile, contains('Permission.camera'));
+      expect(profile, contains('Geolocator.checkPermission'));
+      expect(profile, contains('backgroundLocation'));
+    });
+
+    test('profile persists work preferences without duplicating protected data',
+        () {
+      expect(profile, contains("collection('riderProfiles')"));
+      expect(profile, contains('workPreferences.'));
+      expect(profile, contains('Preferred working areas'));
+      expect(profile, contains('Health+'));
+      expect(profile, contains('Vanguard'));
+      expect(profile, contains('Heavy Duty'));
+      expect(profile, contains('\$label delivery preference'));
+    });
+
+    test('profile earnings shortcuts avoid rider-facing tax language', () {
+      expect(profile, contains('Available earnings'));
+      expect(profile, contains('pending earnings'));
+      expect(profile, contains('Payout history'));
+      expect(profile, contains('Payout status'));
+      expect(profile, contains('Transaction history'));
+      expect(profile.toLowerCase(), isNot(contains('hmrc')));
+      expect(profile.toLowerCase(), isNot(contains('tax advice')));
+      expect(profile.toLowerCase(), isNot(contains('tax filing')));
     });
   });
 
