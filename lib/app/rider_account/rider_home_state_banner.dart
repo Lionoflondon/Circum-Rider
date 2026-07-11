@@ -1,9 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-
-import '../home/bloc/home_bloc.dart';
+import '../rider_design/rider_ui.dart';
 import 'rider_account_state.dart';
 
 /// A read-only summary over the existing profile documents. It deliberately
@@ -35,14 +33,10 @@ class RiderHomeStateBanner extends StatelessWidget {
         return SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: const Color(0xED0C121C),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: const Color(0x335EA0FF)),
-              ),
+            child: RiderGlassCard(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               child: Padding(
-                padding: const EdgeInsets.all(14),
+                padding: EdgeInsets.zero,
                 child: Row(
                   children: [
                     Expanded(
@@ -52,11 +46,12 @@ class RiderHomeStateBanner extends StatelessWidget {
                           Text(
                             state == RiderAccountState.approved
                                 ? (online
-                                    ? 'Online and ready'
-                                    : 'Ready when you are')
+                                    ? 'You are online'
+                                    : 'Ready when you are, ${_firstName(rider)}')
                                 : 'Rider account update',
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: RiderPalette.paper,
+                              fontSize: 17,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -73,22 +68,15 @@ class RiderHomeStateBanner extends StatelessWidget {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                                color: Color(0xFFC9D2D7), fontSize: 12),
+                                color: RiderPalette.muted, fontSize: 12),
                           ),
                         ],
                       ),
                     ),
                     if (state == RiderAccountState.approved)
-                      TextButton(
-                        onPressed: () => context.read<HomeBloc>().add(
-                              SetRideStatus(
-                                status: online
-                                    ? RideStatus.offline
-                                    : RideStatus.online,
-                              ),
-                            ),
-                        child: Text(online ? 'Go offline' : 'Go online'),
-                      ),
+                      RiderStatusBadge(online ? 'ONLINE' : 'OFFLINE',
+                          color:
+                              online ? RiderPalette.green : RiderPalette.muted),
                   ],
                 ),
               ),
@@ -97,6 +85,11 @@ class RiderHomeStateBanner extends StatelessWidget {
         );
       },
     );
+  }
+
+  String _firstName(Map<String, dynamic> rider) {
+    final value = '${rider['firstName'] ?? rider['name'] ?? 'Rider'}'.trim();
+    return value.split(' ').first;
   }
 
   String _summary({

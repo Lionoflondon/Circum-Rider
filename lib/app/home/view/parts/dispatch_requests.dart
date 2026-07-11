@@ -25,8 +25,8 @@ class _DispatchRequestsState extends State<DispatchRequests> {
               children: [
                 Padding(
                     padding: const EdgeInsets.only(left: 24),
-                    child: AppText.text('Requests',
-                        fontSize: 20, fontWeight: FontWeight.bold)),
+                    child: AppText.text('Available jobs',
+                        fontSize: 22, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 24),
                 ExpandableCarousel(
                   options: ExpandableCarouselOptions(
@@ -45,8 +45,10 @@ class _DispatchRequestsState extends State<DispatchRequests> {
                             padding: EdgeInsets.symmetric(vertical: 16)
                                 .copyWith(bottom: 0),
                             decoration: BoxDecoration(
-                                border:
-                                    Border.all(color: AppColors.borderColor)),
+                                color: const Color(0xF20D111C),
+                                borderRadius: BorderRadius.circular(22),
+                                border: Border.all(
+                                    color: Colors.white.withOpacity(.09))),
                             child: Column(
                               children: [
                                 Row(
@@ -124,7 +126,7 @@ class _DispatchRequestsState extends State<DispatchRequests> {
                                             '${cSymbol(item.currency)}${item.price}',
                                             fontSize: 24,
                                             fontWeight: FontWeight.w600),
-                                        AppText.text('Delivery Price',
+                                        AppText.text('Estimated earnings',
                                             color: Color(0xFFC9D2D7))
                                       ],
                                     ),
@@ -137,52 +139,24 @@ class _DispatchRequestsState extends State<DispatchRequests> {
                                   thickness: 1,
                                   color: AppColors.borderColor,
                                 ),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                        child: TextButton(
-                                            // backgroundColor: Colors.transparent,
-                                            style: TextButton.styleFrom(
-                                              minimumSize: const Size(100, 55),
-                                              shape: RoundedRectangleBorder(),
-                                            ),
-                                            child: AppText.text('Accept',
-                                                color: AppColors.primary,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold),
-                                            onPressed: () {
-                                              context.read<HomeBloc>().add(
-                                                  AcceptRide(
-                                                      topic: item.requestId,
-                                                      code: item.code,
-                                                      selectedRequestIndex:
-                                                          index));
-                                            })),
-                                    const SizedBox(
-                                      height: 55,
-                                      child: VerticalDivider(
-                                          color: AppColors.borderColor,
-                                          thickness: 1,
-                                          width: 10),
-                                    ),
-                                    Expanded(
-                                        child: TextButton(
-                                            // backgroundColor: Colors.transparent,
-                                            style: TextButton.styleFrom(
-                                              minimumSize: const Size(100, 55),
-                                              shape: RoundedRectangleBorder(),
-                                            ),
-                                            child: AppText.text('Decline',
-                                                color: const Color(0xFFA75248),
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.bold),
-                                            onPressed: () {
-                                              context.read<HomeBloc>().add(
-                                                  DeclineRequest(
-                                                      requestId:
-                                                          item.requestId));
-                                            })),
-                                  ],
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: TextButton(
+                                      // backgroundColor: Colors.transparent,
+                                      style: TextButton.styleFrom(
+                                        minimumSize: const Size(100, 55),
+                                        shape: RoundedRectangleBorder(),
+                                      ),
+                                      child: AppText.text('Accept Delivery',
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold),
+                                      onPressed: () {
+                                        context.read<HomeBloc>().add(AcceptRide(
+                                            topic: item.requestId,
+                                            code: item.code,
+                                            selectedRequestIndex: index));
+                                      }),
                                 )
                               ],
                             ));
@@ -204,7 +178,7 @@ class _DispatchRequestsState extends State<DispatchRequests> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    AppText.text('Awaiting requests',
+                    AppText.text('Looking for nearby jobs',
                         color: Colors.white,
                         fontSize: 28,
                         fontWeight: FontWeight.bold),
@@ -237,8 +211,10 @@ class _DispatchRequestsState extends State<DispatchRequests> {
               height: 70,
             ),
             const SizedBox(height: 8),
-            AppText.text('There are no requests around\nyou at this time.',
-                textAlign: TextAlign.center, fontSize: 14),
+            AppText.text(
+                'No jobs available right now.\nWe’ll keep looking while you’re online.',
+                textAlign: TextAlign.center,
+                fontSize: 14),
             const SizedBox(height: 18),
             Padding(
                 padding: EdgeInsets.symmetric(horizontal: 24),

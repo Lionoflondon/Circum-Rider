@@ -8,7 +8,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_svg/svg.dart';
-import '../../../helper/notifications_helper.dart';
 import '../../../utils/theme/theme.dart';
 import '../../account/view/account.dart';
 import '../../authentication/view/enable_location.dart';
@@ -16,6 +15,7 @@ import '../../history/view/index.dart';
 import '../../home/view/index.dart';
 import '../../home/view/maps_view.dart';
 import '../../rider_account/rider_home_state_banner.dart';
+import '../../rider_design/rider_ui.dart';
 import '../../support/view/index.dart';
 import '../bloc/navbar_bloc.dart';
 
@@ -56,7 +56,7 @@ class AppNavViewState extends State<AppNavView> {
     final AuthBloc authBloc = context.read<AuthBloc>();
     return BlocBuilder<NavbarBloc, NavbarState>(builder: (context, state) {
       return Scaffold(
-        backgroundColor: AppColors.secondary,
+        backgroundColor: RiderPalette.background,
         body: WillPopScope(
             // Intercept the back button press
             onWillPop: () async {
@@ -120,13 +120,13 @@ class AppNavViewState extends State<AppNavView> {
   Widget _buildBottomNavigation() => BlocBuilder<NavbarBloc, NavbarState>(
         builder: (context, state) => BottomNavigationBar(
           elevation: 0,
-          backgroundColor: const Color(0xFF151A1C),
+          backgroundColor: const Color(0xF20D111C),
           // fixedColor: Colors.black,
           currentIndex: state.currentNavIndex,
           selectedFontSize: 10,
           unselectedFontSize: 10,
-          selectedItemColor: AppColors.primary,
-          unselectedItemColor: AppColors.grey,
+          selectedItemColor: RiderPalette.blue,
+          unselectedItemColor: RiderPalette.muted,
           selectedLabelStyle: const TextStyle(fontFamily: 'OpenSans'),
           unselectedLabelStyle: const TextStyle(fontFamily: 'OpenSans'),
           type: BottomNavigationBarType.fixed,

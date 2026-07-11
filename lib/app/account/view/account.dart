@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../utils/theme/theme.dart';
+import '../../rider_design/rider_ui.dart';
 import '../bloc/account_bloc.dart';
 import 'account_details.dart';
 import 'earnings.dart';
@@ -18,18 +19,24 @@ class AccountView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-        color: AppColors.secondary,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [appBar(context), const SizedBox(height: 40), options()],
-        ));
+      color: RiderPalette.background,
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            appBar(context),
+            const SizedBox(height: 24),
+            options(),
+          ]),
+        ),
+      ),
+    );
   }
 
   Widget appBar(context) {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return Container(
-          margin: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 20, left: 24),
           width: double.maxFinite,
           child: Row(
             children: [
@@ -69,7 +76,7 @@ class AccountView extends StatelessWidget {
                       ? '${state.username}'.trim().split(' ').first
                       : '',
                   color: Colors.white,
-                  fontSize: 28,
+                  fontSize: 30,
                   fontWeight: FontWeight.bold),
             ],
           ));
@@ -78,8 +85,8 @@ class AccountView extends StatelessWidget {
 
   Widget options() {
     return BlocBuilder<AccountBloc, AccountState>(builder: (context, state) {
-      return SizedBox(
-          width: double.maxFinite,
+      return RiderGlassCard(
+          padding: EdgeInsets.zero,
           child: Column(
             children: [
               AppButton.button(
