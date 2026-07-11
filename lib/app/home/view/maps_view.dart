@@ -6,7 +6,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../authentication/bloc/auth_bloc.dart';
 import '../bloc/home_bloc.dart';
-import 'ratings.dart';
 
 class MapsView extends StatefulWidget {
   const MapsView({Key? key}) : super(key: key);

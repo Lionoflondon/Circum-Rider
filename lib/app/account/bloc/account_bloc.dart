@@ -1,6 +1,7 @@
 import 'package:circum_rider/app/account/repo/earnings_repo.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../models/earnings.m.dart';
@@ -39,18 +40,24 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
       (event, emit) async {
         emit(state.copyWith(status: AccountStatus.loading));
         try {
-          final docRef = db.collection('payoutRequests').doc();
-          await docRef.set({
-            'sortCode': event.sortCode,
-            'accountNumber': event.accountNumber,
-            'bankName': event.bankName,
-            'amount': event.amount,
-            'address': event.address,
-            'saveAccountDetails': event.saveAccountDetails,
-            'riderId': user!.uid
+          final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
+              .httpsCallable('requestRiderWithdrawal');
+          final response = await callable.call({
+            'amount': double.parse(event.amount),
           });
-
-          emit(state.copyWith(status: AccountStatus.success));
+          final data = Map<String, dynamic>.from(response.data as Map);
+          final request = WithdrawRequestModel(
+            accountNumber: '',
+            bankName: 'Stripe Connect',
+            amount: '${data['amount'] ?? event.amount}',
+            saveAccountDetails: false,
+            riderId: user!.uid,
+          );
+          emit(state.copyWith(
+            status: AccountStatus.success,
+            isWithdrawRequestActive: true,
+            withdrawRequest: request,
+          ));
         } catch (e) {
           print(e);
           emit(state.copyWith(status: AccountStatus.failure));
@@ -68,6 +75,12 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
           final docRes = await docRef.get();
           for (final doc in docRes.docs) {
             final data = doc.data();
+            final status =
+                '${data['status'] ?? data['payoutStatus'] ?? ''}'.toLowerCase();
+            if (!{'requested', 'pending', 'approved', 'processing'}
+                .contains(status)) {
+              continue;
+            }
             final req = WithdrawRequestModel.fromJson(data);
             emit(state.copyWith(
                 isWithdrawRequestActive: true, withdrawRequest: req));

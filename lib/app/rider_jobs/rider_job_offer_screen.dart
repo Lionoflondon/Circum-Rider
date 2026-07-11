@@ -7,7 +7,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../home/view/ride_chats.dart';
+import '../support/view/support.dart';
 import 'rider_accept_controller.dart';
 import 'rider_delivery_controller.dart';
 import 'rider_offer_card.dart';
@@ -20,6 +23,7 @@ class RiderJobOfferScreen extends StatefulWidget {
   final FirebaseAuth? auth;
   final RiderAcceptController? acceptController;
   final List<RiderJobOffer>? previewOffers;
+  final VoidCallback? onScheduledAccepted;
 
   const RiderJobOfferScreen({
     super.key,
@@ -27,6 +31,7 @@ class RiderJobOfferScreen extends StatefulWidget {
     this.auth,
     this.acceptController,
     this.previewOffers,
+    this.onScheduledAccepted,
   });
 
   @override
@@ -41,6 +46,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
   bool _accepting = false;
   bool _accepted = false;
   String? _statusMessage;
+  RiderAcceptStatus? _acceptStatus;
 
   @override
   void initState() {
@@ -64,10 +70,13 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
         accepted: _accepted,
         riderRank: 'Sentinel',
         statusMessage: _statusMessage,
+        acceptStatus: _acceptStatus,
+        onBackToFeed: _resetTakenState,
         onIndexChanged: (index) {
           setState(() {
             _activeIndex = index;
             _statusMessage = null;
+            _acceptStatus = null;
           });
         },
         onAccept: _acceptPreview,
@@ -138,11 +147,14 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
               accepted: _accepted,
               riderRank: rider.riderRank ?? 'Sentinel',
               statusMessage: _statusMessage,
+              acceptStatus: _acceptStatus,
+              onBackToFeed: _resetTakenState,
               onIndexChanged: (index) {
                 setState(() {
                   _activeIndex = index;
                   _accepted = false;
                   _statusMessage = null;
+                  _acceptStatus = null;
                 });
               },
               onAccept: (offer) => _accept(offer, rider),
@@ -251,11 +263,21 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       _accepting = false;
       _accepted = result.accepted;
       _statusMessage = result.message;
+      _acceptStatus = result.status;
     });
 
     if (result.accepted) {
       await Future<void>.delayed(const Duration(milliseconds: 650));
       if (!mounted) return;
+      if (_isScheduled(offer) && widget.onScheduledAccepted != null) {
+        widget.onScheduledAccepted!();
+        setState(() {
+          _accepted = false;
+          _acceptStatus = null;
+          _statusMessage = null;
+        });
+        return;
+      }
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => RiderAcceptedJobScreen(
@@ -268,6 +290,21 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       );
     }
   }
+
+  void _resetTakenState() {
+    setState(() {
+      _acceptStatus = null;
+      _statusMessage = null;
+      _accepted = false;
+      _activeIndex = 0;
+    });
+  }
+
+  bool _isScheduled(RiderJobOffer offer) =>
+      offer.warningChips.contains('Scheduled') ||
+      offer.raw['isScheduled'] == true ||
+      offer.raw['scheduled'] == true ||
+      offer.raw['scheduledAt'] != null;
 
   Future<void> _acceptPreview(RiderJobOffer offer) async {
     if (_accepting || _accepted) return;
@@ -287,6 +324,8 @@ class _OfferExperience extends StatelessWidget {
   final bool accepted;
   final String riderRank;
   final String? statusMessage;
+  final RiderAcceptStatus? acceptStatus;
+  final VoidCallback onBackToFeed;
   final ValueChanged<int> onIndexChanged;
   final ValueChanged<RiderJobOffer> onAccept;
 
@@ -297,12 +336,17 @@ class _OfferExperience extends StatelessWidget {
     required this.accepted,
     required this.riderRank,
     required this.statusMessage,
+    required this.acceptStatus,
+    required this.onBackToFeed,
     required this.onIndexChanged,
     required this.onAccept,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (acceptStatus == RiderAcceptStatus.alreadyTaken) {
+      return _TakenState(onBackToFeed: onBackToFeed);
+    }
     final safeIndex = activeIndex.clamp(0, offers.length - 1);
     final activeOffer = offers[safeIndex];
 
@@ -352,6 +396,67 @@ class _OfferExperience extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TakenState extends StatelessWidget {
+  const _TakenState({required this.onBackToFeed});
+  final VoidCallback onBackToFeed;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        backgroundColor: const Color(0xFF07090F),
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Padding(
+                padding: const EdgeInsets.all(22),
+                child: Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D111C),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withOpacity(.09)),
+                  ),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Container(
+                      width: 54,
+                      height: 54,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFFF87171).withOpacity(.12),
+                      ),
+                      child: const Icon(Icons.work_off_outlined,
+                          color: Color(0xFFF87171)),
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Job no longer available',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 8),
+                    Text('Another Rider accepted this delivery first.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(.62), height: 1.4)),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: FilledButton(
+                        onPressed: onBackToFeed,
+                        child: const Text('Back to job feed'),
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class RiderJobOfferPreview {
@@ -1855,7 +1960,7 @@ class _AcceptedBottomPanel extends StatelessWidget {
                         stage: stage,
                         verificationRequired: verificationRequired),
                     const SizedBox(height: 10),
-                    _SecondaryContactRow(vanguard: vanguard),
+                    _SecondaryContactRow(offer: offer, vanguard: vanguard),
                     const SizedBox(height: 10),
                     TextButton.icon(
                       onPressed: onIssue,
@@ -2189,62 +2294,89 @@ class _StageTracker extends StatelessWidget {
 }
 
 class _SecondaryContactRow extends StatelessWidget {
+  final RiderJobOffer offer;
   final bool vanguard;
 
-  const _SecondaryContactRow({required this.vanguard});
+  const _SecondaryContactRow({required this.offer, required this.vanguard});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Expanded(
-            child: _SecondaryButton(icon: Icons.call_rounded, label: 'Call')),
-        const SizedBox(width: 8),
-        const Expanded(
+        Expanded(
             child: _SecondaryButton(
-                icon: Icons.chat_bubble_rounded, label: 'Message')),
+                icon: Icons.call_rounded,
+                label: 'Call',
+                onTap: () => _call(offer.raw))),
+        const SizedBox(width: 8),
+        Expanded(
+            child: _SecondaryButton(
+                icon: Icons.chat_bubble_rounded,
+                label: 'Message',
+                onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const RideChatPageView()),
+                    ))),
         const SizedBox(width: 8),
         Expanded(
           child: _SecondaryButton(
             icon: Icons.support_agent_rounded,
             label: vanguard ? 'Support - Vanguard Priority' : 'Support',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SupportView()),
+            ),
           ),
         ),
       ],
     );
+  }
+
+  Future<void> _call(Map<String, dynamic> raw) async {
+    final number = '${raw['senderPhone'] ?? raw['contactPhone'] ?? ''}'
+        .replaceAll(RegExp(r'[^0-9+]'), '');
+    if (number.isEmpty) return;
+    await launchUrl(Uri.parse('tel:$number'));
   }
 }
 
 class _SecondaryButton extends StatelessWidget {
   final IconData icon;
   final String label;
+  final VoidCallback onTap;
 
-  const _SecondaryButton({required this.icon, required this.label});
+  const _SecondaryButton(
+      {required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: const Color(0xFF60A5FA), size: 14),
-          const SizedBox(width: 4),
-          Flexible(
-            child: Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w800)),
-          ),
-        ],
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.06),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: const Color(0xFF60A5FA), size: 14),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800)),
+            ),
+          ],
+        ),
       ),
     );
   }

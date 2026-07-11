@@ -127,70 +127,65 @@ class CircumRider extends StatelessWidget {
         minTextAdapt: true,
         builder: (_, __) {
           final botToastBuilder = BotToastInit();
-          final localWebPreview = kIsWeb &&
-              (Uri.base.host == '127.0.0.1' || Uri.base.host == 'localhost') &&
-              (Uri.base.path.contains('/rider/jobs/offers') ||
-                  Uri.base.fragment.contains('/rider/jobs/offers') ||
-                  Uri.base.queryParameters['preview'] == '1');
           return MaterialApp(
               // navigatorKey: NavKey.navKey,
               // onGenerateRoute: (_) => null,
               debugShowCheckedModeBanner: false,
               title: 'Circum Rider',
               builder: (context, child) {
-                // ScreenUtil.setContext(context);
                 child = botToastBuilder(context, child);
-                return MediaQuery(
-                  //Setting font does not change with system font size
-                  data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
-                  child: child,
-                );
+                return child;
               },
-              theme: ThemeData.light(),
-              darkTheme: ThemeData.dark(),
+              themeMode: ThemeMode.dark,
+              theme: ThemeData(
+                brightness: Brightness.dark,
+                scaffoldBackgroundColor: const Color(0xFF07090F),
+                colorScheme: const ColorScheme.dark(
+                  primary: Color(0xFF3B82F6),
+                  surface: Color(0xFF0D111C),
+                  error: Color(0xFFF87171),
+                ),
+                fontFamily: 'Inter',
+                navigationBarTheme: const NavigationBarThemeData(
+                  labelTextStyle: WidgetStatePropertyAll(TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  )),
+                ),
+              ),
               navigatorObservers: [BotToastNavigatorObserver()],
               routes: {
-                RiderJobOfferScreen.routeName: (_) => kDebugMode && kIsWeb
-                    ? RiderJobOfferScreen(
-                        previewOffers: RiderJobOfferPreview.offers(),
-                      )
-                    : const RiderJobOfferScreen(),
-                '/rider/jobs/offers/preview': (_) => RiderJobOfferScreen(
-                      previewOffers: RiderJobOfferPreview.offers(),
-                    ),
+                RiderJobOfferScreen.routeName: (_) =>
+                    const RiderJobOfferScreen(),
               },
-              home: localWebPreview
-                  ? RiderJobOfferScreen(
-                      previewOffers: RiderJobOfferPreview.offers(),
-                    )
-                  : WillPopScope(
-                      onWillPop: () async =>
-                          !await NavKey.navKey.currentState!.maybePop(),
-                      child: MultiBlocProvider(providers: [
-                        BlocProvider<AuthBloc>(
-                          create: (BuildContext context) =>
-                              AuthBloc()..add(SortSessionState()),
-                        ),
-                        BlocProvider(
-                          create: (context) => NavbarBloc(),
-                        ),
-                        BlocProvider(
-                          create: (context) => VerificationBloc(),
-                        ),
-                        BlocProvider<HomeBloc>(
-                          create: (BuildContext context) => homeBloc,
-                        ),
-                        BlocProvider<HistoryBloc>(
-                          create: (BuildContext context) => HistoryBloc(),
-                        ),
-                        BlocProvider<SupportBloc>(
-                          create: (BuildContext context) => SupportBloc(),
-                        ),
-                        BlocProvider<AccountBloc>(
-                          create: (BuildContext context) => AccountBloc(),
-                        ),
-                      ], child: const App()),
-                    ));
+              home: WillPopScope(
+                onWillPop: () async =>
+                    !await NavKey.navKey.currentState!.maybePop(),
+                child: MultiBlocProvider(providers: [
+                  BlocProvider<AuthBloc>(
+                    create: (BuildContext context) =>
+                        AuthBloc()..add(SortSessionState()),
+                  ),
+                  BlocProvider(
+                    create: (context) => NavbarBloc(),
+                  ),
+                  BlocProvider(
+                    create: (context) => VerificationBloc(),
+                  ),
+                  BlocProvider<HomeBloc>(
+                    create: (BuildContext context) => homeBloc,
+                  ),
+                  BlocProvider<HistoryBloc>(
+                    create: (BuildContext context) => HistoryBloc(),
+                  ),
+                  BlocProvider<SupportBloc>(
+                    create: (BuildContext context) => SupportBloc(),
+                  ),
+                  BlocProvider<AccountBloc>(
+                    create: (BuildContext context) => AccountBloc(),
+                  ),
+                ], child: const App()),
+              ));
         });
   }
 }

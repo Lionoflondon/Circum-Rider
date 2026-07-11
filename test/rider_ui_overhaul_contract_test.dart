@@ -1,61 +1,117 @@
 import 'dart:io';
 
+import 'package:circum_rider/app/rider_design/rider_ui.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  group('Rider UI overhaul contract', () {
-    final home = File('lib/app/home/view/home.dart').readAsStringSync();
+  group('canonical Rider presentation replacement', () {
+    final mainSource = File('lib/main.dart').readAsStringSync();
     final nav = File('lib/app/bottom_nav/view/app_nav.dart').readAsStringSync();
-    final account =
-        File('lib/app/account/view/account.dart').readAsStringSync();
+    final dashboard = File('lib/app/rider_shell/rider_dashboard_view.dart')
+        .readAsStringSync();
+    final profile =
+        File('lib/app/rider_shell/rider_profile_view.dart').readAsStringSync();
     final schedule =
         File('lib/app/schedule/rider_schedule_view.dart').readAsStringSync();
-    final notifications =
-        File('lib/app/notifications/rider_notifications_view.dart')
-            .readAsStringSync();
-    final design =
-        File('lib/app/rider_design/rider_ui.dart').readAsStringSync();
+    final earnings =
+        File('lib/app/account/view/earnings.dart').readAsStringSync();
+    final accountBloc =
+        File('lib/app/account/bloc/account_bloc.dart').readAsStringSync();
+    final offers = File('lib/app/rider_jobs/rider_job_offer_screen.dart')
+        .readAsStringSync();
 
-    test('keeps one canonical navigation shell', () {
-      expect(nav, contains('class AppNavView'));
-      expect(nav, contains('HomeView()'));
-      expect(nav, contains('HistoryView'));
-      expect(nav, contains('SupportView'));
-      expect(nav, contains('AccountView'));
-      expect(nav, isNot(contains('CanonicalRiderApp')));
+    test('old four-tab shell is gone', () {
+      expect(
+          nav, contains("['Home', 'Jobs', 'Schedule', 'Earnings', 'Profile']"));
+      expect(nav, isNot(contains("label: 'History'")));
+      expect(nav, isNot(contains("label: 'Live Chat'")));
+      expect(nav, isNot(contains("label: 'Account'")));
+      expect(nav, isNot(contains('HomeView()')));
+      expect(nav, isNot(contains('SupportView')));
+      expect(nav, isNot(contains('AccountView')));
     });
 
-    test('home implements backend-driven availability states', () {
-      expect(home, contains('RideStatus.offline'));
-      expect(home, contains('RideStatus.online'));
-      expect(home, contains('SetRideStatus'));
-      expect(home, contains("collection('riders')"));
-      expect(home, contains('TRUST PTS'));
-      expect(home, contains('Swipe to go online'));
+    test('legacy primary presentation files are retired', () {
+      expect(File('lib/app/home/view/home.dart').existsSync(), isFalse);
+      expect(File('lib/app/account/view/account.dart').existsSync(), isFalse);
+      expect(File('lib/app/account/view/earnings_chart.dart').existsSync(),
+          isFalse);
+      expect(
+          File('lib/app/account/view/bottom_sheets/withdrawal_bs.dart')
+              .existsSync(),
+          isFalse);
     });
 
-    test('schedule and notifications reuse existing collections', () {
+    test('production mock preview route is absent', () {
+      expect(mainSource, isNot(contains('/rider/jobs/offers/preview')));
+      expect(mainSource, isNot(contains('previewOffers:')));
+      expect(mainSource, isNot(contains('textScaleFactor: 1.0')));
+    });
+
+    test('home is compact, backend driven and operational', () {
+      expect(dashboard, contains("collection('riderProfiles')"));
+      expect(dashboard, contains("collection('riderEarnings')"));
+      expect(dashboard, contains("collection('deliveryRequests')"));
+      expect(dashboard, contains('Good '));
+      expect(dashboard, contains('Go Online'));
+      expect(dashboard, contains('Priority operations'));
+      expect(dashboard, contains('Upcoming schedule'));
+      expect(dashboard, contains('Recent activity'));
+    });
+
+    test('jobs expose Taken state and scheduled handoff', () {
+      expect(offers, contains('Job no longer available'));
+      expect(offers, contains('Back to job feed'));
+      expect(offers, contains('RiderAcceptStatus.alreadyTaken'));
+      expect(offers, contains('onScheduledAccepted'));
+      expect(offers, isNot(contains("label: 'Reject'")));
+    });
+
+    test('schedule and earnings consume canonical records', () {
       expect(schedule, contains("collection('deliveryRequests')"));
-      expect(schedule, contains("where('assignedRider'"));
-      expect(notifications, contains("collection('notifications')"));
-      expect(notifications, contains("where('recipientId'"));
+      expect(schedule, contains('assignedRider'));
+      expect(schedule,
+          anyOf(contains('expected earnings'), contains('riderEarning')));
+      expect(earnings, contains("collection('riderEarnings')"));
+      expect(earnings, contains("collection('payoutRequests')"));
+      expect(earnings, contains("collection('riderWalletTransactions')"));
+      expect(accountBloc, contains('requestRiderWithdrawal'));
+      expect(earnings, contains('Roth remains separate'));
     });
 
-    test('account exposes the canonical Rider destinations', () {
-      expect(account, contains('RiderScheduleView'));
-      expect(account, contains('RiderNotificationsView'));
-      expect(account, contains('EarningsView'));
-      expect(account, contains('Trust points'));
-      expect(account, contains('Deliveries'));
+    test('profile supports rank, trust, two vehicles and contextual tools', () {
+      expect(profile, contains('RiderRankProgress'));
+      expect(profile, contains('rawVehicles.take(2)'));
+      expect(profile, contains('RiderNotificationsView'));
+      expect(profile, contains('HistoryView'));
+      expect(profile, contains('SupportView'));
     });
+  });
 
-    test('shared native design is Flutter-only and uses locked colours', () {
-      expect(design, contains('0xFF07090F'));
-      expect(design, contains('0xFF0D111C'));
-      expect(design, contains('0xFF3B82F6'));
-      expect(design, contains('class RiderGlassCard'));
-      expect(design, isNot(contains('HtmlElementView')));
-      expect(design, isNot(contains('WebView')));
+  testWidgets('web preview remains a centred mobile-first surface',
+      (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
     });
+    await tester.pumpWidget(const MaterialApp(
+      home: RiderMobileFrame(child: SizedBox.expand()),
+    ));
+    final box = tester.renderObject<RenderBox>(find.byType(ColoredBox).last);
+    expect(box.size.width, lessThanOrEqualTo(520));
+  });
+
+  testWidgets('rank display follows the canonical order', (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+      home: Scaffold(
+        body: RiderRankProgress(rank: 'Warden', trustPoints: 420),
+      ),
+    ));
+    expect(find.text('WARDEN'), findsOneWidget);
+    expect(find.text('420 TRUST'), findsOneWidget);
+    expect(find.textContaining('Knight'), findsOneWidget);
   });
 }
