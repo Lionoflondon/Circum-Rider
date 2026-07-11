@@ -35,11 +35,24 @@ void main() {
 
   test('Rider Hosting prevents stale authentication shell assets', () {
     final hosting = File('firebase.json').readAsStringSync();
+    final index = File('web/index.html').readAsStringSync();
+    final bootstrap = File('web/flutter_bootstrap.js').readAsStringSync();
     expect(hosting, contains('"source": "**"'));
+    expect(hosting, contains('"source": "/"'));
     expect(hosting, contains('"source": "/index.html"'));
+    expect(hosting, contains('"source": "/flutter_bootstrap.js"'));
     expect(hosting, contains('"source": "/main.dart.js"'));
     expect(hosting, contains('"source": "/flutter_service_worker.js"'));
     expect(hosting, contains('no-cache, no-store, must-revalidate'));
+    expect(index, contains('src="flutter_bootstrap.js"'));
+    expect(index, isNot(contains('loadEntrypoint')));
+    expect(index, isNot(contains('manifest.json')));
+    expect(bootstrap, contains('getRegistrations()'));
+    expect(bootstrap, contains('registration.unregister()'));
+    expect(bootstrap, contains('caches.keys()'));
+    expect(bootstrap, contains('caches.delete(cacheName)'));
+    expect(bootstrap, contains('serviceWorkerSettings: null'));
+    expect(bootstrap, contains("CIRCUM_RIDER_BUILD = 'rider-web-cache-v1'"));
   });
 
   test('sign-in form exposes email, password, reset and account navigation',
