@@ -14,13 +14,27 @@ void main() {
 
     test('shell primary jobs entries resolve to the swipeable offer stack', () {
       expect(nav, contains('RiderJobOfferScreen('));
-      expect(nav, contains('_CentralAction(onTap: () => onSelect(1))'));
-      expect(nav, contains("label: 'Open delivery offers'"));
       expect(nav, contains("label: 'Jobs'"));
       expect(nav, contains('onTap: () => onSelect(1)'));
       expect(nav, contains('onScheduledAccepted: () => select(2)'));
+      expect(nav, contains('const _CentralAction()'));
+      expect(nav, isNot(contains('_CentralAction(onTap: () => onSelect(1))')));
       expect(nav, isNot(contains('MarketplaceView')));
       expect(nav, isNot(contains('RiderMarketplace')));
+    });
+
+    test('centre action is availability control and never navigates to jobs',
+        () {
+      expect(
+          nav,
+          contains(
+              "final semantic = online ? 'Rider online. Go offline' : 'Go online'"));
+      expect(nav, contains('SetRideStatus('));
+      expect(nav, contains('RideStatus.online'));
+      expect(nav, contains('RideStatus.offline'));
+      expect(nav, contains('_showAvailabilitySheet'));
+      expect(nav, contains('Go offline'));
+      expect(nav, isNot(contains("label: 'Open delivery offers'")));
     });
 
     test('dashboard jobs cards and quick action open the same jobs destination',
@@ -44,6 +58,14 @@ void main() {
       expect(offerCard, contains('Accept Delivery'));
       expect(offers, contains("where('status', isEqualTo: 'requested')"));
       expect(offers, contains('No offers nearby'));
+      expect(
+          offers,
+          contains(
+              'Offers, scheduled work, active deliveries and recent jobs.'));
+      expect(offers, contains('Reserved scheduled jobs'));
+      expect(offers, contains('Active delivery'));
+      expect(offers, contains('Recent jobs'));
+      expect(offers, contains('_JobsStateScaffold'));
       expect(offers, contains('RiderAcceptStatus.alreadyTaken'));
       expect(offers, contains('Job no longer available'));
       expect(offers, contains('Back to job feed'));

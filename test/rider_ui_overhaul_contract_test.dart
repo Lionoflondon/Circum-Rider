@@ -24,8 +24,10 @@ void main() {
     test('old four-tab shell is gone', () {
       expect(
           nav, contains("['Home', 'Jobs', 'Action', 'Earnings', 'Profile']"));
-      expect(nav, contains("label: 'Open delivery offers'"));
-      expect(nav, contains('_CentralAction(onTap: () => onSelect(1))'));
+      expect(nav, contains('const _CentralAction()'));
+      expect(nav, contains('_showAvailabilitySheet'));
+      expect(nav, contains('SetRideStatus('));
+      expect(nav, isNot(contains('_CentralAction(onTap: () => onSelect(1))')));
       expect(nav, isNot(contains("label: 'History'")));
       expect(nav, isNot(contains("label: 'Live Chat'")));
       expect(nav, isNot(contains("label: 'Account'")));

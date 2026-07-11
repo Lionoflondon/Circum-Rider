@@ -126,12 +126,12 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                           .toLowerCase());
 
                   if (!rider.canAcceptJobs)
-                    return _StateScaffold(
+                    return _JobsStateScaffold(
                         title: 'Account action required',
                         message: rider.blockedReason ??
                             'Your Rider account cannot receive jobs right now.');
                   if (!online)
-                    return _StateScaffold(
+                    return _JobsStateScaffold(
                         title: "You're offline",
                         message:
                             'Go online to receive eligible delivery offers.',
@@ -148,7 +148,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                         .snapshots(),
                     builder: (context, snapshot) {
                       if (snapshot.hasError) {
-                        return const _StateScaffold(
+                        return const _JobsStateScaffold(
                           title: 'Network error',
                           message:
                               'We could not load offers. Please try again.',
@@ -160,7 +160,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                                   ConnectionState.waiting &&
                               profileSnapshot.connectionState ==
                                   ConnectionState.waiting)) {
-                        return const _StateScaffold(
+                        return const _JobsStateScaffold(
                           title: 'Loading offers',
                           message: 'Checking nearby delivery requests.',
                           loading: true,
@@ -182,7 +182,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                       }
 
                       if (offers.isEmpty) {
-                        return const _StateScaffold(
+                        return const _JobsStateScaffold(
                           title: 'No offers nearby',
                           message:
                               'New delivery offers will appear here when available.',
@@ -911,15 +911,11 @@ class _StateScaffold extends StatelessWidget {
   final String title;
   final String message;
   final bool loading;
-  final String? actionLabel;
-  final VoidCallback? onAction;
 
   const _StateScaffold({
     required this.title,
     required this.message,
     this.loading = false,
-    this.actionLabel,
-    this.onAction,
   });
 
   @override
@@ -946,13 +942,6 @@ class _StateScaffold extends StatelessWidget {
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                if (actionLabel != null) ...[
-                  const SizedBox(height: 18),
-                  SizedBox(
-                      width: 220,
-                      child: FilledButton(
-                          onPressed: onAction, child: Text(actionLabel!))),
-                ],
                 const SizedBox(height: 10),
                 Text(
                   message,
@@ -967,6 +956,273 @@ class _StateScaffold extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _JobsStateScaffold extends StatelessWidget {
+  final String title;
+  final String message;
+  final bool loading;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _JobsStateScaffold({
+    required this.title,
+    required this.message,
+    this.loading = false,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final offline = title.toLowerCase().contains('offline');
+    final error = title.toLowerCase().contains('error');
+    return Scaffold(
+      backgroundColor: const Color(0xFF07090F),
+      body: SafeArea(
+        child: RefreshIndicator(
+          color: RiderPalette.blue,
+          backgroundColor: RiderPalette.panel,
+          onRefresh: () async {
+            context.read<HomeBloc>()
+              ..add(CheckForPushToken())
+              ..add(CheckForActiveRequest());
+          },
+          child: CustomScrollView(
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 110),
+                sliver: SliverList.list(
+                  children: [
+                    const Text(
+                      'Jobs',
+                      style: TextStyle(
+                        color: RiderPalette.paper,
+                        fontFamily: RiderTypography.heading,
+                        fontSize: 34,
+                        height: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Offers, scheduled work, active deliveries and recent jobs.',
+                      style: TextStyle(
+                        color: RiderPalette.muted,
+                        fontSize: 13,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    RiderGlassSurface(
+                      padding: const EdgeInsets.all(18),
+                      radius: 22,
+                      opacity: .64,
+                      edgeColor: error
+                          ? RiderPalette.red
+                          : offline
+                              ? RiderPalette.amber
+                              : RiderPalette.blue,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 42,
+                                height: 42,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: (error
+                                          ? RiderPalette.red
+                                          : offline
+                                              ? RiderPalette.amber
+                                              : RiderPalette.blue)
+                                      .withValues(alpha: .14),
+                                ),
+                                child: loading
+                                    ? const Padding(
+                                        padding: EdgeInsets.all(11),
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: RiderPalette.blue,
+                                        ),
+                                      )
+                                    : Icon(
+                                        error
+                                            ? Icons.cloud_off_rounded
+                                            : offline
+                                                ? Icons
+                                                    .power_settings_new_rounded
+                                                : Icons.radar_rounded,
+                                        color: error
+                                            ? RiderPalette.red
+                                            : offline
+                                                ? RiderPalette.amber
+                                                : RiderPalette.blue,
+                                      ),
+                              ),
+                              const SizedBox(width: 13),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      title,
+                                      style: const TextStyle(
+                                        color: RiderPalette.paper,
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 18,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      message,
+                                      style: const TextStyle(
+                                        color: RiderPalette.muted,
+                                        fontSize: 12.5,
+                                        height: 1.35,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (actionLabel != null) ...[
+                            const SizedBox(height: 16),
+                            FilledButton(
+                              onPressed: onAction,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: RiderPalette.blue,
+                                minimumSize: const Size.fromHeight(48),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(15),
+                                ),
+                              ),
+                              child: Text(actionLabel!),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _JobsInfoGrid(offline: offline),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _JobsInfoGrid extends StatelessWidget {
+  const _JobsInfoGrid({required this.offline});
+
+  final bool offline;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _JobsInfoTile(
+          icon: Icons.wifi_tethering_rounded,
+          title: 'Availability',
+          subtitle: offline
+              ? 'Offline. Use the centre action to go online.'
+              : 'Online status controls nearby offer listening.',
+          accent: offline ? RiderPalette.amber : RiderPalette.green,
+        ),
+        const SizedBox(height: 10),
+        const _JobsInfoTile(
+          icon: Icons.calendar_month_outlined,
+          title: 'Reserved scheduled jobs',
+          subtitle: 'Scheduled deliveries stay in Schedule until ready.',
+          accent: RiderPalette.purple,
+        ),
+        const SizedBox(height: 10),
+        const _JobsInfoTile(
+          icon: Icons.near_me_outlined,
+          title: 'Active delivery',
+          subtitle: 'Accepted jobs restore into the live delivery flow.',
+          accent: RiderPalette.blue,
+        ),
+        const SizedBox(height: 10),
+        const _JobsInfoTile(
+          icon: Icons.history_rounded,
+          title: 'Recent jobs',
+          subtitle:
+              'Completed work remains available in activity and earnings.',
+          accent: RiderPalette.green,
+        ),
+      ],
+    );
+  }
+}
+
+class _JobsInfoTile extends StatelessWidget {
+  const _JobsInfoTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.accent,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return RiderGlassSurface(
+      padding: const EdgeInsets.all(15),
+      radius: 18,
+      opacity: .58,
+      blur: 12,
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: .13),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: Icon(icon, color: accent, size: 19),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: RiderPalette.paper,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13.5,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: RiderPalette.muted,
+                    fontSize: 11.5,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
