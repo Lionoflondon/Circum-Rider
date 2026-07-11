@@ -23,7 +23,8 @@ void main() {
 
     test('old four-tab shell is gone', () {
       expect(
-          nav, contains("['Home', 'Jobs', 'Schedule', 'Earnings', 'Profile']"));
+          nav, contains("['Home', 'Jobs', 'Action', 'Earnings', 'Profile']"));
+      expect(nav, contains("label: 'Open schedule'"));
       expect(nav, isNot(contains("label: 'History'")));
       expect(nav, isNot(contains("label: 'Live Chat'")));
       expect(nav, isNot(contains("label: 'Account'")));
@@ -54,10 +55,13 @@ void main() {
       expect(dashboard, contains("collection('riderEarnings')"));
       expect(dashboard, contains("collection('deliveryRequests')"));
       expect(dashboard, contains('Good '));
-      expect(dashboard, contains('Go Online'));
+      expect(dashboard, contains('Go online'));
       expect(dashboard, contains('Priority operations'));
       expect(dashboard, contains('Upcoming schedule'));
       expect(dashboard, contains('Recent activity'));
+      expect(dashboard, contains('CIRCUM RIDER'));
+      expect(dashboard, contains('No eligible jobs'));
+      expect(dashboard, contains('No scheduled deliveries'));
     });
 
     test('jobs expose Taken state and scheduled handoff', () {

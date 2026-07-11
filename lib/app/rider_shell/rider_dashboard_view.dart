@@ -6,8 +6,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../authentication/bloc/auth_bloc.dart';
 import '../communication/rider_communication_service.dart';
-import '../home/bloc/home_bloc.dart';
 import '../founder_access/founder_rider_access.dart';
+import '../home/bloc/home_bloc.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
@@ -40,6 +40,7 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
         message: 'Sign in to open your Rider dashboard.',
       );
     }
+
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
           .collection('riderProfiles')
@@ -62,115 +63,81 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                   .doc(uid)
                   .snapshots(),
               builder: (context, earningsSnapshot) {
-                final earnings = earningsSnapshot.data?.data() ?? const {};
-                return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                   stream: FirebaseFirestore.instance
-                      .collection('deliveryRequests')
-                      .where('assignedRider', isEqualTo: uid)
-                      .limit(20)
+                      .collection('riderPresence')
+                      .doc(uid)
                       .snapshots(),
-                  builder: (context, deliverySnapshot) {
-                    final deliveries = deliverySnapshot.data?.docs
-                            .map((doc) => {'id': doc.id, ...doc.data()})
-                            .toList() ??
-                        const <Map<String, dynamic>>[];
-                    final scheduled = deliveries
-                        .where(
-                            (item) => _isScheduled(item) && !_isFinished(item))
-                        .toList();
-                    final recent = deliveries.where(_isFinished).toList()
-                      ..sort((a, b) => _millis(b).compareTo(_millis(a)));
-                    return StreamBuilder<
-                        DocumentSnapshot<Map<String, dynamic>>>(
+                  builder: (context, presenceSnapshot) {
+                    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: FirebaseFirestore.instance
-                          .collection('riderPresence')
-                          .doc(uid)
+                          .collection('deliveryRequests')
+                          .where('assignedRider', isEqualTo: uid)
+                          .limit(24)
                           .snapshots(),
-                      builder: (context, presenceSnapshot) =>
-                          BlocBuilder<HomeBloc, HomeState>(
-                        builder: (context, homeState) {
-                          final presence = presenceSnapshot.data?.data();
-                          final online = presence?['isOnline'] == true &&
-                              '${presence?['availabilityStatus'] ?? ''}' !=
-                                  'offline';
-                          final home = homeState.copyWith(
-                              rideStatus: online
-                                  ? RideStatus.online
-                                  : RideStatus.offline);
-                          return CustomScrollView(
-                            key: const PageStorageKey('rider-dashboard'),
-                            slivers: [
-                              SliverSafeArea(
-                                bottom: false,
-                                sliver: SliverPadding(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(18, 14, 18, 28),
-                                  sliver: SliverList.list(children: [
-                                    _Header(
-                                      profile: profile,
-                                      onNotifications: () => Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              RiderNotificationsView(
-                                            onNavigateTab: widget.onSelectTab,
+                      builder: (context, assignedSnapshot) {
+                        return StreamBuilder<
+                            QuerySnapshot<Map<String, dynamic>>>(
+                          stream: FirebaseFirestore.instance
+                              .collection('deliveryRequests')
+                              .where('status',
+                                  whereIn: const ['available', 'pending'])
+                              .limit(8)
+                              .snapshots(),
+                          builder: (context, offersSnapshot) {
+                            final assigned = _docs(assignedSnapshot);
+                            final data = _DashboardData(
+                              profile: profile,
+                              earnings:
+                                  earningsSnapshot.data?.data() ?? const {},
+                              presence:
+                                  presenceSnapshot.data?.data() ?? const {},
+                              eligibleOffers: _docs(offersSnapshot),
+                              scheduled: assigned
+                                  .where((item) =>
+                                      _isScheduled(item) && !_isFinished(item))
+                                  .toList()
+                                ..sort((a, b) => _time(a).compareTo(_time(b))),
+                              recent: assigned.where(_isFinished).toList()
+                                ..sort((a, b) => _time(b).compareTo(_time(a))),
+                              loading: profileSnapshot.connectionState ==
+                                      ConnectionState.waiting &&
+                                  riderSnapshot.connectionState ==
+                                      ConnectionState.waiting,
+                              hasDataError: profileSnapshot.hasError ||
+                                  riderSnapshot.hasError ||
+                                  earningsSnapshot.hasError ||
+                                  presenceSnapshot.hasError ||
+                                  assignedSnapshot.hasError ||
+                                  offersSnapshot.hasError,
+                              notificationsUnavailable: false,
+                            );
+                            return BlocBuilder<HomeBloc, HomeState>(
+                              builder: (context, homeState) {
+                                final online = data.isOnline;
+                                final mergedHome = homeState.copyWith(
+                                  rideStatus: online
+                                      ? RideStatus.online
+                                      : RideStatus.offline,
+                                );
+                                return _DashboardSurface(
+                                  data: data,
+                                  home: mergedHome,
+                                  onSelectTab: widget.onSelectTab,
+                                  onToggleAvailability: () =>
+                                      context.read<HomeBloc>().add(
+                                            SetRideStatus(
+                                              status: online
+                                                  ? RideStatus.offline
+                                                  : RideStatus.online,
+                                            ),
                                           ),
-                                        ),
-                                      ),
-                                    ),
-                                    const FounderRiderBadge(),
-                                    const SizedBox(height: 18),
-                                    _AvailabilityCard(
-                                      state: home,
-                                      onToggle: () =>
-                                          context.read<HomeBloc>().add(
-                                                SetRideStatus(
-                                                  status: home.rideStatus ==
-                                                          RideStatus.offline
-                                                      ? RideStatus.online
-                                                      : RideStatus.offline,
-                                                ),
-                                              ),
-                                    ),
-                                    const SizedBox(height: 14),
-                                    _RankCard(profile: profile),
-                                    const SizedBox(height: 14),
-                                    _TodayGrid(earnings: earnings),
-                                    const SizedBox(height: 22),
-                                    RiderSectionTitle('Priority operations',
-                                        action: 'View jobs',
-                                        onAction: () => widget.onSelectTab(1)),
-                                    const SizedBox(height: 10),
-                                    _JobsSummary(
-                                      home: home,
-                                      onOpenJobs: () => widget.onSelectTab(1),
-                                    ),
-                                    const SizedBox(height: 22),
-                                    RiderSectionTitle('Upcoming schedule',
-                                        action: 'View all',
-                                        onAction: () => widget.onSelectTab(2)),
-                                    const SizedBox(height: 10),
-                                    _ScheduledSummary(
-                                      job: scheduled.isEmpty
-                                          ? null
-                                          : scheduled.first,
-                                      onTap: () => widget.onSelectTab(2),
-                                    ),
-                                    const SizedBox(height: 22),
-                                    const RiderSectionTitle('Recent activity'),
-                                    const SizedBox(height: 10),
-                                    _RecentSummary(
-                                        items: recent.take(3).toList()),
-                                    const SizedBox(height: 22),
-                                    _QuickActions(
-                                        onSelectTab: widget.onSelectTab),
-                                  ]),
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
+                                );
+                              },
+                            );
+                          },
+                        );
+                      },
                     );
                   },
                 );
@@ -182,6 +149,13 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
     );
   }
 
+  static List<Map<String, dynamic>> _docs(
+          AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot) =>
+      snapshot.data?.docs
+          .map((doc) => {'id': doc.id, ...doc.data()})
+          .toList() ??
+      const <Map<String, dynamic>>[];
+
   static bool _isScheduled(Map<String, dynamic> item) =>
       item['scheduled'] == true ||
       item['isScheduled'] == true ||
@@ -190,117 +164,231 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
   static bool _isFinished(Map<String, dynamic> item) => {
         'completed',
         'delivered',
-        'cancelled',
-        'failed',
       }.contains(
           '${item['deliveryState'] ?? item['status'] ?? ''}'.toLowerCase());
 
-  static int _millis(Map<String, dynamic> item) {
-    final value = item['completedAt'] ?? item['updatedAt'] ?? item['createdAt'];
+  static int _time(Map<String, dynamic> item) {
+    final value = item['scheduledAt'] ??
+        item['collectionStart'] ??
+        item['completedAt'] ??
+        item['updatedAt'] ??
+        item['createdAt'];
     return value is Timestamp ? value.millisecondsSinceEpoch : 0;
   }
 }
 
-class _RankCard extends StatelessWidget {
-  const _RankCard({required this.profile});
+class _DashboardData {
+  const _DashboardData({
+    required this.profile,
+    required this.earnings,
+    required this.presence,
+    required this.eligibleOffers,
+    required this.scheduled,
+    required this.recent,
+    required this.loading,
+    required this.hasDataError,
+    required this.notificationsUnavailable,
+  });
+
   final Map<String, dynamic> profile;
+  final Map<String, dynamic> earnings;
+  final Map<String, dynamic> presence;
+  final List<Map<String, dynamic>> eligibleOffers;
+  final List<Map<String, dynamic>> scheduled;
+  final List<Map<String, dynamic>> recent;
+  final bool loading;
+  final bool hasDataError;
+  final bool notificationsUnavailable;
+
+  bool get isOnline =>
+      presence['isOnline'] == true &&
+      '${presence['availabilityStatus'] ?? ''}'.toLowerCase() != 'offline';
+}
+
+class _DashboardSurface extends StatelessWidget {
+  const _DashboardSurface({
+    required this.data,
+    required this.home,
+    required this.onSelectTab,
+    required this.onToggleAvailability,
+  });
+
+  final _DashboardData data;
+  final HomeState home;
+  final ValueChanged<int> onSelectTab;
+  final VoidCallback onToggleAvailability;
+
   @override
   Widget build(BuildContext context) {
-    final rank = RiderRankSnapshot.from(profile);
-    if (rank == null) {
-      return const RiderEmptyState(
-          icon: Icons.sync_problem_rounded,
-          title: 'Rank unavailable',
-          message: 'Rider rank and trust data are still synchronising.');
-    }
-    return RiderGlassCard(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      RiderRankProgress(rank: rank.rank, trustPoints: rank.trustPoints),
-      if (rank.overrideReason != null) ...[
-        const SizedBox(height: 8),
-        Text(rank.overrideReason!,
-            style: const TextStyle(color: RiderPalette.amber, fontSize: 11))
-      ],
-    ]));
+    return RefreshIndicator(
+      color: RiderPalette.blue,
+      backgroundColor: RiderPalette.panel,
+      onRefresh: () async {
+        context.read<HomeBloc>()
+          ..add(CheckForPushToken())
+          ..add(CheckForActiveRequest());
+      },
+      child: CustomScrollView(
+        key: const PageStorageKey('rider-dashboard'),
+        slivers: [
+          SliverSafeArea(
+            bottom: false,
+            sliver: SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+              sliver: SliverList.list(
+                children: [
+                  _DashboardHeader(
+                    profile: data.profile,
+                    onNotifications: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            RiderNotificationsView(onNavigateTab: onSelectTab),
+                      ),
+                    ),
+                    onProfile: () => onSelectTab(4),
+                  ),
+                  const FounderRiderBadge(),
+                  if (data.hasDataError) ...[
+                    const SizedBox(height: 14),
+                    const _InlineNotice(
+                      icon: Icons.cloud_off_rounded,
+                      title: 'Some dashboard data is unavailable',
+                      message: 'Pull to refresh or try again shortly.',
+                    ),
+                  ],
+                  const SizedBox(height: 18),
+                  _AvailabilityCard(
+                    home: home,
+                    online: data.isOnline,
+                    onToggle: onToggleAvailability,
+                  ),
+                  const SizedBox(height: 14),
+                  _RankCard(profile: data.profile),
+                  const SizedBox(height: 18),
+                  _TodaySection(earnings: data.earnings),
+                  const SizedBox(height: 24),
+                  _SectionHeader(
+                    title: 'Priority operations',
+                    action: 'View jobs',
+                    onAction: () => onSelectTab(1),
+                  ),
+                  const SizedBox(height: 10),
+                  _PriorityJobsCard(
+                    online: data.isOnline,
+                    offers: data.eligibleOffers,
+                    onTap: () => onSelectTab(1),
+                  ),
+                  const SizedBox(height: 24),
+                  _SectionHeader(
+                    title: 'Upcoming schedule',
+                    action: 'View all',
+                    onAction: () => onSelectTab(2),
+                  ),
+                  const SizedBox(height: 10),
+                  _ScheduleCard(
+                    job: data.scheduled.isEmpty ? null : data.scheduled.first,
+                    onTap: () => onSelectTab(2),
+                  ),
+                  const SizedBox(height: 24),
+                  const _SmallLabel('Recent activity'),
+                  const SizedBox(height: 10),
+                  _RecentActivityCard(
+                    items: data.recent.take(2).toList(),
+                    onTap: () => onSelectTab(3),
+                  ),
+                  const SizedBox(height: 24),
+                  _QuickActions(onSelectTab: onSelectTab),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
-class _Header extends StatelessWidget {
-  const _Header({required this.profile, required this.onNotifications});
+class _DashboardHeader extends StatelessWidget {
+  const _DashboardHeader({
+    required this.profile,
+    required this.onNotifications,
+    required this.onProfile,
+  });
+
   final Map<String, dynamic> profile;
   final VoidCallback onNotifications;
+  final VoidCallback onProfile;
 
   @override
   Widget build(BuildContext context) {
     final auth = context.watch<AuthBloc>().state;
-    final name = '${profile['firstName'] ?? auth.username ?? 'Rider'}'.trim();
-    final firstName = name.split(' ').first;
+    final rawName =
+        '${profile['firstName'] ?? profile['name'] ?? auth.username ?? ''}'
+            .trim();
+    final firstName = rawName.isEmpty ? 'Rider' : rawName.split(' ').first;
     final photo =
-        '${profile['profilePhoto'] ?? auth.profilePhoto ?? ''}'.trim();
-    return Row(children: [
-      Expanded(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('CIRCUM RIDER',
-              style: TextStyle(
+        '${profile['profilePhoto'] ?? profile['photoUrl'] ?? auth.profilePhoto ?? ''}'
+            .trim();
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'CIRCUM RIDER',
+                style: TextStyle(
                   color: RiderPalette.blue,
                   fontFamily: RiderTypography.mono,
                   fontSize: 10,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: 1.4)),
-          const SizedBox(height: 4),
-          Text('Good ${_period()}, $firstName',
-              style: const TextStyle(
+                  letterSpacing: 1.4,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Good ${_period()}, $firstName',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
                   color: RiderPalette.paper,
                   fontFamily: RiderTypography.heading,
-                  fontSize: 28)),
-        ]),
-      ),
-      IconButton(
-        tooltip: 'Notifications',
-        onPressed: onNotifications,
-        icon: StreamBuilder<int?>(
-          stream: RiderCommunicationService().watchUnreadNotificationCount(),
-          builder: (context, snapshot) {
-            final unread = snapshot.data ?? 0;
-            return Stack(
-              clipBehavior: Clip.none,
-              children: [
-                const Icon(Icons.notifications_none_rounded),
-                if (snapshot.hasData && unread > 0)
-                  Positioned(
-                    right: -1,
-                    top: -1,
-                    child: Semantics(
-                      label: '$unread unread notifications',
-                      child: Container(
-                        width: 9,
-                        height: 9,
-                        decoration: const BoxDecoration(
-                          color: RiderPalette.red,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
+                  fontSize: 27,
+                  height: 1.05,
+                ),
+              ),
+            ],
+          ),
         ),
-        color: RiderPalette.paper,
-      ),
-      const SizedBox(width: 4),
-      CircleAvatar(
-        radius: 21,
-        backgroundColor: RiderPalette.panel,
-        backgroundImage:
-            photo.isEmpty ? null : CachedNetworkImageProvider(photo),
-        child: photo.isEmpty
-            ? Text(firstName.isEmpty ? 'R' : firstName[0].toUpperCase(),
-                style: const TextStyle(
-                    color: RiderPalette.paper, fontWeight: FontWeight.w800))
-            : null,
-      ),
-    ]);
+        _NotificationButton(onTap: onNotifications),
+        const SizedBox(width: 10),
+        Semantics(
+          button: true,
+          label: 'Open Rider profile',
+          child: GestureDetector(
+            onTap: onProfile,
+            child: CircleAvatar(
+              radius: 20,
+              backgroundColor: RiderPalette.blue,
+              backgroundImage:
+                  photo.isEmpty ? null : CachedNetworkImageProvider(photo),
+              child: photo.isEmpty
+                  ? Text(
+                      _initials(rawName),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                    )
+                  : null,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   static String _period() {
@@ -309,279 +397,957 @@ class _Header extends StatelessWidget {
     if (hour < 18) return 'afternoon';
     return 'evening';
   }
+
+  static String _initials(String name) {
+    final parts = name
+        .split(RegExp(r'\s+'))
+        .where((part) => part.trim().isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return 'R';
+    return parts.take(2).map((part) => part[0].toUpperCase()).join();
+  }
+}
+
+class _NotificationButton extends StatelessWidget {
+  const _NotificationButton({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: 'Notifications',
+      onPressed: onTap,
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.white.withValues(alpha: .045),
+        side: BorderSide(color: Colors.white.withValues(alpha: .09)),
+      ),
+      icon: StreamBuilder<int?>(
+        stream: RiderCommunicationService().watchUnreadNotificationCount(),
+        builder: (context, snapshot) {
+          final unread = snapshot.data ?? 0;
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const Icon(Icons.notifications_none_rounded,
+                  color: RiderPalette.paper, size: 20),
+              if (snapshot.hasData && unread > 0)
+                Positioned(
+                  right: -1,
+                  top: -1,
+                  child: Semantics(
+                    label: '$unread unread notifications',
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: RiderPalette.purple,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: RiderPalette.background,
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
 
 class _AvailabilityCard extends StatelessWidget {
-  const _AvailabilityCard({required this.state, required this.onToggle});
-  final HomeState state;
+  const _AvailabilityCard({
+    required this.home,
+    required this.online,
+    required this.onToggle,
+  });
+
+  final HomeState home;
+  final bool online;
   final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
-    final online = state.rideStatus != RideStatus.offline;
-    return RiderGlassCard(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(
-            width: 9,
-            height: 9,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: online ? RiderPalette.green : RiderPalette.red,
-              boxShadow: online
-                  ? const [BoxShadow(color: RiderPalette.green, blurRadius: 9)]
-                  : null,
-            ),
+    return RiderGlassSurface(
+      opacity: .66,
+      edgeColor: online ? RiderPalette.green : RiderPalette.red,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: online ? RiderPalette.green : RiderPalette.red,
+                  boxShadow: [
+                    BoxShadow(
+                      color: (online ? RiderPalette.green : RiderPalette.red)
+                          .withValues(alpha: .34),
+                      blurRadius: 12,
+                      spreadRadius: 3,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  online ? 'Online and available' : 'You are currently offline',
+                  style: const TextStyle(
+                    color: RiderPalette.paper,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: RiderTypography.body,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Text(online ? 'Online and available' : 'You are currently offline',
-              style: const TextStyle(
-                  color: RiderPalette.paper,
-                  fontFamily: RiderTypography.body,
-                  fontWeight: FontWeight.w700)),
-        ]),
-        const SizedBox(height: 8),
-        Text(
-          online
-              ? 'Circum is checking eligible delivery opportunities near you.'
-              : 'Go online when you are ready to receive eligible jobs.',
-          style: const TextStyle(
+          const SizedBox(height: 9),
+          Text(
+            online
+                ? 'Circum is checking eligible delivery opportunities near you.'
+                : 'Go online when you are ready to receive eligible jobs.',
+            style: const TextStyle(
               color: RiderPalette.muted,
               fontFamily: RiderTypography.body,
-              height: 1.35),
-        ),
-        if (state.message != null) ...[
-          const SizedBox(height: 8),
-          Text(state.message!,
-              style: const TextStyle(color: RiderPalette.amber, fontSize: 12)),
-        ],
-        const SizedBox(height: 16),
-        FutureBuilder<bool>(
-          future: FounderRiderAccess.enabled(),
-          builder: (context, founder) => RiderPrimaryButton(
-            label: online ? 'Go Offline' : 'Go Online',
-            icon:
-                online ? Icons.pause_rounded : Icons.power_settings_new_rounded,
-            color: online ? RiderPalette.panel : RiderPalette.green,
-            onPressed: founder.data == true || state.canGoOnline || online
-                ? onToggle
-                : null,
+              fontSize: 12.5,
+              height: 1.48,
+            ),
           ),
-        ),
-      ]),
+          if (home.message != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              home.message!,
+              style: const TextStyle(color: RiderPalette.amber, fontSize: 12.5),
+            ),
+          ],
+          const SizedBox(height: 16),
+          FutureBuilder<bool>(
+            future: FounderRiderAccess.enabled(),
+            builder: (context, founder) {
+              final allowed =
+                  founder.data == true || home.canGoOnline || online;
+              return SizedBox(
+                height: 52,
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: allowed ? onToggle : null,
+                  icon: Icon(
+                    online
+                        ? Icons.pause_rounded
+                        : Icons.power_settings_new_rounded,
+                    size: 18,
+                  ),
+                  label: Text(online ? 'Go offline' : 'Go online'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: online
+                        ? Colors.white.withValues(alpha: .06)
+                        : RiderPalette.green,
+                    foregroundColor:
+                        online ? RiderPalette.paper : RiderPalette.background,
+                    disabledBackgroundColor:
+                        Colors.white.withValues(alpha: .05),
+                    disabledForegroundColor: RiderPalette.muted,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: online
+                          ? BorderSide(
+                              color: Colors.white.withValues(alpha: .16))
+                          : BorderSide.none,
+                    ),
+                    textStyle: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14.5,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _TodayGrid extends StatelessWidget {
-  const _TodayGrid({required this.earnings});
+class _RankCard extends StatelessWidget {
+  const _RankCard({required this.profile});
+
+  final Map<String, dynamic> profile;
+
+  @override
+  Widget build(BuildContext context) {
+    final rank = RiderRankSnapshot.from(profile);
+    if (rank == null) {
+      return const RiderGlassSurface(
+        padding: EdgeInsets.all(18),
+        opacity: .62,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Rank updating',
+                style: TextStyle(
+                    color: RiderPalette.paper, fontWeight: FontWeight.w800)),
+            SizedBox(height: 6),
+            Text('Build trust with every completed delivery.',
+                style: TextStyle(color: RiderPalette.muted, fontSize: 12.5)),
+          ],
+        ),
+      );
+    }
+
+    final progress = _RankProgressData.forTrust(rank.trustPoints);
+    final note = progress.nextRank == null
+        ? 'Highest Rider rank achieved'
+        : '${progress.remaining} points to ${progress.nextRank}';
+
+    return RiderGlassSurface(
+      padding: const EdgeInsets.all(18),
+      opacity: .64,
+      edgeColor: RiderPalette.green,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                rank.rank.toUpperCase(),
+                style: const TextStyle(
+                  color: RiderPalette.green,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                  letterSpacing: .4,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${rank.trustPoints} TRUST',
+                style: const TextStyle(
+                  color: RiderPalette.paper,
+                  fontFamily: RiderTypography.mono,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(99),
+            child: LinearProgressIndicator(
+              value: progress.progress,
+              minHeight: 5,
+              backgroundColor: Colors.white.withValues(alpha: .07),
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(RiderPalette.green),
+            ),
+          ),
+          const SizedBox(height: 7),
+          Text(note,
+              style: const TextStyle(color: RiderPalette.muted, fontSize: 11)),
+          if (rank.overrideReason != null) ...[
+            const SizedBox(height: 7),
+            Text(rank.overrideReason!,
+                style:
+                    const TextStyle(color: RiderPalette.amber, fontSize: 11)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TodaySection extends StatelessWidget {
+  const _TodaySection({required this.earnings});
+
   final Map<String, dynamic> earnings;
 
   @override
   Widget build(BuildContext context) {
-    final today = _num(earnings['todayEarnings'] ?? earnings['availableToday']);
-    final jobs = _num(earnings['todayCompletedJobs']).toInt();
-    final pending =
-        _num(earnings['pendingEarnings'] ?? earnings['pendingBalance']);
-    return GridView.count(
-      crossAxisCount: 3,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 8,
-      childAspectRatio: 1.18,
+    final summary = RiderEarningsSummary.from(earnings);
+    final today = _number(earnings['todayEarnings'] ??
+        earnings['todayClearedCash'] ??
+        earnings['availableToday']);
+    final jobs = _number(
+            earnings['todayCompletedJobs'] ?? earnings['completedJobsToday'])
+        .toInt();
+    final pending = _number(earnings['pendingEarnings'] ??
+        earnings['pendingBalance'] ??
+        summary?.pending);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        RiderMetric(value: '£${today.toStringAsFixed(2)}', label: 'TODAY'),
-        RiderMetric(value: '$jobs', label: 'JOBS'),
-        RiderMetric(value: '£${pending.toStringAsFixed(2)}', label: 'PENDING'),
+        const _SmallLabel('Today'),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: _TodayTile(
+                icon: Icons.payments_outlined,
+                color: RiderPalette.green,
+                value: '£${today.toStringAsFixed(2)}',
+                label: 'TODAY',
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: _TodayTile(
+                icon: Icons.done_rounded,
+                color: RiderPalette.blue,
+                value: '$jobs',
+                label: 'JOBS',
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: _TodayTile(
+                icon: Icons.schedule_rounded,
+                color: RiderPalette.amber,
+                value: '£${pending.toStringAsFixed(2)}',
+                label: 'PENDING',
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
 
-  static double _num(Object? value) => value is num ? value.toDouble() : 0;
+  static double _number(Object? value) => value is num ? value.toDouble() : 0;
 }
 
-class _JobsSummary extends StatelessWidget {
-  const _JobsSummary({required this.home, required this.onOpenJobs});
-  final HomeState home;
-  final VoidCallback onOpenJobs;
+class _TodayTile extends StatelessWidget {
+  const _TodayTile({
+    required this.icon,
+    required this.color,
+    required this.value,
+    required this.label,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String value;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    if (home.rideStatus == RideStatus.offline) {
-      return RiderGlassCard(
-          onTap: onOpenJobs,
-          child: const Row(children: [
-            Icon(Icons.fact_check_outlined, color: RiderPalette.blue),
-            SizedBox(width: 12),
-            Expanded(
-                child: Text('No priority operational action right now.',
-                    style: TextStyle(color: RiderPalette.muted))),
-            Icon(Icons.chevron_right_rounded, color: RiderPalette.muted)
-          ]));
-    }
-    if (home.requestStatus == RequestStatus.loading) {
-      return const RiderGlassCard(
-          child: Center(child: CircularProgressIndicator()));
-    }
-    final count = home.dispatchRequests.length;
-    return RiderGlassCard(
-      onTap: onOpenJobs,
-      child: Row(children: [
-        const Icon(Icons.route_rounded, color: RiderPalette.blue, size: 28),
-        const SizedBox(width: 14),
-        Expanded(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(
-                count == 0
-                    ? 'Looking for jobs'
-                    : '$count eligible ${count == 1 ? 'job' : 'jobs'}',
-                style: const TextStyle(
-                    color: RiderPalette.paper, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 4),
-            const Text('Open the marketplace to review delivery details.',
-                style: TextStyle(color: RiderPalette.muted, fontSize: 12)),
-          ]),
-        ),
-        const Icon(Icons.chevron_right_rounded, color: RiderPalette.muted),
-      ]),
+    return RiderGlassSurface(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 13),
+      radius: 16,
+      blur: 14,
+      opacity: .60,
+      edgeColor: color,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .14),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, color: color, size: 15),
+          ),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: const TextStyle(
+                color: RiderPalette.paper,
+                fontFamily: RiderTypography.mono,
+                fontSize: 15,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              color: RiderPalette.muted,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: .2,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _ScheduledSummary extends StatelessWidget {
-  const _ScheduledSummary({required this.job, required this.onTap});
+class _PriorityJobsCard extends StatelessWidget {
+  const _PriorityJobsCard({
+    required this.online,
+    required this.offers,
+    required this.onTap,
+  });
+
+  final bool online;
+  final List<Map<String, dynamic>> offers;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = offers.length;
+    final title = !online
+        ? 'Go online for jobs'
+        : count == 0
+            ? 'No eligible jobs'
+            : '$count eligible ${count == 1 ? 'job' : 'jobs'}';
+    final message = !online
+        ? 'Go online to receive eligible delivery offers.'
+        : count == 0
+            ? 'New eligible jobs will appear here when available.'
+            : 'Open the marketplace to review delivery details.';
+    return _ActionRow(
+      icon: Icons.map_outlined,
+      iconColor: RiderPalette.blue,
+      title: title,
+      subtitle: message,
+      onTap: onTap,
+    );
+  }
+}
+
+class _ScheduleCard extends StatelessWidget {
+  const _ScheduleCard({required this.job, required this.onTap});
+
   final Map<String, dynamic>? job;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     if (job == null) {
-      return RiderEmptyState(
+      return _EmptyPanel(
         icon: Icons.calendar_month_outlined,
         title: 'No scheduled deliveries',
         message: 'Reserved jobs will appear here with their collection window.',
-        actionLabel: 'Open schedule',
-        onAction: onTap,
+        action: 'Open schedule',
+        onTap: onTap,
       );
     }
-    return RiderGlassCard(
+
+    return RiderGlassSurface(
       onTap: onTap,
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const RiderStatusBadge('SCHEDULED', color: RiderPalette.purple),
-        const SizedBox(height: 12),
-        Text(
-            '${job!['pickupArea'] ?? job!['pickupPostcode'] ?? 'Pickup'} → ${job!['dropoffArea'] ?? job!['dropoffPostcode'] ?? 'Drop-off'}',
+      padding: const EdgeInsets.all(18),
+      opacity: .64,
+      edgeColor: RiderPalette.purple,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'SCHEDULED',
+            style: TextStyle(
+              color: RiderPalette.purple,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: .4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _route(job!),
             style: const TextStyle(
-                color: RiderPalette.paper, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 6),
-        Text(
-            '${job!['pickupWindow'] ?? job!['scheduledTime'] ?? 'Collection time pending'}',
-            style: const TextStyle(color: RiderPalette.muted, fontSize: 12)),
-      ]),
+              color: RiderPalette.paper,
+              fontWeight: FontWeight.w800,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${job!['pickupWindow'] ?? job!['scheduledTime'] ?? _formatTime(job!['scheduledAt']) ?? 'Collection time pending'}',
+            style: const TextStyle(color: RiderPalette.muted, fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _RecentSummary extends StatelessWidget {
-  const _RecentSummary({required this.items});
+class _RecentActivityCard extends StatelessWidget {
+  const _RecentActivityCard({required this.items, required this.onTap});
+
   final List<Map<String, dynamic>> items;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return const RiderEmptyState(
+      return const _EmptyPanel(
         icon: Icons.history_rounded,
         title: 'No completed deliveries yet',
         message: 'Your most recent completed work will appear here.',
       );
     }
-    return RiderGlassCard(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+
+    return RiderGlassSurface(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      opacity: .62,
       child: Column(
-        children: items
-            .map((item) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const CircleAvatar(
-                    backgroundColor: Color(0x1734D399),
-                    child: Icon(Icons.check_rounded, color: RiderPalette.green),
-                  ),
-                  title: Text(
-                      '${item['serviceType'] ?? item['deliveryType'] ?? 'Delivery'}',
-                      style: const TextStyle(
-                          color: RiderPalette.paper,
-                          fontWeight: FontWeight.w700)),
-                  subtitle: Text(
-                      '${item['dropoffArea'] ?? item['dropoffPostcode'] ?? 'Completed'}',
-                      style: const TextStyle(color: RiderPalette.muted)),
-                  trailing: Text(
-                      _money(item['riderEarning'] ?? item['riderPay']),
-                      style: const TextStyle(
-                          color: RiderPalette.paper,
-                          fontFamily: RiderTypography.mono)),
-                ))
-            .toList(),
+        children: [
+          for (var i = 0; i < items.length; i++) ...[
+            _RecentRow(item: items[i], onTap: onTap),
+            if (i != items.length - 1)
+              Divider(color: Colors.white.withValues(alpha: .07), height: 1),
+          ],
+        ],
       ),
     );
   }
+}
 
-  static String _money(Object? value) =>
-      value is num ? '£${value.toStringAsFixed(2)}' : '—';
+class _RecentRow extends StatelessWidget {
+  const _RecentRow({required this.item, required this.onTap});
+
+  final Map<String, dynamic> item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: RiderPalette.green.withValues(alpha: .14),
+                borderRadius: BorderRadius.circular(11),
+              ),
+              child: const Icon(Icons.done_rounded,
+                  color: RiderPalette.green, size: 18),
+            ),
+            const SizedBox(width: 13),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${item['serviceType'] ?? item['deliveryType'] ?? 'Delivery'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: RiderPalette.paper,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${item['dropoffArea'] ?? item['dropoffPostcode'] ?? item['pickupArea'] ?? 'Completed'}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: RiderPalette.muted,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Text(
+              _money(item['riderEarning'] ?? item['riderPay']),
+              style: const TextStyle(
+                color: RiderPalette.paper,
+                fontFamily: RiderTypography.mono,
+                fontWeight: FontWeight.w800,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _QuickActions extends StatelessWidget {
   const _QuickActions({required this.onSelectTab});
+
   final ValueChanged<int> onSelectTab;
 
   @override
-  Widget build(BuildContext context) => Row(children: [
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
         Expanded(
-            child: _QuickAction(
-                icon: Icons.work_outline_rounded,
-                label: 'Jobs',
-                onTap: () => onSelectTab(1))),
-        const SizedBox(width: 8),
+          child: _QuickAction(
+            icon: Icons.work_outline_rounded,
+            label: 'Jobs',
+            onTap: () => onSelectTab(1),
+          ),
+        ),
+        const SizedBox(width: 9),
         Expanded(
-            child: _QuickAction(
-                icon: Icons.calendar_month_outlined,
-                label: 'Schedule',
-                onTap: () => onSelectTab(2))),
-        const SizedBox(width: 8),
+          child: _QuickAction(
+            icon: Icons.calendar_month_outlined,
+            label: 'Schedule',
+            onTap: () => onSelectTab(2),
+          ),
+        ),
+        const SizedBox(width: 9),
         Expanded(
-            child: _QuickAction(
-                icon: Icons.payments_outlined,
-                label: 'Earnings',
-                onTap: () => onSelectTab(3))),
-      ]);
+          child: _QuickAction(
+            icon: Icons.account_balance_wallet_outlined,
+            label: 'Earnings',
+            onTap: () => onSelectTab(3),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _QuickAction extends StatelessWidget {
-  const _QuickAction(
-      {required this.icon, required this.label, required this.onTap});
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
   final IconData icon;
   final String label;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(15),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 15),
-          decoration: BoxDecoration(
-            color: RiderPalette.panel,
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: Colors.white.withOpacity(.08)),
+  Widget build(BuildContext context) {
+    return RiderGlassSurface(
+      onTap: onTap,
+      radius: 16,
+      blur: 14,
+      opacity: .58,
+      padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 8),
+      child: Column(
+        children: [
+          Icon(icon, color: RiderPalette.blue, size: 19),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              color: RiderPalette.paper,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-          child: Column(children: [
-            Icon(icon, color: RiderPalette.blue),
-            const SizedBox(height: 7),
-            Text(label,
-                style: const TextStyle(
+        ],
+      ),
+    );
+  }
+}
+
+class _ActionRow extends StatelessWidget {
+  const _ActionRow({
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return RiderGlassSurface(
+      onTap: onTap,
+      padding: const EdgeInsets.all(16),
+      radius: 20,
+      opacity: .64,
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: .14),
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: Icon(icon, color: iconColor, size: 21),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
                     color: RiderPalette.paper,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700)),
-          ]),
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14.5,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style:
+                      const TextStyle(color: RiderPalette.muted, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: RiderPalette.muted),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyPanel extends StatelessWidget {
+  const _EmptyPanel({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.action,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+  final String? action;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return RiderGlassSurface(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+      radius: 20,
+      opacity: .60,
+      child: Column(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: RiderPalette.blue.withValues(alpha: .12),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: RiderPalette.blue.withValues(alpha: .25),
+              ),
+            ),
+            child: Icon(icon, color: RiderPalette.blue, size: 20),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: RiderPalette.paper,
+              fontFamily: RiderTypography.heading,
+              fontSize: 17,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: RiderPalette.muted,
+              height: 1.45,
+              fontSize: 12.5,
+            ),
+          ),
+          if (action != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              action!,
+              style: const TextStyle(
+                color: RiderPalette.blue,
+                fontWeight: FontWeight.w700,
+                fontSize: 12.5,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineNotice extends StatelessWidget {
+  const _InlineNotice({
+    required this.icon,
+    required this.title,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return RiderGlassSurface(
+      padding: const EdgeInsets.all(14),
+      radius: 16,
+      blur: 10,
+      opacity: .58,
+      edgeColor: RiderPalette.amber,
+      child: Row(
+        children: [
+          Icon(icon, color: RiderPalette.amber, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                        color: RiderPalette.paper,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13)),
+                const SizedBox(height: 3),
+                Text(message,
+                    style: const TextStyle(
+                        color: RiderPalette.muted, fontSize: 12)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.title,
+    this.action,
+    this.onAction,
+  });
+
+  final String title;
+  final String? action;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Text(
+            title,
+            style: const TextStyle(
+              color: RiderPalette.paper,
+              fontFamily: RiderTypography.heading,
+              fontSize: 19,
+              height: 1.1,
+            ),
+          ),
         ),
+        if (action != null)
+          GestureDetector(
+            onTap: onAction,
+            child: Text(
+              action!,
+              style: const TextStyle(
+                color: RiderPalette.blue,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _SmallLabel extends StatelessWidget {
+  const _SmallLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Text(
+        label.toUpperCase(),
+        style: const TextStyle(
+          color: Color(0xFF5F6779),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: .9,
+        ),
+      ),
+    );
+  }
+}
+
+String _route(Map<String, dynamic> item) {
+  final pickup = item['pickupArea'] ??
+      item['pickupPostcode'] ??
+      item['pickupShortAddress'] ??
+      'Pickup';
+  final dropoff = item['dropoffArea'] ??
+      item['dropoffPostcode'] ??
+      item['dropoffShortAddress'] ??
+      'Drop-off';
+  return '$pickup → $dropoff';
+}
+
+String? _formatTime(Object? value) {
+  if (value is! Timestamp) return null;
+  final local = value.toDate().toLocal();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return 'Collection window $hour:$minute';
+}
+
+String _money(Object? value) =>
+    value is num ? '£${value.toStringAsFixed(2)}' : '—';
+
+class _RankProgressData {
+  const _RankProgressData({
+    required this.progress,
+    required this.remaining,
+    required this.nextRank,
+  });
+
+  final double progress;
+  final int remaining;
+  final String? nextRank;
+
+  static _RankProgressData forTrust(int trustPoints) {
+    var index = 0;
+    for (var i = 0; i < RiderRankSnapshot.thresholds.length; i++) {
+      if (trustPoints >= RiderRankSnapshot.thresholds[i]) index = i;
+    }
+    if (index == RiderRankSnapshot.ranks.length - 1) {
+      return const _RankProgressData(
+        progress: 1,
+        remaining: 0,
+        nextRank: null,
       );
+    }
+    final current = RiderRankSnapshot.thresholds[index];
+    final next = RiderRankSnapshot.thresholds[index + 1];
+    return _RankProgressData(
+      progress: ((trustPoints - current) / (next - current)).clamp(0.0, 1.0),
+      remaining: (next - trustPoints).clamp(0, next),
+      nextRank: RiderRankSnapshot.ranks[index + 1],
+    );
+  }
 }
