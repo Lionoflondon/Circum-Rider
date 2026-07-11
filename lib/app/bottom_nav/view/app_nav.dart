@@ -15,6 +15,7 @@ import '../../authentication/view/enable_location.dart';
 import '../../history/view/index.dart';
 import '../../home/view/index.dart';
 import '../../home/view/maps_view.dart';
+import '../../rider_account/rider_home_state_banner.dart';
 import '../../support/view/index.dart';
 import '../bloc/navbar_bloc.dart';
 
@@ -90,6 +91,13 @@ class AppNavViewState extends State<AppNavView> {
                       Expanded(
                           child: userScreens(context, state.currentNavIndex)),
                     ],
+                  ),
+                if (state.currentNavIndex == 0)
+                  const Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: RiderHomeStateBanner(),
                   ),
                 BlocBuilder<HomeBloc, HomeState>(builder: ((context, state) {
                   if (state.rideStatus == RideStatus.acceptedARide) {

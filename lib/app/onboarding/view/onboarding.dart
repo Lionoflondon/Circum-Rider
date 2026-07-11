@@ -1,170 +1,115 @@
 import 'dart:io' show Platform;
-import 'package:circum_rider/app/authentication/view/signup.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/svg.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
-import '../../../utils/theme/theme.dart';
 import '../../authentication/bloc/auth_bloc.dart';
-import 'onboarding_slider.dart';
+import '../../authentication/view/signin.dart';
+import '../../authentication/view/signup.dart';
+import '../../authentication/view/widgets/rider_onboarding_shell.dart';
+import '../../../../utils/theme/theme.dart';
 
-class OnboardingView extends StatelessWidget {
-  // final BuildContext authBlocContext;
-  const OnboardingView({Key? key}) : super(key: key);
+/// The existing Circum authentication entry point. It intentionally delegates
+/// sign-in, account creation, OTP, recovery, Google and Apple to AuthBloc.
+class OnboardingView extends StatefulWidget {
+  const OnboardingView({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return BlocListener<AuthBloc, AuthState>(
-        listener: (context, state) {
-          // if (state.status == Status.signedInWithOAuth) {
-          //   context.read<AuthBloc>().add(ResetStatus());
-          //   // context.read<AuthBloc>().add(St4artCountDown());
-          //   Navigator.push(
-          //       context, MaterialPageRoute(builder: (_) => const SignupView()));
-          // }
-        },
-        child: Scaffold(
-            backgroundColor: AppColors.secondary,
-            body: SafeArea(
-                child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(height: 10),
-                const Expanded(child: OnboardingSlider()),
-                Container(
-                    // margin: const EdgeInsets.only(bottom: 30),
-                    width: MediaQuery.of(context).size.width * 0.9,
-                    padding: const EdgeInsets.only(
-                        top: 20, bottom: 30, left: 10, right: 10),
-                    child: Column(
-                      children: [
-                        actionButton(),
-                        const SizedBox(height: 14),
-                        orSignUpWith(),
-                        const SizedBox(height: 14),
-                        oAuthButtons(),
-                        const SizedBox(height: 10),
-                        termsOfService(),
-                      ],
-                    )),
-              ],
-            ))));
+  State<OnboardingView> createState() => _OnboardingViewState();
+}
+
+class _OnboardingViewState extends State<OnboardingView> {
+  final _identity = TextEditingController();
+
+  @override
+  void dispose() {
+    _identity.dispose();
+    super.dispose();
   }
 
-  Widget actionButton() {
-    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-      return AppButton.button(
-        onPressed: () {
-          // context
-          //     .read<AuthBloc>()
-          // print('pressing');
-          // context
-          //     .read<AuthBloc>()
-          //     .add(ChangeSelectedPage(page: SelectedPage.cta));
-          Navigator.push(
-              context, MaterialPageRoute(builder: (_) => const SignupView()));
-        },
-        widget: Center(
-            child: AppText.text(
-          'Continue',
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-        )),
-        borderRadius: BorderRadius.circular(100),
-        // minimumSize: const Size(70, 70)
-      );
-    });
-  }
-
-  Widget orSignUpWith() {
-    return Row(
-      children: [
-        const Expanded(child: Divider(color: Colors.grey)),
-        const SizedBox(width: 10),
-        AppText.text('or continue with', fontSize: 16),
-        const SizedBox(width: 10),
-        const Expanded(child: Divider(color: Colors.grey)),
-      ],
+  void _continue() {
+    final value = _identity.text.trim();
+    if (value.isEmpty) return;
+    final bloc = context.read<AuthBloc>();
+    if (value.contains('@')) {
+      bloc.add(SignupEmailChanged(email: value));
+    } else {
+      bloc.add(PhoneNumberChanged(phoneNumber: value));
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SignupView()),
     );
   }
 
-  Widget oAuthButtons() {
-    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-      return Row(
-        children: [
-          Expanded(
-              child: TextButton(
-                  onPressed: () {
-                    context.read<AuthBloc>().add(SignInWithGoogle());
-                  },
-                  style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.zero,
-                          side: BorderSide(
-                              color: Colors.white.withOpacity(0.4)))),
-                  child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        SvgPicture.asset('assets/svg/google_logo.svg'),
-                        const SizedBox(width: 12),
-                        AppText.text('Google',
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16)
-                      ]))),
-          if (!kIsWeb && Platform.isIOS) const SizedBox(width: 15),
-          if (!kIsWeb && Platform.isIOS)
-            Expanded(
-                child: TextButton(
-                    onPressed: () {
-                      context.read<AuthBloc>().add(SignInWithAppleAuth());
-                    },
-                    style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 13),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.zero,
-                            side: BorderSide(
-                                color: Colors.white.withOpacity(0.4)))),
-                    child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SvgPicture.asset('assets/svg/apple_logo.svg'),
-                          const SizedBox(width: 12),
-                          AppText.text('Apple',
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16)
-                        ]))),
-        ],
-      );
-    });
-  }
-
-  Widget termsOfService() {
-    return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+  @override
+  Widget build(BuildContext context) {
+    return RiderOnboardingShell(
+      currentStep: 0,
+      showStepProgress: false,
+      title: 'What\'s your phone number or email?',
+      subtitle: 'Continue securely to your Circum account or create one.',
+      child: RiderGlassCard(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            GestureDetector(
-                onTap: () async {
-                  await launchUrl(Uri.parse('https://circumuk.com/terms'));
-                },
-                child: AppText.text('By signing up, you are agreeing to our',
-                    fontSize: 12)),
-            GestureDetector(
-                onTap: () async {
-                  await launchUrl(Uri.parse('https://circumuk.com/terms'));
-                },
-                child: AppText.text('Terms of Service',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
-                    color: Color.fromARGB(255, 203, 232, 255))),
+            RiderGlassTextField(
+              label: 'Enter phone number or email',
+              controller: _identity,
+              keyboardType: TextInputType.emailAddress,
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 18),
+            RiderPrimaryButton(
+              label: 'Continue',
+              enabled: _identity.text.trim().isNotEmpty,
+              onPressed: _continue,
+            ),
+            const SizedBox(height: 14),
+            TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SigninView()),
+              ),
+              child: const Text('Already have an account? Sign in'),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 10),
+              child: Row(children: [
+                Expanded(child: Divider()),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: Text('or continue with'),
+                ),
+                Expanded(child: Divider()),
+              ]),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => context.read<AuthBloc>().add(SignInWithGoogle()),
+              icon: SvgPicture.asset('assets/svg/google_logo.svg', height: 18),
+              label: const Text('Google'),
+            ),
+            if (!kIsWeb && Platform.isIOS) ...[
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () =>
+                    context.read<AuthBloc>().add(SignInWithAppleAuth()),
+                icon: SvgPicture.asset('assets/svg/apple_logo.svg', height: 18),
+                label: const Text('Apple'),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Text(
+              'By continuing, you agree to Circum Terms and Privacy.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  color: AppColors.textGrey.withOpacity(0.9), fontSize: 12),
+            ),
           ],
-        ));
+        ),
+      ),
+    );
   }
 }

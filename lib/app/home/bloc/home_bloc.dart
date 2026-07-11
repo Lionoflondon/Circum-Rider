@@ -28,6 +28,7 @@ import '../../../helper/chats_help.dart';
 import '../../../helper/formatted_string_after_seconds.dart';
 import '../../../helper/messaging_server.dart';
 import '../../../utils/theme/theme.dart';
+import '../../rider_account/rider_account_state.dart';
 import '../models/dispatch_request.m..dart';
 import '../models/message.m.dart';
 import '../models/place_coordinates.m.dart';
@@ -86,6 +87,20 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     if (uid == null || uid.isEmpty) return ['Rider profile'];
     final riderDoc = await db.collection('riders').doc(uid).get();
     return _remainingVerificationItems(riderDoc.data());
+  }
+
+  Future<RiderAccountState> _loadAccountState(String? uid) async {
+    if (uid == null || uid.isEmpty) {
+      return RiderAccountState.onboardingNotStarted;
+    }
+    final records = await Future.wait([
+      db.collection('riders').doc(uid).get(),
+      db.collection('riderProfiles').doc(uid).get(),
+    ]);
+    return RiderAccountStateResolver.resolve({
+      ...(records[1].data() ?? const <String, dynamic>{}),
+      ...(records[0].data() ?? const <String, dynamic>{}),
+    });
   }
 
   HomeBloc() : super(HomeState()) {
@@ -173,6 +188,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       await pref.setString('status', 'offline');
     } else {
+      final accountState = await _loadAccountState(user?.uid);
+      if (!RiderAccountStateResolver.canOperate(accountState)) {
+        emit(state.copyWith(
+          rideStatus: RideStatus.offline,
+          canGoOnline: false,
+          message: 'Your Rider account is not approved for operational access.',
+        ));
+        return;
+      }
       final remaining = await _loadRemainingVerificationItems(user?.uid);
       if (event.status == RideStatus.online && remaining.isNotEmpty) {
         emit(state.copyWith(

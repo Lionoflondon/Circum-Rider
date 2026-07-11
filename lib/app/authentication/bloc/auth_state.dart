@@ -88,6 +88,7 @@ class AuthState extends AuthInitial {
   final AppLocationStatus appLocationStatus;
   final VerificationUploadStatus verificationUploadStatus;
   final AuthenticatedStatus authenticatedStatus;
+  final RiderAccountState riderAccountState;
 
   final int countdown;
 
@@ -144,6 +145,7 @@ class AuthState extends AuthInitial {
         oAuthPhotoURL,
         verificationUploadStatus,
         authenticatedStatus,
+        riderAccountState,
       ];
 
   const AuthState({
@@ -196,6 +198,7 @@ class AuthState extends AuthInitial {
     this.oAuthPhotoURL,
     this.verificationUploadStatus = VerificationUploadStatus.initialized,
     this.authenticatedStatus = AuthenticatedStatus.initial,
+    this.riderAccountState = RiderAccountState.onboardingNotStarted,
   });
 
   AuthState copyWith(
@@ -242,6 +245,7 @@ class AuthState extends AuthInitial {
       String? vehicleRegistrationDocumentStatus,
       AppLocationStatus? appLocationStatus,
       AuthenticatedStatus? authenticatedStatus,
+      RiderAccountState? riderAccountState,
       String? profilePhoto,
       String? oAuthFirstName,
       String? oAuthLastName,
@@ -294,6 +298,7 @@ class AuthState extends AuthInitial {
             this.vehicleRegistrationDocumentStatus,
         appLocationStatus: appLocationStatus ?? this.appLocationStatus,
         authenticatedStatus: authenticatedStatus ?? this.authenticatedStatus,
+        riderAccountState: riderAccountState ?? this.riderAccountState,
         profilePhoto: profilePhoto ?? this.profilePhoto,
         oAuthFirstName: oAuthFirstName ?? this.oAuthFirstName,
         oAuthLastName: oAuthLastName ?? this.oAuthLastName,

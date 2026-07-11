@@ -24,6 +24,7 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../utils/validator/validator.dart';
+import '../../rider_account/rider_account_state.dart';
 import '../repo/auth_repo.dart';
 // import '../../onboarding/view/onboarding.dart';
 
@@ -70,20 +71,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }, SetOptions(merge: true));
     }
 
-    String riderAuthStatus(Map<String, dynamic>? data) {
-      final onboardingStatus = '${data?['onboardingStatus'] ?? ''}';
-      if (onboardingStatus == 'profile_complete' ||
-          onboardingStatus == 'verification_pending' ||
-          onboardingStatus == 'under_review' ||
-          data?['profileCompletionStatus'] == 'complete') {
-        return 'dashboard';
-      }
-      if (onboardingStatus == 'application_submitted') {
-        return 'pending';
-      }
-      return 'dashboard';
-    }
-
     Future<String?> vehicleRegistrationDocumentStatus(String uid) async {
       final doc = await db
           .collection('riderDocuments')
@@ -114,17 +101,32 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           String? vehicleDocStatus;
           String? riderPhoto;
           var authenticatedStatus = AuthenticatedStatus.authenticated;
+          var riderAccountState = RiderAccountState.onboardingNotStarted;
           try {
-            final riderDoc = await db.collection('riders').doc(user.uid).get();
-            final riderData = riderDoc.data();
-            riderPhone = riderData?['phone'] as String? ?? phone;
+            final records = await Future.wait([
+              db.collection('riders').doc(user.uid).get(),
+              db.collection('riderProfiles').doc(user.uid).get(),
+            ]);
+            final riderData = <String, dynamic>{
+              ...(records[1].data() ?? const <String, dynamic>{}),
+              ...(records[0].data() ?? const <String, dynamic>{}),
+            };
+            riderPhone = riderData['phone'] as String? ?? phone;
             riderPhoto =
-                '${riderData?['photoURL'] ?? riderData?['photoUrl'] ?? riderData?['profilePhotoUrl'] ?? ''}'
+                '${riderData['photoURL'] ?? riderData['photoUrl'] ?? riderData['profilePhotoUrl'] ?? ''}'
                     .trim();
             if (riderPhoto.isEmpty || riderPhoto == 'null') riderPhoto = null;
-            phoneVerified = riderData?['phoneVerified'] == true;
-            if (riderAuthStatus(riderData) == 'pending') {
-              authenticatedStatus = AuthenticatedStatus.pendingApproval;
+            phoneVerified = riderData['phoneVerified'] == true;
+            riderAccountState = RiderAccountStateResolver.resolve(riderData);
+            if (!RiderAccountStateResolver.canOperate(riderAccountState)) {
+              authenticatedStatus =
+                  riderAccountState == RiderAccountState.onboardingNotStarted ||
+                          riderAccountState ==
+                              RiderAccountState.onboardingInProgress ||
+                          riderAccountState ==
+                              RiderAccountState.moreInformationRequired
+                      ? AuthenticatedStatus.incompleteData
+                      : AuthenticatedStatus.pendingApproval;
             }
             vehicleDocStatus =
                 await vehicleRegistrationDocumentStatus(user.uid);
@@ -149,6 +151,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               profilePhoto: riderPhoto ?? user.photoURL,
               isPhoneVerified: phoneVerified,
               vehicleRegistrationDocumentStatus: vehicleDocStatus,
+              riderAccountState: riderAccountState,
               authenticatedStatus: authenticatedStatus));
 
           await Future.delayed(const Duration(seconds: 3));
@@ -1353,8 +1356,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               if (documentSnapshot.exists) {
                 final doc = documentSnapshot.data();
                 riderPhone = doc?['phone'] as String? ?? riderPhone;
-                if (riderAuthStatus(doc) == 'pending') {
-                  authenticatedStatus = AuthenticatedStatus.pendingApproval;
+                final riderAccountState =
+                    RiderAccountStateResolver.resolve(doc);
+                if (!RiderAccountStateResolver.canOperate(riderAccountState)) {
+                  authenticatedStatus = riderAccountState ==
+                              RiderAccountState.onboardingNotStarted ||
+                          riderAccountState ==
+                              RiderAccountState.onboardingInProgress ||
+                          riderAccountState ==
+                              RiderAccountState.moreInformationRequired
+                      ? AuthenticatedStatus.incompleteData
+                      : AuthenticatedStatus.pendingApproval;
                 }
                 if (riderPhone != null) {
                   await storage.write(key: 'phone', value: riderPhone);
@@ -1363,6 +1375,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               emit(state.copyWith(
                   status: Status.success,
                   authenticatedStatus: authenticatedStatus,
+                  riderAccountState: documentSnapshot.exists
+                      ? RiderAccountStateResolver.resolve(
+                          documentSnapshot.data())
+                      : RiderAccountState.onboardingNotStarted,
                   username: userCredential.user?.displayName,
                   profilePhoto: userCredential.user?.photoURL,
                   email: userCredential.user?.email,
