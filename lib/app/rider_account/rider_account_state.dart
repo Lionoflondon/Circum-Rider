@@ -40,12 +40,6 @@ class RiderAccountStateResolver {
       'approvalStatus',
       'verificationStatus',
     );
-    final profileOperational = _value(
-      riderProfile ?? const <String, dynamic>{},
-      'driverStatus',
-      'riderStatus',
-      'status',
-    );
     final riderOperational = _value(
       rider ?? const <String, dynamic>{},
       'riderStatus',
@@ -57,8 +51,7 @@ class RiderAccountStateResolver {
         _bool(reconciled, 'isSuspended', 'suspended') ||
         _matches(riderOperational, {'closed', 'frozen', 'suspended'});
     if (!restricted &&
-        _matches(profileApproval, {'approved', 'verified'}) &&
-        _matches(profileOperational, {'active', 'approved'})) {
+        _matches(profileApproval, {'approved', 'verified'})) {
       reconciled['riderStatus'] = 'active';
     }
     return resolve(reconciled);

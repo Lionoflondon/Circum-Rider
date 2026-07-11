@@ -72,7 +72,6 @@ void main() {
           riderProfile: const {
             'approvalStatus': 'approved',
             'verificationStatus': 'approved',
-            'driverStatus': 'active',
           },
         ),
         RiderAccountState.approved,
