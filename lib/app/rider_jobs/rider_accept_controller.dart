@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class RiderProfileSnapshot {
   final String riderId;
@@ -156,6 +157,41 @@ class FirestoreRiderJobTransactionStore implements RiderJobTransactionStore {
         status: RiderAcceptStatus.networkError,
         message: 'We could not accept this delivery. Please try again.',
       );
+    }
+  }
+}
+
+class CallableRiderJobTransactionStore implements RiderJobTransactionStore {
+  CallableRiderJobTransactionStore({FirebaseFunctions? functions})
+      : functions =
+            functions ?? FirebaseFunctions.instanceFor(region: 'us-central1');
+
+  final FirebaseFunctions functions;
+
+  @override
+  Future<RiderAcceptResult> acceptInTransaction(
+      {required String jobId, required RiderProfileSnapshot rider}) async {
+    try {
+      final response = await functions
+          .httpsCallable('acceptRideRequests')
+          .call({'requestId': jobId});
+      final data = Map<String, dynamic>.from(response.data as Map);
+      return RiderAcceptResult(
+          status: RiderAcceptStatus.accepted,
+          message: 'Delivery accepted.',
+          patch: data);
+    } on FirebaseFunctionsException catch (error) {
+      if (error.code == 'already-exists' ||
+          error.code == 'not-found' ||
+          error.code == 'failed-precondition') {
+        return RiderAcceptResult(
+            status: RiderAcceptStatus.alreadyTaken,
+            message: error.message ?? 'This delivery is no longer available.');
+      }
+      return RiderAcceptResult(
+          status: RiderAcceptStatus.networkError,
+          message: error.message ??
+              'We could not accept this delivery. Please try again.');
     }
   }
 }

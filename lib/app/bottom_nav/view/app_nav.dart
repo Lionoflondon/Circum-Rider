@@ -27,7 +27,8 @@ class AppNavView extends StatelessWidget {
 
         final screens = <Widget>[
           RiderDashboardView(onSelectTab: select),
-          RiderJobOfferScreen(onScheduledAccepted: () => select(2)),
+          RiderJobOfferScreen(
+              onScheduledAccepted: () => select(2), onNavigateTab: select),
           const RiderScheduleView(embedded: true),
           const EarningsView(embedded: true),
           RiderProfileView(onSelectTab: select),

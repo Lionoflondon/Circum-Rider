@@ -27,6 +27,7 @@ class RiderJobOfferScreen extends StatefulWidget {
   final RiderAcceptController? acceptController;
   final List<RiderJobOffer>? previewOffers;
   final VoidCallback? onScheduledAccepted;
+  final ValueChanged<int>? onNavigateTab;
 
   const RiderJobOfferScreen({
     super.key,
@@ -35,6 +36,7 @@ class RiderJobOfferScreen extends StatefulWidget {
     this.acceptController,
     this.previewOffers,
     this.onScheduledAccepted,
+    this.onNavigateTab,
   });
 
   @override
@@ -58,7 +60,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     _auth = widget.auth ?? FirebaseAuth.instance;
     _acceptController = widget.acceptController ??
         RiderAcceptController(
-          store: FirestoreRiderJobTransactionStore(firestore: _firestore),
+          store: CallableRiderJobTransactionStore(),
         );
   }
 
@@ -309,13 +311,14 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
         });
         return;
       }
-      Navigator.of(context).pushReplacement(
+      Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => RiderAcceptedJobScreen(
             offer: offer,
             firestore: _firestore,
             riderId: rider.riderId,
             riderRank: rider.riderRank ?? 'Agent',
+            onNavigateTab: widget.onNavigateTab,
           ),
         ),
       );
@@ -1132,6 +1135,7 @@ class RiderAcceptedJobScreen extends StatefulWidget {
   final String riderId;
   final FirebaseFirestore? firestore;
   final RiderDeliveryController? deliveryController;
+  final ValueChanged<int>? onNavigateTab;
 
   const RiderAcceptedJobScreen({
     super.key,
@@ -1140,6 +1144,7 @@ class RiderAcceptedJobScreen extends StatefulWidget {
     this.riderId = 'preview-rider',
     this.firestore,
     this.deliveryController,
+    this.onNavigateTab,
   });
 
   @override
@@ -1495,6 +1500,54 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final firestore = widget.firestore;
+    if (firestore == null) return _buildExperience(context, widget.offer.raw);
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: firestore
+          .collection('deliveryRequests')
+          .doc(widget.offer.id)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError)
+          return const _StateScaffold(
+              title: 'Delivery unavailable',
+              message:
+                  'Check your connection and retry. Your delivery state remains safe.');
+        if (!snapshot.hasData)
+          return const _StateScaffold(
+              title: 'Restoring delivery',
+              message: 'Loading the latest operational state.',
+              loading: true);
+        final live = snapshot.data?.data();
+        if (live == null)
+          return const _StateScaffold(
+              title: 'Delivery unavailable',
+              message:
+                  'This delivery record is no longer available. Contact Circum Support.');
+        final rawStatus =
+            live['deliveryStage'] ?? live['deliveryStatus'] ?? live['status'];
+        final restored = RiderDeliveryStagePolicy.fromRaw(rawStatus);
+        if (restored != _stage)
+          scheduleMicrotask(() {
+            if (mounted) setState(() => _stage = restored);
+          });
+        final terminal = '$rawStatus'.toLowerCase();
+        if ({'cancelled', 'failed', 'no_show', 'disputed'}.contains(terminal))
+          return _StateScaffold(
+              title: terminal.replaceAll('_', ' '),
+              message:
+                  'This delivery can no longer progress. The latest backend state has been restored.');
+        return _buildExperience(context, live);
+      },
+    );
+  }
+
+  Widget _buildExperience(BuildContext context, Map<String, dynamic> live) {
+    if (_stage == RiderDeliveryStage.delivered)
+      return _DeliveryCompleteView(
+          offer: widget.offer,
+          delivery: live,
+          onNavigateTab: widget.onNavigateTab);
     final nextTitle = _nextActionTitle(_stage);
     return Scaffold(
       backgroundColor: const Color(0xFF07090F),
@@ -1609,6 +1662,134 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     if (stage == RiderDeliveryStage.delivered) return widget.offer.dropoffArea;
     return '${widget.offer.dropoffAddress} - ${widget.offer.timeText} away';
   }
+}
+
+class _DeliveryCompleteView extends StatelessWidget {
+  const _DeliveryCompleteView(
+      {required this.offer,
+      required this.delivery,
+      required this.onNavigateTab});
+  final RiderJobOffer offer;
+  final Map<String, dynamic> delivery;
+  final ValueChanged<int>? onNavigateTab;
+
+  @override
+  Widget build(BuildContext context) {
+    num value(String key) => delivery[key] is num ? delivery[key] as num : 0;
+    final total = value('riderEarning');
+    final breakdown = delivery['riderEarningBreakdown'] is Map
+        ? Map<String, dynamic>.from(delivery['riderEarningBreakdown'] as Map)
+        : const <String, dynamic>{};
+    num part(String key) => breakdown[key] is num ? breakdown[key] as num : 0;
+    return Scaffold(
+        backgroundColor: const Color(0xFF07090F),
+        body: Stack(children: [
+          _OfferMapBackground(offer: offer),
+          Container(color: const Color(0xFF07090F).withOpacity(.78)),
+          SafeArea(
+              child: Center(
+                  child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(20),
+                      child: Container(
+                          constraints: const BoxConstraints(maxWidth: 430),
+                          padding: const EdgeInsets.all(22),
+                          decoration: BoxDecoration(
+                              color: const Color(0xF20D111C),
+                              borderRadius: BorderRadius.circular(24),
+                              border:
+                                  Border.all(color: const Color(0x5534D399))),
+                          child:
+                              Column(mainAxisSize: MainAxisSize.min, children: [
+                            const CircleAvatar(
+                                radius: 28,
+                                backgroundColor: Color(0x2234D399),
+                                child: Icon(Icons.check_rounded,
+                                    color: Color(0xFF34D399), size: 34)),
+                            const SizedBox(height: 14),
+                            const Text('Delivery complete',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 6),
+                            Text(
+                                'Reference ${delivery['requestId'] ?? offer.id}',
+                                style: TextStyle(
+                                    color: Colors.white.withOpacity(.62),
+                                    fontSize: 12)),
+                            const SizedBox(height: 18),
+                            _CompletionRow(
+                                'Delivery earnings',
+                                total -
+                                    part('tip') -
+                                    part('waiting') -
+                                    part('adjustment')),
+                            if (part('tip') != 0)
+                              _CompletionRow('Tip', part('tip')),
+                            if (part('waiting') != 0)
+                              _CompletionRow(
+                                  'Waiting / no-show', part('waiting')),
+                            if (part('adjustment') != 0)
+                              _CompletionRow('Adjustment', part('adjustment')),
+                            const Divider(color: Colors.white12),
+                            _CompletionRow('Total credited', total,
+                                strong: true),
+                            const SizedBox(height: 8),
+                            Text(
+                                '+${delivery['trustPointsAwarded'] ?? 0} Trust Points',
+                                style: const TextStyle(
+                                    color: Color(0xFFA78BFA),
+                                    fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 5),
+                            const Text(
+                                'Roth is separate from withdrawable cash.',
+                                style: TextStyle(
+                                    color: Colors.white54, fontSize: 11)),
+                            const SizedBox(height: 20),
+                            SizedBox(
+                                width: double.infinity,
+                                child: FilledButton(
+                                    onPressed: () {
+                                      onNavigateTab?.call(0);
+                                      Navigator.of(context).pop();
+                                    },
+                                    child: const Text('Return to Home'))),
+                            TextButton(
+                                onPressed: () {
+                                  onNavigateTab?.call(3);
+                                  Navigator.of(context).pop();
+                                },
+                                child: const Text('View Earnings')),
+                            TextButton(
+                                onPressed: () {
+                                  onNavigateTab?.call(4);
+                                  Navigator.of(context).pop();
+                                },
+                                child: const Text('View Delivery activity')),
+                          ])))))
+        ]));
+  }
+}
+
+class _CompletionRow extends StatelessWidget {
+  const _CompletionRow(this.label, this.amount, {this.strong = false});
+  final String label;
+  final num amount;
+  final bool strong;
+  @override
+  Widget build(BuildContext context) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(children: [
+        Expanded(
+            child: Text(label,
+                style: TextStyle(
+                    color: Colors.white.withOpacity(.7),
+                    fontWeight: strong ? FontWeight.w800 : FontWeight.w500))),
+        Text('£${amount.toStringAsFixed(2)}',
+            style: TextStyle(
+                color: Colors.white,
+                fontWeight: strong ? FontWeight.w900 : FontWeight.w700))
+      ]));
 }
 
 class _WaitingPolicyCard extends StatelessWidget {
