@@ -1,8 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:intl_phone_field/countries.dart';
-import 'package:intl_phone_field/intl_phone_field.dart';
 
 import '../../../utils/theme/theme.dart';
 import '../bloc/auth_bloc.dart';
@@ -26,7 +24,6 @@ class SignupFormState extends State<SignupForm> {
   final _vehicleColourController = TextEditingController();
   final _vehicleRegistrationController = TextEditingController();
   bool _acceptedTerms = false;
-  var _country = countries.firstWhere((element) => element.code == 'GB');
 
   @override
   void dispose() {
@@ -45,7 +42,6 @@ class SignupFormState extends State<SignupForm> {
   Widget build(BuildContext context) {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       final valid = state.isEmailValid == true &&
-          state.isPhoneNumberValid == true &&
           (state.password?.length ?? 0) >= 8 &&
           _vehicleTypeController.text.trim().isNotEmpty &&
           _vehicleMakeModelController.text.trim().isNotEmpty &&
@@ -102,8 +98,6 @@ class SignupFormState extends State<SignupForm> {
                       color: AppColors.primary)
                   : null,
             ),
-            const SizedBox(height: 16),
-            _phoneField(state),
             const SizedBox(height: 16),
             RiderGlassTextField(
               label: 'Vehicle type',
@@ -285,33 +279,6 @@ class SignupFormState extends State<SignupForm> {
     );
   }
 
-  Widget _phoneField(AuthState state) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        AppText.text('Mobile number',
-            color: Colors.white, fontWeight: FontWeight.w700),
-        const SizedBox(height: 8),
-        IntlPhoneField(
-          style: const TextStyle(color: Colors.white, fontFamily: 'OpenSans'),
-          dropdownTextStyle:
-              const TextStyle(color: Colors.white, fontFamily: 'OpenSans'),
-          initialCountryCode: 'GB',
-          decoration: riderInputDecoration(),
-          onCountryChanged: (country) => _country = country,
-          onChanged: (value) {
-            final valid = value.number.length >= _country.minLength &&
-                value.number.length <= _country.maxLength;
-            context.read<AuthBloc>().add(ValidatePhoneNumber(val: valid));
-            context
-                .read<AuthBloc>()
-                .add(PhoneNumberChanged(phoneNumber: value.completeNumber));
-          },
-        ),
-      ],
-    );
-  }
-
   Widget _passwordStrength(String password) {
     final score = password.length >= 12
         ? 3
@@ -362,11 +329,6 @@ class SignupFormState extends State<SignupForm> {
     }
     if (state.isEmailValid != true) {
       bloc.add(const SetErrorMessage(errorMessage: 'Invalid email address.'));
-      return;
-    }
-    if (state.isPhoneNumberValid != true) {
-      bloc.add(
-          const SetErrorMessage(errorMessage: 'Add a valid mobile number.'));
       return;
     }
     if (_vehicleTypeController.text.trim().isEmpty ||

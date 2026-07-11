@@ -33,11 +33,7 @@ class _OnboardingViewState extends State<OnboardingView> {
     final value = _identity.text.trim();
     if (value.isEmpty) return;
     final bloc = context.read<AuthBloc>();
-    if (value.contains('@')) {
-      bloc.add(SignupEmailChanged(email: value));
-    } else {
-      bloc.add(PhoneNumberChanged(phoneNumber: value));
-    }
+    bloc.add(SignupEmailChanged(email: value));
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const SignupView()),
@@ -49,14 +45,14 @@ class _OnboardingViewState extends State<OnboardingView> {
     return RiderOnboardingShell(
       currentStep: 0,
       showStepProgress: false,
-      title: 'What\'s your phone number or email?',
-      subtitle: 'Continue securely to your Circum account or create one.',
+      title: 'What\'s your email?',
+      subtitle: 'Create your Rider account securely with email.',
       child: RiderGlassCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             RiderGlassTextField(
-              label: 'Enter phone number or email',
+              label: 'Email address',
               controller: _identity,
               keyboardType: TextInputType.emailAddress,
               onChanged: (_) => setState(() {}),
@@ -68,12 +64,11 @@ class _OnboardingViewState extends State<OnboardingView> {
               onPressed: _continue,
             ),
             const SizedBox(height: 14),
-            TextButton(
+            ExistingRiderSignInLink(
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const SigninView()),
               ),
-              child: const Text('Already have an account? Sign in'),
             ),
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 10),
@@ -108,6 +103,30 @@ class _OnboardingViewState extends State<OnboardingView> {
                   color: AppColors.textGrey.withOpacity(0.9), fontSize: 12),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class ExistingRiderSignInLink extends StatelessWidget {
+  final VoidCallback onPressed;
+
+  const ExistingRiderSignInLink({super.key, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    const label = 'Already have an account? Sign in';
+    return Semantics(
+      button: true,
+      label: label,
+      child: SizedBox(
+        key: const Key('existing_rider_sign_in'),
+        width: double.infinity,
+        height: 48,
+        child: TextButton(
+          onPressed: onPressed,
+          child: const Text(label, textAlign: TextAlign.center),
         ),
       ),
     );

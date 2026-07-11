@@ -25,6 +25,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../utils/validator/validator.dart';
 import '../../rider_account/rider_account_state.dart';
+import '../rider_auth_error.dart';
 import '../repo/auth_repo.dart';
 // import '../../onboarding/view/onboarding.dart';
 
@@ -1332,84 +1333,63 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               status: Status.unverifiedEmail,
             ));
           } else {
-            if (userCredential.user?.displayName == null) {
+            final user = auth.currentUser;
+            if (user == null) {
               emit(state.copyWith(
-                  authenticatedStatus: AuthenticatedStatus.incompleteData,
-                  currentState: AppState.authenticated));
-            } else {
-              print(userCredential.additionalUserInfo);
-              print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
-              print(userCredential);
-              print(userCredential.credential?.accessToken);
-              print(userCredential.credential?.providerId);
-              print(userCredential.credential?.signInMethod);
-              print(userCredential.credential?.token);
-              print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
-              print(userCredential.user);
-              User? user = auth.currentUser;
-              final documentReference = db.collection('riders').doc(user?.uid);
-              // Get the document snapshot
-              final documentSnapshot = await documentReference.get();
-              String? riderPhone = userCredential.user?.phoneNumber;
-              var authenticatedStatus = AuthenticatedStatus.authenticated;
-
-              if (documentSnapshot.exists) {
-                final doc = documentSnapshot.data();
-                riderPhone = doc?['phone'] as String? ?? riderPhone;
-                final riderAccountState =
-                    RiderAccountStateResolver.resolve(doc);
-                if (!RiderAccountStateResolver.canOperate(riderAccountState)) {
-                  authenticatedStatus = riderAccountState ==
-                              RiderAccountState.onboardingNotStarted ||
-                          riderAccountState ==
-                              RiderAccountState.onboardingInProgress ||
-                          riderAccountState ==
-                              RiderAccountState.moreInformationRequired
-                      ? AuthenticatedStatus.incompleteData
-                      : AuthenticatedStatus.pendingApproval;
-                }
-                if (riderPhone != null) {
-                  await storage.write(key: 'phone', value: riderPhone);
-                }
-              }
-              emit(state.copyWith(
-                  status: Status.success,
-                  authenticatedStatus: authenticatedStatus,
-                  riderAccountState: documentSnapshot.exists
-                      ? RiderAccountStateResolver.resolve(
-                          documentSnapshot.data())
-                      : RiderAccountState.onboardingNotStarted,
-                  username: userCredential.user?.displayName,
-                  profilePhoto: userCredential.user?.photoURL,
-                  email: userCredential.user?.email,
-                  verificationId: '',
-                  otp: '',
-                  phoneNumber: riderPhone,
-                  currentState: AppState.authenticated));
+                status: Status.failure,
+                errorMessage:
+                    'Sign in could not be completed. Please try again.',
+              ));
+              return;
             }
+            final documentReference = db.collection('riders').doc(user.uid);
+            // Get the document snapshot
+            final documentSnapshot = await documentReference.get();
+            String? riderPhone = userCredential.user?.phoneNumber;
+            var authenticatedStatus = AuthenticatedStatus.authenticated;
+
+            if (documentSnapshot.exists) {
+              final doc = documentSnapshot.data();
+              riderPhone = doc?['phone'] as String? ?? riderPhone;
+              final riderAccountState = RiderAccountStateResolver.resolve(doc);
+              if (!RiderAccountStateResolver.canOperate(riderAccountState)) {
+                authenticatedStatus = riderAccountState ==
+                            RiderAccountState.onboardingNotStarted ||
+                        riderAccountState ==
+                            RiderAccountState.onboardingInProgress ||
+                        riderAccountState ==
+                            RiderAccountState.moreInformationRequired
+                    ? AuthenticatedStatus.incompleteData
+                    : AuthenticatedStatus.pendingApproval;
+              }
+              if (riderPhone != null) {
+                await storage.write(key: 'phone', value: riderPhone);
+              }
+            }
+            emit(state.copyWith(
+                status: Status.success,
+                authenticatedStatus: authenticatedStatus,
+                riderAccountState: documentSnapshot.exists
+                    ? RiderAccountStateResolver.resolve(documentSnapshot.data())
+                    : RiderAccountState.onboardingNotStarted,
+                username: user.displayName,
+                profilePhoto: user.photoURL,
+                email: user.email,
+                verificationId: '',
+                otp: '',
+                phoneNumber: riderPhone,
+                currentState: AppState.authenticated));
           }
         } on FirebaseAuthException catch (e) {
-          print(e.code);
-          emit(state.copyWith(status: Status.failure));
-          if (e.code == 'invalid-email') {
-            print('Email is invalid');
-            emit(state.copyWith(errorMessage: 'Email is invalid'));
-          }
-          if (e.code == 'user-disabled') {
-            print('User disabled');
-            emit(state.copyWith(errorMessage: 'User disabled'));
-          }
-          if (e.code == 'user-not-found') {
-            print('User not found');
-            emit(state.copyWith(errorMessage: 'User not found'));
-          }
-          if (e.code == 'wrong-password') {
-            print('Wrong password');
-            emit(state.copyWith(errorMessage: 'Password incorrect'));
-          }
-        } catch (e) {
-          print(e);
-          emit(state.copyWith(status: Status.failure));
+          emit(state.copyWith(
+            status: Status.failure,
+            errorMessage: RiderAuthError.messageFor(e.code),
+          ));
+        } catch (_) {
+          emit(state.copyWith(
+            status: Status.failure,
+            errorMessage: RiderAuthError.messageFor('unknown'),
+          ));
         }
       },
     );

@@ -244,7 +244,7 @@ class SigninFormState extends State<SigninForm> {
           child: AppButton.button(
               backgroundColor: state.isEmailValid == true &&
                       state.password != null &&
-                      state.password!.length >= 8
+                      state.password!.isNotEmpty
                   ? null
                   : Colors.white.withOpacity(0.3),
               onPressed: () async {
@@ -262,7 +262,7 @@ class SigninFormState extends State<SigninForm> {
                       errorMessage: 'Invalid email address'));
                   return;
                 }
-                if (state.password != null && state.password!.length >= 8) {
+                if (state.password != null && state.password!.isNotEmpty) {
                   context.read<AuthBloc>().add(SignInWithEmail(
                       email: state.email!, password: state.password!));
                 }
@@ -275,36 +275,27 @@ class SigninFormState extends State<SigninForm> {
 
   Widget _dontHaveAnAccount() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-      return GestureDetector(
-          onTap: () {
+      return SizedBox(
+        width: MediaQuery.of(context).size.width,
+        height: 48,
+        child: TextButton(
+          onPressed: () {
             emailController.text = '';
             passwordController.text = '';
             context.read<AuthBloc>().add(SignupEmailChanged(email: ''));
             context.read<AuthBloc>().add(SignupPasswordChanged(password: ''));
             Navigator.pop(context);
           },
-          child: SizedBox(
-              width: MediaQuery.of(context).size.width,
-              child: const Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                        text: 'New to Circum? ',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontFamily: 'OpenSans',
-                            fontSize: 16)),
-                    TextSpan(
-                      text: 'Create Account',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              )));
+          child: const Text(
+            'Back to create account',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.primary,
+              fontSize: 16,
+            ),
+          ),
+        ),
+      );
     });
   }
 }
