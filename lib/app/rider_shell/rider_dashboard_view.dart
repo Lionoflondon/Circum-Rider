@@ -305,11 +305,17 @@ class _AvailabilityCard extends StatelessWidget {
               style: const TextStyle(color: RiderPalette.amber, fontSize: 12)),
         ],
         const SizedBox(height: 16),
-        RiderPrimaryButton(
-          label: online ? 'Go Offline' : 'Go Online',
-          icon: online ? Icons.pause_rounded : Icons.power_settings_new_rounded,
-          color: online ? RiderPalette.panel : RiderPalette.green,
-          onPressed: state.canGoOnline || online ? onToggle : null,
+        FutureBuilder<bool>(
+          future: FounderRiderAccess.enabled(),
+          builder: (context, founder) => RiderPrimaryButton(
+            label: online ? 'Go Offline' : 'Go Online',
+            icon:
+                online ? Icons.pause_rounded : Icons.power_settings_new_rounded,
+            color: online ? RiderPalette.panel : RiderPalette.green,
+            onPressed: founder.data == true || state.canGoOnline || online
+                ? onToggle
+                : null,
+          ),
         ),
       ]),
     );
