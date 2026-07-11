@@ -19,6 +19,9 @@ void main() {
         File('lib/app/authentication/view/add_details.dart').readAsStringSync();
     final accountState = File('lib/app/rider_account/rider_account_state.dart')
         .readAsStringSync();
+    final applicationCentre =
+        File('lib/app/onboarding/rider_application_centre.dart')
+            .readAsStringSync();
 
     test('new Riders see the guide before auth and viewed state persists', () {
       expect(onboarding, contains('RiderGuideView.hasViewedIntro'));
@@ -46,7 +49,8 @@ void main() {
       final authenticatedEntryPoints =
           '$dashboard\n$profile\n$pending\n$addDetails';
       expect(authenticatedEntryPoints, contains('authenticated: true'));
-      expect(guide, contains('Continue to Rider app'));
+      expect(guide, contains('Open Application Centre'));
+      expect(guide, contains('RiderApplicationCentre'));
       expect(guide, contains('Close guide'));
       expect(guide, isNot(contains('SignOut')));
       expect(guide, isNot(contains('SignUpWithEmail')));
@@ -81,6 +85,7 @@ void main() {
       expect(accountState, contains('payoutSetup'));
       expect(accountState, contains('RiderApprovalProgress.fromBackend'));
       expect(guide, contains('Application progress'));
+      expect(applicationCentre, contains('Application progress'));
       expect(guide, contains('Account created'));
       expect(guide, contains('Phone verified'));
       expect(guide, contains('Identity and documents'));
@@ -95,6 +100,58 @@ void main() {
       expect(guide, contains('Learn how Circum Rider works.'));
       expect(profile, isNot(contains('Already have an account? Sign in')));
       expect(pending, isNot(contains('Get started')));
+    });
+
+    test('Application Centre contains the real Rider application sections', () {
+      for (final label in [
+        'Personal details',
+        'Home address',
+        'Contact details',
+        'Identity verification',
+        'Right-to-work information',
+        'Vehicle details',
+        'Vehicle documents',
+        'Payout details',
+        'Roth wallet setup',
+        'Application messages',
+        'Review status',
+      ]) {
+        expect(applicationCentre, contains(label));
+      }
+      expect(applicationCentre, contains('RiderApplicationSectionStatus'));
+      expect(applicationCentre, contains('Not started'));
+      expect(applicationCentre, contains('In progress'));
+      expect(applicationCentre, contains('Submitted'));
+      expect(applicationCentre, contains('Needs attention'));
+      expect(applicationCentre, contains('Approved'));
+    });
+
+    test('Application Centre stores documents securely for Admin review', () {
+      expect(applicationCentre, contains("storageRoot = 'rider-applications'"));
+      expect(applicationCentre, contains('storagePath'));
+      expect(applicationCentre, contains('riderDocuments'));
+      expect(applicationCentre, contains('statusHistory'));
+      expect(applicationCentre, contains('archivedVersions'));
+      expect(applicationCentre, contains('under_review'));
+      expect(applicationCentre, isNot(contains('publicDownloadUrl')));
+    });
+
+    test('Application Centre supports vehicles Roth and Admin messages', () {
+      expect(applicationCentre, contains('maxVehicles = 2'));
+      expect(applicationCentre, contains('V5C or MOT'));
+      expect(applicationCentre, contains('insurance can be supplied later'));
+      expect(applicationCentre, contains('ensureWalletForRider'));
+      expect(applicationCentre, contains('RiderConversationView'));
+      expect(applicationCentre, contains("admin_rider_"));
+      expect(applicationCentre, contains('_application'));
+    });
+
+    test('Rider cannot approve their own application from the centre', () {
+      expect(
+          applicationCentre, isNot(contains("'approvalStatus': 'approved'")));
+      expect(applicationCentre, isNot(contains("'approvedAt'")));
+      expect(applicationCentre, contains('application_submitted'));
+      expect(applicationCentre, contains('riderApplicationAudit'));
     });
   });
 }

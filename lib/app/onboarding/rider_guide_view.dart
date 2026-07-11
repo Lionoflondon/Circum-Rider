@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../rider_account/rider_account_state.dart';
 import '../rider_design/rider_ui.dart';
+import 'rider_application_centre.dart';
 
 class RiderGuideView extends StatefulWidget {
   const RiderGuideView({
@@ -84,14 +85,6 @@ class _RiderGuideViewState extends State<RiderGuideView> {
                             },
                           ),
                         ),
-                        if (widget.authenticated && widget.progress != null)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(24, 0, 24, 14),
-                            child: RiderGuideProgressCard(
-                              progress: widget.progress!,
-                              compact: true,
-                            ),
-                          ),
                         _GuideFooter(
                           page: _page,
                           count: slides.length,
@@ -144,6 +137,13 @@ class _RiderGuideViewState extends State<RiderGuideView> {
 
   Future<void> _continue() async {
     await _markViewed();
+    if (widget.authenticated && mounted) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const RiderApplicationCentre()),
+      );
+      return;
+    }
     if (widget.onContinue != null) {
       widget.onContinue!();
     } else {
@@ -359,7 +359,7 @@ class _GuideFooter extends StatelessWidget {
               icon: const Icon(Icons.arrow_forward_rounded, size: 18),
               label: Text(
                 authenticated
-                    ? (last ? 'Continue to Rider app' : 'Continue')
+                    ? (last ? 'Open Application Centre' : 'Continue')
                     : (last ? 'Get started' : 'Continue'),
               ),
               style: FilledButton.styleFrom(
