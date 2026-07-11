@@ -1,10 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../rider_design/rider_ui.dart';
-import '../../rider_truth/rider_truth.dart';
 import '../bloc/account_bloc.dart';
 
 class EarningsView extends StatefulWidget {
@@ -17,12 +17,21 @@ class EarningsView extends StatefulWidget {
 }
 
 class _EarningsViewState extends State<EarningsView> {
+  late Future<Map<String, dynamic>> _summary;
   @override
   void initState() {
     super.initState();
+    _summary = _loadSummary();
     context.read<AccountBloc>()
       ..add(GetEarnings())
       ..add(GetRequests());
+  }
+
+  Future<Map<String, dynamic>> _loadSummary() async {
+    final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('getRiderEarningsSummary')
+        .call();
+    return Map<String, dynamic>.from(result.data as Map);
   }
 
   @override
@@ -35,52 +44,63 @@ class _EarningsViewState extends State<EarningsView> {
         message: 'Sign in to view Rider earnings.',
       );
     }
-    final content = StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('riderEarnings')
-          .doc(uid)
-          .snapshots(),
-      builder: (context, earningsSnapshot) {
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+    final content = FutureBuilder<Map<String, dynamic>>(
+      future: _summary,
+      builder: (context, summarySnapshot) {
+        if (summarySnapshot.hasError) {
+          return _EarningsFailure(
+              onRetry: () => setState(() => _summary = _loadSummary()));
+        }
+        if (!summarySnapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
           stream: FirebaseFirestore.instance
-              .collection('payoutRequests')
-              .where('riderId', isEqualTo: uid)
-              .limit(30)
+              .collection('riderEarnings')
+              .doc(uid)
               .snapshots(),
-          builder: (context, payoutSnapshot) {
+          builder: (context, earningsSnapshot) {
             return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
-                  .collection('riderWalletTransactions')
+                  .collection('payoutRequests')
                   .where('riderId', isEqualTo: uid)
-                  .limit(40)
+                  .limit(30)
                   .snapshots(),
-              builder: (context, transactionSnapshot) {
-                if (earningsSnapshot.hasError ||
-                    payoutSnapshot.hasError ||
-                    transactionSnapshot.hasError) {
-                  return _EarningsFailure(
-                    onRetry: () =>
-                        context.read<AccountBloc>().add(GetEarnings()),
-                  );
-                }
-                if (!earningsSnapshot.hasData ||
-                    !payoutSnapshot.hasData ||
-                    !transactionSnapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final wallet = earningsSnapshot.data?.data() ?? const {};
-                final payouts = payoutSnapshot.data?.docs
-                        .map((doc) => {'id': doc.id, ...doc.data()})
-                        .toList() ??
-                    const <Map<String, dynamic>>[];
-                final transactions = transactionSnapshot.data?.docs
-                        .map((doc) => {'id': doc.id, ...doc.data()})
-                        .toList() ??
-                    const <Map<String, dynamic>>[];
-                return _EarningsContent(
-                  wallet: wallet,
-                  payouts: payouts,
-                  transactions: transactions,
+              builder: (context, payoutSnapshot) {
+                return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: FirebaseFirestore.instance
+                      .collection('riderWalletTransactions')
+                      .where('riderId', isEqualTo: uid)
+                      .limit(40)
+                      .snapshots(),
+                  builder: (context, transactionSnapshot) {
+                    if (earningsSnapshot.hasError ||
+                        payoutSnapshot.hasError ||
+                        transactionSnapshot.hasError) {
+                      return _EarningsFailure(
+                        onRetry: () =>
+                            context.read<AccountBloc>().add(GetEarnings()),
+                      );
+                    }
+                    if (!earningsSnapshot.hasData ||
+                        !payoutSnapshot.hasData ||
+                        !transactionSnapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final payouts = payoutSnapshot.data?.docs
+                            .map((doc) => {'id': doc.id, ...doc.data()})
+                            .toList() ??
+                        const <Map<String, dynamic>>[];
+                    final transactions = transactionSnapshot.data?.docs
+                            .map((doc) => {'id': doc.id, ...doc.data()})
+                            .toList() ??
+                        const <Map<String, dynamic>>[];
+                    return _EarningsContent(
+                      summary: summarySnapshot.data!,
+                      payouts: payouts,
+                      transactions: transactions,
+                    );
+                  },
                 );
               },
             );
@@ -106,38 +126,43 @@ class _EarningsViewState extends State<EarningsView> {
 
 class _EarningsContent extends StatelessWidget {
   const _EarningsContent({
-    required this.wallet,
+    required this.summary,
     required this.payouts,
     required this.transactions,
   });
 
-  final Map<String, dynamic> wallet;
+  final Map<String, dynamic> summary;
   final List<Map<String, dynamic>> payouts;
   final List<Map<String, dynamic>> transactions;
 
   @override
   Widget build(BuildContext context) {
-    final summary = RiderEarningsSummary.from(wallet);
-    if (summary == null) return const _EarningsFailure(onRetry: null);
-    final available = summary.available;
-    final pending = summary.pending;
-    final delivery = summary.delivery;
-    final tips = summary.tips;
-    final waiting = summary.waiting;
-    final adjustments = summary.adjustments;
+    final totals = summary['totals'] is Map
+        ? Map<String, dynamic>.from(summary['totals'] as Map)
+        : const <String, dynamic>{};
+    double numValue(Object? value) => value is num ? value.toDouble() : 0;
+    final available = numValue(summary['storedAvailable']);
+    final pending = numValue(summary['pending']);
+    final delivery = numValue(totals['delivery_earning']);
+    final tips = numValue(totals['tip']);
+    final waiting =
+        numValue(totals['waiting_fee']) + numValue(totals['no_show_fee']);
+    final adjustments = numValue(totals['adjustment_credit']) -
+        numValue(totals['adjustment_debit']);
+    final unexplained = numValue(summary['unexplained']);
+    final reconciled = summary['reconciled'] == true;
+    final readiness = '${summary['connectReadiness'] ?? 'setup_required'}';
     final pendingPayout = payouts.any((item) => {
           'requested',
           'pending',
-          'approved',
           'processing',
         }.contains(
             '${item['status'] ?? item['payoutStatus'] ?? ''}'.toLowerCase()));
     final sortedPayouts = [...payouts]
       ..sort((a, b) => _millis(b).compareTo(_millis(a)));
     final activePayout = sortedPayouts
-        .where((item) => {'requested', 'pending', 'approved', 'processing'}
-            .contains('${item['status'] ?? item['payoutStatus'] ?? ''}'
-                .toLowerCase()))
+        .where((item) => {'requested', 'processing'}.contains(
+            '${item['status'] ?? item['payoutStatus'] ?? ''}'.toLowerCase()))
         .firstOrNull;
     final sortedTransactions = [...transactions]
       ..sort((a, b) => _millis(b).compareTo(_millis(a)));
@@ -169,22 +194,35 @@ class _EarningsContent extends StatelessWidget {
                 const SizedBox(width: 9),
                 Expanded(
                     child: RiderMetric(
-                        value: '${transactions.length}', label: 'ACTIVITY')),
+                        value:
+                            '${summary['activityCount'] ?? transactions.length}',
+                        label: 'ACTIVITY')),
               ]),
               const SizedBox(height: 15),
               RiderPrimaryButton(
-                label: pendingPayout
-                    ? 'Withdrawal processing'
-                    : 'Request withdrawal',
+                label: _withdrawalLabel(readiness, activePayout, sortedPayouts),
                 icon: Icons.account_balance_rounded,
                 busy: account.status == AccountStatus.loading,
-                onPressed: pendingPayout || available <= 0
+                onPressed: pendingPayout ||
+                        available <= 0 ||
+                        readiness != 'ready' ||
+                        !reconciled
                     ? null
                     : () => _requestWithdrawal(context, available),
               ),
               if (activePayout != null) ...[
                 const SizedBox(height: 12),
                 _ActivePayoutCard(activePayout)
+              ],
+              if (!reconciled) ...[
+                const SizedBox(height: 12),
+                RiderStatusBadge('RECONCILIATION REQUIRED',
+                    color: RiderPalette.red),
+                const SizedBox(height: 6),
+                Text(
+                    '£${unexplained.abs().toStringAsFixed(2)} is stored outside the canonical ledger categories. Withdrawal is paused until reviewed.',
+                    style: const TextStyle(
+                        color: RiderPalette.muted, fontSize: 11, height: 1.4))
               ],
               const SizedBox(height: 10),
               const Text(
@@ -315,6 +353,26 @@ class _EarningsContent extends StatelessWidget {
   }
 
   static String _money(double value) => '£${value.toStringAsFixed(2)}';
+  static String _withdrawalLabel(String readiness, Map<String, dynamic>? active,
+      List<Map<String, dynamic>> payouts) {
+    if (readiness == 'setup_required' ||
+        readiness == 'restricted' ||
+        readiness == 'disabled') return 'Complete payout setup';
+    if (readiness == 'pending_verification') return 'Verification pending';
+    if (active != null) {
+      final amount = active['amount'];
+      return amount is num
+          ? 'Withdrawal processing — £${amount.toStringAsFixed(2)}'
+          : 'Withdrawal processing';
+    }
+    final failed = payouts
+        .where((p) =>
+            '${p['status'] ?? p['payoutStatus']}'.toLowerCase() == 'failed')
+        .firstOrNull;
+    if (failed != null) return 'Withdrawal failed — Review';
+    return 'Request withdrawal';
+  }
+
   static int _millis(Map<String, dynamic> item) {
     final value = item['createdAt'] ?? item['updatedAt'] ?? item['paidAt'];
     return value is Timestamp ? value.millisecondsSinceEpoch : 0;
