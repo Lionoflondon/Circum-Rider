@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -305,6 +306,10 @@ class _OptionsScreen extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 24),
+                _CloseAccountButton(
+                  onTap: () => _confirmCloseAccount(context),
+                ),
+                const SizedBox(height: 12),
                 _SignOutButton(onTap: () => _confirmSignOut(context)),
                 const SizedBox(height: 16),
                 const _FooterMeta(),
@@ -824,6 +829,63 @@ class _SignOutButton extends StatelessWidget {
       );
 }
 
+class _CloseAccountButton extends StatelessWidget {
+  const _CloseAccountButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: 'Close Account',
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: RiderPalette.red.withValues(alpha: .08),
+              borderRadius: BorderRadius.circular(18),
+              border:
+                  Border.all(color: RiderPalette.red.withValues(alpha: .28)),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.delete_forever_outlined,
+                    color: RiderPalette.red, size: 22),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Close Account',
+                        style: TextStyle(
+                          color: RiderPalette.red,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14.5,
+                        ),
+                      ),
+                      SizedBox(height: 3),
+                      Text(
+                        'Permanently delete your Circum account and personal data.',
+                        style: TextStyle(
+                          color: RiderPalette.muted,
+                          fontSize: 12,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
 class _FooterMeta extends StatelessWidget {
   const _FooterMeta();
 
@@ -1016,6 +1078,195 @@ Future<void> _confirmSignOut(BuildContext context) async {
   if (confirmed == true && context.mounted) {
     context.read<AuthBloc>().add(SignOut());
   }
+}
+
+Future<void> _confirmCloseAccount(BuildContext context) async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+
+  final continueClosure = await showModalBottomSheet<bool>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (context) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: _OptionsGlass(
+          borderRadius: 24,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Close your Circum account?',
+                style: TextStyle(
+                  color: RiderPalette.paper,
+                  fontFamily: RiderTypography.heading,
+                  fontSize: 26,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Closing your account will:\n\n'
+                '• permanently remove your Circum account\n'
+                '• sign you out on all devices\n'
+                '• delete your profile information\n'
+                '• remove your saved preferences\n'
+                '• cancel future scheduled deliveries or rider availability where applicable\n'
+                '• retain records only where required by law (for example completed financial records)\n\n'
+                'This action cannot be undone once deletion is complete.',
+                style: TextStyle(color: RiderPalette.muted, height: 1.45),
+              ),
+              const SizedBox(height: 18),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: RiderPalette.red,
+                  minimumSize: const Size.fromHeight(48),
+                ),
+                child: const Text('Continue'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+  if (continueClosure != true || !context.mounted) return;
+
+  try {
+    await _reauthenticateRiderForClosure(context, user);
+    if (!context.mounted) return;
+    final confirmed = await _showRiderDeleteConfirmation(context);
+    if (confirmed != true || !context.mounted) return;
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('closeCircumAccount')
+        .call({'accountType': 'rider'});
+    if (context.mounted) {
+      context.read<AuthBloc>().add(SignOut());
+    }
+  } on FirebaseFunctionsException catch (error) {
+    if (context.mounted) {
+      _showClosureError(
+          context,
+          error.message ??
+              'Your account could not be closed. Please try again.');
+    }
+  } on FirebaseAuthException catch (error) {
+    if (context.mounted) {
+      _showClosureError(context,
+          error.message ?? 'Please sign in again before closing your account.');
+    }
+  } catch (_) {
+    if (context.mounted) {
+      _showClosureError(
+          context, 'Your account could not be closed. Please try again.');
+    }
+  }
+}
+
+Future<void> _reauthenticateRiderForClosure(
+    BuildContext context, User user) async {
+  final providers = user.providerData.map((info) => info.providerId).toSet();
+  if (providers.contains('password')) {
+    final password = await _showRiderPasswordReauth(context);
+    if (password == null || password.isEmpty) {
+      throw FirebaseAuthException(code: 'requires-recent-login');
+    }
+    final email = user.email;
+    if (email == null || email.isEmpty) {
+      throw FirebaseAuthException(code: 'requires-recent-login');
+    }
+    await user.reauthenticateWithCredential(
+      EmailAuthProvider.credential(email: email, password: password),
+    );
+    return;
+  }
+  if (providers.contains('google.com')) {
+    await user.reauthenticateWithProvider(GoogleAuthProvider());
+    return;
+  }
+  if (providers.contains('apple.com')) {
+    final provider = OAuthProvider('apple.com')
+      ..addScope('email')
+      ..addScope('name');
+    await user.reauthenticateWithProvider(provider);
+    return;
+  }
+  throw FirebaseAuthException(
+    code: 'requires-recent-login',
+    message: 'Sign in again with your existing provider before closing.',
+  );
+}
+
+Future<String?> _showRiderPasswordReauth(BuildContext context) async {
+  final controller = TextEditingController();
+  final result = await showDialog<String>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Confirm your password'),
+      content: TextField(
+        controller: controller,
+        obscureText: true,
+        autofillHints: const [AutofillHints.password],
+        decoration: const InputDecoration(labelText: 'Password'),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, controller.text),
+          child: const Text('Continue'),
+        ),
+      ],
+    ),
+  );
+  controller.dispose();
+  return result;
+}
+
+Future<bool?> _showRiderDeleteConfirmation(BuildContext context) async {
+  final controller = TextEditingController();
+  final result = await showDialog<bool>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('Type DELETE to confirm.'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Confirmation'),
+          onChanged: (_) => setDialogState(() {}),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: controller.text == 'DELETE'
+                ? () => Navigator.pop(context, true)
+                : null,
+            child: const Text('Delete my account'),
+          ),
+        ],
+      ),
+    ),
+  );
+  controller.dispose();
+  return result;
+}
+
+void _showClosureError(BuildContext context, String message) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(message)),
+  );
 }
 
 void _open(BuildContext context, Widget page) {
