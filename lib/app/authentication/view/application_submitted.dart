@@ -2,8 +2,11 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../utils/theme/theme.dart';
+import '../../rider_account/rider_account_state.dart';
 import '../bloc/auth_bloc.dart';
 
 class ApplicationSubmittedView extends StatelessWidget {
@@ -11,6 +14,28 @@ class ApplicationSubmittedView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return const SizedBox.shrink();
+    }
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('riders')
+          .doc(user.uid)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final progress = RiderApprovalProgress.fromBackend(
+          accountExists: snapshot.data?.exists == true,
+          firebaseEmailVerified: user.emailVerified,
+          rider: snapshot.data?.data() ?? const <String, dynamic>{},
+        );
+        return _buildScreen(context, progress);
+      },
+    );
+  }
+
+  Widget _buildScreen(BuildContext context, RiderApprovalProgress progress) {
     return Scaffold(
       backgroundColor: AppColors.secondary,
       body: SafeArea(
@@ -63,12 +88,13 @@ class ApplicationSubmittedView extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 24),
-                        _timeline('Account Created', true),
-                        _timeline('Phone Verified', true),
-                        _timeline('Email Verified', true),
-                        _timeline('Application Submitted', true),
-                        _timeline('Under Review', false),
-                        _timeline('Ready to Deliver', false),
+                        _timeline('Account Created', progress.accountCreated),
+                        _timeline('Email Verified', progress.emailVerified),
+                        _timeline('Application Submitted',
+                            progress.applicationSubmitted),
+                        _timeline('Under Review', progress.underReview),
+                        _timeline('Approved', progress.approved),
+                        _timeline('Ready to Deliver', progress.readyToDeliver),
                       ],
                     ),
                   ),

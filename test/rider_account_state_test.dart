@@ -69,6 +69,59 @@ void main() {
     });
   });
 
+  group('RiderApprovalProgress', () {
+    test('uses Firebase Auth as the only email verification truth', () {
+      final progress = RiderApprovalProgress.fromBackend(
+        accountExists: true,
+        firebaseEmailVerified: false,
+        rider: const {
+          'emailVerified': true,
+          'approvalStatus': 'pending_review',
+        },
+      );
+
+      expect(progress.accountCreated, isTrue);
+      expect(progress.emailVerified, isFalse);
+      expect(progress.applicationSubmitted, isTrue);
+      expect(progress.underReview, isTrue);
+      expect(progress.approved, isFalse);
+      expect(progress.readyToDeliver, isFalse);
+    });
+
+    test('marks approved and ready only from explicit backend fields', () {
+      final approved = RiderApprovalProgress.fromBackend(
+        accountExists: true,
+        firebaseEmailVerified: true,
+        rider: const {
+          'approvalStatus': 'approved',
+          'onboardingComplete': true,
+        },
+      );
+
+      expect(approved.approved, isTrue);
+      expect(approved.readyToDeliver, isTrue);
+
+      final missingStatus = RiderApprovalProgress.fromBackend(
+        accountExists: true,
+        firebaseEmailVerified: true,
+        rider: const {},
+      );
+      expect(missingStatus.applicationSubmitted, isFalse);
+      expect(missingStatus.underReview, isFalse);
+      expect(missingStatus.approved, isFalse);
+      expect(missingStatus.readyToDeliver, isFalse);
+    });
+
+    test('pending review screen has no phone verification stage', () {
+      final source =
+          File('lib/app/authentication/view/application_submitted.dart')
+              .readAsStringSync();
+      expect(source, isNot(contains('Phone Verified')));
+      expect(source, isNot(contains('phoneVerified')));
+      expect(source, contains("_timeline('Approved', progress.approved)"));
+    });
+  });
+
   test('existing app session gate retains AppNav for approved riders', () {
     final source = File('lib/app.dart').readAsStringSync();
     expect(source, contains('RiderAccountState.approved'));

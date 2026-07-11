@@ -59,7 +59,6 @@ class RiderAccountStateResolver {
     }
     if (_matches(onboarding, {
       'profile_started',
-      'phone_verified',
       'email_verified',
       'in_progress',
       'started',
@@ -105,4 +104,72 @@ class RiderAccountStateResolver {
 
   static bool _matches(String value, Set<String> values) =>
       values.contains(value);
+}
+
+class RiderApprovalProgress {
+  const RiderApprovalProgress({
+    required this.accountCreated,
+    required this.emailVerified,
+    required this.applicationSubmitted,
+    required this.underReview,
+    required this.approved,
+    required this.readyToDeliver,
+  });
+
+  final bool accountCreated;
+  final bool emailVerified;
+  final bool applicationSubmitted;
+  final bool underReview;
+  final bool approved;
+  final bool readyToDeliver;
+
+  factory RiderApprovalProgress.fromBackend({
+    required bool accountExists,
+    required bool firebaseEmailVerified,
+    required Map<String, dynamic> rider,
+  }) {
+    final approval = _normalised(
+      rider['approvalStatus'] ?? rider['verificationStatus'],
+    );
+    final onboarding = _normalised(
+      rider['onboardingStatus'] ?? rider['profileCompletionStatus'],
+    );
+    final approved = approval == 'approved' || rider['approvedAt'] != null;
+    final applicationSubmitted = rider['applicationSubmittedAt'] != null ||
+        rider['submittedAt'] != null ||
+        const {
+          'submitted',
+          'pending',
+          'pending_review',
+          'under_review',
+          'reviewing',
+          'approved',
+        }.contains(approval) ||
+        const {'application_submitted', 'submitted'}.contains(onboarding);
+    final underReview = rider['reviewStartedAt'] != null ||
+        rider['reviewedAt'] != null ||
+        const {
+          'pending',
+          'pending_review',
+          'under_review',
+          'reviewing',
+          'approved'
+        }.contains(approval);
+    final onboardingComplete = rider['onboardingComplete'] == true ||
+        rider['onboardingCompleted'] == true ||
+        const {'complete', 'completed', 'profile_complete'}
+            .contains(onboarding);
+
+    return RiderApprovalProgress(
+      accountCreated: accountExists,
+      emailVerified: firebaseEmailVerified,
+      applicationSubmitted: applicationSubmitted,
+      underReview: underReview,
+      approved: approved,
+      readyToDeliver: approved && onboardingComplete,
+    );
+  }
+
+  static String _normalised(Object? value) =>
+      '${value ?? ''}'.trim().toLowerCase().replaceAll(' ', '_');
 }
