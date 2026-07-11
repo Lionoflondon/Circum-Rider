@@ -1,12 +1,14 @@
 // ignore_for_file: deprecated_member_use, prefer_const_constructors, curly_braces_in_flow_control_structures
 
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -15,6 +17,7 @@ import '../home/bloc/home_bloc.dart';
 import '../founder_access/founder_rider_access.dart';
 import '../rider_truth/rider_truth.dart';
 import '../support/view/support.dart';
+import '../tracking/rider_live_tracking_controller.dart';
 import 'rider_accept_controller.dart';
 import 'rider_delivery_controller.dart';
 import 'rider_offer_card.dart';
@@ -637,8 +640,13 @@ class _OfferHeader extends StatelessWidget {
 class _OfferMapBackground extends StatefulWidget {
   final RiderJobOffer offer;
   final bool focusPickup;
+  final Position? riderPosition;
 
-  const _OfferMapBackground({required this.offer, this.focusPickup = false});
+  const _OfferMapBackground({
+    required this.offer,
+    this.focusPickup = false,
+    this.riderPosition,
+  });
 
   @override
   State<_OfferMapBackground> createState() => _OfferMapBackgroundState();
@@ -703,6 +711,20 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
           position: dropoff,
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
         ),
+        if (widget.riderPosition != null)
+          Marker(
+            markerId: const MarkerId('rider'),
+            position: LatLng(
+              widget.riderPosition!.latitude,
+              widget.riderPosition!.longitude,
+            ),
+            rotation: widget.riderPosition!.heading.isFinite
+                ? widget.riderPosition!.heading
+                : 0,
+            anchor: const Offset(.5, .5),
+            icon:
+                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
+          ),
       },
       polylines: {
         Polyline(
@@ -733,6 +755,28 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
     if (lat is num && lng is num) return LatLng(lat.toDouble(), lng.toDouble());
     return null;
   }
+}
+
+RiderGeoPoint? _trackingPoint(dynamic value) {
+  if (value is! Map) return null;
+  final position = value['position'];
+  if (position is Map) {
+    final geo = position['geopoint'] ?? position['geoPoint'];
+    if (geo is GeoPoint) return RiderGeoPoint(geo.latitude, geo.longitude);
+    final lat = position['lat'] ?? position['latitude'];
+    final lng = position['lng'] ?? position['longitude'];
+    if (lat is num && lng is num) {
+      return RiderGeoPoint(lat.toDouble(), lng.toDouble());
+    }
+  }
+  final geo = value['geopoint'] ?? value['geoPoint'];
+  if (geo is GeoPoint) return RiderGeoPoint(geo.latitude, geo.longitude);
+  final lat = value['lat'] ?? value['latitude'];
+  final lng = value['lng'] ?? value['longitude'];
+  if (lat is num && lng is num) {
+    return RiderGeoPoint(lat.toDouble(), lng.toDouble());
+  }
+  return null;
 }
 
 class _MapFallback extends StatelessWidget {
@@ -1170,8 +1214,13 @@ class RiderAcceptedJobScreen extends StatefulWidget {
 class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   late RiderDeliveryStage _stage;
   RiderEvidenceUploader? _evidenceUploader;
+  RiderLiveTrackingController? _trackingController;
+  StreamSubscription<RiderLiveTrackingSnapshot>? _trackingSub;
+  RiderLiveTrackingSnapshot _trackingSnapshot =
+      const RiderLiveTrackingSnapshot(status: RiderLiveTrackingStatus.idle);
   bool _expanded = false;
   bool _transitioning = false;
+  bool _arrivalTransitioning = false;
   String? _transitionError;
 
   bool get _vanguard =>
@@ -1186,8 +1235,36 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.firestore != null) {
+      _trackingController = RiderLiveTrackingController(
+        firestore: widget.firestore,
+      );
+      _trackingSub = _trackingController!.states.listen(_handleTrackingState);
+    }
     _stage =
         RiderDeliveryStagePolicy.fromRaw(widget.offer.raw['deliveryStage']);
+  }
+
+  @override
+  void dispose() {
+    unawaited(_trackingSub?.cancel());
+    _trackingController?.dispose();
+    super.dispose();
+  }
+
+  void _handleTrackingState(RiderLiveTrackingSnapshot snapshot) {
+    if (!mounted) return;
+    setState(() => _trackingSnapshot = snapshot);
+    final phase = snapshot.arrivalPhase;
+    if (phase == null || _arrivalTransitioning) return;
+    if (phase == RiderTrackingArrivalPhase.pickup &&
+        _stage == RiderDeliveryStage.navigatingToPickup) {
+      unawaited(_autoArrival(RiderDeliveryStage.arrivedAtPickup));
+    }
+    if (phase == RiderTrackingArrivalPhase.dropoff &&
+        _stage == RiderDeliveryStage.navigatingToDropoff) {
+      unawaited(_autoArrival(RiderDeliveryStage.arrivedAtDropoff));
+    }
   }
 
   Future<void> _advance() async {
@@ -1553,9 +1630,81 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
               title: terminal.replaceAll('_', ' '),
               message:
                   'This delivery can no longer progress. The latest backend state has been restored.');
+        scheduleMicrotask(() => _syncLiveTracking(live, restored));
         return _buildExperience(context, live);
       },
     );
+  }
+
+  Future<void> _syncLiveTracking(
+    Map<String, dynamic> live,
+    RiderDeliveryStage stage,
+  ) async {
+    if (!mounted || widget.firestore == null) return;
+    final status = RiderDeliveryStagePolicy.storageValue(stage);
+    final terminal = RiderLiveTrackingPolicy.isTerminalDeliveryStatus(status);
+    final active = RiderLiveTrackingPolicy.isActiveDeliveryStatus(status);
+    final assigned = RiderLiveTrackingPolicy.assignedToRider(
+      live,
+      widget.riderId,
+    );
+    if (!active || terminal || !assigned) {
+      await _trackingController?.stop(
+        status: assigned ? 'inactive' : 'assignment_removed',
+      );
+      return;
+    }
+    await _trackingController?.start(
+      deliveryId: widget.offer.id,
+      riderId: widget.riderId,
+      trackingStatus: status,
+      pickup: _trackingPoint(
+        live['pickupDetails'] ??
+            live['pickup'] ??
+            widget.offer.raw['pickupDetails'] ??
+            widget.offer.raw['pickup'],
+      ),
+      dropoff: _trackingPoint(
+        live['dropoffDetails'] ??
+            live['dropoff'] ??
+            widget.offer.raw['dropoffDetails'] ??
+            widget.offer.raw['dropoff'],
+      ),
+    );
+  }
+
+  Future<void> _autoArrival(RiderDeliveryStage target) async {
+    if (!mounted || _transitioning || _arrivalTransitioning) return;
+    if (!RiderDeliveryStagePolicy.canAdvance(
+      riderId: widget.riderId,
+      delivery: widget.offer.raw,
+      current: _stage,
+      target: target,
+      verificationRequired: _verificationRequired,
+      pinRequired: _pinRequired,
+    )) return;
+    setState(() {
+      _arrivalTransitioning = true;
+      _transitionError = null;
+    });
+    try {
+      final result =
+          await (widget.deliveryController ?? CallableRiderDeliveryController())
+              .transition(
+        deliveryId: widget.offer.id,
+        action: target == RiderDeliveryStage.arrivedAtDropoff
+            ? 'arrived_at_dropoff'
+            : 'arrived_at_pickup',
+      );
+      if (!mounted) return;
+      setState(() => _stage = RiderDeliveryStagePolicy.fromRaw(result.status));
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _transitionError =
+          "Arrival detected, but backend confirmation failed. Tap I've Arrived to retry.");
+    } finally {
+      if (mounted) setState(() => _arrivalTransitioning = false);
+    }
   }
 
   Widget _buildExperience(BuildContext context, Map<String, dynamic> live) {
@@ -1569,7 +1718,11 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       backgroundColor: const Color(0xFF07090F),
       body: Stack(
         children: [
-          _OfferMapBackground(offer: widget.offer),
+          _OfferMapBackground(
+            offer: widget.offer,
+            riderPosition: _trackingSnapshot.position,
+            focusPickup: _stage.index < RiderDeliveryStage.collected.index,
+          ),
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -1590,6 +1743,13 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                 children: [
                   _AcceptedTopPill(chips: widget.offer.warningChips),
                   const SizedBox(height: 14),
+                  if (_trackingController != null) ...[
+                    _TrackingStatusPill(
+                      snapshot: _trackingSnapshot,
+                      onRetry: _trackingController?.retry,
+                    ),
+                    const SizedBox(height: 10),
+                  ],
                   _NavigationInstructionCard(
                     title: nextTitle,
                     subtitle: _navigationSubtitle(_stage),
@@ -2024,6 +2184,174 @@ class _AcceptedTopPill extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _TrackingStatusPill extends StatelessWidget {
+  const _TrackingStatusPill({
+    required this.snapshot,
+    required this.onRetry,
+  });
+
+  final RiderLiveTrackingSnapshot snapshot;
+  final Future<void> Function()? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _copy(snapshot.status);
+    final warning = {
+      RiderLiveTrackingStatus.permissionDenied,
+      RiderLiveTrackingStatus.permissionPermanentlyDenied,
+      RiderLiveTrackingStatus.servicesDisabled,
+      RiderLiveTrackingStatus.poorAccuracy,
+      RiderLiveTrackingStatus.offline,
+      RiderLiveTrackingStatus.error,
+    }.contains(snapshot.status);
+    final action = _action(snapshot.status);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xCC0B1020),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: warning
+                  ? const Color(0xFFF5A623).withOpacity(.38)
+                  : const Color(0xFF60A5FA).withOpacity(.28),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF2563EB).withOpacity(.16),
+                blurRadius: 24,
+                offset: const Offset(0, 10),
+              )
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: warning
+                      ? const Color(0xFFF5A623)
+                      : const Color(0xFF22C55E),
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    status,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+              if (snapshot.accuracyMeters != null) ...[
+                Text(
+                  '${snapshot.accuracyMeters!.round()}m',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(.62),
+                    fontSize: 11,
+                    fontFamily: 'OpenSans',
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              if (action != null)
+                GestureDetector(
+                  onTap: () {
+                    if (snapshot.status ==
+                        RiderLiveTrackingStatus.permissionPermanentlyDenied) {
+                      Geolocator.openAppSettings();
+                      return;
+                    }
+                    if (snapshot.status ==
+                        RiderLiveTrackingStatus.servicesDisabled) {
+                      Geolocator.openLocationSettings();
+                      return;
+                    }
+                    onRetry?.call();
+                  },
+                  child: Text(
+                    action,
+                    style: const TextStyle(
+                      color: Color(0xFF60A5FA),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _copy(RiderLiveTrackingStatus status) {
+    switch (status) {
+      case RiderLiveTrackingStatus.idle:
+        return 'Tracking ready';
+      case RiderLiveTrackingStatus.acquiring:
+        return 'Acquiring location';
+      case RiderLiveTrackingStatus.live:
+        return 'Live tracking';
+      case RiderLiveTrackingStatus.foregroundOnly:
+        return 'Foreground tracking active';
+      case RiderLiveTrackingStatus.backgroundActive:
+        return 'Background tracking active';
+      case RiderLiveTrackingStatus.permissionRequired:
+      case RiderLiveTrackingStatus.permissionDenied:
+        return 'Location permission required';
+      case RiderLiveTrackingStatus.permissionPermanentlyDenied:
+        return 'Location permission blocked';
+      case RiderLiveTrackingStatus.servicesDisabled:
+        return 'Location services disabled';
+      case RiderLiveTrackingStatus.poorAccuracy:
+        return 'Poor GPS accuracy';
+      case RiderLiveTrackingStatus.offline:
+        return 'Offline - tracking queued';
+      case RiderLiveTrackingStatus.reconnecting:
+        return 'Reconnecting tracking';
+      case RiderLiveTrackingStatus.arrivedAtPickup:
+        return 'Arrived at pickup';
+      case RiderLiveTrackingStatus.arrivedAtDropoff:
+        return 'Arrived at drop-off';
+      case RiderLiveTrackingStatus.stopped:
+        return 'Tracking stopped';
+      case RiderLiveTrackingStatus.error:
+        return 'Tracking needs attention';
+    }
+  }
+
+  static String? _action(RiderLiveTrackingStatus status) {
+    switch (status) {
+      case RiderLiveTrackingStatus.permissionRequired:
+      case RiderLiveTrackingStatus.permissionDenied:
+      case RiderLiveTrackingStatus.error:
+      case RiderLiveTrackingStatus.offline:
+      case RiderLiveTrackingStatus.reconnecting:
+        return 'Retry';
+      case RiderLiveTrackingStatus.permissionPermanentlyDenied:
+      case RiderLiveTrackingStatus.servicesDisabled:
+        return 'Settings';
+      default:
+        return null;
+    }
   }
 }
 
