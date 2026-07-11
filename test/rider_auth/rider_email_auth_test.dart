@@ -1,36 +1,40 @@
 import 'dart:io';
 
 import 'package:circum_rider/app/authentication/rider_auth_error.dart';
-import 'package:circum_rider/app/onboarding/view/onboarding.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('complete existing-account text is a tappable semantic control',
-      (tester) async {
-    var tapped = false;
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: ExistingRiderSignInLink(onPressed: () => tapped = true),
-      ),
-    ));
-
-    final link = find.byKey(const Key('existing_rider_sign_in'));
-    expect(link, findsOneWidget);
-    expect(find.text('Already have an account? Sign in'), findsOneWidget);
-    await tester.tap(link);
-    expect(tapped, isTrue);
-  });
-
-  test('Rider entry and registration are email-only', () {
+  test('replacement auth experience is the only active Rider entry', () {
     final entry =
         File('lib/app/onboarding/view/onboarding.dart').readAsStringSync();
-    final signup =
-        File('lib/app/authentication/view/signup_form.dart').readAsStringSync();
-    expect(entry, contains("title: 'What\\'s your email?'"));
-    expect(entry, contains("label: 'Enter your email'"));
+    final app = File('lib/app.dart').readAsStringSync();
+
+    expect(app, contains('child: OnboardingView()'));
+    expect(entry, contains('Deliver with Circum'));
+    expect(entry, contains('Get started'));
+    expect(entry, contains('Existing Rider sign in'));
+    expect(entry, contains('Create Rider account'));
+    expect(entry, contains('Full name'));
+    expect(entry, contains('UK mobile number'));
+    expect(entry, contains('Verify your mobile'));
+    expect(entry, contains('Enable location'));
+    expect(entry, isNot(contains("What's your email?")));
     expect(entry, isNot(contains('phone number or email')));
-    expect(signup, isNot(contains("label: 'Mobile number'")));
+  });
+
+  test('legacy Rider auth presentation files are removed', () {
+    expect(
+        File('lib/app/authentication/view/signin.dart').existsSync(), isFalse);
+    expect(File('lib/app/authentication/view/signin_form.dart').existsSync(),
+        isFalse);
+    expect(
+        File('lib/app/authentication/view/signup.dart').existsSync(), isFalse);
+    expect(File('lib/app/authentication/view/signup_form.dart').existsSync(),
+        isFalse);
+    final source =
+        File('lib/app/onboarding/view/onboarding.dart').readAsStringSync();
+    expect(source, isNot(contains('SigninView')));
+    expect(source, isNot(contains('SignupView')));
   });
 
   test('Rider Hosting prevents stale authentication shell assets', () {
@@ -55,17 +59,33 @@ void main() {
     expect(bootstrap, contains("CIRCUM_RIDER_BUILD = 'rider-web-cache-v1'"));
   });
 
-  test('sign-in form exposes email, password, reset and account navigation',
+  test('new sign-in form exposes email, password, reset and account navigation',
       () {
     final source =
-        File('lib/app/authentication/view/signin_form.dart').readAsStringSync();
-    expect(source, contains("AppText.text('Email'"));
-    expect(source, contains("AppText.text('Password'"));
-    expect(source, contains("AppText.text('Forgot password?'"));
+        File('lib/app/onboarding/view/onboarding.dart').readAsStringSync();
+    expect(source, contains("'Welcome back'"));
+    expect(source, contains("label: 'Email'"));
+    expect(source, contains("label: 'Password'"));
+    expect(source, contains("'Forgot password'"));
     expect(source, contains('Back to create account'));
     expect(source, contains('SignInWithEmail('));
-    expect(source, contains('state.password!.isNotEmpty'));
-    expect(source, isNot(contains('state.password!.length >= 8')));
+    expect(source, contains('ResetPassword(email: email)'));
+  });
+
+  test('new registration requires phone OTP, consents and location step', () {
+    final source =
+        File('lib/app/onboarding/view/onboarding.dart').readAsStringSync();
+    expect(source, contains('SignUpWithEmail('));
+    expect(source, contains('PhoneNumberChanged'));
+    expect(source, contains('VerifyPhoneOtp'));
+    expect(source, contains('ResendPhoneOtp'));
+    expect(source, contains('Change number'));
+    expect(source, contains('Accept the Rider Terms'));
+    expect(source, contains('Accept the Privacy Policy'));
+    expect(source, contains('legally entitled to work in the UK'));
+    expect(source, contains('RequestLocationData'));
+    expect(
+        source, contains('CompleteRiderApplication(locationEnabled: false)'));
   });
 
   test('Firebase auth errors have clear customer-safe messages', () {
