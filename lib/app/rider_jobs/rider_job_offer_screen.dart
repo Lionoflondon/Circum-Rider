@@ -115,100 +115,124 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                     .doc(user.uid)
                     .snapshots(),
                 builder: (context, profileSnapshot) {
-                  final riderData = <String, dynamic>{
-                    ...?profileSnapshot.data?.data(),
-                    ...?riderSnapshot.data?.data()
-                  };
-                  final rider =
-                      _riderProfile(user.uid, riderData, founder: founder);
-                  final online = {'online', 'available', 'busy'}.contains(
-                      '${riderData['availabilityStatus'] ?? riderData['status'] ?? ''}'
-                          .toLowerCase());
-
-                  if (!rider.canAcceptJobs)
-                    return _JobsStateScaffold(
-                        title: 'Account action required',
-                        message: rider.blockedReason ??
-                            'Your Rider account cannot receive jobs right now.');
-                  if (!online)
-                    return _JobsStateScaffold(
-                        title: "You're offline",
-                        message:
-                            'Go online to receive eligible delivery offers.',
-                        actionLabel: 'Go Online',
-                        onAction: () => context
-                            .read<HomeBloc>()
-                            .add(SetRideStatus(status: RideStatus.online)));
-
-                  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
                     stream: _firestore
-                        .collection('deliveryRequests')
-                        .where('status', isEqualTo: 'requested')
-                        .limit(20)
+                        .collection('riderPresence')
+                        .doc(user.uid)
                         .snapshots(),
-                    builder: (context, snapshot) {
-                      if (snapshot.hasError) {
-                        return const _JobsStateScaffold(
-                          title: 'Network error',
-                          message:
-                              'We could not load offers. Please try again.',
-                        );
-                      }
+                    builder: (context, presenceSnapshot) {
+                      final riderData = <String, dynamic>{
+                        ...?profileSnapshot.data?.data(),
+                        ...?riderSnapshot.data?.data()
+                      };
+                      final presence =
+                          presenceSnapshot.data?.data() ?? const {};
+                      final rider =
+                          _riderProfile(user.uid, riderData, founder: founder);
+                      final online = presence['isOnline'] == true &&
+                          '${presence['availabilityStatus'] ?? ''}'
+                                  .toLowerCase() !=
+                              'offline';
+                      final connectionLost =
+                          '${presence['connectionStatus'] ?? ''}'
+                                  .toLowerCase() ==
+                              'lost';
 
-                      if (!snapshot.hasData ||
-                          (riderSnapshot.connectionState ==
-                                  ConnectionState.waiting &&
-                              profileSnapshot.connectionState ==
-                                  ConnectionState.waiting)) {
+                      if (!rider.canAcceptJobs)
+                        return _JobsStateScaffold(
+                            title: 'Account action required',
+                            message: rider.blockedReason ??
+                                'Your Rider account cannot receive jobs right now.');
+                      if (!online)
+                        return _JobsStateScaffold(
+                            title: "You're offline",
+                            message:
+                                'Go online to receive eligible delivery offers.',
+                            actionLabel: 'Go Online',
+                            onAction: () => context
+                                .read<HomeBloc>()
+                                .add(SetRideStatus(status: RideStatus.online)));
+                      if (connectionLost)
                         return const _JobsStateScaffold(
-                          title: 'Loading offers',
-                          message: 'Checking nearby delivery requests.',
+                          title: 'Reconnecting',
+                          message:
+                              'You are still online. We will show nearby offers once your live location reconnects.',
                           loading: true,
                         );
-                      }
 
-                      final offers = _filterOffers(
-                        docs: snapshot.data!.docs,
-                        riderId: user.uid,
-                        riderVehicle: rider.riderVehicle,
-                        founder: founder,
-                      );
+                      return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                        stream: _firestore
+                            .collection('deliveryRequests')
+                            .where('status', isEqualTo: 'requested')
+                            .limit(20)
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasError) {
+                            return const _JobsStateScaffold(
+                              title: 'Network error',
+                              message:
+                                  'We could not load offers. Please try again.',
+                            );
+                          }
 
-                      if (_activeIndex >= offers.length && offers.isNotEmpty) {
-                        scheduleMicrotask(() {
-                          if (mounted)
-                            setState(() => _activeIndex = offers.length - 1);
-                        });
-                      }
+                          if (!snapshot.hasData ||
+                              (riderSnapshot.connectionState ==
+                                      ConnectionState.waiting &&
+                                  profileSnapshot.connectionState ==
+                                      ConnectionState.waiting)) {
+                            return const _JobsStateScaffold(
+                              title: 'Loading offers',
+                              message: 'Checking nearby delivery requests.',
+                              loading: true,
+                            );
+                          }
 
-                      if (offers.isEmpty) {
-                        return const _JobsStateScaffold(
-                          title: 'No offers nearby',
-                          message:
-                              'New delivery offers will appear here when available.',
-                        );
-                      }
+                          final offers = _filterOffers(
+                            docs: snapshot.data!.docs,
+                            riderId: user.uid,
+                            riderVehicle: rider.riderVehicle,
+                            founder: founder,
+                          );
 
-                      final safeIndex =
-                          _activeIndex.clamp(0, offers.length - 1);
-                      return _OfferExperience(
-                        offers: offers,
-                        activeIndex: safeIndex,
-                        accepting: _accepting,
-                        accepted: _accepted,
-                        riderRank: rider.riderRank ?? 'Sentinel',
-                        statusMessage: _statusMessage,
-                        acceptStatus: _acceptStatus,
-                        onBackToFeed: _resetTakenState,
-                        onIndexChanged: (index) {
-                          setState(() {
-                            _activeIndex = index;
-                            _accepted = false;
-                            _statusMessage = null;
-                            _acceptStatus = null;
-                          });
+                          if (_activeIndex >= offers.length &&
+                              offers.isNotEmpty) {
+                            scheduleMicrotask(() {
+                              if (mounted)
+                                setState(
+                                    () => _activeIndex = offers.length - 1);
+                            });
+                          }
+
+                          if (offers.isEmpty) {
+                            return const _JobsStateScaffold(
+                              title: 'No offers nearby',
+                              message:
+                                  'New delivery offers will appear here when available.',
+                            );
+                          }
+
+                          final safeIndex =
+                              _activeIndex.clamp(0, offers.length - 1);
+                          return _OfferExperience(
+                            offers: offers,
+                            activeIndex: safeIndex,
+                            accepting: _accepting,
+                            accepted: _accepted,
+                            riderRank: rider.riderRank ?? 'Sentinel',
+                            statusMessage: _statusMessage,
+                            acceptStatus: _acceptStatus,
+                            onBackToFeed: _resetTakenState,
+                            onIndexChanged: (index) {
+                              setState(() {
+                                _activeIndex = index;
+                                _accepted = false;
+                                _statusMessage = null;
+                                _acceptStatus = null;
+                              });
+                            },
+                            onAccept: (offer) => _accept(offer, rider),
+                          );
                         },
-                        onAccept: (offer) => _accept(offer, rider),
                       );
                     },
                   );

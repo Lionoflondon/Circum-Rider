@@ -53,6 +53,10 @@ void main() {
     test('jobs destination remains the approved swipeable offer card flow', () {
       expect(offers, contains('class RiderJobOfferScreen'));
       expect(offers, contains("static const routeName = '/rider/jobs/offers'"));
+      expect(offers, contains("collection('riderPresence')"));
+      expect(offers, contains("presence['isOnline'] == true"));
+      expect(offers, contains("presence['availabilityStatus']"));
+      expect(offers, contains("presence['connectionStatus']"));
       expect(offers, contains('RiderOfferStack'));
       expect(offers, contains("import 'rider_offer_card.dart'"));
       expect(offerCard, contains('Accept Delivery'));

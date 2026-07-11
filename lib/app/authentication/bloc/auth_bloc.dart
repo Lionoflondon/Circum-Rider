@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:circum_rider/extension/email_validation.dart';
 import 'package:circum_rider/helper/location_helper.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -1572,6 +1573,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<SignOut>(
       (event, emit) async {
         FlutterSecureStorage storage = const FlutterSecureStorage();
+        try {
+          if (auth.currentUser != null) {
+            await FirebaseFunctions.instanceFor(region: 'us-central1')
+                .httpsCallable('goOffline')
+                .call({'reason': 'sign_out'});
+          }
+        } catch (_) {
+          // Sign-out must still complete if the device is offline.
+        }
         await auth.signOut();
         emit(const AuthState());
         emit(state.copyWith(currentState: AppState.unauthenticated));
