@@ -1,134 +1,97 @@
-import 'dart:io' show Platform;
-
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../authentication/bloc/auth_bloc.dart';
-import '../../authentication/view/signin.dart';
 import '../../authentication/view/signup.dart';
-import '../../authentication/view/widgets/rider_onboarding_shell.dart';
-import '../../../../utils/theme/theme.dart';
+import '../../authentication/view/widgets/circum_auth_entry.dart';
 
-/// The existing Circum authentication entry point. It intentionally delegates
-/// sign-in, account creation, OTP, recovery, Google and Apple to AuthBloc.
 class OnboardingView extends StatefulWidget {
   const OnboardingView({super.key});
-
   @override
   State<OnboardingView> createState() => _OnboardingViewState();
 }
 
 class _OnboardingViewState extends State<OnboardingView> {
-  final _identity = TextEditingController();
+  final _identifier = TextEditingController();
+  bool _submitting = false;
+  String? _validation;
 
   @override
   void dispose() {
-    _identity.dispose();
+    _identifier.dispose();
     super.dispose();
   }
 
+  bool get _valid {
+    final value = _identifier.text.trim();
+    final email = RegExp(r'^[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}$').hasMatch(value);
+    final phone = RegExp(r'^\+?[0-9][0-9 ()-]{7,18}$').hasMatch(value);
+    return email || phone;
+  }
+
   void _continue() {
-    final value = _identity.text.trim();
-    if (value.isEmpty) return;
+    if (!_valid || _submitting) return;
+    final value = _identifier.text.trim();
+    final email = value.contains('@');
+    setState(() {
+      _submitting = true;
+      _validation = null;
+    });
     final bloc = context.read<AuthBloc>();
-    bloc.add(SignupEmailChanged(email: value));
+    if (email) {
+      bloc.add(SignupEmailChanged(email: value));
+    } else {
+      bloc.add(
+        PhoneNumberChanged(
+          phoneNumber: value.replaceAll(RegExp(r'[ ()-]'), ''),
+        ),
+      );
+    }
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const SignupView()),
-    );
+    ).whenComplete(() {
+      if (mounted) setState(() => _submitting = false);
+    });
   }
 
   @override
-  Widget build(BuildContext context) {
-    return RiderOnboardingShell(
-      currentStep: 0,
-      showStepProgress: false,
-      title: 'What\'s your email?',
-      subtitle: 'Create your Rider account securely with email.',
-      child: RiderGlassCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            RiderGlassTextField(
-              label: 'Enter your email',
-              controller: _identity,
-              keyboardType: TextInputType.emailAddress,
-              onChanged: (_) => setState(() {}),
+  Widget build(BuildContext context) => BlocBuilder<AuthBloc, AuthState>(
+        builder: (context, state) => CircumAuthEntry(
+          controller: _identifier,
+          valid: _valid,
+          loading: _submitting || state.status == Status.loading,
+          error: _validation ?? state.errorMessage,
+          onChanged: (_) => setState(() => _validation = null),
+          onContinue: _continue,
+          onGoogle: () => context.read<AuthBloc>().add(SignInWithGoogle()),
+          onApple: () => context.read<AuthBloc>().add(SignInWithAppleAuth()),
+          onQr: () => ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('QR login is not configured in this environment.'),
             ),
-            const SizedBox(height: 18),
-            RiderPrimaryButton(
-              label: 'Continue',
-              enabled: _identity.text.trim().isNotEmpty,
-              onPressed: _continue,
-            ),
-            const SizedBox(height: 14),
-            ExistingRiderSignInLink(
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SigninView()),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 10),
-              child: Row(children: [
-                Expanded(child: Divider()),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('or continue with'),
-                ),
-                Expanded(child: Divider()),
-              ]),
-            ),
-            OutlinedButton.icon(
-              onPressed: () => context.read<AuthBloc>().add(SignInWithGoogle()),
-              icon: SvgPicture.asset('assets/svg/google_logo.svg', height: 18),
-              label: const Text('Google'),
-            ),
-            if (!kIsWeb && Platform.isIOS) ...[
-              const SizedBox(height: 10),
-              OutlinedButton.icon(
-                onPressed: () =>
-                    context.read<AuthBloc>().add(SignInWithAppleAuth()),
-                icon: SvgPicture.asset('assets/svg/apple_logo.svg', height: 18),
-                label: const Text('Apple'),
-              ),
-            ],
-            const SizedBox(height: 12),
-            Text(
-              'By continuing, you agree to Circum Terms and Privacy.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  color: AppColors.textGrey.withOpacity(0.9), fontSize: 12),
-            ),
-          ],
+          ),
         ),
-      ),
-    );
-  }
+      );
 }
 
+/// Retained for the existing email sign-in route and its accessibility test.
+/// The canonical entry card does not render Rider-specific wording.
 class ExistingRiderSignInLink extends StatelessWidget {
-  final VoidCallback onPressed;
-
   const ExistingRiderSignInLink({super.key, required this.onPressed});
-
+  final VoidCallback onPressed;
   @override
-  Widget build(BuildContext context) {
-    const label = 'Already have an account? Sign in';
-    return Semantics(
-      button: true,
-      label: label,
-      child: SizedBox(
-        key: const Key('existing_rider_sign_in'),
-        width: double.infinity,
-        height: 48,
-        child: TextButton(
-          onPressed: onPressed,
-          child: const Text(label, textAlign: TextAlign.center),
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: 'Already have an account? Sign in',
+        child: SizedBox(
+          key: const Key('existing_rider_sign_in'),
+          width: double.infinity,
+          height: 48,
+          child: TextButton(
+            onPressed: onPressed,
+            child: const Text('Already have an account? Sign in'),
+          ),
         ),
-      ),
-    );
-  }
+      );
 }

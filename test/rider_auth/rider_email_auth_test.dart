@@ -22,15 +22,16 @@ void main() {
     expect(tapped, isTrue);
   });
 
-  test('Rider entry and registration are email-only', () {
+  test('Rider entry uses the canonical phone or email language', () {
     final entry =
         File('lib/app/onboarding/view/onboarding.dart').readAsStringSync();
-    final signup =
-        File('lib/app/authentication/view/signup_form.dart').readAsStringSync();
-    expect(entry, contains("title: 'What\\'s your email?'"));
-    expect(entry, contains("label: 'Enter your email'"));
-    expect(entry, isNot(contains('phone number or email')));
-    expect(signup, isNot(contains("label: 'Mobile number'")));
+    final presentation =
+        File('lib/app/authentication/view/widgets/circum_auth_entry.dart')
+            .readAsStringSync();
+    expect(presentation, contains("What's your phone number"));
+    expect(presentation, contains('Enter phone number or email'));
+    expect(entry, contains('PhoneNumberChanged'));
+    expect(entry, contains('SignupEmailChanged'));
   });
 
   test('Rider Hosting prevents stale authentication shell assets', () {
