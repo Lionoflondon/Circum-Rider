@@ -15,6 +15,7 @@ import '../founder_access/founder_rider_access.dart';
 import '../history/view/history.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../onboarding/rider_guide_view.dart';
+import '../recognitions/rider_recognitions.dart';
 import '../rider_account/rider_account_state.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
@@ -190,6 +191,7 @@ class _OptionsScreen extends StatelessWidget {
     final rank = RiderRankSnapshot.from(profile);
     final status = _ProfileData.accountStatus(accountState);
     final verificationStatus = _ProfileData.verificationStatus(profile);
+    final recognitions = RiderRecognitions.from(profile);
 
     return CustomScrollView(
       key: const PageStorageKey('rider-options-screen'),
@@ -214,6 +216,7 @@ class _OptionsScreen extends StatelessWidget {
                       : '${rank.trustPoints} Trust',
                   verificationStatus: verificationStatus,
                   accountStatus: status,
+                  recognitions: recognitions,
                   onTap: () => _open(context, const AccountDetails()),
                 ),
                 const SizedBox(height: 24),
@@ -374,6 +377,7 @@ class _IdentityCard extends StatelessWidget {
     required this.trust,
     required this.verificationStatus,
     required this.accountStatus,
+    required this.recognitions,
     required this.onTap,
   });
 
@@ -384,6 +388,7 @@ class _IdentityCard extends StatelessWidget {
   final String trust;
   final String verificationStatus;
   final String accountStatus;
+  final RiderRecognitions recognitions;
   final VoidCallback onTap;
 
   @override
@@ -478,6 +483,25 @@ class _IdentityCard extends StatelessWidget {
                         fontSize: 12,
                       ),
                     ),
+                    if (recognitions.hasAny) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          if (recognitions.foundingRider.awarded)
+                            _RecognitionText(
+                              label:
+                                  'Founding Rider ${recognitions.foundingRider.numberLabel(4)}',
+                            ),
+                          if (recognitions.legend.awarded)
+                            _RecognitionText(
+                              label:
+                                  'Legend ${recognitions.legend.numberLabel(4)}',
+                            ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -501,6 +525,22 @@ class _IdentityCard extends StatelessWidget {
     }
     return RiderPalette.muted;
   }
+}
+
+class _RecognitionText extends StatelessWidget {
+  const _RecognitionText({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Text(
+        label.trim(),
+        style: const TextStyle(
+          color: RiderPalette.blue,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w900,
+        ),
+      );
 }
 
 class _OptionsSection extends StatelessWidget {

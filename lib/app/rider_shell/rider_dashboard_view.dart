@@ -10,6 +10,7 @@ import '../founder_access/founder_rider_access.dart';
 import '../home/bloc/home_bloc.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../onboarding/rider_guide_view.dart';
+import '../recognitions/rider_recognitions.dart';
 import '../rider_account/rider_account_state.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
@@ -638,6 +639,7 @@ class _RankCard extends StatelessWidget {
     final note = progress.nextRank == null
         ? 'Highest Rider rank achieved'
         : '${progress.remaining} points to ${progress.nextRank}';
+    final recognitions = RiderRecognitions.from(profile);
 
     return RiderGlassSurface(
       padding: const EdgeInsets.all(18),
@@ -689,10 +691,44 @@ class _RankCard extends StatelessWidget {
                 style:
                     const TextStyle(color: RiderPalette.amber, fontSize: 11)),
           ],
+          if (recognitions.hasAny) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              runSpacing: 6,
+              children: [
+                if (recognitions.foundingRider.awarded)
+                  _RecognitionLabel(
+                    'Founding Rider ${recognitions.foundingRider.numberLabel(4)}',
+                  ),
+                if (recognitions.legend.awarded)
+                  _RecognitionLabel(
+                    'Legend ${recognitions.legend.numberLabel(4)}',
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+class _RecognitionLabel extends StatelessWidget {
+  const _RecognitionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Text(
+        label.trim(),
+        style: const TextStyle(
+          color: RiderPalette.blue,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+          letterSpacing: .2,
+        ),
+      );
 }
 
 class _TodaySection extends StatelessWidget {
