@@ -120,9 +120,36 @@ void main() {
     test('Home badge uses same unread notification source', () {
       expect(dashboard, contains('watchUnreadNotificationCount'));
       expect(dashboard, contains('RiderNotificationsView'));
-      expect(dashboard, contains('onNavigateTab: widget.onSelectTab'));
+      expect(dashboard,
+          contains('RiderNotificationsView(onNavigateTab: onSelectTab)'));
       expect(profile, contains('RiderNotificationsView'));
       expect(profile, contains('onNavigateTab: onSelectTab'));
+    });
+
+    test('Notification Centre uses grouped glass presentation', () {
+      expect(notificationSource, contains('_groupNotifications'));
+      expect(notificationSource, contains("'Today'"));
+      expect(notificationSource, contains("'Yesterday'"));
+      expect(notificationSource, contains("'Earlier'"));
+      expect(notificationSource, contains('_DayGroup'));
+      expect(notificationSource, contains('RiderGlassSurface'));
+      expect(notificationSource,
+          contains('edgeColor: unread ? RiderPalette.blue : accent'));
+      expect(notificationSource, contains('_NotificationEmptyState'));
+    });
+
+    test('Notification Centre preserves semantic icon colours', () {
+      expect(notificationSource, contains('RiderPalette.green'));
+      expect(notificationSource, contains('RiderPalette.amber'));
+      expect(notificationSource, contains('RiderPalette.purple'));
+      expect(notificationSource, contains('RiderPalette.red'));
+      expect(notificationSource, contains('Icons.work_outline_rounded'));
+      expect(notificationSource, contains('Icons.route_rounded'));
+      expect(notificationSource, contains('Icons.chat_bubble_outline_rounded'));
+      expect(notificationSource, contains('Icons.calendar_month_outlined'));
+      expect(notificationSource,
+          contains('Icons.account_balance_wallet_outlined'));
+      expect(notificationSource, contains('Icons.person_outline_rounded'));
     });
   });
 }
