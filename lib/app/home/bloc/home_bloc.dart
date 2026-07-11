@@ -132,6 +132,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     // if (Firebase.apps.isEmpty) print('Firebase not initialized');
     // if (Firebase.apps.isEmpty) await Firebase.initializeApp();
     final User? user = auth.currentUser;
+    final founder = user == null
+        ? false
+        : (await user.getIdTokenResult()).claims?['founderRider'] == true;
     if (!kIsWeb && Platform.isIOS) {
       await firebaseMessaging.requestPermission();
     }
@@ -151,7 +154,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           final remaining =
               _remainingVerificationItems(documentSnapshot.data());
           emit(state.copyWith(
-              canGoOnline: remaining.isEmpty,
+              canGoOnline: founder || remaining.isEmpty,
               verificationChecklist: remaining));
           await db
               .collection("riders")
@@ -172,6 +175,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   void _handleSetRideStatus(SetRideStatus event, Emitter emit) async {
     final User? user = auth.currentUser;
+    final founder = user == null
+        ? false
+        : (await user.getIdTokenResult()).claims?['founderRider'] == true;
     final pref = await SharedPreferences.getInstance();
     if (event.status == RideStatus.offline) {
       // print('isOffline');
@@ -189,7 +195,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       await pref.setString('status', 'offline');
     } else {
       final accountState = await _loadAccountState(user?.uid);
-      if (!RiderAccountStateResolver.canOperate(accountState)) {
+      if (!founder && !RiderAccountStateResolver.canOperate(accountState)) {
         emit(state.copyWith(
           rideStatus: RideStatus.offline,
           canGoOnline: false,
@@ -198,7 +204,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         return;
       }
       final remaining = await _loadRemainingVerificationItems(user?.uid);
-      if (event.status == RideStatus.online && remaining.isNotEmpty) {
+      if (!founder &&
+          event.status == RideStatus.online &&
+          remaining.isNotEmpty) {
         emit(state.copyWith(
           rideStatus: RideStatus.offline,
           canGoOnline: false,

@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../account/view/account_details.dart';
 import '../authentication/bloc/auth_bloc.dart';
 import '../history/view/history.dart';
+import '../founder_access/founder_rider_access.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
@@ -61,6 +62,8 @@ class RiderProfileView extends StatelessWidget {
                               color: RiderPalette.paper,
                               fontFamily: RiderTypography.heading,
                               fontSize: 30)),
+                      const SizedBox(height: 8),
+                      const FounderRiderBadge(),
                       const SizedBox(height: 16),
                       _IdentityCard(profile: profile),
                       const SizedBox(height: 14),

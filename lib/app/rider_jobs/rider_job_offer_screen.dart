@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../home/view/ride_chats.dart';
 import '../home/bloc/home_bloc.dart';
+import '../founder_access/founder_rider_access.dart';
 import '../rider_truth/rider_truth.dart';
 import '../support/view/support.dart';
 import 'rider_accept_controller.dart';
@@ -97,112 +98,123 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     }
 
     final home = context.watch<HomeBloc>().state;
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: _firestore.collection('riders').doc(user.uid).snapshots(),
-      builder: (context, riderSnapshot) {
-        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream:
-              _firestore.collection('riderProfiles').doc(user.uid).snapshots(),
-          builder: (context, profileSnapshot) {
-            final riderData = <String, dynamic>{
-              ...?profileSnapshot.data?.data(),
-              ...?riderSnapshot.data?.data()
-            };
-            final rider = _riderProfile(user.uid, riderData);
+    return FutureBuilder<bool>(
+        future: FounderRiderAccess.enabled(),
+        builder: (context, founderSnapshot) {
+          final founder = founderSnapshot.data == true;
+          return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+            stream: _firestore.collection('riders').doc(user.uid).snapshots(),
+            builder: (context, riderSnapshot) {
+              return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                stream: _firestore
+                    .collection('riderProfiles')
+                    .doc(user.uid)
+                    .snapshots(),
+                builder: (context, profileSnapshot) {
+                  final riderData = <String, dynamic>{
+                    ...?profileSnapshot.data?.data(),
+                    ...?riderSnapshot.data?.data()
+                  };
+                  final rider =
+                      _riderProfile(user.uid, riderData, founder: founder);
 
-            if (!rider.canAcceptJobs)
-              return _StateScaffold(
-                  title: 'Account action required',
-                  message: rider.blockedReason ??
-                      'Your Rider account cannot receive jobs right now.');
-            if (home.rideStatus == RideStatus.offline)
-              return _StateScaffold(
-                  title: "You're offline",
-                  message: 'Go online to receive eligible delivery offers.',
-                  actionLabel: 'Go Online',
-                  onAction: () => context
-                      .read<HomeBloc>()
-                      .add(SetRideStatus(status: RideStatus.online)));
+                  if (!rider.canAcceptJobs)
+                    return _StateScaffold(
+                        title: 'Account action required',
+                        message: rider.blockedReason ??
+                            'Your Rider account cannot receive jobs right now.');
+                  if (home.rideStatus == RideStatus.offline)
+                    return _StateScaffold(
+                        title: "You're offline",
+                        message:
+                            'Go online to receive eligible delivery offers.',
+                        actionLabel: 'Go Online',
+                        onAction: () => context
+                            .read<HomeBloc>()
+                            .add(SetRideStatus(status: RideStatus.online)));
 
-            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: _firestore
-                  .collection('deliveryRequests')
-                  .where('status', isEqualTo: 'requested')
-                  .limit(20)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const _StateScaffold(
-                    title: 'Network error',
-                    message: 'We could not load offers. Please try again.',
+                  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: _firestore
+                        .collection('deliveryRequests')
+                        .where('status', isEqualTo: 'requested')
+                        .limit(20)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return const _StateScaffold(
+                          title: 'Network error',
+                          message:
+                              'We could not load offers. Please try again.',
+                        );
+                      }
+
+                      if (!snapshot.hasData ||
+                          (riderSnapshot.connectionState ==
+                                  ConnectionState.waiting &&
+                              profileSnapshot.connectionState ==
+                                  ConnectionState.waiting)) {
+                        return const _StateScaffold(
+                          title: 'Loading offers',
+                          message: 'Checking nearby delivery requests.',
+                          loading: true,
+                        );
+                      }
+
+                      final offers = _filterOffers(
+                        docs: snapshot.data!.docs,
+                        riderId: user.uid,
+                        riderVehicle: rider.riderVehicle,
+                        founder: founder,
+                      );
+
+                      if (_activeIndex >= offers.length && offers.isNotEmpty) {
+                        scheduleMicrotask(() {
+                          if (mounted)
+                            setState(() => _activeIndex = offers.length - 1);
+                        });
+                      }
+
+                      if (offers.isEmpty) {
+                        return const _StateScaffold(
+                          title: 'No offers nearby',
+                          message:
+                              'New delivery offers will appear here when available.',
+                        );
+                      }
+
+                      final safeIndex =
+                          _activeIndex.clamp(0, offers.length - 1);
+                      return _OfferExperience(
+                        offers: offers,
+                        activeIndex: safeIndex,
+                        accepting: _accepting,
+                        accepted: _accepted,
+                        riderRank: rider.riderRank ?? 'Sentinel',
+                        statusMessage: _statusMessage,
+                        acceptStatus: _acceptStatus,
+                        onBackToFeed: _resetTakenState,
+                        onIndexChanged: (index) {
+                          setState(() {
+                            _activeIndex = index;
+                            _accepted = false;
+                            _statusMessage = null;
+                            _acceptStatus = null;
+                          });
+                        },
+                        onAccept: (offer) => _accept(offer, rider),
+                      );
+                    },
                   );
-                }
-
-                if (!snapshot.hasData ||
-                    (riderSnapshot.connectionState == ConnectionState.waiting &&
-                        profileSnapshot.connectionState ==
-                            ConnectionState.waiting)) {
-                  return const _StateScaffold(
-                    title: 'Loading offers',
-                    message: 'Checking nearby delivery requests.',
-                    loading: true,
-                  );
-                }
-
-                final offers = _filterOffers(
-                  docs: snapshot.data!.docs,
-                  riderId: user.uid,
-                  riderVehicle: rider.riderVehicle,
-                );
-
-                if (_activeIndex >= offers.length && offers.isNotEmpty) {
-                  scheduleMicrotask(() {
-                    if (mounted)
-                      setState(() => _activeIndex = offers.length - 1);
-                  });
-                }
-
-                if (offers.isEmpty) {
-                  return const _StateScaffold(
-                    title: 'No offers nearby',
-                    message:
-                        'New delivery offers will appear here when available.',
-                  );
-                }
-
-                final safeIndex = _activeIndex.clamp(0, offers.length - 1);
-                return _OfferExperience(
-                  offers: offers,
-                  activeIndex: safeIndex,
-                  accepting: _accepting,
-                  accepted: _accepted,
-                  riderRank: rider.riderRank ?? 'Sentinel',
-                  statusMessage: _statusMessage,
-                  acceptStatus: _acceptStatus,
-                  onBackToFeed: _resetTakenState,
-                  onIndexChanged: (index) {
-                    setState(() {
-                      _activeIndex = index;
-                      _accepted = false;
-                      _statusMessage = null;
-                      _acceptStatus = null;
-                    });
-                  },
-                  onAccept: (offer) => _accept(offer, rider),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
+                },
+              );
+            },
+          );
+        });
   }
 
-  RiderProfileSnapshot _riderProfile(
-    String uid,
-    Map<String, dynamic> riderData,
-  ) {
-    final canAccept = RiderOnboardingPolicy.canAcceptJobs(riderData);
+  RiderProfileSnapshot _riderProfile(String uid, Map<String, dynamic> riderData,
+      {bool founder = false}) {
+    final canAccept = founder || RiderOnboardingPolicy.canAcceptJobs(riderData);
     final firstName = '${riderData['firstName'] ?? ''}'.trim();
     final lastName = '${riderData['lastName'] ?? ''}'.trim();
     final displayName =
@@ -226,19 +238,19 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
     required String riderId,
     required String? riderVehicle,
+    bool founder = false,
   }) {
     return docs
-        .where((doc) => _isVisibleToRider(doc.data(), riderId, riderVehicle))
+        .where((doc) => _isVisibleToRider(doc.data(), riderId, riderVehicle,
+            founder: founder))
         .map((doc) =>
             RiderJobOffer.fromFirestore(docId: doc.id, data: doc.data()))
         .toList();
   }
 
   bool _isVisibleToRider(
-    Map<String, dynamic> data,
-    String riderId,
-    String? riderVehicle,
-  ) {
+      Map<String, dynamic> data, String riderId, String? riderVehicle,
+      {bool founder = false}) {
     final ignored = _stringList(data['ignoredRiders']);
     final rejected = _stringList(data['rejectedRiders']);
     if (ignored.contains(riderId) || rejected.contains(riderId)) return false;
@@ -251,7 +263,8 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
 
     final minimumVehicle =
         '${data['minimumVehicle'] ?? data['recommendedVehicle'] ?? 'Bike'}';
-    return _vehicleMeetsMinimum(riderVehicle ?? 'Bike', minimumVehicle);
+    return founder ||
+        _vehicleMeetsMinimum(riderVehicle ?? 'Bike', minimumVehicle);
   }
 
   List<String> _stringList(dynamic value) {

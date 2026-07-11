@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../authentication/bloc/auth_bloc.dart';
 import '../home/bloc/home_bloc.dart';
+import '../founder_access/founder_rider_access.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
@@ -98,6 +99,7 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                                     ),
                                   ),
                                 ),
+                                const FounderRiderBadge(),
                                 const SizedBox(height: 18),
                                 _AvailabilityCard(
                                   state: home,
