@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
 
 import '../../../utils/theme/theme.dart';
+import '../../rider_design/rider_ui.dart';
 import '../bloc/support_bloc.dart';
 import 'chat.dart';
 import 'faq.dart';
@@ -13,7 +14,7 @@ class SupportView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.secondary,
+      color: RiderPalette.background,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [appBar(context), const SizedBox(height: 40), options()],
@@ -33,78 +34,80 @@ class SupportView extends StatelessWidget {
 
   Widget options() {
     return BlocBuilder<SupportBloc, SupportState>(builder: (context, state) {
-      return SizedBox(
-          width: double.maxFinite,
-          child: Column(
-            children: [
-              TextButton(
-                  // borderSide: BorderSide.none,
-                  // backgroundColor: AppColors.secondary,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 16),
-                    shape: RoundedRectangleBorder(),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
+      return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: RiderGlassCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  TextButton(
+                      // borderSide: BorderSide.none,
+                      // backgroundColor: AppColors.secondary,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 16),
+                        shape: RoundedRectangleBorder(),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          SvgPicture.asset('assets/svg/support.svg'),
-                          const SizedBox(width: 16),
-                          AppText.text(
-                            'Live Chat',
+                          Row(
+                            children: [
+                              SvgPicture.asset('assets/svg/support.svg'),
+                              const SizedBox(width: 16),
+                              AppText.text(
+                                'Live Chat',
+                              )
+                            ],
+                          ),
+                          Icon(
+                            Icons.keyboard_arrow_right_rounded,
+                            color: Colors.white.withOpacity(0.15),
                           )
                         ],
                       ),
-                      Icon(
-                        Icons.keyboard_arrow_right_rounded,
-                        color: Colors.white.withOpacity(0.15),
-                      )
-                    ],
-                  ),
-                  onPressed: () {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const ChatPageView()));
-                  }),
-              Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: Colors.white.withOpacity(0.15)),
-              TextButton(
-                  // borderSide: BorderSide.none,
-                  // backgroundColor: AppColors.secondary,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 16),
-                    shape: RoundedRectangleBorder(),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
+                      onPressed: () {
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const ChatPageView()));
+                      }),
+                  Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: Colors.white.withOpacity(0.15)),
+                  TextButton(
+                      // borderSide: BorderSide.none,
+                      // backgroundColor: AppColors.secondary,
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 16),
+                        shape: RoundedRectangleBorder(),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          SvgPicture.asset('assets/svg/support.svg'),
-                          const SizedBox(width: 16),
-                          AppText.text(
-                            'FAQ',
+                          Row(
+                            children: [
+                              SvgPicture.asset('assets/svg/support.svg'),
+                              const SizedBox(width: 16),
+                              AppText.text(
+                                'FAQ',
+                              )
+                            ],
+                          ),
+                          Icon(
+                            Icons.keyboard_arrow_right_rounded,
+                            color: Colors.white.withOpacity(0.15),
                           )
                         ],
                       ),
-                      Icon(
-                        Icons.keyboard_arrow_right_rounded,
-                        color: Colors.white.withOpacity(0.15),
-                      )
-                    ],
-                  ),
-                  onPressed: () {
-                    Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const FAQView()));
-                  }),
-            ],
-          ));
+                      onPressed: () {
+                        Navigator.push(context,
+                            MaterialPageRoute(builder: (_) => const FAQView()));
+                      }),
+                ],
+              )));
     });
   }
 }

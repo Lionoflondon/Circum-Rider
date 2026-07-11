@@ -17,71 +17,84 @@ class RiderHomeStateBanner extends StatelessWidget {
       stream:
           FirebaseFirestore.instance.collection('riders').doc(uid).snapshots(),
       builder: (context, snapshot) {
-        final rider = snapshot.data?.data() ?? const <String, dynamic>{};
-        final state = RiderAccountStateResolver.resolve(rider);
-        final online =
-            '${rider['status'] ?? rider['driverStatus'] ?? ''}'.toLowerCase() ==
+        final baseRider = snapshot.data?.data() ?? const <String, dynamic>{};
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('riderProfiles')
+              .doc(uid)
+              .snapshots(),
+          builder: (context, profileSnapshot) {
+            final profile =
+                profileSnapshot.data?.data() ?? const <String, dynamic>{};
+            final rider = <String, dynamic>{...baseRider, ...profile};
+            final state = RiderAccountStateResolver.resolve(rider);
+            final online = '${rider['status'] ?? rider['driverStatus'] ?? ''}'
+                    .toLowerCase() ==
                 'online';
-        final vehicle = rider['vehicle'] is Map
-            ? Map<String, dynamic>.from(rider['vehicle'] as Map)
-            : const <String, dynamic>{};
-        final vehicleSummary =
-            '${rider['vehicleType'] ?? vehicle['type'] ?? ''}'.trim();
-        final rank = '${rider['riderRank'] ?? rider['rank'] ?? ''}'.trim();
-        final trust = rider['trustPoints'];
-        final earnings = rider['todayEarnings'];
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: RiderGlassCard(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            final vehicle = rider['vehicle'] is Map
+                ? Map<String, dynamic>.from(rider['vehicle'] as Map)
+                : const <String, dynamic>{};
+            final vehicleSummary =
+                '${rider['vehicleType'] ?? vehicle['type'] ?? ''}'.trim();
+            final rank = '${rider['riderRank'] ?? rider['rank'] ?? ''}'.trim();
+            final trust = rider['trustPoints'];
+            final earnings = rider['todayEarnings'];
+            return SafeArea(
               child: Padding(
-                padding: EdgeInsets.zero,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            state == RiderAccountState.approved
-                                ? (online
-                                    ? 'You are online'
-                                    : 'Ready when you are, ${_firstName(rider)}')
-                                : 'Rider account update',
-                            style: const TextStyle(
-                              color: RiderPalette.paper,
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                            ),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                child: RiderGlassCard(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Padding(
+                    padding: EdgeInsets.zero,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                state == RiderAccountState.approved
+                                    ? (online
+                                        ? 'You are online'
+                                        : 'Ready when you are, ${_firstName(rider)}')
+                                    : 'Rider account update',
+                                style: const TextStyle(
+                                  color: RiderPalette.paper,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _summary(
+                                  state: state,
+                                  online: online,
+                                  vehicle: vehicleSummary,
+                                  rank: rank,
+                                  trust: trust,
+                                  earnings: earnings,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    color: RiderPalette.muted, fontSize: 12),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _summary(
-                              state: state,
-                              online: online,
-                              vehicle: vehicleSummary,
-                              rank: rank,
-                              trust: trust,
-                              earnings: earnings,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                color: RiderPalette.muted, fontSize: 12),
-                          ),
-                        ],
-                      ),
+                        ),
+                        if (state == RiderAccountState.approved)
+                          RiderStatusBadge(online ? 'ONLINE' : 'OFFLINE',
+                              color: online
+                                  ? RiderPalette.green
+                                  : RiderPalette.muted),
+                      ],
                     ),
-                    if (state == RiderAccountState.approved)
-                      RiderStatusBadge(online ? 'ONLINE' : 'OFFLINE',
-                          color:
-                              online ? RiderPalette.green : RiderPalette.muted),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );

@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../helper/format_date.dart';
 import '../../../utils/theme/theme.dart';
+import '../../rider_design/rider_ui.dart';
 import '../bloc/history_bloc.dart';
 import 'history_details.dart';
 
@@ -25,7 +26,7 @@ class HistoryViewState extends State<HistoryView> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: AppColors.secondary,
+      color: RiderPalette.background,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [appBar(context), filter(), history()],
@@ -38,7 +39,7 @@ class HistoryViewState extends State<HistoryView> {
       margin: EdgeInsets.only(
           top: MediaQuery.of(context).padding.top + 20, left: 24),
       width: double.maxFinite,
-      child: AppText.text('History',
+      child: AppText.text('Delivery history',
           color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
     );
   }
@@ -114,18 +115,20 @@ class HistoryViewState extends State<HistoryView> {
           child: SizedBox(
               width: double.maxFinite,
               child: ListView.separated(
-                  padding: const EdgeInsets.only(top: 24, bottom: 24),
+                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
                   shrinkWrap: true,
                   // physics: const NeverScrollableScrollPhysics(),
                   itemBuilder: (contxt, index) {
-                    return TextButton(
-                        // borderSide: BorderSide.none,
-                        // backgroundColor: AppColors.secondary,
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 5),
-                          shape: RoundedRectangleBorder(),
-                        ),
+                    return RiderGlassCard(
+                        padding: const EdgeInsets.all(16),
+                        onTap: () {
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => HistoryDetailsView(
+                                        data: state.ridesHistory[index],
+                                      )));
+                        },
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
@@ -159,25 +162,12 @@ class HistoryViewState extends State<HistoryView> {
                                 )
                               ],
                             ),
-                            Icon(
-                              Icons.keyboard_arrow_right_rounded,
-                              color: Colors.white.withOpacity(0.15),
-                            )
+                            const Icon(Icons.keyboard_arrow_right_rounded,
+                                color: RiderPalette.muted)
                           ],
-                        ),
-                        onPressed: () {
-                          Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => HistoryDetailsView(
-                                        data: state.ridesHistory[index],
-                                      )));
-                        });
+                        ));
                   },
-                  separatorBuilder: (_, i) => Divider(
-                      height: 5,
-                      thickness: 1,
-                      color: Colors.white.withOpacity(0.15)),
+                  separatorBuilder: (_, i) => const SizedBox(height: 10),
                   itemCount: state.ridesHistory.length)));
     });
   }

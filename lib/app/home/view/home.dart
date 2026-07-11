@@ -13,11 +13,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_carousel_widget/flutter_carousel_widget.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:sliding_up_panel/sliding_up_panel.dart';
 // import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../../utils/theme/theme.dart';
+import '../../rider_design/rider_ui.dart';
 import 'parts/requests_loader.dart';
 import 'ratings.dart';
 import 'ride_chats.dart';
@@ -74,11 +77,14 @@ class _HomeViewState extends State<HomeView> {
       }
       return SlidingUpPanel(
           controller: panelController,
-          minHeight: state.minDrawerHeight,
-          maxHeight: state
-              .maxDrawerHeight, // MediaQuery.of(context).size.height * 0.75,
+          minHeight: _sheetHeight(state),
+          maxHeight: _sheetHeight(state),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
           panel: Container(
-              color: AppColors.secondary,
+              decoration: const BoxDecoration(
+                color: Color(0xF20D111C),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+              ),
               child: Column(
                 children: [
                   if (state.rideStatus != RideStatus.offline)
@@ -110,6 +116,14 @@ class _HomeViewState extends State<HomeView> {
     });
   }
 
+  double _sheetHeight(HomeState state) {
+    if (state.rideStatus == RideStatus.offline) return 350;
+    if (state.rideStatus == RideStatus.online) {
+      return state.dispatchRequests.isEmpty ? 270 : 610;
+    }
+    return 610;
+  }
+
   Widget onlinePresenceButton() {
     return BlocBuilder<HomeBloc, HomeState>(builder: (context, state) {
       return Column(
@@ -130,6 +144,10 @@ class _HomeViewState extends State<HomeView> {
                   ],
                 ),
           const SizedBox(height: 32),
+          if (state.rideStatus == RideStatus.offline) ...[
+            const _RiderStatPills(),
+            const SizedBox(height: 20),
+          ],
           if (state.rideStatus == RideStatus.offline &&
               !state.canGoOnline &&
               state.verificationChecklist.isNotEmpty) ...[
@@ -294,16 +312,91 @@ class _HomeViewState extends State<HomeView> {
                             const SizedBox(width: 16),
                           ],
                         ),
-                        onPressed: () {
-                          // Navigator.push(
-                          //     context,
-                          //     MaterialPageRoute(
-                          //         builder: (_) => const ChooseAddressView()));
-                        }))
+                        onPressed: state.rideStatus == RideStatus.offline &&
+                                !state.canGoOnline
+                            ? null
+                            : () => _toggleAvailability(state)))
               ],
             )
         ],
       );
     });
   }
+
+  void _toggleAvailability(HomeState state) {
+    if (context.read<AuthBloc>().state.locationData != null) {
+      context.read<HomeBloc>().add(SetHomeLocationData(
+          locationData: context.read<AuthBloc>().state.locationData!));
+    }
+    context.read<HomeBloc>().add(SetRideStatus(
+        status: state.rideStatus == RideStatus.offline
+            ? RideStatus.online
+            : RideStatus.offline));
+  }
+}
+
+class _RiderStatPills extends StatelessWidget {
+  const _RiderStatPills();
+
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const SizedBox.shrink();
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream:
+          FirebaseFirestore.instance.collection('riders').doc(uid).snapshots(),
+      builder: (context, snapshot) {
+        final rider = snapshot.data?.data() ?? const <String, dynamic>{};
+        final earnings = rider['todayEarnings'];
+        final trust = rider['trustPoints'];
+        final rank = '${rider['riderRank'] ?? rider['rank'] ?? 'Agent'}';
+        return Row(children: [
+          Expanded(
+              child: _RiderStat(
+                  value:
+                      earnings is num ? '£${earnings.toStringAsFixed(2)}' : '—',
+                  label: 'TODAY')),
+          const SizedBox(width: 8),
+          Expanded(
+              child: _RiderStat(
+                  value: trust is num ? trust.toStringAsFixed(0) : '—',
+                  label: 'TRUST PTS')),
+          const SizedBox(width: 8),
+          Expanded(child: _RiderStat(value: rank, label: 'RANK')),
+        ]);
+      },
+    );
+  }
+}
+
+class _RiderStat extends StatelessWidget {
+  const _RiderStat({required this.value, required this.label});
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        constraints: const BoxConstraints(minHeight: 66),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(.035),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withOpacity(.09)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                  color: RiderPalette.paper,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 3),
+          Text(label,
+              style: const TextStyle(
+                  color: RiderPalette.muted,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600)),
+        ]),
+      );
 }
