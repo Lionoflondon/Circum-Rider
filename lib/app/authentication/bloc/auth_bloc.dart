@@ -231,11 +231,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (event is SignupPasswordChanged) {
         // Passwords must never be persisted in bloc state. The canonical
         // email auth flow passes credentials directly to Firebase Auth.
-        emit(state.copyWith(password: null));
+        emit(state.copyWith(clearSensitiveAuthFields: true));
       }
 
       if (event is ConfirmPasswordChanged) {
-        emit(state.copyWith(confirmPassword: null));
+        emit(state.copyWith(clearSensitiveAuthFields: true));
       }
       if (event is DateOfBirthChanged) {
         if (event.dateOfBirth.length == 10) {
@@ -784,8 +784,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
           GeoFirePoint myLocation = GeoFirePoint(
               GeoPoint(locationData.latitude, locationData.longitude));
-          print('Latitude: ${locationData.latitude}');
-          print('Longitude: ${locationData.longitude}');
           emit(state.copyWith(
             locationData: locationData,
             hasLocationPermission: true,
@@ -803,8 +801,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             'roles': ['rider'],
             'riderRank': 'agent',
             'submittedAt': FieldValue.serverTimestamp(),
-          }).then((value) => print("DocumentSnapshot successfully updated!"),
-              onError: (e) => print("Error updating document $e"));
+          });
           await db.collection('riderOnboardingEvents').add({
             'riderId': user.uid,
             'eventType': 'profile_complete',
@@ -816,7 +813,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             email: user.email,
           );
         } catch (e) {
-          print(e);
           if (e == 'Location permissions are permanently denied') {
             emit(state.copyWith(
                 hasLocationPermission: false,
@@ -832,8 +828,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
           GeoFirePoint myLocation = GeoFirePoint(
               GeoPoint(locationData.latitude, locationData.longitude));
-          print('Latitude: ${locationData.latitude}');
-          print('Longitude: ${locationData.longitude}');
           emit(state.copyWith(
               locationData: locationData,
               hasLocationPermission: true,
@@ -842,19 +836,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await db
               .collection("riders")
               .doc(user?.uid)
-              .update({'position': myLocation.data}).then(
-                  (value) => print("DocumentSnapshot successfully updated!"),
-                  onError: (e) => print("Error updating document $e"));
+              .update({'position': myLocation.data});
         } catch (e) {
-          print(e);
           if (e == 'Location permissions are permanently denied') {
-            final _openLocationSettings =
-                await Geolocator.openLocationSettings();
+            await Geolocator.openLocationSettings();
           }
 
           if (e == 'Location services are disabled') {
-            final _openLocationSettings = await Geolocator.openAppSettings();
-            print(_openLocationSettings);
+            await Geolocator.openAppSettings();
           }
         }
       }
@@ -1336,10 +1325,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           const storage = FlutterSecureStorage();
 
           if (auth.currentUser?.emailVerified == false) {
-            print('Email not verified');
             await auth.currentUser?.sendEmailVerification();
             emit(state.copyWith(
               status: Status.unverifiedEmail,
+              clearSensitiveAuthFields: true,
             ));
           } else {
             final user = auth.currentUser;
@@ -1387,17 +1376,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 verificationId: '',
                 otp: '',
                 phoneNumber: riderPhone,
-                currentState: AppState.authenticated));
+                currentState: AppState.authenticated,
+                clearSensitiveAuthFields: true));
           }
         } on FirebaseAuthException catch (e) {
           emit(state.copyWith(
             status: Status.failure,
             errorMessage: RiderAuthError.messageFor(e.code),
+            clearSensitiveAuthFields: true,
           ));
         } catch (_) {
           emit(state.copyWith(
             status: Status.failure,
             errorMessage: RiderAuthError.messageFor('unknown'),
+            clearSensitiveAuthFields: true,
           ));
         }
       },
@@ -1469,15 +1461,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             );
           }
 
-          print('done');
           emit(state.copyWith(
             username: fullName.isEmpty ? state.username : fullName,
             status: Status.initial,
+            clearSensitiveAuthFields: true,
           ));
           add(SendPhoneOtp());
         } on FirebaseAuthException catch (e) {
-          print(e.code);
-          emit(state.copyWith(status: Status.failure));
+          emit(state.copyWith(
+            status: Status.failure,
+            clearSensitiveAuthFields: true,
+          ));
           if (e.code == 'invalid-email') {
             // print('Email is invalid');
             emit(state.copyWith(errorMessage: 'Email is invalid'));
@@ -1497,7 +1491,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         } catch (e) {
           // print(e);
           emit(state.copyWith(
-              status: Status.failure, errorMessage: 'Something went wrong'));
+              status: Status.failure,
+              errorMessage: 'Something went wrong',
+              clearSensitiveAuthFields: true));
         }
       },
     );

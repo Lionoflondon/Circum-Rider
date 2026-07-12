@@ -5,7 +5,6 @@ import 'package:bloc/bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:path_provider/path_provider.dart';
 
-import '../../../helper/chats_help.dart';
 import '../../communication/rider_communication_service.dart';
 import '../../home/models/message.m.dart';
 
@@ -55,11 +54,8 @@ class SupportBloc extends Bloc<SupportEvent, SupportState> {
           };
 
           add(IncomingSupportMessage(data: messageData));
-
-          ChatsHelper().storeChat(messageData);
-        } catch (e) {
-          print('Sending messsage failed');
-          print(e);
+        } catch (_) {
+          emit(state.copyWith(message: event.message));
         }
       },
     );

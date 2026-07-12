@@ -19,7 +19,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../helper/bitmap_descriptor_helper.dart';
-import '../../../helper/chats_help.dart';
 import '../../../helper/formatted_string_after_seconds.dart';
 import '../../../helper/messaging_server.dart';
 import '../../../utils/theme/theme.dart';
@@ -389,7 +388,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             .where('requestId', isEqualTo: '$requestID');
 
         final docResponse = await docReference.get();
-        print('Doc length: ${docResponse.docs.length}');
         final doc = docResponse.docs.firstOrNull;
 
         if (doc != null) {
@@ -397,9 +395,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           if (data['riderId'] != null && data['riderId'] == user!.uid) {
             // print('Ride assigned to me 🎉');
             // print(timer.tick);
-
-            print('Document ID: ${doc.id}');
-
             // Set user as the active delivery;
             await documentReference.update(
                 {'activeDelivery': doc.id, 'updatedAt': DateTime.now()});
@@ -723,7 +718,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     String? statusString = prefs.getString('status');
     RideStatus? status;
     if (statusString == 'online') {
-      print('online-online');
       status = RideStatus.online;
       add(SetRideStatus(status: RideStatus.online));
       add(GetAvailableRequests());
@@ -731,21 +725,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           minDrawerHeight: state.minDrawerHeight, maxDrawerHeight: 0.75.sh));
       add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
     }
-    print('Checking for active requests');
-    print('activeRequest: $activeRequest');
-
     final documentReference = db
         .collection('deliveryRequests')
         .where('riderId', isEqualTo: user!.uid);
 
     final docResponse = await documentReference.get();
-    print('Doc length: ${docResponse.docs.length}');
     // final doc = docResponse.docs.firstOrNull;
 
     for (final doc in docResponse.docs) {
       final data = doc.data();
-      print(data);
-      print('There is an active ride assigned to me 🎉');
       final activeRequest = DispatchRequest.fromJson(data);
       // print('code: ${activeRequest.code}');
       // print('currency: ${activeRequest.currency}');
@@ -782,7 +770,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             actionButtonStatus: ActionButtonStatus.outForDelivery));
       }
 
-      print('RideStatus: $status');
       add(SetRideStatus(status: status ?? RideStatus.offline));
 
       emit(state.copyWith(rideStatus: status));
@@ -796,7 +783,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     }
 
     if (docResponse.docs.isEmpty) {
-      print('No active ride');
       add(CancelRequest());
     }
   }
@@ -834,7 +820,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   void _handleMessageUser(MessageUser event, Emitter emit) async {
     try {
-      print('Sending messsage ');
       final User? user = auth.currentUser;
       // final SharedPreferences prefs = await SharedPreferences.getInstance();
       // final String? activeRequest = prefs.getString('activeRequest');
@@ -853,11 +838,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       );
 
       add(IncomingMessage(data: messageData));
-
-      ChatsHelper().storeChat(messageData);
-    } catch (e) {
-      print('Sending messsage failed');
-      print(e);
+    } catch (_) {
+      emit(state.copyWith(message: event.message));
     }
   }
 

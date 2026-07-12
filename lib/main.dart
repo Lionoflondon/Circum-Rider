@@ -23,7 +23,6 @@ import 'app/history/bloc/history_bloc.dart';
 import 'app/rider_jobs/rider_job_offer_screen.dart';
 import 'app/support/bloc/support_bloc.dart';
 import 'app/verification/bloc/verification_bloc.dart';
-import 'helper/chats_help.dart';
 import 'helper/notifications_helper.dart';
 import 'firebase_options.dart';
 import 'utils/nav/nav_key.dart';
