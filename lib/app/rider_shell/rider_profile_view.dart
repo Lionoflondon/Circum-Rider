@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
@@ -264,7 +265,8 @@ class _OptionsScreen extends StatelessWidget {
                       ),
                     ),
                     _LocationSharingRow(
-                      onTap: () => Geolocator.openAppSettings(),
+                      profile: profile,
+                      user: user,
                     ),
                   ],
                 ),
@@ -685,27 +687,629 @@ class _PermissionRow extends StatelessWidget {
 }
 
 class _LocationSharingRow extends StatelessWidget {
-  const _LocationSharingRow({required this.onTap});
+  const _LocationSharingRow({
+    required this.profile,
+    required this.user,
+  });
 
-  final VoidCallback onTap;
+  final Map<String, dynamic> profile;
+  final User user;
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<LocationPermission>(
-        future: Geolocator.checkPermission(),
+  Widget build(BuildContext context) => FutureBuilder<bool>(
+        future: Geolocator.isLocationServiceEnabled(),
         builder: (context, snapshot) {
-          final status = snapshot.hasData
-              ? _locationPermissionLabel(snapshot.data!)
-              : 'Checking permission';
+          final service = snapshot.hasData
+              ? snapshot.data!
+                  ? 'On'
+                  : 'Off'
+              : 'Checking';
           return _OptionRow(
             icon: Icons.location_searching_rounded,
-            iconColor: RiderPalette.muted,
-            title: 'Location sharing',
+            iconColor: RiderPalette.blue,
+            title: 'Location & GPS',
             subtitle:
-                'Used only while online, travelling to collection, or completing an active delivery · $status',
-            onTap: onTap,
+                'Used while online and during active deliveries · GPS Services: $service',
+            onTap: () => _open(
+              context,
+              RiderLocationGpsView(profile: profile, user: user),
+            ),
           );
         },
       );
+}
+
+class RiderLocationGpsView extends StatefulWidget {
+  const RiderLocationGpsView({
+    super.key,
+    required this.profile,
+    required this.user,
+  });
+
+  final Map<String, dynamic> profile;
+  final User user;
+
+  @override
+  State<RiderLocationGpsView> createState() => _RiderLocationGpsViewState();
+}
+
+class _RiderLocationGpsViewState extends State<RiderLocationGpsView> {
+  late Future<_LocationGpsSnapshot> _snapshot;
+  String? _gpsTestResult;
+  bool _testing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _snapshot = _LocationGpsSnapshot.load(widget.user.uid, widget.profile);
+  }
+
+  void _refresh() {
+    setState(() {
+      _snapshot = _LocationGpsSnapshot.load(widget.user.uid, widget.profile);
+    });
+  }
+
+  Future<void> _runGpsTest() async {
+    setState(() {
+      _testing = true;
+      _gpsTestResult = null;
+    });
+    try {
+      final servicesEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!servicesEnabled) {
+        setState(() {
+          _gpsTestResult =
+              'Location services are off. Turn on GPS in device settings and try again.';
+        });
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied) {
+        setState(() {
+          _gpsTestResult =
+              'Location permission is denied. Allow location for Circum Rider to enable live tracking.';
+        });
+        return;
+      }
+      if (permission == LocationPermission.deniedForever) {
+        setState(() {
+          _gpsTestResult =
+              'Location permission is permanently denied. Open device settings and allow location access.';
+        });
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.bestForNavigation,
+        timeLimit: const Duration(seconds: 12),
+      );
+      if (position.accuracy > 80) {
+        setState(() {
+          _gpsTestResult =
+              'GPS is available, but accuracy is reduced. Move near a window or outdoors and try again.';
+        });
+        return;
+      }
+
+      setState(() {
+        _gpsTestResult = '✓ GPS working correctly';
+      });
+      _refresh();
+    } catch (_) {
+      setState(() {
+        _gpsTestResult =
+            'GPS test could not complete. Check signal, permissions and device location settings, then retry.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _testing = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: RiderPalette.background,
+      body: SafeArea(
+        child: FutureBuilder<_LocationGpsSnapshot>(
+          future: _snapshot,
+          builder: (context, snapshot) {
+            final data = snapshot.data;
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+              children: [
+                Row(
+                  children: [
+                    _RoundIconButton(
+                      icon: Icons.arrow_back_rounded,
+                      label: 'Back',
+                      onTap: () => Navigator.of(context).maybePop(),
+                    ),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Text(
+                        'Location & GPS',
+                        style: TextStyle(
+                          color: RiderPalette.paper,
+                          fontFamily: RiderTypography.heading,
+                          fontSize: 28,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  "Used while you're online, travelling to pickup, navigating to deliveries and completing active deliveries. GPS enables accurate live tracking, ETAs and delivery verification. Location tracking stops automatically when you go offline or complete your final active delivery.",
+                  style: TextStyle(
+                    color: RiderPalette.muted,
+                    fontSize: 13,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                if (snapshot.connectionState == ConnectionState.waiting &&
+                    data == null)
+                  const _OptionsGlass(
+                    child: Text(
+                      'Checking GPS status...',
+                      style: TextStyle(color: RiderPalette.muted),
+                    ),
+                  )
+                else if (snapshot.hasError)
+                  _OptionsGlass(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'GPS status unavailable',
+                          style: TextStyle(
+                            color: RiderPalette.paper,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Check your connection and try again.',
+                          style: TextStyle(color: RiderPalette.muted),
+                        ),
+                        const SizedBox(height: 14),
+                        _PrimaryGpsButton(
+                          label: 'Retry',
+                          onTap: _refresh,
+                        ),
+                      ],
+                    ),
+                  )
+                else ...[
+                  _LocationStatusPanel(snapshot: data!),
+                  const SizedBox(height: 14),
+                  _GpsTestPanel(
+                    testing: _testing,
+                    result: _gpsTestResult,
+                    onRun: _runGpsTest,
+                  ),
+                  const SizedBox(height: 14),
+                  const _PrivacyPanel(),
+                ],
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _LocationGpsSnapshot {
+  const _LocationGpsSnapshot({
+    required this.servicesEnabled,
+    required this.permission,
+    required this.backgroundEnabled,
+    required this.liveTrackingActive,
+    required this.accuracyLabel,
+    required this.lastUpdateLabel,
+  });
+
+  final bool servicesEnabled;
+  final LocationPermission permission;
+  final bool backgroundEnabled;
+  final bool liveTrackingActive;
+  final String accuracyLabel;
+  final String lastUpdateLabel;
+
+  static Future<_LocationGpsSnapshot> load(
+    String riderId,
+    Map<String, dynamic> profile,
+  ) async {
+    final servicesEnabled = await Geolocator.isLocationServiceEnabled();
+    final permission = await Geolocator.checkPermission();
+    Position? lastPosition;
+    if (servicesEnabled &&
+        permission != LocationPermission.denied &&
+        permission != LocationPermission.deniedForever) {
+      lastPosition = await Geolocator.getLastKnownPosition();
+    }
+    final activeDelivery = await _activeDeliveryFor(riderId, profile);
+    final online = _isOnline(profile);
+    final liveTrackingActive = online && activeDelivery;
+
+    return _LocationGpsSnapshot(
+      servicesEnabled: servicesEnabled,
+      permission: permission,
+      backgroundEnabled: !kIsWeb && permission == LocationPermission.always,
+      liveTrackingActive: liveTrackingActive,
+      accuracyLabel: _accuracyLabel(lastPosition),
+      lastUpdateLabel: _lastUpdateLabel(lastPosition?.timestamp),
+    );
+  }
+
+  static bool _isOnline(Map<String, dynamic> profile) {
+    final raw = '${profile['availability'] ?? profile['status'] ?? ''}'
+        .toLowerCase()
+        .trim();
+    return raw == 'online' ||
+        raw == 'available' ||
+        profile['isOnline'] == true ||
+        profile['online'] == true;
+  }
+
+  static Future<bool> _activeDeliveryFor(
+    String riderId,
+    Map<String, dynamic> profile,
+  ) async {
+    final activeDeliveryId =
+        '${profile['activeDelivery'] ?? profile['activeDeliveryId'] ?? ''}'
+            .trim();
+    if (activeDeliveryId.isNotEmpty && activeDeliveryId != 'null') {
+      final doc = await FirebaseFirestore.instance
+          .collection('deliveryRequests')
+          .doc(activeDeliveryId)
+          .get();
+      return _isActiveDelivery(doc.data());
+    }
+
+    final query = await FirebaseFirestore.instance
+        .collection('deliveryRequests')
+        .where('riderId', isEqualTo: riderId)
+        .limit(5)
+        .get();
+    return query.docs.any((doc) => _isActiveDelivery(doc.data()));
+  }
+
+  static bool _isActiveDelivery(Map<String, dynamic>? data) {
+    if (data == null) return false;
+    final status =
+        '${data['deliveryStage'] ?? data['deliveryStatus'] ?? data['status'] ?? ''}'
+            .toLowerCase()
+            .trim();
+    return {
+      'accepted',
+      'navigating_to_pickup',
+      'travelling_to_pickup',
+      'approaching_pickup',
+      'arrived_at_pickup',
+      'waiting_at_pickup',
+      'pickup_verification',
+      'pickup_verified',
+      'collected',
+      'in_transit',
+      'navigating_to_dropoff',
+      'travelling_to_dropoff',
+      'approaching_dropoff',
+      'arrived_at_dropoff',
+      'pin_required',
+      'awaiting_pin',
+    }.contains(status);
+  }
+}
+
+class _LocationStatusPanel extends StatelessWidget {
+  const _LocationStatusPanel({required this.snapshot});
+
+  final _LocationGpsSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final gpsLabel = snapshot.servicesEnabled ? 'On' : 'Off';
+    final gpsColor =
+        snapshot.servicesEnabled ? RiderPalette.green : RiderPalette.red;
+    return _OptionsGlass(
+      child: Column(
+        children: [
+          _StatusLine(
+            title: 'GPS Services',
+            value: gpsLabel,
+            color: gpsColor,
+            action: const _PrimaryGpsButton(
+              label: 'Open Device Settings',
+              onTap: Geolocator.openLocationSettings,
+            ),
+          ),
+          const _HairlineDivider(),
+          _StatusLine(
+            title: 'Location Permission',
+            value: _locationPermissionDetail(snapshot.permission),
+            color: _permissionColor(snapshot.permission),
+            action: _permissionAction(snapshot.permission),
+          ),
+          const _HairlineDivider(),
+          _StatusLine(
+            title: 'Background Location',
+            value: snapshot.backgroundEnabled ? 'Enabled' : 'Disabled',
+            color: snapshot.backgroundEnabled
+                ? RiderPalette.green
+                : RiderPalette.amber,
+            description:
+                'Required to continue live tracking during active deliveries while the app is running in the background.',
+          ),
+          const _HairlineDivider(),
+          _StatusLine(
+            title: 'Live Tracking',
+            value: snapshot.liveTrackingActive ? 'Active' : 'Inactive',
+            color: snapshot.liveTrackingActive
+                ? RiderPalette.green
+                : RiderPalette.muted,
+          ),
+          const _HairlineDivider(),
+          _StatusLine(
+            title: 'GPS Accuracy',
+            value: snapshot.accuracyLabel,
+            color: _accuracyColor(snapshot.accuracyLabel),
+          ),
+          const _HairlineDivider(),
+          _StatusLine(
+            title: 'Last GPS Update',
+            value: snapshot.lastUpdateLabel,
+            color: RiderPalette.blue,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatusLine extends StatelessWidget {
+  const _StatusLine({
+    required this.title,
+    required this.value,
+    required this.color,
+    this.description,
+    this.action,
+  });
+
+  final String title;
+  final String value;
+  final Color color;
+  final String? description;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '$title. $value${description == null ? '' : '. $description'}',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      color: RiderPalette.paper,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+            if (description != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                description!,
+                style: const TextStyle(
+                  color: RiderPalette.muted,
+                  fontSize: 12,
+                  height: 1.35,
+                ),
+              ),
+            ],
+            if (action != null) ...[
+              const SizedBox(height: 12),
+              action!,
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GpsTestPanel extends StatelessWidget {
+  const _GpsTestPanel({
+    required this.testing,
+    required this.result,
+    required this.onRun,
+  });
+
+  final bool testing;
+  final String? result;
+  final VoidCallback onRun;
+
+  @override
+  Widget build(BuildContext context) {
+    return _OptionsGlass(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Run GPS Test',
+            style: TextStyle(
+              color: RiderPalette.paper,
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Checks GPS availability, permission and accuracy for live delivery tracking.',
+            style: TextStyle(color: RiderPalette.muted, height: 1.35),
+          ),
+          const SizedBox(height: 14),
+          _PrimaryGpsButton(
+            label: testing ? 'Testing GPS...' : 'Run GPS Test',
+            onTap: testing ? null : onRun,
+          ),
+          if (result != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              result!,
+              style: TextStyle(
+                color: result!.startsWith('✓')
+                    ? RiderPalette.green
+                    : RiderPalette.amber,
+                fontWeight: FontWeight.w800,
+                height: 1.35,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _PrivacyPanel extends StatelessWidget {
+  const _PrivacyPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    const bullets = [
+      'Circum only tracks your location while you\'re online or completing an active delivery.',
+      'Tracking automatically stops when you go offline.',
+      'Background tracking is only used to maintain accurate delivery progress.',
+      'Your live location is never shared publicly.',
+      'Only authorised delivery participants and Circum operations can view active delivery locations.',
+    ];
+    return _OptionsGlass(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Your Privacy',
+            style: TextStyle(
+              color: RiderPalette.paper,
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 10),
+          for (final item in bullets)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                '• $item',
+                style: const TextStyle(
+                  color: RiderPalette.muted,
+                  height: 1.35,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrimaryGpsButton extends StatelessWidget {
+  const _PrimaryGpsButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: label,
+      child: SizedBox(
+        height: 48,
+        child: ElevatedButton(
+          onPressed: onTap,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: RiderPalette.blue,
+            disabledBackgroundColor: RiderPalette.muted.withValues(alpha: .18),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w900),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoundIconButton extends StatelessWidget {
+  const _RoundIconButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(19),
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: .045),
+              border: Border.all(color: Colors.white.withValues(alpha: .09)),
+            ),
+            child: Icon(icon, color: RiderPalette.paper, size: 20),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _IconChip extends StatelessWidget {
@@ -1020,14 +1624,62 @@ String _permissionLabel(permissions.PermissionStatus status) {
   return 'Not requested';
 }
 
-String _locationPermissionLabel(LocationPermission permission) {
+String _locationPermissionDetail(LocationPermission permission) {
   return switch (permission) {
-    LocationPermission.always => 'Allowed',
-    LocationPermission.whileInUse => 'Foreground only',
+    LocationPermission.always => 'Always Allowed',
+    LocationPermission.whileInUse => 'While Using App',
     LocationPermission.denied => 'Denied',
-    LocationPermission.deniedForever => 'Open settings',
-    LocationPermission.unableToDetermine => 'Not requested',
+    LocationPermission.deniedForever => 'Denied',
+    LocationPermission.unableToDetermine => 'Restricted',
   };
+}
+
+Color _permissionColor(LocationPermission permission) {
+  return switch (permission) {
+    LocationPermission.always => RiderPalette.green,
+    LocationPermission.whileInUse => RiderPalette.amber,
+    LocationPermission.denied ||
+    LocationPermission.deniedForever =>
+      RiderPalette.red,
+    LocationPermission.unableToDetermine => RiderPalette.amber,
+  };
+}
+
+Widget? _permissionAction(LocationPermission permission) {
+  if (permission == LocationPermission.always ||
+      permission == LocationPermission.whileInUse) {
+    return null;
+  }
+  return const _PrimaryGpsButton(
+    label: 'Open Device Settings',
+    onTap: Geolocator.openAppSettings,
+  );
+}
+
+String _accuracyLabel(Position? position) {
+  if (position == null) return 'Reduced';
+  if (position.accuracy <= 25) return 'High';
+  if (position.accuracy <= 80) return 'Medium';
+  return 'Reduced';
+}
+
+Color _accuracyColor(String label) {
+  return switch (label) {
+    'High' => RiderPalette.green,
+    'Medium' => RiderPalette.amber,
+    _ => RiderPalette.red,
+  };
+}
+
+String _lastUpdateLabel(DateTime? timestamp) {
+  if (timestamp == null) return 'Unavailable';
+  final elapsed = DateTime.now().difference(timestamp).abs();
+  if (elapsed.inSeconds < 10) return 'Just now';
+  if (elapsed.inMinutes < 1) return '${elapsed.inSeconds} seconds ago';
+  if (elapsed.inMinutes == 1) return '1 minute ago';
+  if (elapsed.inMinutes < 60) return '${elapsed.inMinutes} minutes ago';
+  if (elapsed.inHours == 1) return '1 hour ago';
+  return '${elapsed.inHours} hours ago';
 }
 
 Future<void> _confirmSignOut(BuildContext context) async {

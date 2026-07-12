@@ -135,7 +135,9 @@ void main() {
       expect(profile, contains('Documents & verification'));
       expect(profile, contains('Delivery activity'));
       expect(profile, contains('Notifications'));
-      expect(profile, contains('Location sharing'));
+      expect(profile, contains('Location & GPS'));
+      expect(
+          profile, contains('Used while online and during active deliveries'));
       expect(profile, contains('Support'));
       expect(profile, contains('Legal'));
       expect(profile, contains('Privacy'));
@@ -184,10 +186,34 @@ void main() {
       expect(profile, contains("collection('riders')"));
       expect(profile, contains('RiderLegalView'));
       expect(profile, contains('Geolocator.openAppSettings'));
+      expect(profile, contains('Geolocator.openLocationSettings'));
       expect(profile, contains('showModalBottomSheet'));
       expect(profile, contains('SignOut()'));
       expect(profile, isNot(contains('Permission.camera')));
       expect(profile, isNot(contains('backgroundLocation')));
+    });
+
+    test('location and GPS settings expose production tracking states', () {
+      expect(profile, contains('RiderLocationGpsView'));
+      expect(profile, contains('GPS Services'));
+      expect(profile, contains('Location Permission'));
+      expect(profile, contains('Background Location'));
+      expect(profile, contains('Live Tracking'));
+      expect(profile, contains('GPS Accuracy'));
+      expect(profile, contains('Last GPS Update'));
+      expect(profile, contains('Run GPS Test'));
+      expect(profile, contains('Your Privacy'));
+      expect(profile, contains('GPS working correctly'));
+      expect(profile, contains('Always Allowed'));
+      expect(profile, contains('While Using App'));
+      expect(
+          profile,
+          contains(
+              'Required to continue live tracking during active deliveries while the app is running in the background.'));
+      expect(profile, contains("collection('deliveryRequests')"));
+      expect(profile, contains('getCurrentPosition'));
+      expect(profile, contains('getLastKnownPosition'));
+      expect(profile, isNot(contains('Your live location is shared publicly')));
     });
 
     test('profile avoids dashboard and rider-facing tax language', () {
