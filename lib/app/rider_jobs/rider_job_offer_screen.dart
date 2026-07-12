@@ -2497,7 +2497,7 @@ class _CompletionRow extends StatelessWidget {
       ]));
 }
 
-class _WaitingPolicyCard extends StatelessWidget {
+class _WaitingPolicyCard extends StatefulWidget {
   final FirebaseFirestore firestore;
   final String deliveryId;
   final RiderDeliveryController controller;
@@ -2509,21 +2509,83 @@ class _WaitingPolicyCard extends StatelessWidget {
   });
 
   @override
+  State<_WaitingPolicyCard> createState() => _WaitingPolicyCardState();
+}
+
+class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
+  bool _updatingContext = false;
+  bool _markingNoShow = false;
+  String? _error;
+  Map<String, dynamic>? _lastNoShowResult;
+
+  Future<void> _customerResponded() async {
+    setState(() {
+      _updatingContext = true;
+      _error = null;
+    });
+    try {
+      await widget.controller.reportWaitingContext(
+        deliveryId: widget.deliveryId,
+        type: 'customer_responded',
+        note: 'Customer responded during waiting period',
+      );
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not update waiting context.');
+    } finally {
+      if (mounted) setState(() => _updatingContext = false);
+    }
+  }
+
+  Future<void> _markNoShow() async {
+    setState(() {
+      _markingNoShow = true;
+      _error = null;
+    });
+    try {
+      final result =
+          await widget.controller.markNoShow(deliveryId: widget.deliveryId);
+      if (mounted) setState(() => _lastNoShowResult = result);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'No-show failed. Retry.');
+    } finally {
+      if (mounted) setState(() => _markingNoShow = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream:
-          firestore.collection('deliveryRequests').doc(deliveryId).snapshots(),
+      stream: widget.firestore
+          .collection('deliveryRequests')
+          .doc(widget.deliveryId)
+          .snapshots(),
       builder: (context, snapshot) {
         final data = snapshot.data?.data() ?? const <String, dynamic>{};
         final waiting = data['waiting'] is Map
             ? Map<String, dynamic>.from(data['waiting'] as Map)
             : const <String, dynamic>{};
+        final noShowFinancial = data['noShowFinancial'] is Map
+            ? Map<String, dynamic>.from(data['noShowFinancial'] as Map)
+            : _lastNoShowResult?['financial'] is Map
+                ? Map<String, dynamic>.from(
+                    _lastNoShowResult!['financial'] as Map)
+                : const <String, dynamic>{};
         final rawDeadline = waiting['noShowAvailableAt'];
         final deadline = rawDeadline is Timestamp
             ? rawDeadline.toDate()
             : rawDeadline is num
                 ? DateTime.fromMillisecondsSinceEpoch(rawDeadline.toInt())
                 : null;
+        final feeAmount = _moneyValue(
+            noShowFinancial['amount'] ?? waiting['noShowFeeAmount']);
+        final riderCompensation = _moneyValue(
+            noShowFinancial['riderCompensation'] ??
+                waiting['noShowRiderCompensation']);
+        final currency =
+            '${noShowFinancial['currency'] ?? waiting['currency'] ?? 'GBP'}';
+        final noShowRecorded = data['state'] == 'sender_no_show_pickup' ||
+            noShowFinancial.isNotEmpty ||
+            _lastNoShowResult?['success'] == true;
         return StreamBuilder<int>(
           stream: Stream<int>.periodic(
               const Duration(seconds: 1), (value) => value),
@@ -2537,51 +2599,320 @@ class _WaitingPolicyCard extends StatelessWidget {
                 '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
             return RiderGlassSurface(
               width: double.infinity,
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(16),
               radius: 18,
               opacity: .64,
               blur: 18,
               borderColor: Colors.white.withValues(alpha: .16),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Sender notified',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800)),
-                        Text(
-                          noShowReady
-                              ? 'No-show review available'
-                              : 'Free wait $label',
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.7)),
+                  Center(
+                    child: _WaitingCountdownRing(
+                      label: label,
+                      noShowReady: noShowReady,
+                      noShowRecorded: noShowRecorded,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('Sender notified on arrival',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontFamily: RiderTypography.mono,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: .8)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Waiting timer is server-side - this screen mirrors the backend clock and won\'t drift if you background the app.',
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.70),
+                        fontSize: 12,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600),
+                  ),
+                  if (feeAmount != null) ...[
+                    const SizedBox(height: 10),
+                    _WaitingChargeLine(
+                      label: noShowRecorded
+                          ? 'No-show charge recorded'
+                          : noShowReady
+                              ? 'No-show charge available'
+                              : 'No-show charge after free wait',
+                      amount: feeAmount,
+                      currency: currency,
+                    ),
+                    if (riderCompensation != null)
+                      _WaitingChargeLine(
+                        label: noShowRecorded
+                            ? 'Rider compensation recorded'
+                            : 'Rider compensation if backend approves',
+                        amount: riderCompensation,
+                        currency: currency,
+                        muted: !noShowRecorded,
+                      ),
+                  ],
+                  if (_error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(_error!,
+                        style: const TextStyle(
+                            color: Color(0xFFFF8A8A),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700)),
+                  ],
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _WaitingActionButton(
+                          label: 'Contact sender',
+                          icon: Icons.chat_bubble_outline_rounded,
+                          onTap: () => widget.controller.reportWaitingContext(
+                            deliveryId: widget.deliveryId,
+                            type: 'waiting_for_building_access',
+                            note: 'Rider contacted sender during wait',
+                          ),
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _WaitingActionButton(
+                          label: _updatingContext
+                              ? 'Updating...'
+                              : 'Customer Responded',
+                          icon: Icons.mark_chat_read_outlined,
+                          onTap: _updatingContext ? null : _customerResponded,
+                        ),
+                      ),
+                    ],
                   ),
-                  TextButton(
-                    onPressed: () => controller.reportWaitingContext(
-                      deliveryId: deliveryId,
-                      type: 'waiting_for_building_access',
-                      note: 'Contact established by rider',
-                    ),
-                    child: const Text('Contact made'),
+                  const SizedBox(height: 8),
+                  _WaitingNoShowButton(
+                    label: noShowRecorded
+                        ? 'No Show recorded'
+                        : noShowReady
+                            ? _markingNoShow
+                                ? 'Marking No Show...'
+                                : 'Mark No Show'
+                            : 'No Show - available at $label',
+                    enabled: noShowReady && !noShowRecorded && !_markingNoShow,
+                    onTap: _markNoShow,
                   ),
-                  if (noShowReady)
-                    TextButton(
-                      onPressed: () =>
-                          controller.markNoShow(deliveryId: deliveryId),
-                      child: const Text('No Show'),
-                    ),
                 ],
               ),
             );
           },
         );
       },
+    );
+  }
+
+  double? _moneyValue(Object? value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+}
+
+class _WaitingCountdownRing extends StatelessWidget {
+  const _WaitingCountdownRing({
+    required this.label,
+    required this.noShowReady,
+    required this.noShowRecorded,
+  });
+
+  final String label;
+  final bool noShowReady;
+  final bool noShowRecorded;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = noShowRecorded
+        ? const Color(0xFF34D399)
+        : noShowReady
+            ? const Color(0xFFFF452B)
+            : const Color(0xFF3B82F6);
+    return Container(
+      width: 152,
+      height: 152,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: SweepGradient(
+          colors: [
+            color,
+            color,
+            Colors.white.withValues(alpha: .08),
+            Colors.white.withValues(alpha: .08),
+          ],
+          stops: const [0, .72, .72, 1],
+        ),
+      ),
+      child: Center(
+        child: Container(
+          width: 128,
+          height: 128,
+          decoration: const BoxDecoration(
+            color: Color(0xFF07090F),
+            shape: BoxShape.circle,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                noShowRecorded
+                    ? 'DONE'
+                    : noShowReady
+                        ? '00:00'
+                        : label,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 31,
+                    fontFamily: RiderTypography.mono,
+                    fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                noShowRecorded
+                    ? 'backend recorded'
+                    : noShowReady
+                        ? 'no-show available'
+                        : 'free wait remaining',
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: .52),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WaitingChargeLine extends StatelessWidget {
+  const _WaitingChargeLine({
+    required this.label,
+    required this.amount,
+    required this.currency,
+    this.muted = false,
+  });
+
+  final String label;
+  final double amount;
+  final String currency;
+  final bool muted;
+
+  @override
+  Widget build(BuildContext context) {
+    final symbol = currency.toUpperCase() == 'GBP' ? '£' : '$currency ';
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: muted ? .48 : .72),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700)),
+          ),
+          Text('$symbol${amount.toStringAsFixed(2)}',
+              style: TextStyle(
+                  color: muted
+                      ? Colors.white.withValues(alpha: .50)
+                      : Colors.white,
+                  fontSize: 13,
+                  fontFamily: RiderTypography.mono,
+                  fontWeight: FontWeight.w900)),
+        ],
+      ),
+    );
+  }
+}
+
+class _WaitingActionButton extends StatelessWidget {
+  const _WaitingActionButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 42),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: .12)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: const Color(0xFF60A5FA), size: 15),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WaitingNoShowButton extends StatelessWidget {
+  const _WaitingNoShowButton({
+    required this.label,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedOpacity(
+        opacity: enabled ? 1 : .46,
+        duration: const Duration(milliseconds: 180),
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(minHeight: 42),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF452B).withValues(alpha: .08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+                color: const Color(0xFFFF452B).withValues(alpha: .30)),
+          ),
+          child: Text(label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: Color(0xFFFF7A63),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900)),
+        ),
+      ),
     );
   }
 }
