@@ -30,4 +30,23 @@ void main() {
       expect(body, isNot(contains('apnsToken:')), reason: source.path);
     }
   });
+
+  test('release-critical Rider paths do not use raw print diagnostics', () {
+    final root = Directory.current;
+    final releaseCriticalSources = <File>[
+      File('${root.path}/lib/app/home/bloc/home_bloc.dart'),
+      File('${root.path}/lib/app/tracking/rider_live_tracking_controller.dart'),
+    ];
+
+    for (final source in releaseCriticalSources) {
+      expect(source.existsSync(), isTrue, reason: source.path);
+      final executableLines = source
+          .readAsLinesSync()
+          .map((line) => line.trimLeft())
+          .where((line) => !line.startsWith('//'))
+          .join('\n');
+
+      expect(executableLines, isNot(contains('print(')), reason: source.path);
+    }
+  });
 }

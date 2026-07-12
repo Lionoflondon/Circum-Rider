@@ -197,6 +197,20 @@ void main() {
       expect(source, contains(".collection('tracking')"));
       expect(source, contains(".doc('liveLocation')"));
       expect(source, contains("'riderLiveLocation'"));
+      expect(source, contains("'freshness': 'fresh'"));
+      expect(source, contains("'deliveryState': update.trackingStatus"));
+      expect(source, contains("'clientRecordedAt': Timestamp.fromDate"));
+      expect(source,
+          contains("'freshnessUpdatedAt': FieldValue.serverTimestamp()"));
+      expect(source, contains(".collection('activeDeliveries')"));
+    });
+
+    test('publishes a backend-visible stopped state when tracking ends', () {
+      expect(source, contains("_writeStop"));
+      expect(source, contains("'trackingStatus': 'stopped'"));
+      expect(source, contains("'freshness': 'stopped'"));
+      expect(source, contains("'deliveryState': status"));
+      expect(source, contains("batch.set(activeRef, payload"));
     });
 
     test('accepted delivery screen starts tracking from backend state', () {

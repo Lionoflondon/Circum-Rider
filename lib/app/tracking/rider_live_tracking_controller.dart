@@ -721,8 +721,11 @@ class RiderLiveTrackingController {
       'speed': position.speed,
       'status': update.trackingStatus,
       'trackingStatus': 'live',
+      'deliveryState': update.trackingStatus,
+      'freshness': 'fresh',
       'clientRecordedAt': Timestamp.fromDate(update.createdAt),
       'updatedAt': FieldValue.serverTimestamp(),
+      'freshnessUpdatedAt': FieldValue.serverTimestamp(),
       'riderLiveLocation': {
         'geopoint': GeoPoint(position.latitude, position.longitude),
         'latitude': position.latitude,
@@ -730,6 +733,8 @@ class RiderLiveTrackingController {
         'accuracy': position.accuracy,
         'heading': position.heading,
         'speed': position.speed,
+        'freshness': 'fresh',
+        'deliveryState': update.trackingStatus,
         'updatedAt': FieldValue.serverTimestamp(),
       },
     };
@@ -747,8 +752,12 @@ class RiderLiveTrackingController {
         'deliveryId': deliveryId,
         'riderId': riderId,
         'status': update.trackingStatus,
+        'deliveryState': update.trackingStatus,
+        'trackingStatus': 'live',
+        'freshness': 'fresh',
         'riderLiveLocation': payload['riderLiveLocation'],
         'updatedAt': FieldValue.serverTimestamp(),
+        'freshnessUpdatedAt': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
     );
@@ -760,19 +769,27 @@ class RiderLiveTrackingController {
     required String riderId,
     required String status,
   }) async {
-    await _firestore
-        .collection('deliveryRequests')
-        .doc(deliveryId)
-        .collection('tracking')
-        .doc('liveLocation')
-        .set({
+    final payload = {
       'riderId': riderId,
       'activeDeliveryId': deliveryId,
       'deliveryId': deliveryId,
       'trackingStatus': 'stopped',
       'status': status,
+      'deliveryState': status,
+      'freshness': 'stopped',
       'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+      'freshnessUpdatedAt': FieldValue.serverTimestamp(),
+    };
+    final trackingRef = _firestore
+        .collection('deliveryRequests')
+        .doc(deliveryId)
+        .collection('tracking')
+        .doc('liveLocation');
+    final activeRef = _firestore.collection('activeDeliveries').doc(deliveryId);
+    final batch = _firestore.batch();
+    batch.set(trackingRef, payload, SetOptions(merge: true));
+    batch.set(activeRef, payload, SetOptions(merge: true));
+    await batch.commit();
   }
 
   void _emit(RiderLiveTrackingSnapshot next) {

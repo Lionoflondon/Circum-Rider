@@ -8,7 +8,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:equatable/equatable.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 // import 'package:geoflutterfire2/geoflutterfire2.dart';
@@ -16,7 +15,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../../helper/bitmap_descriptor_helper.dart';
 import '../../../helper/chats_help.dart';
@@ -46,7 +44,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       RiderCommunicationService();
 
   List<DirectionStep> _currentRoute = [];
-  int _currentStepIndex = 0;
 
   List<String> _remainingVerificationItems(Map<String, dynamic>? riderData) {
     final remaining = <String>[];
@@ -159,7 +156,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                   (value) {},
                   onError: (e) {});
         }
-      } catch (e) {
+      } catch (_) {
         debugPrint('Push token update failed');
       }
     } else {
@@ -191,7 +188,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       }
       return;
     } else {
-      final accountState = await _loadAccountState(user?.uid);
+      final accountState = await _loadAccountState(user.uid);
       if (!founder && !RiderAccountStateResolver.canOperate(accountState)) {
         emit(state.copyWith(
           rideStatus: RideStatus.offline,
@@ -200,7 +197,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         ));
         return;
       }
-      final remaining = await _loadRemainingVerificationItems(user?.uid);
+      final remaining = await _loadRemainingVerificationItems(user.uid);
       if (!founder &&
           event.status == RideStatus.online &&
           remaining.isNotEmpty) {
@@ -253,9 +250,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       emit(state.copyWith(
           dispatchRequests: dispatchRequests,
           requestStatus: RequestStatus.success));
-    } catch (e) {
-      print('failure');
-      print(e);
+    } catch (_) {
       emit(state.copyWith(requestStatus: RequestStatus.failure));
     }
   }
@@ -281,23 +276,23 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       emit(state.copyWith(
           rideStatus: RideStatus.acceptedARide,
           selectedRequestIndex: event.selectedRequestIndex,
-          activeRequest: state.dispatchRequests![event.selectedRequestIndex]));
+          activeRequest: state.dispatchRequests[event.selectedRequestIndex]));
 
-      final double? riderLng = prefs.getDouble('longitude');
-      final double? riderLat = prefs.getDouble('latitude');
+      final riderLng = prefs.getDouble('longitude')!;
+      final riderLat = prefs.getDouble('latitude')!;
 
-      final riderCoordinates = PlaceCoordinate(lat: riderLat!, lng: riderLng!);
+      final riderCoordinates = PlaceCoordinate(lat: riderLat, lng: riderLng);
       final userPickupCoordinates = PlaceCoordinate(
-        lat: state.dispatchRequests![event.selectedRequestIndex].pickupData
+        lat: state.dispatchRequests[event.selectedRequestIndex].pickupData
             .position.geopoint.latitude,
-        lng: state.dispatchRequests![event.selectedRequestIndex].pickupData
+        lng: state.dispatchRequests[event.selectedRequestIndex].pickupData
             .position.geopoint.longitude,
       );
 
       final userDestinationCoordinates = PlaceCoordinate(
-        lat: state.dispatchRequests![event.selectedRequestIndex].dropoffData
+        lat: state.dispatchRequests[event.selectedRequestIndex].dropoffData
             .position.geopoint.latitude,
-        lng: state.dispatchRequests![event.selectedRequestIndex].dropoffData
+        lng: state.dispatchRequests[event.selectedRequestIndex].dropoffData
             .position.geopoint.longitude,
       );
 
@@ -383,13 +378,12 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       Timer.periodic(const Duration(seconds: 2), (timer) async {
         final requestID =
-            state.dispatchRequests?[event.selectedRequestIndex].requestId;
+            state.dispatchRequests[event.selectedRequestIndex].requestId;
         final docReference = db
             .collection('deliveryRequests')
-            .where('requestId', isEqualTo: '$requestID');
+            .where('requestId', isEqualTo: requestID);
 
         final docResponse = await docReference.get();
-        print('Doc length: ${docResponse.docs.length}');
         final doc = docResponse.docs.firstOrNull;
 
         if (doc != null) {
@@ -397,9 +391,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           if (data['riderId'] != null && data['riderId'] == user!.uid) {
             // print('Ride assigned to me 🎉');
             // print(timer.tick);
-
-            print('Document ID: ${doc.id}');
-
             // Set user as the active delivery;
             await documentReference.update(
                 {'activeDelivery': doc.id, 'updatedAt': DateTime.now()});
@@ -431,14 +422,12 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             state.dispatchRequests[event.selectedRequestIndex].requestId);
         emit(state.copyWith(
             rideStatus: RideStatus.userConfirmedRide,
-            activeRequest: state.dispatchRequests?[event.selectedRequestIndex],
+            activeRequest: state.dispatchRequests[event.selectedRequestIndex],
             actionButtonStatus: ActionButtonStatus.goingToPickupLocation));
 
         add(BroadcastLocation());
       }
-    } catch (e) {
-      print(e);
-    }
+    } catch (_) {}
   }
 
   void _handleDeclineRequest(DeclineRequest event, Emitter emit) async {
@@ -569,8 +558,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             rideStatus: RideStatus.outForDelivery,
             requestStatus: RequestStatus.success));
       }
-    } catch (e) {
-      print(e);
+    } catch (_) {
       emit(state.copyWith(requestStatus: RequestStatus.failure));
     }
   }
@@ -578,9 +566,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   void _handleRideCompleted(RideCompleted event, Emitter emit) async {
     try {
       emit(state.copyWith(requestStatus: RequestStatus.loading));
-      final uuid1 = const Uuid().v4();
-      final uuid2 = const Uuid().v4();
-      final uuiduuid = '$uuid1$uuid2';
       final User user = auth.currentUser!;
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       final String? activeRequest = prefs.getString('activeRequest');
@@ -613,8 +598,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       ));
 
       add(GetAvailableRequests());
-    } catch (e) {
-      print(e);
+    } catch (_) {
       emit(state.copyWith(requestStatus: RequestStatus.failure));
     }
   }
@@ -637,10 +621,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         markers: markers,
         polylineCoordinates: [],
         dispatchRequests: []));
-
-    print('>>>>>>>>>>>>>>>>>>>>>');
-    print('Cancelled Data');
-    print('>>>>>>>>>>>>>>>>>>>>>');
   }
 
   void _handleBroadcastLocation(BroadcastLocation event, Emitter emit) async {
@@ -657,18 +637,16 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
                 "assets/svg/bike_top.svg");
         final Marker riderLocationMarker = Marker(
-            markerId: MarkerId('rider_location_marker'),
+            markerId: const MarkerId('rider_location_marker'),
             position:
                 LatLng(riderLat!, riderLng!), // Destination address location
             icon: icon);
 
         Map<MarkerId, Marker> markers = Map.of(state.markers);
 
-        markers[MarkerId('rider_location_marker')] = riderLocationMarker;
+        markers[const MarkerId('rider_location_marker')] = riderLocationMarker;
 
         emit(state.copyWith(markers: markers));
-
-        print('code: ${state.activeRequest!.code}');
         // final SharedPreferences prefs = await SharedPreferences.getInstance();
         final courierName = prefs.getString('courierName');
         Map<String, dynamic>? riderSnapshotData;
@@ -706,8 +684,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         await Future.delayed(const Duration(seconds: 5));
         emit(state.copyWith(broadcastStatus: BroadcastStatus.initialized));
       }
-    } catch (e) {
-      print(e);
+    } catch (_) {
       emit(state.copyWith(broadcastStatus: BroadcastStatus.initialized));
     }
   }
@@ -716,14 +693,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       CheckForActiveRequest event, Emitter emit) async {
     User? user = auth.currentUser;
     final SharedPreferences prefs = await SharedPreferences.getInstance();
-    final String? activeRequest = prefs.getString('activeRequest');
     final double? riderLng = prefs.getDouble('longitude');
     final double? riderLat = prefs.getDouble('latitude');
-    final String? riderId = prefs.getString('riderId');
-    String? statusString = prefs.getString('status');
+    final statusString = prefs.getString('status');
     RideStatus? status;
     if (statusString == 'online') {
-      print('online-online');
       status = RideStatus.online;
       add(SetRideStatus(status: RideStatus.online));
       add(GetAvailableRequests());
@@ -731,21 +705,16 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           minDrawerHeight: state.minDrawerHeight, maxDrawerHeight: 0.75.sh));
       add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
     }
-    print('Checking for active requests');
-    print('activeRequest: $activeRequest');
 
     final documentReference = db
         .collection('deliveryRequests')
         .where('riderId', isEqualTo: user!.uid);
 
     final docResponse = await documentReference.get();
-    print('Doc length: ${docResponse.docs.length}');
     // final doc = docResponse.docs.firstOrNull;
 
     for (final doc in docResponse.docs) {
       final data = doc.data();
-      print(data);
-      print('There is an active ride assigned to me 🎉');
       final activeRequest = DispatchRequest.fromJson(data);
       // print('code: ${activeRequest.code}');
       // print('currency: ${activeRequest.currency}');
@@ -781,8 +750,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         emit(state.copyWith(
             actionButtonStatus: ActionButtonStatus.outForDelivery));
       }
-
-      print('RideStatus: $status');
       add(SetRideStatus(status: status ?? RideStatus.offline));
 
       emit(state.copyWith(rideStatus: status));
@@ -796,7 +763,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     }
 
     if (docResponse.docs.isEmpty) {
-      print('No active ride');
       add(CancelRequest());
     }
   }
@@ -821,7 +787,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         File('${directory.path}/${state.activeRequest!.requestId}.json');
 
     if (await chats.exists()) {
-      print('Loading chats');
       final contents = await chats.readAsString();
       // print(contents);
       final jsonData = await jsonDecode(contents) as List;
@@ -834,7 +799,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   void _handleMessageUser(MessageUser event, Emitter emit) async {
     try {
-      print('Sending messsage ');
       final User? user = auth.currentUser;
       // final SharedPreferences prefs = await SharedPreferences.getInstance();
       // final String? activeRequest = prefs.getString('activeRequest');
@@ -855,10 +819,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       add(IncomingMessage(data: messageData));
 
       ChatsHelper().storeChat(messageData);
-    } catch (e) {
-      print('Sending messsage failed');
-      print(e);
-    }
+    } catch (_) {}
   }
 
   void _handleRateUser(RateUser event, Emitter emit) async {
@@ -869,8 +830,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           .collection('history')
           .doc(lastTrip)
           .update({'userRating': event.rating, 'updatedAt': DateTime.now()});
-    } catch (e) {
-      print(e);
-    }
+    } catch (_) {}
   }
 }
