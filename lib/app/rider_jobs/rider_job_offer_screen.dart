@@ -1522,9 +1522,30 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   bool get _vanguard =>
       widget.offer.warningChips.contains('Vanguard') ||
       widget.offer.raw['requiresVanguard'] == true;
-  bool get _pinRequired => _vanguard || widget.offer.raw['pinRequired'] == true;
+  bool get _healthPlus =>
+      widget.offer.warningChips.contains('Health+') ||
+      widget.offer.raw['serviceType'] == 'health_plus' ||
+      widget.offer.raw['isHealthPlus'] == true;
+  bool get _gift =>
+      widget.offer.warningChips.contains('Gift') ||
+      widget.offer.raw['serviceType'] == 'gift' ||
+      widget.offer.raw['isGift'] == true;
+  bool get _pinRequired =>
+      _vanguard ||
+      _healthPlus ||
+      widget.offer.raw['pinRequired'] == true ||
+      widget.offer.raw['receiverPinRequired'] == true;
+  bool get _photoRequired =>
+      _gift ||
+      widget.offer.raw['photoRequired'] == true ||
+      widget.offer.raw['proofPhotoRequired'] == true;
+  bool get _signatureRequired =>
+      widget.offer.raw['signatureRequired'] == true ||
+      widget.offer.raw['receiverSignatureRequired'] == true;
   bool get _verificationRequired =>
       _vanguard ||
+      _healthPlus ||
+      _gift ||
       widget.offer.raw['verificationRequired'] == true ||
       widget.offer.raw['requiresVerification'] == true;
 
@@ -1659,6 +1680,12 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       );
       if (!mounted) return;
       setState(() => _stage = RiderDeliveryStagePolicy.fromRaw(result.status));
+      if (action == 'start_heading_to_pickup') {
+        unawaited(_openNavigationOptions(toPickup: true));
+      }
+      if (action == 'start_delivery') {
+        unawaited(_openNavigationOptions(toPickup: false));
+      }
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
       setState(() => _transitionError = error.message ?? 'Action failed.');
@@ -1782,8 +1809,14 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
               DropdownButtonFormField<String>(
                 value: category,
                 items: const {
+                  'vehicle_breakdown': 'Vehicle breakdown',
+                  'accident': 'Accident',
+                  'road_closure': 'Road closure',
+                  'medical_emergency': 'Medical emergency',
+                  'customer_change_request': 'Customer requests change',
                   'sender_unavailable': 'Sender unavailable',
                   'recipient_unavailable': 'Recipient unavailable',
+                  'access_problem': 'Unable to access property',
                   'address_problem': 'Address problem',
                   'parcel_mismatch': 'Parcel mismatch',
                   'unsafe_situation': 'Unsafe situation',
@@ -1930,6 +1963,79 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     return value != null && RegExp(r'^\d{6}$').hasMatch(value) ? value : null;
   }
 
+  Future<void> _openNavigationOptions({required bool toPickup}) async {
+    final target = toPickup
+        ? _locationPayload(
+            widget.offer.raw['pickupDetails'] ?? widget.offer.raw['pickup'])
+        : _locationPayload(
+            widget.offer.raw['dropoffDetails'] ?? widget.offer.raw['dropoff']);
+    final label = Uri.encodeComponent(
+        toPickup ? widget.offer.pickupAddress : widget.offer.dropoffAddress);
+    final lat = target.$1;
+    final lng = target.$2;
+    final query = lat != null && lng != null ? '$lat,$lng' : label;
+    if (!mounted) return;
+    final app = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: RiderGlassSurface(
+            padding: const EdgeInsets.all(16),
+            radius: 24,
+            opacity: .78,
+            blur: 18,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text('Navigate',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900)),
+                SizedBox(height: 10),
+                _MapChoice(
+                    label: 'Google Maps',
+                    icon: Icons.map_rounded,
+                    value: 'google'),
+                _MapChoice(
+                    label: 'Apple Maps',
+                    icon: Icons.navigation_rounded,
+                    value: 'apple'),
+                _MapChoice(
+                    label: 'Waze',
+                    icon: Icons.alt_route_rounded,
+                    value: 'waze'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (app == null) return;
+    final uri = switch (app) {
+      'google' =>
+        Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$query'),
+      'apple' => Uri.parse('https://maps.apple.com/?daddr=$query'),
+      'waze' => Uri.parse('https://waze.com/ul?q=$query&navigate=yes'),
+      _ => null,
+    };
+    if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  (double?, double?) _locationPayload(Object? value) {
+    if (value is! Map) return (null, null);
+    final data = Map<String, dynamic>.from(value);
+    final lat = data['lat'] ?? data['latitude'];
+    final lng = data['lng'] ?? data['longitude'];
+    return (
+      lat is num ? lat.toDouble() : null,
+      lng is num ? lng.toDouble() : null
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final firestore = widget.firestore;
@@ -2051,7 +2157,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       return _DeliveryCompleteView(
           offer: widget.offer,
           delivery: live,
-          onNavigateTab: widget.onNavigateTab);
+          onNavigateTab: widget.onNavigateTab,
+          onReportIssue: _reportIssue);
     final nextTitle = _nextActionTitle(_stage);
     return Scaffold(
       backgroundColor: const Color(0xFF07090F),
@@ -2106,6 +2213,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                   _NavigationInstructionCard(
                     title: nextTitle,
                     subtitle: _navigationSubtitle(_stage),
+                    status: _connectionStatus(_trackingSnapshot.status),
                   ),
                   const SizedBox(height: 10),
                   _CompactProgressIndicator(stage: _stage),
@@ -2138,9 +2246,18 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                     expanded: _expanded,
                     vanguard: _vanguard,
                     verificationRequired: _verificationRequired,
+                    pinRequired: _pinRequired,
+                    photoRequired: _photoRequired,
+                    signatureRequired: _signatureRequired,
+                    healthPlus: _healthPlus,
+                    gift: _gift,
                     cta: _transitioning ? 'Updating...' : nextTitle,
                     onToggle: () => setState(() => _expanded = !_expanded),
                     onIssue: _transitioning ? null : _reportIssue,
+                    onCustomerResponded: _transitioning
+                        ? null
+                        : () => _customerResponded(widget.offer.id),
+                    onReportDifference: _transitioning ? null : _reportIssue,
                     onPrimary: _transitioning ? null : _advance,
                   ),
                 ],
@@ -2150,6 +2267,40 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _customerResponded(String deliveryId) async {
+    setState(() {
+      _transitioning = true;
+      _transitionError = null;
+    });
+    try {
+      await (widget.deliveryController ?? CallableRiderDeliveryController())
+          .reportWaitingContext(
+        deliveryId: deliveryId,
+        type: 'customer_responded',
+        note: 'Customer responded during waiting period',
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() =>
+            _transitionError = 'Could not update waiting context. Retry.');
+      }
+    } finally {
+      if (mounted) setState(() => _transitioning = false);
+    }
+  }
+
+  String _connectionStatus(RiderLiveTrackingStatus status) {
+    return switch (status) {
+      RiderLiveTrackingStatus.live ||
+      RiderLiveTrackingStatus.backgroundActive ||
+      RiderLiveTrackingStatus.arrivedAtPickup ||
+      RiderLiveTrackingStatus.arrivedAtDropoff =>
+        'Live',
+      RiderLiveTrackingStatus.offline => 'Offline',
+      _ => 'Syncing',
+    };
   }
 
   String _nextActionTitle(RiderDeliveryStage stage) {
@@ -2197,10 +2348,12 @@ class _DeliveryCompleteView extends StatelessWidget {
   const _DeliveryCompleteView(
       {required this.offer,
       required this.delivery,
-      required this.onNavigateTab});
+      required this.onNavigateTab,
+      required this.onReportIssue});
   final RiderJobOffer offer;
   final Map<String, dynamic> delivery;
   final ValueChanged<int>? onNavigateTab;
+  final VoidCallback? onReportIssue;
 
   @override
   Widget build(BuildContext context) {
@@ -2210,6 +2363,10 @@ class _DeliveryCompleteView extends StatelessWidget {
         ? Map<String, dynamic>.from(delivery['riderEarningBreakdown'] as Map)
         : const <String, dynamic>{};
     num part(String key) => breakdown[key] is num ? breakdown[key] as num : 0;
+    final feedback = delivery['feedbackRequired'] == true ||
+        delivery['requiresFeedback'] == true ||
+        delivery['senderRatingRequired'] == true ||
+        delivery['deliveryIssuePromptRequired'] == true;
     return Scaffold(
         backgroundColor: const Color(0xFF07090F),
         body: Stack(children: [
@@ -2275,6 +2432,23 @@ class _DeliveryCompleteView extends StatelessWidget {
                                 style: TextStyle(
                                     color: Colors.white54, fontSize: 11)),
                             const SizedBox(height: 20),
+                            if (feedback) ...[
+                              SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton(
+                                      onPressed: () {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(const SnackBar(
+                                          content: Text(
+                                              'Sender rating is not available for this delivery yet.'),
+                                        ));
+                                      },
+                                      child: const Text('Rate Sender'))),
+                              TextButton(
+                                  onPressed: onReportIssue,
+                                  child: const Text('Report Delivery Issue')),
+                              const SizedBox(height: 4),
+                            ],
                             SizedBox(
                                 width: double.infinity,
                                 child: FilledButton(
@@ -2282,7 +2456,9 @@ class _DeliveryCompleteView extends StatelessWidget {
                                       onNavigateTab?.call(0);
                                       Navigator.of(context).pop();
                                     },
-                                    child: const Text('Return to Home'))),
+                                    child: Text(feedback
+                                        ? 'Return to Home'
+                                        : 'Return Home'))),
                             TextButton(
                                 onPressed: () {
                                   onNavigateTab?.call(3);
@@ -2996,9 +3172,10 @@ class _TrackingPermissionCard extends StatelessWidget {
 class _NavigationInstructionCard extends StatelessWidget {
   final String title;
   final String subtitle;
+  final String status;
 
   const _NavigationInstructionCard(
-      {required this.title, required this.subtitle});
+      {required this.title, required this.subtitle, required this.status});
 
   @override
   Widget build(BuildContext context) {
@@ -3044,8 +3221,70 @@ class _NavigationInstructionCard extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(width: 8),
+          _ConnectionPill(status: status),
         ],
       ),
+    );
+  }
+}
+
+class _ConnectionPill extends StatelessWidget {
+  const _ConnectionPill({required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (status) {
+      'Live' => const Color(0xFF34D399),
+      'Offline' => const Color(0xFFFF452B),
+      _ => const Color(0xFFE0A93A),
+    };
+    return Semantics(
+      label: 'Connection status $status',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: .10),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: .35)),
+        ),
+        child: Text(
+          status,
+          style: TextStyle(
+            color: color,
+            fontSize: 10,
+            fontFamily: RiderTypography.mono,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MapChoice extends StatelessWidget {
+  const _MapChoice({
+    required this.label,
+    required this.icon,
+    required this.value,
+  });
+
+  final String label;
+  final IconData icon;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      minLeadingWidth: 28,
+      leading: Icon(icon, color: const Color(0xFF60A5FA)),
+      title: Text(label,
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.w800)),
+      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white54),
+      onTap: () => Navigator.pop(context, value),
     );
   }
 }
@@ -3057,10 +3296,17 @@ class _AcceptedBottomPanel extends StatelessWidget {
   final bool expanded;
   final bool vanguard;
   final bool verificationRequired;
+  final bool pinRequired;
+  final bool photoRequired;
+  final bool signatureRequired;
+  final bool healthPlus;
+  final bool gift;
   final String cta;
   final VoidCallback onToggle;
   final VoidCallback? onPrimary;
   final VoidCallback? onIssue;
+  final VoidCallback? onCustomerResponded;
+  final VoidCallback? onReportDifference;
 
   const _AcceptedBottomPanel({
     required this.offer,
@@ -3069,10 +3315,17 @@ class _AcceptedBottomPanel extends StatelessWidget {
     required this.expanded,
     required this.vanguard,
     required this.verificationRequired,
+    required this.pinRequired,
+    required this.photoRequired,
+    required this.signatureRequired,
+    required this.healthPlus,
+    required this.gift,
     required this.cta,
     required this.onToggle,
     required this.onPrimary,
     required this.onIssue,
+    required this.onCustomerResponded,
+    required this.onReportDifference,
   });
 
   @override
@@ -3139,17 +3392,26 @@ class _AcceptedBottomPanel extends StatelessWidget {
                         _PickupWorkflowPanel(
                           vanguard: vanguard,
                           verificationRequired: verificationRequired,
+                          offer: offer,
+                          onReportDifference: onReportDifference,
                         ),
                         const SizedBox(height: 10),
                         _ExpandedLine(
                           title: 'Verification',
-                          body: verificationRequired
-                              ? 'Parcel condition verification is required before collection.'
-                              : 'Check parcel condition at pickup.',
+                          body: _verificationCopy,
                         ),
                         _StageTracker(
                             stage: stage,
                             verificationRequired: verificationRequired),
+                        if (stage == RiderDeliveryStage.arrivedAtPickup ||
+                            stage == RiderDeliveryStage.waiting) ...[
+                          const SizedBox(height: 10),
+                          _SecondaryButton(
+                            icon: Icons.mark_chat_read_outlined,
+                            label: 'Customer Responded',
+                            onTap: onCustomerResponded ?? () {},
+                          ),
+                        ],
                         const SizedBox(height: 10),
                         _SecondaryContactRow(offer: offer, vanguard: vanguard),
                         const SizedBox(height: 10),
@@ -3168,6 +3430,22 @@ class _AcceptedBottomPanel extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String get _verificationCopy {
+    final methods = <String>[];
+    if (pinRequired) methods.add('PIN mandatory');
+    if (photoRequired) methods.add('photo required');
+    if (signatureRequired) methods.add('signature required');
+    if (methods.isEmpty) methods.add('photo optional');
+    final service = healthPlus
+        ? 'Health+'
+        : vanguard
+            ? 'Vanguard'
+            : gift
+                ? 'Gift'
+                : 'Standard';
+    return '$service verification: ${methods.join(', ')}. Requirements are read from backend state.';
   }
 }
 
@@ -3340,10 +3618,14 @@ class _ExpandedLine extends StatelessWidget {
 class _PickupWorkflowPanel extends StatelessWidget {
   final bool vanguard;
   final bool verificationRequired;
+  final RiderJobOffer offer;
+  final VoidCallback? onReportDifference;
 
   const _PickupWorkflowPanel({
     required this.vanguard,
     required this.verificationRequired,
+    required this.offer,
+    required this.onReportDifference,
   });
 
   @override
@@ -3361,6 +3643,7 @@ class _PickupWorkflowPanel extends StatelessWidget {
             'Add parcel photo if required',
             'Confirm collection',
           ];
+    final iris = _irisRecommendation(offer);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(13),
@@ -3407,7 +3690,167 @@ class _PickupWorkflowPanel extends StatelessWidget {
               ),
             ),
           ),
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF3B82F6).withValues(alpha: .10),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: const Color(0xFF60A5FA).withValues(alpha: .22)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('IRIS Recommendation',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900)),
+                const SizedBox(height: 8),
+                _IrisLine('Detected Item', iris.detectedItem),
+                _IrisLine('Suggested Category', iris.category),
+                _IrisLine('Suggested Weight Band', iris.weightBand),
+                _IrisLine('Confidence', iris.confidence),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _MiniGlassButton(
+                        label: 'Confirm',
+                        icon: Icons.check_rounded,
+                        onTap: () {},
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _MiniGlassButton(
+                        label: 'Report Difference',
+                        icon: Icons.report_outlined,
+                        onTap: onReportDifference,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  static _IrisRecommendation _irisRecommendation(RiderJobOffer offer) {
+    final raw = offer.raw;
+    final iris = raw['irisRecommendation'] is Map
+        ? Map<String, dynamic>.from(raw['irisRecommendation'] as Map)
+        : raw['iris'] is Map
+            ? Map<String, dynamic>.from(raw['iris'] as Map)
+            : const <String, dynamic>{};
+    return _IrisRecommendation(
+      detectedItem:
+          '${iris['detectedItem'] ?? raw['itemName'] ?? offer.parcelGuidance}',
+      category:
+          '${iris['suggestedCategory'] ?? raw['suggestedCategory'] ?? offer.points.label}',
+      weightBand:
+          '${iris['weightBand'] ?? iris['suggestedWeightBand'] ?? raw['weightBand'] ?? offer.weightText}',
+      confidence:
+          '${iris['confidence'] ?? raw['irisConfidence'] ?? 'Backend pending'}',
+    );
+  }
+}
+
+class _IrisRecommendation {
+  const _IrisRecommendation({
+    required this.detectedItem,
+    required this.category,
+    required this.weightBand,
+    required this.confidence,
+  });
+
+  final String detectedItem;
+  final String category;
+  final String weightBand;
+  final String confidence;
+}
+
+class _IrisLine extends StatelessWidget {
+  const _IrisLine(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: .50),
+                    fontSize: 10,
+                    fontFamily: RiderTypography.mono,
+                    fontWeight: FontWeight.w800)),
+          ),
+          Flexible(
+            child: Text(value,
+                textAlign: TextAlign.right,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniGlassButton extends StatelessWidget {
+  const _MiniGlassButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 42),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: .11)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: const Color(0xFF60A5FA), size: 16),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900)),
+            ),
+          ],
+        ),
       ),
     );
   }

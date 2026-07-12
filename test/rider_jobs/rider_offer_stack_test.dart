@@ -156,7 +156,8 @@ void main() {
       expect(find.textContaining('Vanguard Priority'), findsOneWidget);
     });
 
-    testWidgets('standard pickup stays lightweight', (tester) async {
+    testWidgets('gift pickup shows required verification from backend data',
+        (tester) async {
       await tester.pumpWidget(MaterialApp(
         home: RiderAcceptedJobScreen(offer: _offers.last),
       ));
@@ -165,8 +166,11 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Pickup Workflow'), findsOneWidget);
-      expect(find.text('Confirm parcel matches booking'), findsOneWidget);
-      expect(find.text('Pickup Verification'), findsNothing);
+      expect(find.text('IRIS Recommendation'), findsOneWidget);
+      expect(
+          find.text(
+              'Gift verification: photo required. Requirements are read from backend state.'),
+          findsOneWidget);
       expect(find.textContaining('Vanguard Protection'), findsNothing);
     });
 
