@@ -738,65 +738,118 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
             widget.riderPosition!.longitude,
           );
 
-    return GoogleMap(
-      onMapCreated: (controller) {
-        _controller = controller;
-        if (widget.focusPickup) _focusPickup();
-      },
-      initialCameraPosition: CameraPosition(
-        target: LatLng(
-          (pickup.latitude + dropoff.latitude) / 2,
-          (pickup.longitude + dropoff.longitude) / 2,
+    return Stack(
+      children: [
+        GoogleMap(
+          onMapCreated: (controller) {
+            _controller = controller;
+            if (widget.focusPickup) {
+              _focusPickup();
+            } else {
+              _fitRoute(pickup, dropoff, riderLatLng);
+            }
+          },
+          initialCameraPosition: CameraPosition(
+            target: LatLng(
+              (pickup.latitude + dropoff.latitude) / 2,
+              (pickup.longitude + dropoff.longitude) / 2,
+            ),
+            zoom: 12,
+          ),
+          zoomControlsEnabled: false,
+          myLocationButtonEnabled: false,
+          compassEnabled: true,
+          mapToolbarEnabled: false,
+          markers: {
+            Marker(
+              markerId: const MarkerId('pickup'),
+              position: pickup,
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueAzure),
+            ),
+            Marker(
+              markerId: const MarkerId('dropoff'),
+              position: dropoff,
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueBlue),
+            ),
+            if (widget.riderPosition != null)
+              Marker(
+                markerId: const MarkerId('rider'),
+                position: riderLatLng!,
+                rotation: widget.riderPosition!.heading.isFinite
+                    ? widget.riderPosition!.heading
+                    : 0,
+                anchor: const Offset(.5, .5),
+                icon: BitmapDescriptor.defaultMarkerWithHue(
+                    BitmapDescriptor.hueCyan),
+              ),
+          },
+          polylines: {
+            Polyline(
+              polylineId: const PolylineId('route'),
+              points: [pickup, dropoff],
+              color: const Color(0xFF60A5FA),
+              width: 5,
+            ),
+          },
+          circles: {
+            if (riderLatLng != null)
+              Circle(
+                circleId: const CircleId('rider-live-pulse'),
+                center: riderLatLng,
+                radius: widget.riderPosition!.accuracy.clamp(12, 42).toDouble(),
+                fillColor: const Color(0xFF38BDF8).withValues(alpha: .16),
+                strokeColor: const Color(0xFF60A5FA).withValues(alpha: .58),
+                strokeWidth: 2,
+              ),
+          },
         ),
-        zoom: 12,
+        Positioned(
+          right: 16,
+          top: 112,
+          child: Column(
+            children: [
+              _MapControlButton(
+                tooltip: 'Re-centre rider',
+                icon: Icons.my_location_rounded,
+                onTap: riderLatLng == null
+                    ? null
+                    : () => _controller?.animateCamera(
+                          CameraUpdate.newLatLng(riderLatLng),
+                        ),
+              ),
+              const SizedBox(height: 10),
+              _MapControlButton(
+                tooltip: 'Fit route',
+                icon: Icons.zoom_out_map_rounded,
+                onTap: () => _fitRoute(pickup, dropoff, riderLatLng),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _fitRoute(LatLng pickup, LatLng dropoff, LatLng? rider) {
+    final points = [pickup, dropoff, if (rider != null) rider];
+    final minLat =
+        points.map((p) => p.latitude).reduce((a, b) => a < b ? a : b);
+    final maxLat =
+        points.map((p) => p.latitude).reduce((a, b) => a > b ? a : b);
+    final minLng =
+        points.map((p) => p.longitude).reduce((a, b) => a < b ? a : b);
+    final maxLng =
+        points.map((p) => p.longitude).reduce((a, b) => a > b ? a : b);
+    _controller?.animateCamera(
+      CameraUpdate.newLatLngBounds(
+        LatLngBounds(
+          southwest: LatLng(minLat, minLng),
+          northeast: LatLng(maxLat, maxLng),
+        ),
+        68,
       ),
-      zoomControlsEnabled: false,
-      myLocationButtonEnabled: false,
-      compassEnabled: false,
-      mapToolbarEnabled: false,
-      markers: {
-        Marker(
-          markerId: const MarkerId('pickup'),
-          position: pickup,
-          icon:
-              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-        ),
-        Marker(
-          markerId: const MarkerId('dropoff'),
-          position: dropoff,
-          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-        ),
-        if (widget.riderPosition != null)
-          Marker(
-            markerId: const MarkerId('rider'),
-            position: riderLatLng!,
-            rotation: widget.riderPosition!.heading.isFinite
-                ? widget.riderPosition!.heading
-                : 0,
-            anchor: const Offset(.5, .5),
-            icon:
-                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
-          ),
-      },
-      polylines: {
-        Polyline(
-          polylineId: const PolylineId('route'),
-          points: [pickup, dropoff],
-          color: const Color(0xFF60A5FA),
-          width: 5,
-        ),
-      },
-      circles: {
-        if (riderLatLng != null)
-          Circle(
-            circleId: const CircleId('rider-live-pulse'),
-            center: riderLatLng,
-            radius: widget.riderPosition!.accuracy.clamp(12, 42).toDouble(),
-            fillColor: const Color(0xFF38BDF8).withValues(alpha: .16),
-            strokeColor: const Color(0xFF60A5FA).withValues(alpha: .58),
-            strokeWidth: 2,
-          ),
-      },
     );
   }
 
@@ -817,6 +870,50 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
     final lng = value['lng'] ?? value['longitude'];
     if (lat is num && lng is num) return LatLng(lat.toDouble(), lng.toDouble());
     return null;
+  }
+}
+
+class _MapControlButton extends StatelessWidget {
+  const _MapControlButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        enabled: onTap != null,
+        child: GestureDetector(
+          onTap: onTap,
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: RiderGlassSurface(
+              radius: 16,
+              opacity: .62,
+              blur: 14,
+              borderColor: Colors.white.withValues(alpha: .14),
+              child: Icon(
+                icon,
+                color: onTap == null
+                    ? Colors.white.withValues(alpha: .28)
+                    : const Color(0xFF60A5FA),
+                size: 20,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -1255,11 +1352,13 @@ class _JobsInfoTile extends StatelessWidget {
 enum RiderDeliveryStage {
   accepted,
   navigatingToPickup,
+  approachingPickup,
   arrivedAtPickup,
   pickupVerification,
   pickupVerified,
   collected,
   navigatingToDropoff,
+  approachingDropoff,
   arrivedAtDropoff,
   waiting,
   pinRequired,
@@ -1271,11 +1370,13 @@ class RiderDeliveryStagePolicy {
   static const ordered = [
     RiderDeliveryStage.accepted,
     RiderDeliveryStage.navigatingToPickup,
+    RiderDeliveryStage.approachingPickup,
     RiderDeliveryStage.arrivedAtPickup,
     RiderDeliveryStage.pickupVerification,
     RiderDeliveryStage.pickupVerified,
     RiderDeliveryStage.collected,
     RiderDeliveryStage.navigatingToDropoff,
+    RiderDeliveryStage.approachingDropoff,
     RiderDeliveryStage.arrivedAtDropoff,
     RiderDeliveryStage.waiting,
     RiderDeliveryStage.pinRequired,
@@ -1286,7 +1387,10 @@ class RiderDeliveryStagePolicy {
     final text = '$value'.trim().toLowerCase();
     switch (text) {
       case 'navigating_to_pickup':
+      case 'travelling_to_pickup':
         return RiderDeliveryStage.navigatingToPickup;
+      case 'approaching_pickup':
+        return RiderDeliveryStage.approachingPickup;
       case 'arrived_at_pickup':
         return RiderDeliveryStage.arrivedAtPickup;
       case 'pickup_verification':
@@ -1298,7 +1402,11 @@ class RiderDeliveryStagePolicy {
       case 'collected':
         return RiderDeliveryStage.collected;
       case 'navigating_to_dropoff':
+      case 'travelling_to_dropoff':
         return RiderDeliveryStage.navigatingToDropoff;
+      case 'approaching_dropoff':
+      case 'approaching_destination':
+        return RiderDeliveryStage.approachingDropoff;
       case 'arrived_at_dropoff':
         return RiderDeliveryStage.arrivedAtDropoff;
       case 'waiting':
@@ -1319,6 +1427,8 @@ class RiderDeliveryStagePolicy {
     switch (stage) {
       case RiderDeliveryStage.navigatingToPickup:
         return 'navigating_to_pickup';
+      case RiderDeliveryStage.approachingPickup:
+        return 'approaching_pickup';
       case RiderDeliveryStage.arrivedAtPickup:
         return 'arrived_at_pickup';
       case RiderDeliveryStage.pickupVerification:
@@ -1329,6 +1439,8 @@ class RiderDeliveryStagePolicy {
         return 'collected';
       case RiderDeliveryStage.navigatingToDropoff:
         return 'navigating_to_dropoff';
+      case RiderDeliveryStage.approachingDropoff:
+        return 'approaching_dropoff';
       case RiderDeliveryStage.arrivedAtDropoff:
         return 'arrived_at_dropoff';
       case RiderDeliveryStage.waiting:
@@ -1353,6 +1465,7 @@ class RiderDeliveryStagePolicy {
       case RiderDeliveryStage.accepted:
         return RiderDeliveryStage.navigatingToPickup;
       case RiderDeliveryStage.navigatingToPickup:
+      case RiderDeliveryStage.approachingPickup:
         return RiderDeliveryStage.arrivedAtPickup;
       case RiderDeliveryStage.arrivedAtPickup:
         return verificationRequired
@@ -1365,6 +1478,7 @@ class RiderDeliveryStagePolicy {
       case RiderDeliveryStage.collected:
         return RiderDeliveryStage.navigatingToDropoff;
       case RiderDeliveryStage.navigatingToDropoff:
+      case RiderDeliveryStage.approachingDropoff:
         return RiderDeliveryStage.arrivedAtDropoff;
       case RiderDeliveryStage.arrivedAtDropoff:
         return RiderDeliveryStage.waiting;
@@ -1551,6 +1665,11 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       _vanguard ||
       widget.offer.raw['verificationRequired'] == true ||
       widget.offer.raw['requiresVerification'] == true;
+  bool get _proofOfDeliveryRequired =>
+      widget.offer.raw['proofOfDeliveryRequired'] == true ||
+      widget.offer.raw['requiresProofOfDelivery'] == true ||
+      widget.offer.raw['photoProofRequired'] == true ||
+      _vanguard;
 
   @override
   void initState() {
@@ -1582,11 +1701,13 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     final phase = snapshot.arrivalPhase;
     if (phase == null || _arrivalTransitioning) return;
     if (phase == RiderTrackingArrivalPhase.pickup &&
-        _stage == RiderDeliveryStage.navigatingToPickup) {
+        (_stage == RiderDeliveryStage.navigatingToPickup ||
+            _stage == RiderDeliveryStage.approachingPickup)) {
       unawaited(_autoArrival(RiderDeliveryStage.arrivedAtPickup));
     }
     if (phase == RiderTrackingArrivalPhase.dropoff &&
-        _stage == RiderDeliveryStage.navigatingToDropoff) {
+        (_stage == RiderDeliveryStage.navigatingToDropoff ||
+            _stage == RiderDeliveryStage.approachingDropoff)) {
       unawaited(_autoArrival(RiderDeliveryStage.arrivedAtDropoff));
     }
   }
@@ -1658,7 +1779,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       if (pin == null) return;
     }
     if ((action == 'verify_collection_pin' && _verificationRequired) ||
-        (action == 'verify_receiver_pin' && _pinRequired)) {
+        (action == 'verify_receiver_pin' &&
+            (_pinRequired || _proofOfDeliveryRequired))) {
       evidence = await _captureEvidence(
         pickup: action == 'verify_collection_pin',
       );
@@ -1903,6 +2025,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     switch (next) {
       case RiderDeliveryStage.navigatingToPickup:
         return 'start_heading_to_pickup';
+      case RiderDeliveryStage.approachingPickup:
+        return 'start_heading_to_pickup';
       case RiderDeliveryStage.arrivedAtPickup:
         return 'arrived_at_pickup';
       case RiderDeliveryStage.pickupVerification:
@@ -1910,6 +2034,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       case RiderDeliveryStage.collected:
         return 'verify_collection_pin';
       case RiderDeliveryStage.navigatingToDropoff:
+        return 'start_delivery';
+      case RiderDeliveryStage.approachingDropoff:
         return 'start_delivery';
       case RiderDeliveryStage.arrivedAtDropoff:
       case RiderDeliveryStage.waiting:
@@ -2161,6 +2287,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                     stage: _stage,
                     expanded: _expanded,
                     vanguard: _vanguard,
+                    pinRequired: _pinRequired,
                     verificationRequired: _verificationRequired,
                     cta: _transitioning ? 'Updating...' : nextTitle,
                     onToggle: () => setState(() => _expanded = !_expanded),
@@ -2181,6 +2308,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       case RiderDeliveryStage.accepted:
         return 'Navigate to Pickup';
       case RiderDeliveryStage.navigatingToPickup:
+      case RiderDeliveryStage.approachingPickup:
         return 'I\'ve Arrived';
       case RiderDeliveryStage.arrivedAtPickup:
         return _verificationRequired ? 'Verify Parcel' : 'Confirm Pickup';
@@ -2191,6 +2319,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       case RiderDeliveryStage.collected:
         return 'Navigate to Drop-off';
       case RiderDeliveryStage.navigatingToDropoff:
+      case RiderDeliveryStage.approachingDropoff:
         return 'I\'ve Arrived';
       case RiderDeliveryStage.arrivedAtDropoff:
       case RiderDeliveryStage.waiting:
@@ -2234,6 +2363,12 @@ class _DeliveryCompleteView extends StatelessWidget {
         ? Map<String, dynamic>.from(delivery['riderEarningBreakdown'] as Map)
         : const <String, dynamic>{};
     num part(String key) => breakdown[key] is num ? breakdown[key] as num : 0;
+    final rothBalance = delivery['rothBalance'] ??
+        delivery['currentRothBalance'] ??
+        delivery['riderRothBalance'];
+    final rothReward = delivery['rothReward'] ??
+        delivery['rothEarned'] ??
+        delivery['rothTransactionAmount'];
     return Scaffold(
         backgroundColor: const Color(0xFF07090F),
         body: Stack(children: [
@@ -2294,10 +2429,17 @@ class _DeliveryCompleteView extends StatelessWidget {
                                     color: Color(0xFFA78BFA),
                                     fontWeight: FontWeight.w800)),
                             const SizedBox(height: 5),
+                            _RothCompletionSummary(
+                              balance: rothBalance,
+                              reward: rothReward,
+                            ),
+                            const SizedBox(height: 8),
                             const Text(
-                                'Roth is separate from withdrawable cash.',
-                                style: TextStyle(
-                                    color: Colors.white54, fontSize: 11)),
+                              'Delivery chat is now read-only. Support and Admin messages remain visible.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  color: Colors.white54, fontSize: 11),
+                            ),
                             const SizedBox(height: 20),
                             SizedBox(
                                 width: double.infinity,
@@ -2343,6 +2485,51 @@ class _CompletionRow extends StatelessWidget {
                 color: Colors.white,
                 fontWeight: strong ? FontWeight.w900 : FontWeight.w700))
       ]));
+}
+
+class _RothCompletionSummary extends StatelessWidget {
+  const _RothCompletionSummary({
+    required this.balance,
+    required this.reward,
+  });
+
+  final Object? balance;
+  final Object? reward;
+
+  @override
+  Widget build(BuildContext context) {
+    final balanceText = _formatRoth(balance);
+    final rewardText = _formatRoth(reward);
+    return Column(
+      children: [
+        Text(
+          rewardText == null
+              ? 'Roth balance remains separate from delivery cash.'
+              : 'Roth earned: $rewardText',
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Color(0xFF60A5FA),
+            fontSize: 11.5,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        if (balanceText != null)
+          Text(
+            'Current Roth balance: $balanceText',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white54, fontSize: 11),
+          ),
+      ],
+    );
+  }
+
+  static String? _formatRoth(Object? value) {
+    if (value == null) return null;
+    if (value is num) return '${value.toStringAsFixed(2)} Roth';
+    final text = '$value'.trim();
+    if (text.isEmpty || text == 'null') return null;
+    return text.contains('Roth') ? text : '$text Roth';
+  }
 }
 
 class _WaitingPolicyCard extends StatelessWidget {
@@ -2512,6 +2699,7 @@ class _CompactProgressIndicator extends StatelessWidget {
       case RiderDeliveryStage.accepted:
         return 0;
       case RiderDeliveryStage.navigatingToPickup:
+      case RiderDeliveryStage.approachingPickup:
       case RiderDeliveryStage.arrivedAtPickup:
         return 1;
       case RiderDeliveryStage.pickupVerification:
@@ -2520,6 +2708,7 @@ class _CompactProgressIndicator extends StatelessWidget {
       case RiderDeliveryStage.collected:
         return 3;
       case RiderDeliveryStage.navigatingToDropoff:
+      case RiderDeliveryStage.approachingDropoff:
       case RiderDeliveryStage.arrivedAtDropoff:
       case RiderDeliveryStage.waiting:
         return 4;
@@ -3080,6 +3269,7 @@ class _AcceptedBottomPanel extends StatelessWidget {
   final RiderDeliveryStage stage;
   final bool expanded;
   final bool vanguard;
+  final bool pinRequired;
   final bool verificationRequired;
   final String cta;
   final VoidCallback onToggle;
@@ -3092,6 +3282,7 @@ class _AcceptedBottomPanel extends StatelessWidget {
     required this.stage,
     required this.expanded,
     required this.vanguard,
+    required this.pinRequired,
     required this.verificationRequired,
     required this.cta,
     required this.onToggle,
@@ -3151,14 +3342,20 @@ class _AcceptedBottomPanel extends StatelessWidget {
                           const _VanguardGuidance(),
                           const SizedBox(height: 10),
                         ],
+                        _DeliveryPartyAndInstructionPanel(
+                          offer: offer,
+                          stage: stage,
+                        ),
+                        const SizedBox(height: 10),
                         _ExpandedLine(
                             title: 'Pickup', body: offer.pickupAddress),
                         _ExpandedLine(
                             title: 'Drop-off', body: offer.dropoffAddress),
-                        _ExpandedLine(
-                          title: 'IRIS Brief',
-                          body:
-                              '${offer.parcelGuidance}\nVehicle: ${offer.minimumVehicle} - Weight: ${offer.weightText}',
+                        _PinAndIrisPanel(
+                          offer: offer,
+                          vanguard: vanguard,
+                          pinRequired: pinRequired,
+                          verificationRequired: verificationRequired,
                         ),
                         _PickupWorkflowPanel(
                           vanguard: vanguard,
@@ -3175,7 +3372,11 @@ class _AcceptedBottomPanel extends StatelessWidget {
                             stage: stage,
                             verificationRequired: verificationRequired),
                         const SizedBox(height: 10),
-                        _SecondaryContactRow(offer: offer, vanguard: vanguard),
+                        _SecondaryContactRow(
+                          offer: offer,
+                          stage: stage,
+                          vanguard: vanguard,
+                        ),
                         const SizedBox(height: 10),
                         TextButton.icon(
                           onPressed: onIssue,
@@ -3328,6 +3529,246 @@ class _VanguardGuidance extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DeliveryPartyAndInstructionPanel extends StatelessWidget {
+  const _DeliveryPartyAndInstructionPanel({
+    required this.offer,
+    required this.stage,
+  });
+
+  final RiderJobOffer offer;
+  final RiderDeliveryStage stage;
+
+  @override
+  Widget build(BuildContext context) {
+    final raw = offer.raw;
+    final headingToDropoff = stage.index >= RiderDeliveryStage.collected.index;
+    final partyTitle = headingToDropoff ? 'Recipient' : 'Sender';
+    final partyName = _firstText(
+        raw,
+        headingToDropoff
+            ? const ['recipientName', 'receiverName', 'dropoffContactName']
+            : const ['senderName', 'pickupContactName', 'customerName']);
+    final instructions = _firstText(
+        raw,
+        headingToDropoff
+            ? const ['recipientInstructions', 'dropoffInstructions']
+            : const ['senderInstructions', 'pickupInstructions']);
+    final access = _firstText(raw, const [
+      'buildingAccess',
+      'accessDetails',
+      'entryInstructions',
+      'dropoffAccessDetails',
+      'pickupAccessDetails',
+    ]);
+    final parking = _firstText(raw, const [
+      'safeParkingNotes',
+      'parkingNotes',
+      'riderParkingNotes',
+    ]);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _OperationalLine(
+            title: partyTitle,
+            body: partyName.isEmpty
+                ? 'Shown when provided by booking'
+                : partyName,
+          ),
+          if (instructions.isNotEmpty)
+            _OperationalLine(title: 'Instructions', body: instructions),
+          if (access.isNotEmpty)
+            _OperationalLine(title: 'Building access', body: access),
+          if (parking.isNotEmpty)
+            _OperationalLine(title: 'Safe parking', body: parking),
+          if (instructions.isEmpty && access.isEmpty && parking.isEmpty)
+            Text(
+              'No extra access, parking or handover notes were provided.',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.62),
+                fontSize: 12,
+                height: 1.3,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PinAndIrisPanel extends StatelessWidget {
+  const _PinAndIrisPanel({
+    required this.offer,
+    required this.vanguard,
+    required this.pinRequired,
+    required this.verificationRequired,
+  });
+
+  final RiderJobOffer offer;
+  final bool vanguard;
+  final bool pinRequired;
+  final bool verificationRequired;
+
+  @override
+  Widget build(BuildContext context) {
+    final raw = offer.raw;
+    final quantity = _firstText(raw, const ['quantity', 'itemQuantity']);
+    final handling = _firstText(raw, const [
+      'handlingInstructions',
+      'irisHandling',
+      'handlingRequirements',
+    ]);
+    final valueState = raw['highValue'] == true || raw['isHighValue'] == true
+        ? 'High value'
+        : '';
+    final fragile =
+        raw['fragile'] == true || raw['isFragile'] == true ? 'Fragile' : '';
+    final senderPin = raw['senderPinRequired'] == true ||
+        raw['pickupPinRequired'] == true ||
+        pinRequired;
+    final receiverPin = raw['receiverPinRequired'] == true ||
+        raw['recipientPinRequired'] == true ||
+        pinRequired;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'IRIS Brief',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _OperationalLine(
+            title: 'Matched item',
+            body: offer.parcelGuidance,
+            mono: false,
+          ),
+          _OperationalLine(
+            title: 'Quantity',
+            body: quantity.isEmpty ? 'Confirm at pickup' : quantity,
+            mono: true,
+          ),
+          _OperationalLine(
+            title: 'Weight and vehicle',
+            body: '${offer.weightText} - ${offer.minimumVehicle}',
+          ),
+          if (handling.isNotEmpty)
+            _OperationalLine(title: 'Handling', body: handling),
+          if (fragile.isNotEmpty || valueState.isNotEmpty || vanguard)
+            _OperationalLine(
+              title: 'Indicators',
+              body: [
+                if (fragile.isNotEmpty) fragile,
+                if (valueState.isNotEmpty) valueState,
+                if (vanguard) 'Vanguard protected',
+              ].join(' - '),
+            ),
+          _OperationalLine(
+            title: 'Sender PIN',
+            body: senderPin
+                ? 'Required before collection. Never show recipient PIN here.'
+                : 'Not required for collection',
+            mono: senderPin,
+          ),
+          _OperationalLine(
+            title: 'Recipient PIN',
+            body: receiverPin
+                ? 'Required before completion. Kept separate from Sender PIN.'
+                : 'Not required for completion',
+            mono: receiverPin,
+          ),
+          if (verificationRequired)
+            const Text(
+              'Rider verification is not final truth. Material mismatch escalates to Circum operations.',
+              style: TextStyle(
+                color: Color(0xFFF5A623),
+                fontSize: 11.5,
+                height: 1.3,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OperationalLine extends StatelessWidget {
+  const _OperationalLine({
+    required this.title,
+    required this.body,
+    this.mono = false,
+  });
+
+  final String title;
+  final String body;
+  final bool mono;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 96,
+            child: Text(
+              title,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.56),
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              body,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.78),
+                fontSize: 12,
+                height: 1.28,
+                fontFamily: mono ? RiderTypography.mono : null,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _firstText(Map<String, dynamic> raw, List<String> keys) {
+  for (final key in keys) {
+    final value = raw[key];
+    if (value is num) return '$value';
+    final text = '$value'.trim();
+    if (text.isNotEmpty && text != 'null') return text;
+  }
+  return '';
 }
 
 class _ExpandedLine extends StatelessWidget {
@@ -3490,6 +3931,7 @@ class _StageTracker extends StatelessWidget {
       case RiderDeliveryStage.accepted:
         return 'Accepted';
       case RiderDeliveryStage.navigatingToPickup:
+      case RiderDeliveryStage.approachingPickup:
         return 'Navigate to Pickup';
       case RiderDeliveryStage.arrivedAtPickup:
         return 'I\'ve Arrived';
@@ -3499,6 +3941,7 @@ class _StageTracker extends StatelessWidget {
       case RiderDeliveryStage.collected:
         return 'Collected Parcel';
       case RiderDeliveryStage.navigatingToDropoff:
+      case RiderDeliveryStage.approachingDropoff:
         return 'Navigate to Drop-off';
       case RiderDeliveryStage.arrivedAtDropoff:
         return 'I\'ve Arrived';
@@ -3515,19 +3958,25 @@ class _StageTracker extends StatelessWidget {
 
 class _SecondaryContactRow extends StatelessWidget {
   final RiderJobOffer offer;
+  final RiderDeliveryStage stage;
   final bool vanguard;
 
-  const _SecondaryContactRow({required this.offer, required this.vanguard});
+  const _SecondaryContactRow({
+    required this.offer,
+    required this.stage,
+    required this.vanguard,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final recipientPhase = stage.index >= RiderDeliveryStage.collected.index;
     return Row(
       children: [
         Expanded(
             child: _SecondaryButton(
                 icon: Icons.call_rounded,
-                label: 'Call',
-                onTap: () => _call(offer.raw))),
+                label: recipientPhase ? 'Call Recipient' : 'Call Sender',
+                onTap: () => _call(offer.raw, recipient: recipientPhase))),
         const SizedBox(width: 8),
         Expanded(
             child: _SecondaryButton(
@@ -3554,12 +4003,26 @@ class _SecondaryContactRow extends StatelessWidget {
             ),
           ),
         ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _SecondaryButton(
+            icon: Icons.health_and_safety_rounded,
+            label: 'Emergency',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SupportView()),
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  Future<void> _call(Map<String, dynamic> raw) async {
-    final number = '${raw['senderPhone'] ?? raw['contactPhone'] ?? ''}'
+  Future<void> _call(Map<String, dynamic> raw,
+      {required bool recipient}) async {
+    final number = (recipient
+            ? '${raw['recipientPhone'] ?? raw['receiverPhone'] ?? raw['dropoffPhone'] ?? ''}'
+            : '${raw['senderPhone'] ?? raw['pickupPhone'] ?? raw['contactPhone'] ?? ''}')
         .replaceAll(RegExp(r'[^0-9+]'), '');
     if (number.isEmpty) return;
     await launchUrl(Uri.parse('tel:$number'));

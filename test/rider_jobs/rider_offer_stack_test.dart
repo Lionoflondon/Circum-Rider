@@ -151,7 +151,7 @@ void main() {
       expect(find.text('Pickup Verification'), findsOneWidget);
       expect(find.text('Photo verification'), findsOneWidget);
       expect(find.text('Verification'), findsOneWidget);
-      expect(find.text('Call'), findsOneWidget);
+      expect(find.text('Call Sender'), findsOneWidget);
       expect(find.text('Message'), findsOneWidget);
       expect(find.textContaining('Vanguard Priority'), findsOneWidget);
     });
@@ -229,11 +229,27 @@ void main() {
       );
       expect(
         RiderDeliveryStagePolicy.nextStage(
+          RiderDeliveryStage.approachingPickup,
+          verificationRequired: true,
+          pinRequired: true,
+        ),
+        RiderDeliveryStage.arrivedAtPickup,
+      );
+      expect(
+        RiderDeliveryStagePolicy.nextStage(
           RiderDeliveryStage.arrivedAtPickup,
           verificationRequired: true,
           pinRequired: true,
         ),
         RiderDeliveryStage.pickupVerification,
+      );
+      expect(
+        RiderDeliveryStagePolicy.nextStage(
+          RiderDeliveryStage.approachingDropoff,
+          verificationRequired: true,
+          pinRequired: true,
+        ),
+        RiderDeliveryStage.arrivedAtDropoff,
       );
       expect(
         RiderDeliveryStagePolicy.nextStage(
@@ -328,6 +344,24 @@ void main() {
       expect(charge!['chargeType'], 'waiting');
       expect(charge['amount'], 150);
       expect(charge['auditEvent']['state'], 'waiting_charge_recorded');
+    });
+
+    test('accepted delivery source includes complete operational safeguards',
+        () {
+      final source = File('lib/app/rider_jobs/rider_job_offer_screen.dart')
+          .readAsStringSync();
+      expect(source, contains('approaching_pickup'));
+      expect(source, contains('approaching_dropoff'));
+      expect(source, contains('Sender PIN'));
+      expect(source, contains('Recipient PIN'));
+      expect(source, contains('Never show recipient PIN here'));
+      expect(source, contains('IRIS Brief'));
+      expect(source, contains('Building access'));
+      expect(source, contains('Safe parking'));
+      expect(source, contains('Emergency'));
+      expect(source, contains('Delivery chat is now read-only'));
+      expect(source, contains('Current Roth balance'));
+      expect(source, isNot(contains('£\${roth')));
     });
   });
 }

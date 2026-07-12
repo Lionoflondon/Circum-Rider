@@ -81,6 +81,12 @@ void main() {
     test('active and terminal delivery states are clearly separated', () {
       expect(RiderLiveTrackingPolicy.isActiveDeliveryStatus('accepted'), true);
       expect(
+          RiderLiveTrackingPolicy.isActiveDeliveryStatus('approaching_pickup'),
+          true);
+      expect(
+          RiderLiveTrackingPolicy.isActiveDeliveryStatus('approaching_dropoff'),
+          true);
+      expect(
           RiderLiveTrackingPolicy.isActiveDeliveryStatus('completed'), false);
       expect(
           RiderLiveTrackingPolicy.isTerminalDeliveryStatus('cancelled'), true);
@@ -199,6 +205,8 @@ void main() {
       expect(accepted, contains('RiderLiveTrackingPolicy.assignedToRider'));
       expect(accepted, contains('arrived_at_pickup'));
       expect(accepted, contains('arrived_at_dropoff'));
+      expect(accepted, contains('approaching_pickup'));
+      expect(accepted, contains('approaching_dropoff'));
     });
 
     test('tracking UI renders mandatory states and recovery actions', () {
@@ -208,6 +216,9 @@ void main() {
       expect(source, contains('Location permission required'));
       expect(accepted, contains('_TrackingEtaCard'));
       expect(accepted, contains('_TrackingPermissionCard'));
+      expect(accepted, contains('Re-centre rider'));
+      expect(accepted, contains('Fit route'));
+      expect(accepted, contains('compassEnabled: true'));
       expect(accepted, contains('Geolocator.openAppSettings'));
       expect(accepted, contains('Geolocator.openLocationSettings'));
     });
