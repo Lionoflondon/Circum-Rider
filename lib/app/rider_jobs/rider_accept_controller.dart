@@ -1,22 +1,45 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
+import 'rider_dispatch_policy.dart';
+
 class RiderProfileSnapshot {
   final String riderId;
   final String? riderName;
   final String? riderVehicle;
+  final List<String> riderVehicles;
   final String? riderRank;
+  final int trustPoints;
   final bool canAcceptJobs;
   final String? blockedReason;
+  final String? activeDeliveryId;
+  final Iterable<String> reservedScheduledJobIds;
 
   const RiderProfileSnapshot({
     required this.riderId,
     this.riderName,
     this.riderVehicle,
+    this.riderVehicles = const [],
     this.riderRank,
+    this.trustPoints = 0,
     required this.canAcceptJobs,
     this.blockedReason,
+    this.activeDeliveryId,
+    this.reservedScheduledJobIds = const [],
   });
+
+  RiderDispatchContext toDispatchContext() {
+    return RiderDispatchContext(
+      riderId: riderId,
+      vehicles: [
+        ...riderVehicles,
+        if ((riderVehicle ?? '').trim().isNotEmpty) riderVehicle!,
+      ],
+      activeDeliveryId: activeDeliveryId,
+      reservedScheduledJobIds: reservedScheduledJobIds,
+      trustPoints: trustPoints,
+    );
+  }
 }
 
 class RiderOnboardingPolicy {
@@ -71,6 +94,14 @@ class RiderMarketplaceRules {
     required RiderProfileSnapshot rider,
     DateTime? acceptedAt,
   }) {
+    return immediateAcceptancePatch(rider: rider, acceptedAt: acceptedAt)
+      ..remove('_scheduledMarker');
+  }
+
+  static Map<String, dynamic> immediateAcceptancePatch({
+    required RiderProfileSnapshot rider,
+    DateTime? acceptedAt,
+  }) {
     final timestamp = acceptedAt ?? DateTime.now().toUtc();
     return {
       'status': 'accepted',
@@ -83,6 +114,37 @@ class RiderMarketplaceRules {
       'acceptedAt': Timestamp.fromDate(timestamp),
       'updatedAt': Timestamp.fromDate(timestamp),
     };
+  }
+
+  static Map<String, dynamic> scheduledReservationPatch({
+    required RiderProfileSnapshot rider,
+    DateTime? reservedAt,
+  }) {
+    final timestamp = reservedAt ?? DateTime.now().toUtc();
+    return {
+      'status': 'reserved',
+      'matchingStatus': 'reserved',
+      'reservationStatus': 'reserved',
+      'riderId': rider.riderId,
+      'assignedRiderId': rider.riderId,
+      'reservedForRiderId': rider.riderId,
+      'riderName': rider.riderName,
+      'riderVehicle': rider.riderVehicle,
+      'riderRank': rider.riderRank,
+      'reservedAt': Timestamp.fromDate(timestamp),
+      'updatedAt': Timestamp.fromDate(timestamp),
+      'auditEvent': 'scheduled_offer_reserved',
+    };
+  }
+
+  static Map<String, dynamic> acceptancePatch({
+    required Map<String, dynamic> job,
+    required RiderProfileSnapshot rider,
+    DateTime? acceptedAt,
+  }) {
+    return RiderDispatchPolicy.isScheduled(job)
+        ? scheduledReservationPatch(rider: rider, reservedAt: acceptedAt)
+        : immediateAcceptancePatch(rider: rider, acceptedAt: acceptedAt);
   }
 }
 
@@ -144,11 +206,26 @@ class FirestoreRiderJobTransactionStore implements RiderJobTransactionStore {
           );
         }
 
-        final patch = RiderMarketplaceRules.firstAcceptancePatch(rider: rider);
+        final dispatchDecision = RiderDispatchPolicy.canAccept(
+          job: data,
+          rider: rider.toDispatchContext(),
+        );
+        if (!dispatchDecision.eligible) {
+          return RiderAcceptResult(
+            status: RiderAcceptStatus.alreadyTaken,
+            message: dispatchDecision.reason ??
+                'This delivery is no longer available.',
+          );
+        }
+
+        final patch =
+            RiderMarketplaceRules.acceptancePatch(job: data, rider: rider);
         transaction.update(ref, patch);
         return RiderAcceptResult(
           status: RiderAcceptStatus.accepted,
-          message: 'Delivery accepted.',
+          message: RiderDispatchPolicy.isScheduled(data)
+              ? 'Scheduled delivery reserved.'
+              : 'Delivery accepted.',
           patch: patch,
         );
       });

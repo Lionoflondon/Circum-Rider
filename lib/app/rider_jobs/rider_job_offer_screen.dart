@@ -20,6 +20,7 @@ import '../support/view/support.dart';
 import '../tracking/rider_live_tracking_controller.dart';
 import 'rider_accept_controller.dart';
 import 'rider_delivery_controller.dart';
+import 'rider_dispatch_policy.dart';
 import 'rider_offer_card.dart';
 import 'rider_offer_stack.dart';
 
@@ -189,8 +190,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
 
                           final offers = _filterOffers(
                             docs: snapshot.data!.docs,
-                            riderId: user.uid,
-                            riderVehicle: rider.riderVehicle,
+                            rider: rider,
                             founder: founder,
                           );
 
@@ -253,49 +253,56 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     final vehicle = riderData['vehicle'] is Map
         ? '${riderData['vehicle']['type'] ?? riderData['vehicleType'] ?? ''}'
         : '${riderData['vehicleType'] ?? riderData['typeOfVehicle'] ?? ''}';
+    final vehicles = _riderVehicles(riderData, vehicle);
+    final trustPoints =
+        _intValue(riderData['trustPoints'] ?? riderData['trustTotal']) ?? 0;
+    final activeDeliveryId =
+        '${riderData['activeDeliveryId'] ?? riderData['currentDeliveryId'] ?? ''}'
+            .trim();
+    final reservedScheduled = _stringList(riderData['reservedScheduledJobIds']);
 
     return RiderProfileSnapshot(
       riderId: uid,
       riderName: displayName.isEmpty ? null : displayName,
       riderVehicle: vehicle.trim().isEmpty ? null : vehicle.trim(),
+      riderVehicles: vehicles,
       riderRank: RiderRankSnapshot.from(riderData)?.rank,
+      trustPoints: trustPoints,
       canAcceptJobs: canAccept,
       blockedReason:
           canAccept ? null : RiderOnboardingPolicy.blockedReason(riderData),
+      activeDeliveryId: activeDeliveryId.isEmpty ? null : activeDeliveryId,
+      reservedScheduledJobIds: reservedScheduled,
     );
   }
 
   List<RiderJobOffer> _filterOffers({
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-    required String riderId,
-    required String? riderVehicle,
+    required RiderProfileSnapshot rider,
     bool founder = false,
   }) {
     return docs
-        .where((doc) => _isVisibleToRider(doc.data(), riderId, riderVehicle,
-            founder: founder))
+        .where((doc) => _isVisibleToRider(doc.data(), rider, founder: founder))
         .map((doc) =>
             RiderJobOffer.fromFirestore(docId: doc.id, data: doc.data()))
         .toList();
   }
 
-  bool _isVisibleToRider(
-      Map<String, dynamic> data, String riderId, String? riderVehicle,
+  bool _isVisibleToRider(Map<String, dynamic> data, RiderProfileSnapshot rider,
       {bool founder = false}) {
-    final ignored = _stringList(data['ignoredRiders']);
-    final rejected = _stringList(data['rejectedRiders']);
-    if (ignored.contains(riderId) || rejected.contains(riderId)) return false;
-
-    final matchingStatus =
-        '${data['matchingStatus'] ?? 'available'}'.trim().toLowerCase();
-    if (matchingStatus != 'available' && matchingStatus != 'requested') {
-      return false;
-    }
-
-    final minimumVehicle =
-        '${data['minimumVehicle'] ?? data['recommendedVehicle'] ?? 'Bike'}';
-    return founder ||
-        _vehicleMeetsMinimum(riderVehicle ?? 'Bike', minimumVehicle);
+    return RiderDispatchPolicy.visibleToRider(
+      job: data,
+      rider: RiderDispatchContext(
+        riderId: rider.riderId,
+        vehicles: rider.riderVehicles.isEmpty
+            ? [if ((rider.riderVehicle ?? '').isNotEmpty) rider.riderVehicle!]
+            : rider.riderVehicles,
+        activeDeliveryId: rider.activeDeliveryId,
+        reservedScheduledJobIds: rider.reservedScheduledJobIds,
+        trustPoints: rider.trustPoints,
+        founderOverride: founder,
+      ),
+    ).eligible;
   }
 
   List<String> _stringList(dynamic value) {
@@ -308,15 +315,33 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     return const [];
   }
 
-  bool _vehicleMeetsMinimum(String riderVehicle, String minimumVehicle) {
-    int rank(String value) {
-      final normalized = value.trim().toLowerCase();
-      if (normalized.contains('van')) return 3;
-      if (normalized.contains('car')) return 2;
-      return 1;
+  List<String> _riderVehicles(Map<String, dynamic> riderData, String vehicle) {
+    final vehicles = <String>[];
+    void add(dynamic value) {
+      final text = '$value'.trim();
+      if (value != null && text.isNotEmpty && text != 'null') {
+        vehicles.add(text);
+      }
     }
 
-    return rank(riderVehicle) >= rank(minimumVehicle);
+    add(vehicle);
+    final rawVehicles = riderData['vehicles'];
+    if (rawVehicles is Iterable) {
+      for (final item in rawVehicles) {
+        if (item is Map) {
+          add(item['type'] ?? item['vehicleType'] ?? item['class']);
+        } else {
+          add(item);
+        }
+      }
+    }
+    return vehicles.toSet().toList();
+  }
+
+  int? _intValue(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.round();
+    return int.tryParse('$value');
   }
 
   Future<void> _accept(
@@ -550,12 +575,15 @@ class RiderJobOfferPreview {
         dropoffAddress: '41 King\'s Road, Chelsea, London SW3 4NB',
         earnings: 14.80,
         currency: 'GBP',
+        pickupDistanceText: '1.2 mi to pickup',
         distanceText: '3.4 mi',
         timeText: '22 min',
         parcelGuidance: 'IRIS: Prescription box - Vanguard included',
         minimumVehicle: 'Bike',
         weightText: '0.2kg',
         pickupTiming: 'ASAP',
+        expiryText: 'Expires in 8m',
+        irisSummary: 'IRIS 96% match',
         warningChips: const ['Health+', 'Vanguard', 'Scheduled'],
         raw: const {
           'isHealthPlus': true,
@@ -573,12 +601,15 @@ class RiderJobOfferPreview {
         dropoffAddress: '7 Prince of Wales Drive, Battersea, London SW11 4FA',
         earnings: 18.40,
         currency: 'GBP',
+        pickupDistanceText: '0.9 mi to pickup',
         distanceText: '4.8 mi',
         timeText: '31 min',
         parcelGuidance: 'IRIS: Gift parcel - Handle carefully',
         minimumVehicle: 'Car',
         weightText: '1.4kg',
         pickupTiming: 'Today 16:30',
+        expiryText: 'Expires in 6m',
+        irisSummary: 'IRIS gift match',
         warningChips: const ['Gift', 'Vanguard'],
         raw: const {
           'isGift': true,
@@ -595,12 +626,15 @@ class RiderJobOfferPreview {
         dropoffAddress: '20 Bank Street, Canary Wharf, London E14 5JP',
         earnings: 21.50,
         currency: 'GBP',
+        pickupDistanceText: '2.1 mi to pickup',
         distanceText: '5.7 mi',
         timeText: '36 min',
         parcelGuidance: 'IRIS: Business documents - Small equipment',
         minimumVehicle: 'Car',
         weightText: '5kg',
         pickupTiming: 'Scheduled',
+        expiryText: 'Expires in 10m',
+        irisSummary: 'IRIS business documents',
         warningChips: const ['Business', 'Heavy'],
         raw: const {
           'isBusiness': true,
