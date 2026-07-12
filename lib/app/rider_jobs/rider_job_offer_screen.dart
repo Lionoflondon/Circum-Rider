@@ -18,6 +18,7 @@ import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
 import '../support/view/support.dart';
 import '../tracking/rider_live_tracking_controller.dart';
+import '../tracking/rider_map_navigation_policy.dart';
 import 'rider_accept_controller.dart';
 import 'rider_delivery_controller.dart';
 import 'rider_dispatch_policy.dart';
@@ -457,7 +458,12 @@ class _OfferExperience extends StatelessWidget {
       backgroundColor: const Color(0xFF07090F),
       body: Stack(
         children: [
-          _OfferMapBackground(offer: activeOffer, focusPickup: accepted),
+          _OfferMapBackground(
+            offer: activeOffer,
+            focusPickup: accepted,
+            activeTrackingStatus:
+                accepted ? RiderLiveTrackingStatus.live : null,
+          ),
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -706,11 +712,13 @@ class _OfferMapBackground extends StatefulWidget {
   final RiderJobOffer offer;
   final bool focusPickup;
   final Position? riderPosition;
+  final RiderLiveTrackingStatus? activeTrackingStatus;
 
   const _OfferMapBackground({
     required this.offer,
     this.focusPickup = false,
     this.riderPosition,
+    this.activeTrackingStatus,
   });
 
   @override
@@ -719,6 +727,9 @@ class _OfferMapBackground extends StatefulWidget {
 
 class _OfferMapBackgroundState extends State<_OfferMapBackground> {
   GoogleMapController? _controller;
+  bool _followingRider = true;
+  bool _cameraAnimating = false;
+  Position? _lastCameraPosition;
 
   @override
   void didUpdateWidget(covariant _OfferMapBackground oldWidget) {
@@ -729,19 +740,13 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
     final oldPosition = oldWidget.riderPosition;
     final nextPosition = widget.riderPosition;
     if (nextPosition != null &&
-        (oldPosition == null ||
-            Geolocator.distanceBetween(
-                  oldPosition.latitude,
-                  oldPosition.longitude,
-                  nextPosition.latitude,
-                  nextPosition.longitude,
-                ) >
-                8)) {
-      _controller?.animateCamera(
-        CameraUpdate.newLatLng(
-          LatLng(nextPosition.latitude, nextPosition.longitude),
-        ),
-      );
+        RiderMapNavigationPolicy.shouldMoveCamera(
+          current: nextPosition,
+          previous: _lastCameraPosition ?? oldPosition,
+          following: _followingRider,
+        )) {
+      _lastCameraPosition = nextPosition;
+      _followRider(nextPosition);
     }
   }
 
@@ -749,9 +754,51 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
     final pickup = _latLng(
         widget.offer.raw['pickupDetails'] ?? widget.offer.raw['pickup']);
     if (pickup == null) return;
-    _controller?.animateCamera(CameraUpdate.newCameraPosition(
+    _animateCamera(CameraUpdate.newCameraPosition(
       CameraPosition(target: pickup, zoom: 15.5),
     ));
+  }
+
+  void _followRider(Position position) {
+    final target = LatLng(position.latitude, position.longitude);
+    final heading = position.heading.isFinite ? position.heading : 0.0;
+    _animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: target,
+          zoom: 16.2,
+          bearing: heading,
+          tilt: 42,
+        ),
+      ),
+    );
+  }
+
+  void _animateCamera(CameraUpdate update) {
+    final controller = _controller;
+    if (controller == null) return;
+    _cameraAnimating = true;
+    controller.animateCamera(update).whenComplete(() {
+      Future<void>.delayed(const Duration(milliseconds: 250), () {
+        if (mounted) _cameraAnimating = false;
+      });
+    });
+  }
+
+  void _resumeFollow(Position? position) {
+    setState(() => _followingRider = true);
+    if (position != null) {
+      _lastCameraPosition = position;
+      _followRider(position);
+      return;
+    }
+    final pickup = _latLng(
+        widget.offer.raw['pickupDetails'] ?? widget.offer.raw['pickup']);
+    final dropoff = _latLng(
+        widget.offer.raw['dropoffDetails'] ?? widget.offer.raw['dropoff']);
+    if (pickup != null && dropoff != null) {
+      _fitRoute(pickup, dropoff, null);
+    }
   }
 
   @override
@@ -772,15 +819,33 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
             widget.riderPosition!.longitude,
           );
 
+    final liveLocationFresh = _liveLocationFresh(widget.activeTrackingStatus);
+    final activeRoute = _activeRoutePoints(
+      pickup: pickup,
+      dropoff: dropoff,
+      rider: riderLatLng,
+    );
+    final contextRoute = _contextRoutePoints(
+      pickup: pickup,
+      dropoff: dropoff,
+      rider: riderLatLng,
+    );
+
     return Stack(
       children: [
         GoogleMap(
           onMapCreated: (controller) {
             _controller = controller;
+            controller.setMapStyle(_riderDarkMapStyle);
             if (widget.focusPickup) {
               _focusPickup();
             } else {
               _fitRoute(pickup, dropoff, riderLatLng);
+            }
+          },
+          onCameraMoveStarted: () {
+            if (!_cameraAnimating) {
+              setState(() => _followingRider = false);
             }
           },
           initialCameraPosition: CameraPosition(
@@ -815,20 +880,35 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
                     ? widget.riderPosition!.heading
                     : 0,
                 anchor: const Offset(.5, .5),
+                flat: true,
+                zIndex: 4,
                 icon: BitmapDescriptor.defaultMarkerWithHue(
                     BitmapDescriptor.hueCyan),
               ),
           },
           polylines: {
+            if (contextRoute.length > 1)
+              Polyline(
+                polylineId: const PolylineId('route-context-stale'),
+                points: contextRoute,
+                color: const Color(0xFF60A5FA).withValues(alpha: .24),
+                width: 4,
+                patterns: [
+                  PatternItem.dash(18),
+                  PatternItem.gap(14),
+                ],
+              ),
             Polyline(
-              polylineId: const PolylineId('route'),
-              points: [pickup, dropoff],
-              color: const Color(0xFF60A5FA),
-              width: 5,
+              polylineId: const PolylineId('route-active-circum'),
+              points: activeRoute,
+              color: liveLocationFresh
+                  ? const Color(0xFF3B82F6)
+                  : const Color(0xFF60A5FA).withValues(alpha: .48),
+              width: liveLocationFresh ? 6 : 5,
             ),
           },
           circles: {
-            if (riderLatLng != null)
+            if (riderLatLng != null && liveLocationFresh)
               Circle(
                 circleId: const CircleId('rider-live-pulse'),
                 center: riderLatLng,
@@ -845,13 +925,13 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
           child: Column(
             children: [
               _MapControlButton(
-                tooltip: 'Re-centre rider',
-                icon: Icons.my_location_rounded,
+                tooltip: _followingRider ? 'Following rider' : 'Resume follow',
+                icon: _followingRider
+                    ? Icons.gps_fixed_rounded
+                    : Icons.my_location_rounded,
                 onTap: riderLatLng == null
                     ? null
-                    : () => _controller?.animateCamera(
-                          CameraUpdate.newLatLng(riderLatLng),
-                        ),
+                    : () => _resumeFollow(widget.riderPosition),
               ),
               const SizedBox(height: 10),
               _MapControlButton(
@@ -862,29 +942,63 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
             ],
           ),
         ),
+        Positioned(
+          left: 16,
+          top: 112,
+          child: _MapMiniStatus(
+            label: liveLocationFresh
+                ? 'Live route'
+                : widget.activeTrackingStatus ==
+                        RiderLiveTrackingStatus.foregroundOnly
+                    ? 'Foreground only'
+                    : 'Route preview',
+            sublabel: _followingRider ? 'Camera following' : 'Manual map',
+          ),
+        ),
       ],
     );
   }
 
   void _fitRoute(LatLng pickup, LatLng dropoff, LatLng? rider) {
     final points = [pickup, dropoff, if (rider != null) rider];
-    final minLat =
-        points.map((p) => p.latitude).reduce((a, b) => a < b ? a : b);
-    final maxLat =
-        points.map((p) => p.latitude).reduce((a, b) => a > b ? a : b);
-    final minLng =
-        points.map((p) => p.longitude).reduce((a, b) => a < b ? a : b);
-    final maxLng =
-        points.map((p) => p.longitude).reduce((a, b) => a > b ? a : b);
-    _controller?.animateCamera(
+    setState(() => _followingRider = false);
+    _animateCamera(
       CameraUpdate.newLatLngBounds(
-        LatLngBounds(
-          southwest: LatLng(minLat, minLng),
-          northeast: LatLng(maxLat, maxLng),
-        ),
-        68,
+        RiderMapNavigationPolicy.boundsFor(points),
+        _routePadding(context),
       ),
     );
+  }
+
+  List<LatLng> _activeRoutePoints({
+    required LatLng pickup,
+    required LatLng dropoff,
+    required LatLng? rider,
+  }) {
+    if (rider != null) return [rider, widget.focusPickup ? pickup : dropoff];
+    return widget.focusPickup ? [pickup, dropoff] : [pickup, dropoff];
+  }
+
+  List<LatLng> _contextRoutePoints({
+    required LatLng pickup,
+    required LatLng dropoff,
+    required LatLng? rider,
+  }) {
+    if (rider == null) return const [];
+    return widget.focusPickup ? [pickup, dropoff] : [pickup, rider];
+  }
+
+  double _routePadding(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final shortest = size.shortestSide;
+    return shortest < 380 ? 62 : 86;
+  }
+
+  static bool _liveLocationFresh(RiderLiveTrackingStatus? status) {
+    return status == RiderLiveTrackingStatus.live ||
+        status == RiderLiveTrackingStatus.backgroundActive ||
+        status == RiderLiveTrackingStatus.arrivedAtPickup ||
+        status == RiderLiveTrackingStatus.arrivedAtDropoff;
   }
 
   static LatLng? _latLng(dynamic value) {
@@ -951,6 +1065,66 @@ class _MapControlButton extends StatelessWidget {
   }
 }
 
+class _MapMiniStatus extends StatelessWidget {
+  const _MapMiniStatus({
+    required this.label,
+    required this.sublabel,
+  });
+
+  final String label;
+  final String sublabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return RiderGlassSurface(
+      radius: 16,
+      opacity: .58,
+      blur: 12,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      borderColor: Colors.white.withValues(alpha: .12),
+      child: Semantics(
+        label: '$label. $sublabel.',
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: Color(0xFF3B82F6),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: RiderPalette.paper,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                Text(
+                  sublabel,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .62),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 RiderGeoPoint? _trackingPoint(dynamic value) {
   if (value is! Map) return null;
   final position = value['position'];
@@ -972,6 +1146,85 @@ RiderGeoPoint? _trackingPoint(dynamic value) {
   }
   return null;
 }
+
+const String _riderDarkMapStyle = '''
+[
+  {
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#07090F" }
+    ]
+  },
+  {
+    "elementType": "labels.icon",
+    "stylers": [
+      { "visibility": "off" }
+    ]
+  },
+  {
+    "elementType": "labels.text.fill",
+    "stylers": [
+      { "color": "#AAB7CF" }
+    ]
+  },
+  {
+    "elementType": "labels.text.stroke",
+    "stylers": [
+      { "color": "#07090F" }
+    ]
+  },
+  {
+    "featureType": "poi",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#0B1020" }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#111827" }
+    ]
+  },
+  {
+    "featureType": "road.arterial",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#172033" }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#1D4ED8" },
+      { "lightness": -35 }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry.stroke",
+    "stylers": [
+      { "color": "#3B82F6" },
+      { "lightness": -20 }
+    ]
+  },
+  {
+    "featureType": "transit",
+    "stylers": [
+      { "visibility": "off" }
+    ]
+  },
+  {
+    "featureType": "water",
+    "elementType": "geometry",
+    "stylers": [
+      { "color": "#020617" }
+    ]
+  }
+]
+''';
 
 class _MapFallback extends StatelessWidget {
   const _MapFallback();
@@ -2245,6 +2498,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
             offer: widget.offer,
             riderPosition: _displayRiderPosition ?? _trackingSnapshot.position,
             focusPickup: _stage.index < RiderDeliveryStage.collected.index,
+            activeTrackingStatus: _trackingSnapshot.status,
           ),
           Container(
             decoration: BoxDecoration(

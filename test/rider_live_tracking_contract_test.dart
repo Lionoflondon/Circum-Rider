@@ -216,9 +216,14 @@ void main() {
       expect(source, contains('Location permission required'));
       expect(accepted, contains('_TrackingEtaCard'));
       expect(accepted, contains('_TrackingPermissionCard'));
-      expect(accepted, contains('Re-centre rider'));
+      expect(accepted, contains('Resume follow'));
+      expect(accepted, contains('Following rider'));
       expect(accepted, contains('Fit route'));
       expect(accepted, contains('compassEnabled: true'));
+      expect(accepted, contains('setMapStyle(_riderDarkMapStyle)'));
+      expect(accepted, contains('onCameraMoveStarted'));
+      expect(accepted, contains('route-context-stale'));
+      expect(accepted, contains('route-active-circum'));
       expect(accepted, contains('Geolocator.openAppSettings'));
       expect(accepted, contains('Geolocator.openLocationSettings'));
     });
