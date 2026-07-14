@@ -78,11 +78,6 @@ class _MapsViewState extends State<MapsView> {
         context.read<HomeBloc>().add(SetMapCameraStatus(
             status: MapCameraStatus.showingSourceAndDestinationLocations));
       }
-      if (context.read<AuthBloc>().state.appLocationStatus ==
-          AppLocationStatus.available) {
-        print('here');
-      }
-
       if (state.activeRequest != null &&
           (state.rideStatus == RideStatus.userConfirmedRide ||
               state.rideStatus == RideStatus.outForDelivery ||
@@ -102,8 +97,6 @@ class _MapsViewState extends State<MapsView> {
         initialCameraPosition: _initialCameraPosition,
         cameraTargetBounds: CameraTargetBounds.unbounded,
         onMapCreated: (GoogleMapController controller) async {
-          print('initializing map');
-          print('controller completed: ${_controller.isCompleted}');
           _controller.complete(controller);
         },
         markers: Set<Marker>.of(state.markers.values),

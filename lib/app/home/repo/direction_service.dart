@@ -39,6 +39,7 @@ extension on DirectionsService {
 class DirectionsService {
   final Dio _dio;
   final FlutterTts flutterTts = FlutterTts();
+  static const _mapsApiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
 
   DirectionsService() : _dio = Dio();
 
@@ -52,7 +53,7 @@ class DirectionsService {
         queryParameters: {
           'origin': '${origin.latitude},${origin.longitude}',
           'destination': '${destination.latitude},${destination.longitude}',
-          'key': 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
+          if (_mapsApiKey.isNotEmpty) 'key': _mapsApiKey,
           'polyline': 'true'
         },
       );
@@ -85,9 +86,7 @@ class DirectionsService {
           }
         }
       }
-    } catch (e) {
-      print('Error fetching directions: $e');
-    }
+    } catch (_) {}
 
     return [];
   }

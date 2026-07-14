@@ -1,9 +1,5 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:bloc/bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../communication/rider_communication_service.dart';
 import '../../home/models/message.m.dart';
@@ -15,9 +11,6 @@ class SupportBloc extends Bloc<SupportEvent, SupportState> {
   SupportBloc() : super(SupportState()) {
     FirebaseAuth auth = FirebaseAuth.instance;
     final communication = RiderCommunicationService();
-    on<SupportEvent>((event, emit) {
-      // TODO: implement event handler
-    });
 
     on<SetNewSupportMessage>(
       (event, emit) {
@@ -46,14 +39,6 @@ class SupportBloc extends Bloc<SupportEvent, SupportState> {
           emit(state.copyWith(message: ''));
           final chatId = 'admin_rider_${user!.uid}_general';
           await communication.sendText(chatId: chatId, message: msg);
-          final messageData = {
-            "requestId": "support",
-            'senderId': user.uid,
-            'message': msg,
-            'timeStamp': '${DateTime.now()}'
-          };
-
-          add(IncomingSupportMessage(data: messageData));
         } catch (_) {
           emit(state.copyWith(message: event.message));
         }
@@ -61,22 +46,7 @@ class SupportBloc extends Bloc<SupportEvent, SupportState> {
     );
 
     on<LoadSupportChatMessages>(
-      (event, emit) async {
-        final directory = await getApplicationDocumentsDirectory();
-        final chats = File('${directory.path}/support.json');
-
-        if (await chats.exists()) {
-          print('Loading chats');
-          final contents = await chats.readAsString();
-          // print(contents);
-          final jsonData = await jsonDecode(contents) as List;
-
-          final messagesList =
-              jsonData.map((e) => Message.fromJson(e)).toList();
-          emit(state.copyWith(
-              chatMessages: messagesList, chatStatus: ChatStatus.newMessage));
-        }
-      },
+      (event, emit) async {},
     );
   }
 }

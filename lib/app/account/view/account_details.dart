@@ -36,7 +36,6 @@ class _AccountDetailsState extends State<AccountDetails> {
             child: BlocListener<AuthBloc, AuthState>(
                 listener: (context, state) {
                   if (state.currentState == AppState.unauthenticated) {
-                    // print('signing out');
                     Navigator.popUntil(context, (route) => route.isFirst);
                   }
                   if (state.errorMessage != null &&

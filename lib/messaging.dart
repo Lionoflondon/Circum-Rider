@@ -3,7 +3,6 @@ part of './main.dart';
 foregoundMessage() {
   // chatBloc.add(event);
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-    // print('Message data: ${message.data}');
     if (message.data['type'] == 'message') {
       // Parse the modified string into a map
       Map<String, dynamic> msg = jsonDecode(message.data['data']);

@@ -27,7 +27,6 @@ class OnboardingSliderState extends State<OnboardingSlider>
     onBoardingTab = TabController(length: 3, vsync: this, initialIndex: 0);
     onBoardingTab.addListener(_tabListener);
     // timer = Timer.periodic(const Duration(seconds: 5), (Timer t) {
-    //   // print("Somethingy");
     //   changeIndex();
     // });
   }
@@ -40,7 +39,6 @@ class OnboardingSliderState extends State<OnboardingSlider>
 
   changeIndex() {
     // {setState((){selected = !selected;})}
-    // print("Something");
     switch (onBoardingTab.index) {
       case 0:
         {
@@ -72,7 +70,6 @@ class OnboardingSliderState extends State<OnboardingSlider>
   }
 
   _tabListener() {
-    // print(onBoardingTab.animation.value.sign);
     setState(() {
       currentTabIndex = onBoardingTab.index;
     });

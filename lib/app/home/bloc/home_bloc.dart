@@ -8,7 +8,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:equatable/equatable.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 // import 'package:geoflutterfire2/geoflutterfire2.dart';
@@ -34,9 +33,9 @@ part 'home_event.dart';
 part 'home_state.dart';
 
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
+  static const _mapsApiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+
   FirebaseAuth auth = FirebaseAuth.instance;
-  // Init firestore and geoFlutterFire
-  // final geo = GeoFlutterFire();
   FirebaseFirestore db = FirebaseFirestore.instance;
   final FirebaseMessaging firebaseMessaging = FirebaseMessaging.instance;
 
@@ -126,10 +125,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   }
 
   void _handleCheckForPushToken(CheckForPushToken event, Emitter emit) async {
-    // if (Firebase.apps.isEmpty) print('Firebase not initialized');
-    // if (Firebase.apps.isEmpty) await Firebase.initializeApp();
     final User? user = auth.currentUser;
-    final founder = user == null
+    final internalAccess = user == null
         ? false
         : (await user.getIdTokenResult()).claims?['founderRider'] == true;
     if (!kIsWeb && Platform.isIOS) {
@@ -149,7 +146,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           final remaining =
               _remainingVerificationItems(documentSnapshot.data());
           emit(state.copyWith(
-              canGoOnline: founder || remaining.isEmpty,
+              canGoOnline: internalAccess || remaining.isEmpty,
               verificationChecklist: remaining));
           await db
               .collection("riders")
@@ -166,7 +163,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   void _handleSetRideStatus(SetRideStatus event, Emitter emit) async {
     final User? user = auth.currentUser;
-    final founder = user == null
+    final internalAccess = user == null
         ? false
         : (await user.getIdTokenResult()).claims?['founderRider'] == true;
     if (user == null) {
@@ -189,7 +186,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       return;
     } else {
       final accountState = await _loadAccountState(user?.uid);
-      if (!founder && !RiderAccountStateResolver.canOperate(accountState)) {
+      if (!internalAccess &&
+          !RiderAccountStateResolver.canOperate(accountState)) {
         emit(state.copyWith(
           rideStatus: RideStatus.offline,
           canGoOnline: false,
@@ -198,7 +196,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         return;
       }
       final remaining = await _loadRemainingVerificationItems(user?.uid);
-      if (!founder &&
+      if (!internalAccess &&
           event.status == RideStatus.online &&
           remaining.isNotEmpty) {
         emit(state.copyWith(
@@ -251,8 +249,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           dispatchRequests: dispatchRequests,
           requestStatus: RequestStatus.success));
     } catch (e) {
-      print('failure');
-      print(e);
       emit(state.copyWith(requestStatus: RequestStatus.failure));
     }
   }
@@ -272,8 +268,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       final documentSnapshot = await documentReference.get();
 
       final riderData = documentSnapshot.data();
-
-      // print('riderData: $riderData');
 
       emit(state.copyWith(
           rideStatus: RideStatus.acceptedARide,
@@ -307,7 +301,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       PolylineResult startingPolylineResult =
           await points.getRouteBetweenCoordinates(
-              googleApiKey: 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
+              googleApiKey: _mapsApiKey,
               request: PolylineRequest(
                 origin: PointLatLng(riderLat, riderLng),
                 destination: PointLatLng(
@@ -317,7 +311,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       PolylineResult endingPolylineResult =
           await points.getRouteBetweenCoordinates(
-              googleApiKey: 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
+              googleApiKey: _mapsApiKey,
               request: PolylineRequest(
                 origin: PointLatLng(
                     userPickupCoordinates.lat, userPickupCoordinates.lng),
@@ -330,11 +324,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           startingPolylineResult.totalDurationValue! +
           endingPolylineResult.totalDistanceValue!;
 
-      // print(startingPolylineResult.durationValue);
-      // print(startingPolylineResult.duration);
-      // print(endingPolylineResult.durationValue);
-      // print(endingPolylineResult.duration);
-
       final formattedDeliveryTime = formattedTimeAfterSeconds(totalTime);
       final riderPhone = riderData?['phone'] ?? user?.phoneNumber ?? '';
       final riderPhoto =
@@ -342,7 +331,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       // final userData = await firebaseMessaging
       //     .subscribeToTopic('your_topic_name')
-      //     .then((value) => print(
       //         'Successfully subscribed to your_topic_name')); // Replace with your topic name
       await MessagingServer().sendMessage(
           data: {
@@ -391,8 +379,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         if (doc != null) {
           final data = doc.data();
           if (data['riderId'] != null && data['riderId'] == user!.uid) {
-            // print('Ride assigned to me 🎉');
-            // print(timer.tick);
             // Set user as the active delivery;
             await documentReference.update(
                 {'activeDelivery': doc.id, 'updatedAt': DateTime.now()});
@@ -429,8 +415,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
         add(BroadcastLocation());
       }
-    } catch (e) {
-      print(e);
+    } catch (_) {
+      emit(state.copyWith(requestStatus: RequestStatus.failure));
     }
   }
 
@@ -533,7 +519,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           .where('requestId', isEqualTo: activeRequest);
 
       final docResponse = await documentReference.get();
-      // print('Doc length: ${docResponse.docs.length}');
       final doc = docResponse.docs.firstOrNull;
       if (doc != null) {
         // await doc.data().update('status', (value) => 'outForDelivery');
@@ -563,7 +548,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             requestStatus: RequestStatus.success));
       }
     } catch (e) {
-      print(e);
       emit(state.copyWith(requestStatus: RequestStatus.failure));
     }
   }
@@ -607,7 +591,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       add(GetAvailableRequests());
     } catch (e) {
-      print(e);
       emit(state.copyWith(requestStatus: RequestStatus.failure));
     }
   }
@@ -630,10 +613,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         markers: markers,
         polylineCoordinates: [],
         dispatchRequests: []));
-
-    print('>>>>>>>>>>>>>>>>>>>>>');
-    print('Cancelled Data');
-    print('>>>>>>>>>>>>>>>>>>>>>');
   }
 
   void _handleBroadcastLocation(BroadcastLocation event, Emitter emit) async {
@@ -661,14 +640,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
         emit(state.copyWith(markers: markers));
 
-        print('code: ${state.activeRequest!.code}');
         // final SharedPreferences prefs = await SharedPreferences.getInstance();
         final courierName = prefs.getString('courierName');
         Map<String, dynamic>? riderSnapshotData;
         try {
           riderSnapshotData =
               (await db.collection('riders').doc(riderId).get()).data();
-        } catch (_) {}
+        } catch (_) {
+          // Rider photo fallback uses the authenticated user profile.
+        }
         final riderPhoto =
             '${riderSnapshotData?['photoURL'] ?? riderSnapshotData?['photoUrl'] ?? auth.currentUser?.photoURL ?? ''}';
         final rating = prefs.getString('rating');
@@ -700,7 +680,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         emit(state.copyWith(broadcastStatus: BroadcastStatus.initialized));
       }
     } catch (e) {
-      print(e);
       emit(state.copyWith(broadcastStatus: BroadcastStatus.initialized));
     }
   }
@@ -733,9 +712,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     for (final doc in docResponse.docs) {
       final data = doc.data();
       final activeRequest = DispatchRequest.fromJson(data);
-      // print('code: ${activeRequest.code}');
-      // print('currency: ${activeRequest.currency}');
-      // print('requestId: ${activeRequest.requestId}');
 
       PlaceCoordinate pickupCoordinates;
       PlaceCoordinate desinationCoordinate;
@@ -805,9 +781,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         File('${directory.path}/${state.activeRequest!.requestId}.json');
 
     if (await chats.exists()) {
-      print('Loading chats');
       final contents = await chats.readAsString();
-      // print(contents);
       final jsonData = await jsonDecode(contents) as List;
 
       final messagesList = jsonData.map((e) => Message.fromJson(e)).toList();
@@ -849,8 +823,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           .collection('history')
           .doc(lastTrip)
           .update({'userRating': event.rating, 'updatedAt': DateTime.now()});
-    } catch (e) {
-      print(e);
+    } catch (_) {
+      emit(state.copyWith(requestStatus: RequestStatus.failure));
     }
   }
 }

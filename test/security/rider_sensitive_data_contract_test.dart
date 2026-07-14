@@ -30,4 +30,15 @@ void main() {
       expect(body, isNot(contains('apnsToken:')), reason: source.path);
     }
   });
+
+  test('Rider payout cancellation remains backend-authoritative', () {
+    final root = Directory.current;
+    final accountBloc =
+        File('${root.path}/lib/app/account/bloc/account_bloc.dart')
+            .readAsStringSync();
+
+    expect(accountBloc, contains("httpsCallable('cancelRiderWithdrawal')"));
+    expect(accountBloc,
+        isNot(contains(".collection('payoutRequests').doc(doc.id).delete()")));
+  });
 }

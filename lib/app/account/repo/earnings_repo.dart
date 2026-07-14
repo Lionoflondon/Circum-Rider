@@ -28,8 +28,7 @@ class EarningsRepo {
       );
 
       return EarningsModel.fromJson(response.data);
-    } catch (e) {
-      print(e);
+    } catch (_) {
       throw Exception("Something went wrong");
     }
   }

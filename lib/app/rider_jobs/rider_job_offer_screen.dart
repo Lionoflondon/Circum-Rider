@@ -13,7 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../communication/rider_conversation_view.dart';
 import '../home/bloc/home_bloc.dart';
-import '../founder_access/founder_rider_access.dart';
+import '../rider_internal_access/rider_internal_access.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
 import '../support/view/support.dart';
@@ -103,9 +103,9 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
 
     context.watch<HomeBloc>().state;
     return FutureBuilder<bool>(
-        future: FounderRiderAccess.enabled(),
-        builder: (context, founderSnapshot) {
-          final founder = founderSnapshot.data == true;
+        future: RiderInternalAccess.enabled(),
+        builder: (context, internalAccessSnapshot) {
+          final internalAccess = internalAccessSnapshot.data == true;
           return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: _firestore.collection('riders').doc(user.uid).snapshots(),
             builder: (context, riderSnapshot) {
@@ -119,8 +119,8 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                     ...?profileSnapshot.data?.data(),
                     ...?riderSnapshot.data?.data()
                   };
-                  final rider =
-                      _riderProfile(user.uid, riderData, founder: founder);
+                  final rider = _riderProfile(user.uid, riderData,
+                      internalAccess: internalAccess);
                   final online = {'online', 'available', 'busy'}.contains(
                       '${riderData['availabilityStatus'] ?? riderData['status'] ?? ''}'
                           .toLowerCase());
@@ -171,7 +171,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                         docs: snapshot.data!.docs,
                         riderId: user.uid,
                         riderVehicle: rider.riderVehicle,
-                        founder: founder,
+                        internalAccess: internalAccess,
                       );
 
                       if (_activeIndex >= offers.length && offers.isNotEmpty) {
@@ -220,8 +220,9 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
   }
 
   RiderProfileSnapshot _riderProfile(String uid, Map<String, dynamic> riderData,
-      {bool founder = false}) {
-    final canAccept = founder || RiderOnboardingPolicy.canAcceptJobs(riderData);
+      {bool internalAccess = false}) {
+    final canAccept =
+        internalAccess || RiderOnboardingPolicy.canAcceptJobs(riderData);
     final firstName = '${riderData['firstName'] ?? ''}'.trim();
     final lastName = '${riderData['lastName'] ?? ''}'.trim();
     final displayName =
@@ -245,11 +246,11 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
     required String riderId,
     required String? riderVehicle,
-    bool founder = false,
+    bool internalAccess = false,
   }) {
     return docs
         .where((doc) => _isVisibleToRider(doc.data(), riderId, riderVehicle,
-            founder: founder))
+            internalAccess: internalAccess))
         .map((doc) =>
             RiderJobOffer.fromFirestore(docId: doc.id, data: doc.data()))
         .toList();
@@ -257,7 +258,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
 
   bool _isVisibleToRider(
       Map<String, dynamic> data, String riderId, String? riderVehicle,
-      {bool founder = false}) {
+      {bool internalAccess = false}) {
     final ignored = _stringList(data['ignoredRiders']);
     final rejected = _stringList(data['rejectedRiders']);
     if (ignored.contains(riderId) || rejected.contains(riderId)) return false;
@@ -270,7 +271,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
 
     final minimumVehicle =
         '${data['minimumVehicle'] ?? data['recommendedVehicle'] ?? 'Bike'}';
-    return founder ||
+    return internalAccess ||
         _vehicleMeetsMinimum(riderVehicle ?? 'Bike', minimumVehicle);
   }
 

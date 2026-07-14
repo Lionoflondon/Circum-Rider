@@ -15,23 +15,16 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
     FirebaseAuth auth = FirebaseAuth.instance;
     FirebaseFirestore db = FirebaseFirestore.instance;
     User? user = auth.currentUser;
-    on<AccountEvent>((event, emit) {
-      // TODO: implement event handler
-    });
-
     on<GetEarnings>(
       (event, emit) async {
         try {
           emit(state.copyWith(status: AccountStatus.loading));
           final earningsData =
               await EarningsRepo().fetchEarnings(riderId: user!.uid);
-          // print(earningsData);
           emit(state.copyWith(
               earnings: earningsData, status: AccountStatus.initialized));
-        } catch (e) {
+        } catch (_) {
           emit(state.copyWith(status: AccountStatus.failure));
-          print('Failed to get earnings, reasons:');
-          print(e);
         }
       },
     );
@@ -58,8 +51,7 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
             isWithdrawRequestActive: true,
             withdrawRequest: request,
           ));
-        } catch (e) {
-          print(e);
+        } catch (_) {
           emit(state.copyWith(status: AccountStatus.failure));
         }
       },
@@ -84,11 +76,9 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
             final req = WithdrawRequestModel.fromJson(data);
             emit(state.copyWith(
                 isWithdrawRequestActive: true, withdrawRequest: req));
-            // print(data);
           }
           emit(state.copyWith(status: AccountStatus.initialized));
-        } catch (e) {
-          print(e);
+        } catch (_) {
           emit(state.copyWith(status: AccountStatus.failure));
         }
       },
@@ -96,17 +86,26 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
 
     on<CancelWithdrawalRequest>(
       (event, emit) async {
-        final docRef = db
-            .collection('payoutRequests')
-            .where('riderId', isEqualTo: user!.uid);
+        emit(state.copyWith(status: AccountStatus.loading));
+        try {
+          final docRef = db
+              .collection('payoutRequests')
+              .where('riderId', isEqualTo: user!.uid);
 
-        final docRes = await docRef.get();
+          final docRes = await docRef.get();
 
-        final doc = docRes.docs.firstOrNull;
+          final doc = docRes.docs.firstOrNull;
 
-        if (doc != null) {
-          await db.collection('payoutRequests').doc(doc.id).delete();
-          emit(state.clearWihdrawalRequest());
+          if (doc != null) {
+            await FirebaseFunctions.instanceFor(region: 'us-central1')
+                .httpsCallable('cancelRiderWithdrawal')
+                .call({'requestId': doc.id});
+            emit(state.clearWihdrawalRequest());
+          } else {
+            emit(state.copyWith(status: AccountStatus.initialized));
+          }
+        } catch (_) {
+          emit(state.copyWith(status: AccountStatus.failure));
         }
       },
     );

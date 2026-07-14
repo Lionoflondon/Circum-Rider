@@ -70,8 +70,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
 
     void listenForPermissionStatus() async {
-      final permission = await permission_handler.Permission.location.status;
-      print(permission);
+      await permission_handler.Permission.location.status;
     }
 
     listenForPermissionStatus();
@@ -82,7 +81,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         User? user = auth.currentUser;
 
         if (user != null) {
-          print("User is signed in: ${user.uid}");
           final phone = (await storage.readAll())["phone"];
           String? riderPhone = phone;
           bool phoneVerified = false;
@@ -157,7 +155,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             add(SignOut());
           }
         } else {
-          print('User not signed in');
           emit(state.copyWith(currentState: AppState.unauthenticated));
         }
       }
@@ -195,10 +192,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(email: event.email));
         if (event.email!.isValidEmail()) {
           emit(state.copyWith(isEmailValid: true));
-          // print('Valid email!');
         } else {
           emit(state.copyWith(isEmailValid: false));
-          // print('Invalid email!');
         }
       }
 
@@ -402,11 +397,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
           // SignInWithApple
 
-          // print(appleCredential);
-          // print(appleCredential.email);
-          // print(appleCredential.givenName);
-          // print(appleCredential.familyName);
-
           // final GoogleSignInAuthentication googleSignInAuthentication =
           //     await googleSignInAccount.authentication;
 
@@ -420,12 +410,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           // Sign in with credential
           UserCredential userCredential =
               await auth.signInWithCredential(oauthCredential);
-          // print(userCredential.user?.displayName);
-          // print(userCredential.user?.email);
-          // print(userCredential.user?.emailVerified);
-          // print('>>>>>>>>>>>>>>>>>>>>>>>>>>>');
-          // print(userCredential.user?.displayName?.split(' ').first);
-          // print(userCredential.user?.displayName?.split(' ').last);
 
           emit(state.copyWith(
               username: userCredential.user?.displayName,
@@ -439,9 +423,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                   : AuthenticatedStatus.authenticated));
 
           if (appleCredential.givenName != null) {
-            print('New user, updating user data');
-            // emit(state.copyWith(
-            //     authenticatedStatus: AuthenticatedStatus.authenticated));
             add(UpdateUserProfile(
                 username:
                     "${appleCredential.givenName} ${appleCredential.familyName}"));
@@ -449,8 +430,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await Future.delayed(const Duration(seconds: 2));
 
           // await googleSignIn.signOut();
-        } catch (e) {
-          print(e);
+        } catch (_) {
+          // OAuth profile enrichment should not block sign-in.
         }
       }
 
@@ -499,29 +480,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await auth.verifyPhoneNumber(
             phoneNumber: state.phoneNumber,
             verificationCompleted: (_) {},
-            verificationFailed: (_) {
-              print('Verification failed');
-              print(_);
-            },
+            verificationFailed: (_) {},
             codeSent: (String verificationId, int? resendToken) async {
               _verificationId = verificationId;
               _resendToken = resendToken;
               completer.complete(true);
             },
-            codeAutoRetrievalTimeout: (_) {
-              print('Code timed out');
-              print(_);
-            },
+            codeAutoRetrievalTimeout: (_) {},
           );
           await completer.future;
           emit(state.copyWith(
               verificationId: _verificationId,
               resendToken: _resendToken,
               status: Status.success));
-          // print(_verificationId);
-          // print(_resendToken);
         } catch (e) {
-          // print(e);
           emit(state.copyWith(
               errorMessage: e.toString().split(':').last.trim(),
               isLoading: false,
@@ -569,12 +541,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             }
           }
         } on FirebaseException catch (e) {
-          print(e.code);
           if (e.code == 'invalid-verification-code') {
             emit(state.copyWith(errorMessage: 'Invalid verification code'));
           }
-        } catch (e) {
-          print(e);
+        } catch (_) {
+          emit(state.copyWith(status: Status.failure));
         }
       }
 
@@ -596,7 +567,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           // if (state.oAuthPhotoURL != null) {
           //   await user!.updatePhotoURL(state.oAuthPhotoURL!);
           // }
-          // print(event.username);
 
           final documentReference = db.collection('riders').doc(user.uid);
           final SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -608,7 +578,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
           if (documentSnapshot.exists) {
             // Document exists
-            // print('Document exists');
             await db.collection("riders").doc(user.uid).update({
               'name': event.username,
               'role': 'rider',
@@ -637,11 +606,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'vehicleRegistration': state.vehicleRegistration?.trim(),
               'plateNumber': state.vehicleRegistration?.trim(),
               'typeOfVehicle': state.vehicleType?.trim(),
-            }).then((value) => print("DocumentSnapshot successfully updated!"),
-                onError: (e) => print("Error updating document $e"));
+            });
           } else {
             // Document does not exist
-            // print('Document does not exist');
             await db.collection("riders").doc(user.uid).set({
               'name': event.username,
               "role": 'rider',
@@ -670,8 +637,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'vehicleRegistration': state.vehicleRegistration?.trim(),
               'plateNumber': state.vehicleRegistration?.trim(),
               'typeOfVehicle': state.vehicleType?.trim(),
-            }).then((value) => print("DocumentSnapshot successfully created!"),
-                onError: (e) => print("Error updating document $e"));
+            });
           }
 
           await rothOnboarding.ensureWalletForRider(
@@ -679,14 +645,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             email: user.email,
           );
 
-          // print(user);
-
           emit(state.copyWith(
               status: Status.success,
               authenticatedStatus: AuthenticatedStatus.authenticated,
               username: event.username));
-        } catch (e) {
-          print(e);
+        } catch (_) {
+          emit(state.copyWith(status: Status.failure));
         }
       }
       if (event is SubmitOTP) {
@@ -883,15 +847,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
         if (lastName != null) {
           await user?.updateDisplayName('${event.value} $lastName');
-          // print('${event.value} $lastName');
           emit(state.copyWith(username: '${event.value} $lastName'));
         } else {
           await user?.updateDisplayName(event.value);
-          // print(user?.displayName);
           emit(state.copyWith(username: event.value));
         }
-      } catch (e) {
-        print(e);
+      } catch (_) {
+        emit(state.copyWith(status: Status.failure));
       }
     }));
 
@@ -902,15 +864,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
         if (firstName != null) {
           await user?.updateDisplayName('$firstName ${event.value}');
-          // print(user?.displayName);
           emit(state.copyWith(username: '$firstName ${event.value}'));
         } else {
           await user?.updateDisplayName(event.value);
-          // print(user?.displayName);
           emit(state.copyWith(username: event.value));
         }
-      } catch (e) {
-        print(e);
+      } catch (_) {
+        emit(state.copyWith(status: Status.failure));
       }
     }));
 
@@ -1056,8 +1016,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             await db.collection("riders").doc(user?.uid).update({
               'verificationData': verificationData,
               'verificationStatus': 'under_review'
-            }).then((value) => print("DocumentSnapshot successfully updated!"),
-                onError: (e) => print("Error updating document $e"));
+            });
             final uid = user?.uid;
             if (uid != null) {
               await writeRiderDocumentRecord(
@@ -1073,7 +1032,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           } catch (e) {
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.failure));
-            print(e);
           }
         }
 
@@ -1093,8 +1051,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             await db.collection("riders").doc(user?.uid).update({
               'verificationData': verificationData,
               'verificationStatus': 'under_review'
-            }).then((value) => print("DocumentSnapshot successfully updated!"),
-                onError: (e) => print("Error updating document $e"));
+            });
             final uid = user?.uid;
             if (uid != null) {
               await writeRiderDocumentRecord(
@@ -1108,7 +1065,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           } catch (e) {
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.failure));
-            print(e);
           }
         }
 
@@ -1193,7 +1149,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           } catch (e) {
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.failure));
-            print(e);
           }
         }
       },
@@ -1289,7 +1244,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(state.copyWith(
               profilePhoto: empty, errorMessage: 'Profile photo removed.'));
         } catch (e) {
-          print(e);
           emit(state.copyWith(
               errorMessage: 'Profile photo could not be removed.'));
         }
@@ -1460,23 +1414,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             clearSensitiveAuthFields: true,
           ));
           if (e.code == 'invalid-email') {
-            // print('Email is invalid');
             emit(state.copyWith(errorMessage: 'Email is invalid'));
           }
           if (e.code == 'email-already-in-use') {
-            // print('User already exists');
             emit(state.copyWith(errorMessage: 'User already exists'));
           }
           if (e.code == 'user-not-found') {
-            // print('User not found');
             emit(state.copyWith(errorMessage: 'User not found'));
           }
           if (e.code == 'weak-password') {
-            // print('Weak password');
             emit(state.copyWith(errorMessage: 'Use a strong password'));
           }
         } catch (e) {
-          // print(e);
           emit(state.copyWith(
               status: Status.failure,
               errorMessage: 'Something went wrong',
@@ -1490,15 +1439,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         try {
           User? user = auth.currentUser;
           FlutterSecureStorage storage = const FlutterSecureStorage();
-          print(event.value);
-
           final documentReference = db.collection('riders').doc(user?.uid);
           // Get the document snapshot
           final documentSnapshot = await documentReference.get();
 
           if (documentSnapshot.exists) {
-            // Document exists
-            // print('Document exists');
             await db.collection("riders").doc(user!.uid).update({
               'phone': event.value,
             });
@@ -1507,8 +1452,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
             emit(state.copyWith(phoneNumber: event.value));
           }
-        } catch (e) {
-          print(e);
+        } catch (_) {
+          // Profile update failures are surfaced by the next account refresh.
         }
       },
     );
@@ -1516,7 +1461,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<ConfirmEmailVerification>((event, emit) async {
       await auth.currentUser?.reload();
       if (auth.currentUser?.emailVerified == true) {
-        print('Email Verified');
         final user = auth.currentUser;
         if (user != null) {
           await upsertRiderOnboarding(user: user, data: {
@@ -1547,9 +1491,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             profilePhoto: auth.currentUser?.photoURL,
           ));
         }
-      } else {
-        print('Email not Verified');
-      }
+      } else {}
     });
 
     on<SignOut>(
@@ -1578,10 +1520,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         if (e.code == 'invalid-verification-code') {
           emit(state.copyWith(errorMessage: 'Invalid verification code'));
         }
-      } catch (error) {
-        // An error occurred during reauthentication or account deletion
-        print("Error deleting account: $error");
-        // Handle error (e.g., display error message)
+      } catch (_) {
+        // Reauthentication failures are handled by the account closure UI.
       }
 
       // Navigator.pushNamedAndRemoveUntil(
@@ -1595,7 +1535,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(status: Status.passwordResetEmailSent));
       } on FirebaseAuthException catch (err) {
         emit(state.copyWith(status: Status.failure));
-        print(err.code);
         if (err.code == 'invalid-email') {
           emit(state.copyWith(errorMessage: 'Invalid email'));
         }
@@ -1607,7 +1546,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         throw Exception(err.message.toString());
       } catch (err) {
         emit(state.copyWith(status: Status.failure));
-        print(err.toString());
         throw Exception(err.toString());
       }
     });
@@ -1615,7 +1553,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<String> uploadImage({required String imagePath}) async {
     try {
-      print('Uploading Image');
       final fileName = Uuid();
       File imageFile = File(imagePath);
 
@@ -1625,11 +1562,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           .ref('verification-photos/$fileName')
           .getDownloadURL();
 
-      print(downloadUrl);
-
       return downloadUrl;
-    } catch (e) {
-      print(e);
+    } catch (_) {
       throw 'Something went wrong uploading image';
     }
   }

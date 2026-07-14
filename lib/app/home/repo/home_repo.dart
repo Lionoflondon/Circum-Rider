@@ -30,8 +30,6 @@ class HomeRepo {
           },
         ),
       );
-      // print(response.data);
-
       if (response.statusCode == 409) {
         return response.data["historyId"] ?? "";
       }
@@ -40,8 +38,7 @@ class HomeRepo {
       }
 
       return response.data["historyId"];
-    } catch (e) {
-      print(e);
+    } catch (_) {
       throw Exception("Something went wrong");
     }
   }

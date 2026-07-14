@@ -6,7 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../authentication/bloc/auth_bloc.dart';
 import '../communication/rider_communication_service.dart';
-import '../founder_access/founder_rider_access.dart';
+import '../rider_internal_access/rider_internal_access.dart';
 import '../home/bloc/home_bloc.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../onboarding/rider_guide_view.dart';
@@ -250,7 +250,6 @@ class _DashboardSurface extends StatelessWidget {
                     ),
                     onProfile: () => onSelectTab(4),
                   ),
-                  const FounderRiderBadge(),
                   if (data.hasDataError) ...[
                     const SizedBox(height: 14),
                     const _InlineNotice(
@@ -533,10 +532,10 @@ class _AvailabilityCard extends StatelessWidget {
           ],
           const SizedBox(height: 16),
           FutureBuilder<bool>(
-            future: FounderRiderAccess.enabled(),
-            builder: (context, founder) {
+            future: RiderInternalAccess.enabled(),
+            builder: (context, internalAccess) {
               final allowed =
-                  founder.data == true || home.canGoOnline || online;
+                  internalAccess.data == true || home.canGoOnline || online;
               return SizedBox(
                 height: 52,
                 width: double.infinity,
