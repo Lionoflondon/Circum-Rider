@@ -10,6 +10,7 @@ const CONFIG = Object.freeze({
   buildIdentity: 'CIRCUM_BUILD_ID=rider-app',
   firebaseProject: 'circum-2797c',
   hostingSiteId: 'circum-rider-2797c',
+  targetAlias: 'rider',
   outputDirectory: 'build/web',
 });
 
@@ -101,6 +102,7 @@ function expectedManifest(root = process.cwd()) {
     branch: gitValue(['branch', '--show-current']),
     firebaseProject: CONFIG.firebaseProject,
     hostingSiteId: CONFIG.hostingSiteId,
+    targetAlias: CONFIG.targetAlias,
     outputDirectory: CONFIG.outputDirectory,
   };
 }
