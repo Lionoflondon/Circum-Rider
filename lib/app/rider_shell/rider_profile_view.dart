@@ -1,19 +1,15 @@
-import 'dart:ui';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart' as permissions;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../account/view/account_details.dart';
 import '../authentication/bloc/auth_bloc.dart';
-import '../history/view/history.dart';
 import '../notifications/rider_notifications_view.dart';
+import '../onboarding/rider_application_centre.dart';
 import '../onboarding/rider_guide_view.dart';
 import '../rider_account/rider_account_state.dart';
 import '../rider_design/rider_ui.dart';
@@ -40,38 +36,53 @@ class _RiderProfileViewState extends State<RiderProfileView> {
       return const RiderEmptyState(
         icon: Icons.lock_outline,
         title: 'Sign in required',
-        message: 'Sign in to view Rider options.',
+        message: 'Sign in to view your Rider profile.',
       );
     }
+
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      key: ValueKey('rider-options-profile-$_reload'),
+      key: ValueKey('rider-profile-main-$_reload'),
       stream: FirebaseFirestore.instance
           .collection('riderProfiles')
           .doc(user.uid)
           .snapshots(),
       builder: (context, profileSnapshot) {
         return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          key: ValueKey('rider-options-rider-$_reload'),
+          key: ValueKey('rider-profile-rider-$_reload'),
           stream: FirebaseFirestore.instance
               .collection('riders')
               .doc(user.uid)
               .snapshots(),
           builder: (context, riderSnapshot) {
-            if (profileSnapshot.hasError || riderSnapshot.hasError) {
-              return _OptionsError(
-                onRetry: () => setState(() => _reload++),
-              );
-            }
-            if (!profileSnapshot.hasData && !riderSnapshot.hasData) {
-              return const _OptionsLoading();
-            }
-            final rider = riderSnapshot.data?.data() ?? const {};
-            final riderProfile = profileSnapshot.data?.data() ?? const {};
-            final profile = <String, dynamic>{...rider, ...riderProfile};
-            return _OptionsScreen(
-              user: user,
-              profile: profile,
-              onSelectTab: widget.onSelectTab,
+            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              key: ValueKey('rider-profile-earnings-$_reload'),
+              stream: FirebaseFirestore.instance
+                  .collection('riderEarnings')
+                  .doc(user.uid)
+                  .snapshots(),
+              builder: (context, earningsSnapshot) {
+                if (profileSnapshot.hasError ||
+                    riderSnapshot.hasError ||
+                    earningsSnapshot.hasError) {
+                  return _ProfileError(
+                      onRetry: () => setState(() => _reload++));
+                }
+                if (!profileSnapshot.hasData && !riderSnapshot.hasData) {
+                  return const _ProfileLoading();
+                }
+                final profile = <String, dynamic>{
+                  ...?riderSnapshot.data?.data(),
+                  ...?profileSnapshot.data?.data(),
+                };
+                final earnings =
+                    earningsSnapshot.data?.data() ?? const <String, dynamic>{};
+                return _RiderProfileScreen(
+                  user: user,
+                  profile: profile,
+                  earnings: earnings,
+                  onSelectTab: widget.onSelectTab,
+                );
+              },
             );
           },
         );
@@ -80,805 +91,975 @@ class _RiderProfileViewState extends State<RiderProfileView> {
   }
 }
 
-class _ProfileData {
-  static String name(User user, Map<String, dynamic> profile) {
-    final first = '${profile['firstName'] ?? ''}'.trim();
-    final last = '${profile['lastName'] ?? ''}'.trim();
-    final full = '${profile['name'] ?? profile['fullName'] ?? ''}'.trim();
-    final joined = [first, last].where((part) => part.isNotEmpty).join(' ');
-    return joined.isNotEmpty
-        ? joined
-        : full.isNotEmpty
-            ? full
-            : user.displayName ?? 'Circum Rider';
-  }
-
-  static String initials(String name) {
-    final parts = name.split(' ').where((part) => part.isNotEmpty).take(2);
-    final initials = parts.map((part) => part[0].toUpperCase()).join();
-    return initials.isEmpty ? 'R' : initials;
-  }
-
-  static String verificationStatus(Map<String, dynamic> profile) {
-    final state = documentSummary(profile).toLowerCase();
-    if (state == 'approved') return 'Verified';
-    if (state.contains('review')) return 'Under review';
-    if (state.contains('rejected')) return 'Rejected';
-    if (state.contains('expired')) return 'Expired';
-    if (state.contains('attention') || state.contains('not supplied')) {
-      return 'Needs attention';
-    }
-    return documentSummary(profile);
-  }
-
-  static String documentSummary(Map<String, dynamic> profile) {
-    final statuses = [
-      _docStatus(profile, 'identityStatus', 'identityVerified'),
-      _docStatus(profile, 'vehicleRegistrationDocumentStatus',
-          'vehicleDocumentsVerified'),
-      _docStatus(profile, 'insuranceStatus', 'insuranceVerified'),
-      _docStatus(profile, 'additionalVerificationStatus', 'documentsVerified'),
-    ];
-    final attention = statuses
-        .where((status) =>
-            status == 'Not supplied' ||
-            status == 'Rejected' ||
-            status == 'Expired')
-        .length;
-    if (attention > 0) return '$attention items need attention';
-    if (statuses.any((status) => status == 'Under review')) {
-      return 'Some items are under review';
-    }
-    if (statuses.every((status) => status == 'Approved')) return 'Approved';
-    return 'Review your documents';
-  }
-
-  static String notificationSummary() => 'Job offers, messages and updates';
-
-  static String _docStatus(Map<String, dynamic> profile, String statusKey,
-      [String? booleanKey]) {
-    if (booleanKey != null && profile[booleanKey] == true) return 'Approved';
-    final text = '${profile[statusKey] ?? ''}'.trim().toLowerCase();
-    return switch (text) {
-      'approved' || 'verified' => 'Approved',
-      'submitted' => 'Submitted',
-      'under_review' || 'pending' || 'reviewing' => 'Under review',
-      'rejected' || 'declined' => 'Rejected',
-      'expired' => 'Expired',
-      _ => 'Not supplied',
-    };
-  }
-}
-
-class _OptionsScreen extends StatelessWidget {
-  const _OptionsScreen({
+class _RiderProfileScreen extends StatelessWidget {
+  const _RiderProfileScreen({
     required this.user,
     required this.profile,
+    required this.earnings,
     required this.onSelectTab,
   });
 
   final User user;
   final Map<String, dynamic> profile;
+  final Map<String, dynamic> earnings;
   final ValueChanged<int> onSelectTab;
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthBloc>().state;
-    final name = _ProfileData.name(user, profile);
-    final photo =
-        '${profile['profilePhotoUrl'] ?? profile['profilePhoto'] ?? profile['photoURL'] ?? profile['photoUrl'] ?? auth.profilePhoto ?? user.photoURL ?? ''}'
-            .trim();
-    final rank = RiderRankSnapshot.from(profile);
-    final verificationStatus = _ProfileData.verificationStatus(profile);
+    final data =
+        _RiderProfileData(user: user, profile: profile, earnings: earnings);
 
     return CustomScrollView(
-      key: const PageStorageKey('rider-options-screen'),
+      key: const PageStorageKey('rider-profile-screen'),
       slivers: [
         SliverSafeArea(
           bottom: false,
           sliver: SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
-            sliver: SliverList.list(
-              children: [
-                const _OptionsTopBar(),
-                const SizedBox(height: 12),
-                _IdentityCard(
-                  name: name,
-                  photo: photo,
-                  initials: _ProfileData.initials(name),
-                  rank: rank?.rank ?? 'Pending',
-                  verificationStatus: verificationStatus,
-                  onTap: () => _open(context, const AccountDetails()),
-                ),
-                const SizedBox(height: 28),
-                _OptionsSection(
-                  label: 'Account',
-                  children: [
-                    _OptionRow(
-                      icon: Icons.person_outline_rounded,
-                      iconColor: RiderPalette.blue,
-                      title: 'Personal',
-                      subtitle: _personalDetailsSubtitle(user, profile),
-                      onTap: () => _open(context, const AccountDetails()),
-                    ),
-                    _OptionRow(
-                      icon: Icons.verified_user_outlined,
-                      iconColor: RiderPalette.green,
-                      title: 'Documents',
-                      subtitle: verificationStatus,
-                      onTap: () => _open(context, VerificationView()),
-                    ),
-                    _OptionRow(
-                      icon: Icons.history_rounded,
-                      iconColor: RiderPalette.amber,
-                      title: 'Activity',
-                      subtitle: 'Completed and recent deliveries',
-                      onTap: () => _open(context, const HistoryView()),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 28),
-                _OptionsSection(
-                  label: 'Preferences',
-                  children: [
-                    _PermissionRow(
-                      icon: Icons.notifications_none_rounded,
-                      iconColor: RiderPalette.purple,
-                      title: 'Notifications',
-                      summary: _ProfileData.notificationSummary(),
-                      permission: permissions.Permission.notification,
-                      onTap: () => _open(
-                        context,
-                        RiderNotificationsView(onNavigateTab: onSelectTab),
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 112),
+            sliver: SliverToBoxAdapter(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 920),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _ProfileHero(
+                        data: data,
+                        onEditPhoto: () =>
+                            _open(context, const AccountDetails()),
+                        onEditProfile: () =>
+                            _open(context, const AccountDetails()),
                       ),
-                    ),
-                    _LocationSharingRow(
-                      onTap: () => Geolocator.openAppSettings(),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 28),
-                _OptionsSection(
-                  label: 'Support',
-                  children: [
-                    _OptionRow(
-                      icon: Icons.explore_outlined,
-                      iconColor: RiderPalette.blue,
-                      title: 'Rider Guide',
-                      subtitle: 'How Circum Rider works',
-                      onTap: () => _open(
-                        context,
-                        RiderGuideView(
-                          authenticated: true,
-                          progress: RiderApprovalProgress.fromBackend(
-                            accountExists: true,
-                            firebaseEmailVerified: user.emailVerified,
-                            rider: profile,
+                      const SizedBox(height: 16),
+                      _StatsRow(data: data),
+                      const SizedBox(height: 22),
+                      _ProfileSection(
+                        title: 'Account',
+                        rows: [
+                          _ProfileRow(
+                            icon: Icons.badge_outlined,
+                            title: 'Personal Details',
+                            description:
+                                'Legal name, date of birth and Rider ID',
+                            onTap: () => _open(context, const AccountDetails()),
                           ),
-                        ),
+                          _ProfileRow(
+                            icon: Icons.contact_phone_outlined,
+                            title: 'Contact Information',
+                            description: data.contactSummary,
+                            onTap: () => _open(context, const AccountDetails()),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.health_and_safety_outlined,
+                            title: 'Emergency Contact',
+                            description: data.emergencyContactSummary,
+                            onTap: () =>
+                                _open(context, const RiderApplicationCentre()),
+                          ),
+                        ],
                       ),
-                    ),
-                    _OptionRow(
-                      icon: Icons.help_outline_rounded,
-                      iconColor: RiderPalette.blue,
-                      title: 'Support',
-                      subtitle: 'Get help',
-                      onTap: () => _open(context, const SupportView()),
-                    ),
-                    _OptionRow(
-                      icon: Icons.gavel_rounded,
-                      iconColor: RiderPalette.muted,
-                      title: 'Legal',
-                      subtitle: 'Terms, privacy and Rider agreement',
-                      onTap: () => _open(context, const RiderLegalView()),
-                    ),
-                  ],
+                      _ProfileSection(
+                        title: 'Work',
+                        rows: [
+                          _ProfileRow(
+                            icon: Icons.two_wheeler_outlined,
+                            title: 'Vehicles',
+                            description: data.vehicleSummary,
+                            onTap: () => _open(context, VerificationView()),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.verified_user_outlined,
+                            title: 'Documents',
+                            description: data.documentSummary,
+                            onTap: () => _open(context, VerificationView()),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.event_available_outlined,
+                            title: 'Availability',
+                            description: data.availabilitySummary,
+                            onTap: () => onSelectTab(0),
+                          ),
+                        ],
+                      ),
+                      _ProfileSection(
+                        title: 'Finance',
+                        rows: [
+                          _ProfileRow(
+                            icon: Icons.account_balance_wallet_outlined,
+                            title: 'Earnings',
+                            description:
+                                'Cash earnings and delivery transactions',
+                            onTap: () => onSelectTab(3),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.diamond_outlined,
+                            title: 'Roth Wallet',
+                            description: data.rothSummary,
+                            onTap: () =>
+                                _open(context, const RiderApplicationCentre()),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.payments_outlined,
+                            title: 'Stripe Payouts',
+                            description:
+                                'Manage payouts through Stripe Connect',
+                            onTap: () => onSelectTab(3),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.verified_outlined,
+                            title: 'Stripe Verification Status',
+                            description: data.stripeStatus,
+                            statusColor: data.stripeStatusColor,
+                            onTap: () => onSelectTab(3),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.savings_outlined,
+                            title: 'Available Balance',
+                            description: data.availableBalance,
+                            onTap: () => onSelectTab(3),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.schedule_outlined,
+                            title: 'Next Estimated Payout',
+                            description: data.nextPayout,
+                            onTap: () => onSelectTab(3),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.receipt_long_outlined,
+                            title: 'Payout History',
+                            description: 'Stripe Connect payout records',
+                            onTap: () => onSelectTab(3),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.list_alt_outlined,
+                            title: 'Transaction History',
+                            description: 'Delivery, tip and adjustment records',
+                            onTap: () => onSelectTab(3),
+                          ),
+                        ],
+                      ),
+                      _ProfileSection(
+                        title: 'Performance',
+                        rows: [
+                          _ProfileRow(
+                            icon: Icons.military_tech_outlined,
+                            title: 'Current Rank',
+                            description: data.rank,
+                            onTap: () => onSelectTab(0),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.trending_up_outlined,
+                            title: 'Rank Progress',
+                            description: data.rankProgress,
+                            onTap: () => onSelectTab(0),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.auto_awesome_outlined,
+                            title: 'Trust Progress',
+                            description: data.trustProgress,
+                            onTap: () => onSelectTab(0),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.workspace_premium_outlined,
+                            title: 'Achievements',
+                            description: data.achievementsSummary,
+                            onTap: () => onSelectTab(0),
+                          ),
+                        ],
+                      ),
+                      _ProfileSection(
+                        title: 'Settings',
+                        rows: [
+                          _ProfileRow(
+                            icon: Icons.notifications_none_rounded,
+                            title: 'Notifications',
+                            description:
+                                'Job offers, messages and Rider updates',
+                            onTap: () => _open(
+                              context,
+                              RiderNotificationsView(
+                                  onNavigateTab: onSelectTab),
+                            ),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.accessibility_new_outlined,
+                            title: 'Accessibility',
+                            description:
+                                'Text, contrast and motion preferences',
+                            onTap: () =>
+                                _open(context, const RiderApplicationCentre()),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.lock_outline,
+                            title: 'Privacy',
+                            description: 'Your data and account controls',
+                            onTap: () => _open(context,
+                                const RiderLegalView(initial: 'Privacy')),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.assignment_outlined,
+                            title: 'Rider Agreement',
+                            description: 'Your Rider operating agreement',
+                            onTap: () => _open(
+                                context,
+                                const RiderLegalView(
+                                    initial: 'Rider Agreement')),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.help_outline_rounded,
+                            title: 'Support',
+                            description: 'Get help from Circum Support',
+                            onTap: () => _open(context, const SupportView()),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.shield_outlined,
+                            title: 'Safety Centre',
+                            description: 'Guidance for safe deliveries',
+                            onTap: () => _open(
+                              context,
+                              RiderGuideView(
+                                authenticated: true,
+                                progress: RiderApprovalProgress.fromBackend(
+                                  accountExists: true,
+                                  firebaseEmailVerified: user.emailVerified,
+                                  rider: profile,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      _ProfileSection(
+                        title: 'Account Actions',
+                        rows: [
+                          _ProfileRow(
+                            icon: Icons.logout_rounded,
+                            title: 'Sign Out',
+                            description: 'Leave this device securely',
+                            tone: _ProfileRowTone.danger,
+                            onTap: () => _confirmSignOut(context),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.delete_forever_outlined,
+                            title: 'Close Account',
+                            description:
+                                'Permanently delete your Circum account and personal data.',
+                            tone: _ProfileRowTone.danger,
+                            onTap: () => _confirmCloseAccount(context),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 28),
-                _CloseAccountButton(
-                  onTap: () => _confirmCloseAccount(context),
-                ),
-                const SizedBox(height: 12),
-                _SignOutButton(onTap: () => _confirmSignOut(context)),
-                const SizedBox(height: 16),
-                const _FooterMeta(),
-              ],
+              ),
             ),
           ),
         ),
       ],
     );
   }
+}
 
-  String _personalDetailsSubtitle(User user, Map<String, dynamic> profile) {
-    final phone = '${profile['phoneNumber'] ?? user.phoneNumber ?? ''}'.trim();
-    final address =
-        '${profile['homeAddress'] ?? profile['address'] ?? ''}'.trim();
-    if (phone.isNotEmpty && address.isNotEmpty) return 'Phone and home address';
-    if (phone.isNotEmpty) return 'Phone saved · Add home address';
-    if (address.isNotEmpty) return 'Home address saved · Add phone';
-    return 'Name, phone, home address and account details';
+class _RiderProfileData {
+  _RiderProfileData({
+    required this.user,
+    required this.profile,
+    required this.earnings,
+  })  : rankSnapshot = RiderRankSnapshot.from(profile),
+        earningsSummary = RiderEarningsSummary.from(earnings);
+
+  final User user;
+  final Map<String, dynamic> profile;
+  final Map<String, dynamic> earnings;
+  final RiderRankSnapshot? rankSnapshot;
+  final RiderEarningsSummary? earningsSummary;
+
+  String get name {
+    final first = text('firstName');
+    final last = text('lastName');
+    final joined = [first, last].where((part) => part.isNotEmpty).join(' ');
+    if (joined.isNotEmpty) return joined;
+    final full = text('name', fallback: text('fullName'));
+    if (full.isNotEmpty) return full;
+    return user.displayName ?? 'Circum Rider';
+  }
+
+  String get handle {
+    final raw = text('handle',
+        fallback: text('riderHandle', fallback: text('username')));
+    if (raw.isNotEmpty) return raw.startsWith('@') ? raw : '@$raw';
+    final derived = name
+        .toLowerCase()
+        .replaceAll(RegExp('[^a-z0-9]+'), '.')
+        .replaceAll(RegExp(r'^\.+|\.+$'), '');
+    return derived.isEmpty ? '@rider' : '@$derived';
+  }
+
+  String get initials {
+    final parts = name.split(' ').where((part) => part.isNotEmpty).take(2);
+    final value = parts.map((part) => part[0].toUpperCase()).join();
+    return value.isEmpty ? 'R' : value;
+  }
+
+  String get photoUrl => text('profilePhotoUrl',
+      fallback: text('profilePhoto',
+          fallback: text('photoURL',
+              fallback: text('photoUrl', fallback: user.photoURL ?? ''))));
+
+  String get verifiedLabel {
+    final value = text('verificationStatus',
+            fallback: text('approvalStatus', fallback: text('accountStatus')))
+        .toLowerCase();
+    if (profile['documentsVerified'] == true ||
+        profile['identityVerified'] == true ||
+        value == 'verified' ||
+        value == 'approved') {
+      return 'Verified';
+    }
+    if (value.contains('review') || value.contains('pending')) {
+      return 'Under review';
+    }
+    if (value.contains('reject')) return 'Needs attention';
+    if (value.contains('suspend')) return 'Suspended';
+    return 'Verification pending';
+  }
+
+  String get rank => rankSnapshot?.rank ?? 'Rank pending';
+  int get trustPoints =>
+      rankSnapshot?.trustPoints ?? number('trustPoints').round();
+
+  String get memberSince {
+    final created = timestamp('createdAt') ??
+        timestamp('submittedAt') ??
+        user.metadata.creationTime;
+    if (created == null) return 'Member since pending';
+    return 'Member since ${_monthYear(created)}';
+  }
+
+  String get deliveriesCompleted => whole('completedDeliveries',
+      fallback: whole('deliveriesCompleted',
+          fallback: whole('completedJobs', fallback: '0')));
+
+  String get customerRating {
+    final rating = number('rating', fallback: number('customerRating'));
+    return rating <= 0 ? 'New' : rating.toStringAsFixed(1);
+  }
+
+  String get acceptanceRate => percent('acceptanceRate');
+  String get onTimeRate =>
+      percent('onTimeRate', fallbackKey: 'onTimeDeliveryRate');
+
+  String get contactSummary {
+    final phone = text('phoneNumber',
+        fallback: text('phone', fallback: user.phoneNumber ?? ''));
+    final email = text('email', fallback: user.email ?? '');
+    if (phone.isNotEmpty && email.isNotEmpty) return 'Phone and email saved';
+    if (phone.isNotEmpty) return 'Phone saved';
+    if (email.isNotEmpty) return 'Email saved';
+    return 'Add phone and email';
+  }
+
+  String get emergencyContactSummary {
+    final name = text('emergencyContactName');
+    final phone = text('emergencyContactPhone');
+    if (name.isNotEmpty && phone.isNotEmpty) return '$name · phone saved';
+    if (name.isNotEmpty) return '$name · add phone';
+    return 'Add emergency contact';
+  }
+
+  String get vehicleSummary {
+    final vehicles = profile['vehicles'];
+    if (vehicles is List && vehicles.isNotEmpty) {
+      return '${vehicles.length} vehicle${vehicles.length == 1 ? '' : 's'} saved';
+    }
+    final type = text('vehicleType', fallback: text('typeOfVehicle'));
+    return type.isEmpty ? 'Add vehicle details' : type;
+  }
+
+  String get documentSummary {
+    if (profile['documentsVerified'] == true) return 'Documents verified';
+    final status = text('documentStatus',
+        fallback: text('verificationStatus', fallback: text('identityStatus')));
+    if (status.isEmpty) return 'Identity and vehicle documents';
+    return _prettyStatus(status);
+  }
+
+  String get availabilitySummary {
+    final status = text('availabilityStatus',
+        fallback: text('driverStatus', fallback: text('status')));
+    if (status.isEmpty) return 'Manage online availability';
+    return _prettyStatus(status);
+  }
+
+  String get rothSummary {
+    final status = text('rothOnboardingStatus',
+        fallback: profile['rothWalletId'] == null ? '' : 'connected');
+    if (status.isEmpty) return 'Separate from cash earnings';
+    return '${_prettyStatus(status)} · separate from payouts';
+  }
+
+  String get stripeStatus {
+    final status = text('stripeConnectStatus',
+        fallback:
+            text('payoutStatus', fallback: text('stripeVerificationStatus')));
+    if (status.isEmpty) return 'Stripe Connect setup required';
+    return _prettyStatus(status);
+  }
+
+  Color get stripeStatusColor {
+    final value = stripeStatus.toLowerCase();
+    if (value.contains('verified') || value.contains('active')) {
+      return RiderPalette.green;
+    }
+    if (value.contains('action') || value.contains('required')) {
+      return RiderPalette.red;
+    }
+    return RiderPalette.amber;
+  }
+
+  String get availableBalance =>
+      _money(earningsSummary?.available ?? moneyValue('availableBalance'));
+
+  String get nextPayout {
+    final value = timestampFromAny(earnings['nextEstimatedPayoutAt'] ??
+        earnings['nextPayoutAt'] ??
+        profile['nextEstimatedPayoutAt']);
+    if (value == null) return 'Estimated by Stripe Connect';
+    return _shortDate(value);
+  }
+
+  String get rankProgress {
+    if (rankSnapshot == null) return 'Build trust to unlock rank progress';
+    final current = rankSnapshot!.trustPoints;
+    const thresholds = RiderRankSnapshot.thresholds;
+    const ranks = RiderRankSnapshot.ranks;
+    final index = ranks.indexOf(rankSnapshot!.rank);
+    if (index < 0 || index >= ranks.length - 1) return 'Highest rank achieved';
+    final next = thresholds[index + 1];
+    return '${(next - current).clamp(0, next)} trust points to ${ranks[index + 1]}';
+  }
+
+  String get trustProgress => '$trustPoints trust points';
+
+  String get achievementsSummary {
+    final recognitions = profile['recognitions'];
+    if (recognitions is List && recognitions.isNotEmpty) {
+      return '${recognitions.length} achievement${recognitions.length == 1 ? '' : 's'} unlocked';
+    }
+    return 'Achievements unlock as you deliver';
+  }
+
+  String text(String key, {String fallback = ''}) {
+    final value = '${profile[key] ?? fallback}'.trim();
+    return value == 'null' ? '' : value;
+  }
+
+  double number(String key, {double fallback = 0}) {
+    final value = profile[key];
+    return value is num ? value.toDouble() : fallback;
+  }
+
+  String whole(String key, {String fallback = '0'}) {
+    final value = profile[key] ?? earnings[key];
+    if (value is num) return value.toInt().toString();
+    final text = '$value'.trim();
+    return text.isEmpty || text == 'null' ? fallback : text;
+  }
+
+  String percent(String key, {String? fallbackKey}) {
+    final value =
+        profile[key] ?? (fallbackKey == null ? null : profile[fallbackKey]);
+    if (value is num) {
+      final normalized = value <= 1 ? value * 100 : value;
+      return '${normalized.round()}%';
+    }
+    return 'New';
+  }
+
+  double moneyValue(String key) {
+    final value = earnings[key] ?? profile[key];
+    return value is num ? value.toDouble() : 0;
+  }
+
+  DateTime? timestamp(String key) => timestampFromAny(profile[key]);
+}
+
+class _ProfileHero extends StatelessWidget {
+  const _ProfileHero({
+    required this.data,
+    required this.onEditPhoto,
+    required this.onEditProfile,
+  });
+
+  final _RiderProfileData data;
+  final VoidCallback onEditPhoto;
+  final VoidCallback onEditProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    return RiderGlassSurface(
+      radius: 30,
+      padding: const EdgeInsets.all(22),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 680;
+          final photo = _ProfilePhoto(
+            imageUrl: data.photoUrl,
+            initials: data.initials,
+            onTap: onEditPhoto,
+          );
+          final text = _HeroText(data: data, onEditProfile: onEditProfile);
+          if (wide) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                photo,
+                const SizedBox(width: 22),
+                Expanded(child: text),
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              photo,
+              const SizedBox(height: 18),
+              text,
+            ],
+          );
+        },
+      ),
+    );
   }
 }
 
-class _OptionsTopBar extends StatelessWidget {
-  const _OptionsTopBar();
-
-  @override
-  Widget build(BuildContext context) => Row(
-        children: [
-          Semantics(
-            label: 'Back',
-            button: true,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: () {
-                if (Navigator.canPop(context)) Navigator.pop(context);
-              },
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .045),
-                  shape: BoxShape.circle,
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: .09)),
-                ),
-                child: const Icon(Icons.chevron_left_rounded,
-                    color: RiderPalette.paper),
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          const Text(
-            'Options',
-            style: TextStyle(
-              color: RiderPalette.paper,
-              fontFamily: RiderTypography.heading,
-              fontSize: 30,
-            ),
-          ),
-        ],
-      );
-}
-
-class _IdentityCard extends StatelessWidget {
-  const _IdentityCard({
-    required this.name,
-    required this.photo,
+class _ProfilePhoto extends StatelessWidget {
+  const _ProfilePhoto({
+    required this.imageUrl,
     required this.initials,
-    required this.rank,
-    required this.verificationStatus,
     required this.onTap,
   });
 
-  final String name;
-  final String photo;
+  final String imageUrl;
   final String initials;
-  final String rank;
-  final String verificationStatus;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        label: 'Open Rider profile for $name',
-        child: _OptionsGlass(
-          onTap: onTap,
-          borderRadius: 22,
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [RiderPalette.blue, Color(0xFF2563EB)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: RiderPalette.blue.withValues(alpha: .28),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Edit profile photo',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 132,
+              height: 132,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [RiderPalette.blue, Color(0xFF7C3AED)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: photo.isEmpty
-                    ? Center(
-                        child: Text(
-                          initials,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 20,
+                boxShadow: [
+                  BoxShadow(
+                    color: RiderPalette.blue.withValues(alpha: .22),
+                    blurRadius: 34,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(3),
+              child: ClipOval(
+                child: imageUrl.isEmpty
+                    ? ColoredBox(
+                        color: const Color(0xFF111827),
+                        child: Center(
+                          child: Text(
+                            initials,
+                            style: const TextStyle(
+                              color: RiderPalette.paper,
+                              fontSize: 38,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
                       )
                     : CachedNetworkImage(
-                        imageUrl: photo,
+                        imageUrl: imageUrl,
                         fit: BoxFit.cover,
                         errorWidget: (_, __, ___) => Center(
                           child: Text(
                             initials,
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: RiderPalette.paper,
+                              fontSize: 38,
                               fontWeight: FontWeight.w900,
-                              fontSize: 20,
                             ),
                           ),
                         ),
                       ),
               ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: RiderPalette.paper,
-                        fontFamily: RiderTypography.heading,
-                        fontSize: 22,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _IdentityMetaLine(
-                      label: 'Status',
-                      value: verificationStatus,
-                      valueColor: _statusColor(verificationStatus),
-                    ),
-                    const SizedBox(height: 5),
-                    _IdentityMetaLine(
-                      label: 'Rank',
-                      value: rank,
-                      valueColor: RiderPalette.muted,
-                    ),
-                  ],
+            ),
+            Positioned(
+              right: 4,
+              bottom: 4,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: RiderPalette.blue,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: RiderPalette.background, width: 3),
                 ),
+                child: const Icon(Icons.edit_rounded,
+                    color: RiderPalette.paper, size: 18),
               ),
-              const Icon(Icons.chevron_right_rounded,
-                  color: RiderPalette.muted),
-            ],
-          ),
+            ),
+          ],
         ),
-      );
-
-  Color _statusColor(String status) {
-    final value = status.toLowerCase();
-    if (value.contains('verified') || value.contains('approved')) {
-      return RiderPalette.green;
-    }
-    if (value.contains('review')) return RiderPalette.amber;
-    if (value.contains('rejected') ||
-        value.contains('expired') ||
-        value.contains('required')) {
-      return RiderPalette.red;
-    }
-    return RiderPalette.muted;
+      ),
+    );
   }
 }
 
-class _IdentityMetaLine extends StatelessWidget {
-  const _IdentityMetaLine({
-    required this.label,
-    required this.value,
-    required this.valueColor,
-  });
+class _HeroText extends StatelessWidget {
+  const _HeroText({required this.data, required this.onEditProfile});
 
-  final String label;
-  final String value;
-  final Color valueColor;
+  final _RiderProfileData data;
+  final VoidCallback onEditProfile;
 
   @override
-  Widget build(BuildContext context) => Row(
-        children: [
-          SizedBox(
-            width: 48,
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: RiderPalette.muted,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: valueColor,
-                fontWeight: FontWeight.w800,
-                fontSize: 12.5,
-              ),
-            ),
-          ),
-        ],
-      );
-}
-
-class _OptionsSection extends StatelessWidget {
-  const _OptionsSection({required this.label, required this.children});
-
-  final String label;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 10),
-            child: Text(
-              label.toUpperCase(),
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: .38),
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-          _OptionsGlass(
-            padding: EdgeInsets.zero,
-            borderRadius: 20,
-            child: Column(
-              children: [
-                for (var i = 0; i < children.length; i++) ...[
-                  children[i],
-                  if (i != children.length - 1) const _HairlineDivider(),
-                ],
-              ],
-            ),
-          ),
-        ],
-      );
-}
-
-class _OptionRow extends StatelessWidget {
-  const _OptionRow({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        label: '$title. $subtitle',
-        child: InkWell(
-          onTap: onTap,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 72),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _IconChip(icon: icon, color: iconColor),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            color: RiderPalette.paper,
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: RiderPalette.muted,
-                            fontSize: 12,
-                            height: 1.3,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right_rounded,
-                      color: RiderPalette.muted, size: 22),
-                ],
-              ),
-            ),
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          data.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: RiderPalette.paper,
+            fontFamily: RiderTypography.heading,
+            fontSize: 34,
           ),
         ),
-      );
+        const SizedBox(height: 4),
+        Text(
+          data.handle,
+          style: const TextStyle(
+            color: RiderPalette.muted,
+            fontFamily: RiderTypography.mono,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _HeroPill(
+              icon: Icons.verified_rounded,
+              label: data.verifiedLabel,
+              color: data.verifiedLabel == 'Verified'
+                  ? RiderPalette.green
+                  : RiderPalette.amber,
+            ),
+            _HeroPill(
+              icon: Icons.military_tech_rounded,
+              label: data.rank,
+              color: RiderPalette.blue,
+            ),
+            _HeroPill(
+              icon: Icons.auto_awesome_rounded,
+              label: '${data.trustPoints} trust',
+              color: RiderPalette.purple,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          data.memberSince,
+          style: const TextStyle(color: RiderPalette.muted, fontSize: 13),
+        ),
+        const SizedBox(height: 18),
+        FilledButton.icon(
+          onPressed: onEditProfile,
+          icon: const Icon(Icons.edit_note_rounded),
+          label: const Text('Edit Profile'),
+          style: FilledButton.styleFrom(
+            backgroundColor: RiderPalette.blue,
+            foregroundColor: RiderPalette.paper,
+            minimumSize: const Size(150, 48),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
-class _PermissionRow extends StatelessWidget {
-  const _PermissionRow({
+class _HeroPill extends StatelessWidget {
+  const _HeroPill({
     required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.summary,
-    required this.permission,
-    required this.onTap,
+    required this.label,
+    required this.color,
   });
 
   final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String summary;
-  final permissions.Permission permission;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) =>
-      FutureBuilder<permissions.PermissionStatus>(
-        future: permission.status,
-        builder: (context, snapshot) {
-          final status = snapshot.hasData
-              ? _permissionLabel(snapshot.data!)
-              : 'Checking permission';
-          return _OptionRow(
-            icon: icon,
-            iconColor: iconColor,
-            title: title,
-            subtitle: '$summary · $status',
-            onTap: onTap,
-          );
-        },
-      );
-}
-
-class _LocationSharingRow extends StatelessWidget {
-  const _LocationSharingRow({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => FutureBuilder<LocationPermission>(
-        future: Geolocator.checkPermission(),
-        builder: (context, snapshot) {
-          final status = snapshot.hasData
-              ? _locationPermissionLabel(snapshot.data!)
-              : 'Checking permission';
-          return _OptionRow(
-            icon: Icons.location_searching_rounded,
-            iconColor: RiderPalette.muted,
-            title: 'Location',
-            subtitle:
-                "Used only while you're online or completing deliveries. · $status",
-            onTap: onTap,
-          );
-        },
-      );
-}
-
-class _IconChip extends StatelessWidget {
-  const _IconChip({required this.icon, required this.color});
-
-  final IconData icon;
+  final String label;
   final Color color;
 
   @override
   Widget build(BuildContext context) => Container(
-        width: 38,
-        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: .14),
-          borderRadius: BorderRadius.circular(11),
+          color: color.withValues(alpha: .13),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: .28)),
         ),
-        child: Icon(icon, color: color, size: 20),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 15),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
       );
 }
 
-class _OptionsGlass extends StatelessWidget {
-  const _OptionsGlass({
-    required this.child,
-    this.onTap,
-    this.padding = const EdgeInsets.all(16),
-    this.borderRadius = 20,
-  });
+class _StatsRow extends StatelessWidget {
+  const _StatsRow({required this.data});
 
-  final Widget child;
-  final VoidCallback? onTap;
-  final EdgeInsetsGeometry padding;
-  final double borderRadius;
+  final _RiderProfileData data;
 
   @override
   Widget build(BuildContext context) {
-    final content = ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: const Color(0xFF0D111C).withValues(alpha: .78),
-            borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(color: Colors.white.withValues(alpha: .09)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: .28),
-                blurRadius: 26,
-                offset: const Offset(0, 10),
+    final stats = [
+      ('Deliveries Completed', data.deliveriesCompleted),
+      ('Customer Rating', data.customerRating),
+      ('Acceptance Rate', data.acceptanceRate),
+      ('On-Time Rate', data.onTimeRate),
+      ('Trust Points', '${data.trustPoints}'),
+    ];
+    return RiderGlassSurface(
+      radius: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      child: LayoutBuilder(
+        builder: (context, constraints) => Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final stat in stats)
+              SizedBox(
+                width: constraints.maxWidth >= 760
+                    ? (constraints.maxWidth - 32) / 5
+                    : constraints.maxWidth >= 520
+                        ? (constraints.maxWidth - 16) / 3
+                        : (constraints.maxWidth - 8) / 2,
+                child: _StatTile(label: stat.$1, value: stat.$2),
               ),
-              BoxShadow(
-                color: RiderPalette.blue.withValues(alpha: .06),
-                blurRadius: 24,
-                offset: const Offset(0, -2),
-              ),
-            ],
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withValues(alpha: .045),
-                Colors.white.withValues(alpha: .012),
-              ],
-            ),
-          ),
-          child: Padding(padding: padding, child: child),
+          ],
         ),
-      ),
-    );
-
-    if (onTap == null) return content;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(borderRadius),
-        onTap: onTap,
-        child: content,
       ),
     );
   }
 }
 
-class _SignOutButton extends StatelessWidget {
-  const _SignOutButton({required this.onTap});
+class _StatTile extends StatelessWidget {
+  const _StatTile({required this.label, required this.value});
 
-  final VoidCallback onTap;
+  final String label;
+  final String value;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        label: 'Sign out',
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: onTap,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: RiderPalette.red.withValues(alpha: .08),
-              borderRadius: BorderRadius.circular(18),
-              border:
-                  Border.all(color: RiderPalette.red.withValues(alpha: .28)),
+  Widget build(BuildContext context) => Container(
+        constraints: const BoxConstraints(minHeight: 82),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .035),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: .07)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: RiderPalette.paper,
+                fontFamily: RiderTypography.mono,
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+              ),
             ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.logout_rounded, color: RiderPalette.red, size: 18),
-                SizedBox(width: 10),
-                Text(
-                  'Sign out',
-                  style: TextStyle(
-                    color: RiderPalette.red,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 14.5,
-                  ),
-                ),
-              ],
+            const SizedBox(height: 5),
+            Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: RiderPalette.muted,
+                fontSize: 11.5,
+                height: 1.2,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
+          ],
         ),
       );
 }
 
-class _CloseAccountButton extends StatelessWidget {
-  const _CloseAccountButton({required this.onTap});
+class _ProfileSection extends StatelessWidget {
+  const _ProfileSection({required this.title, required this.rows});
 
-  final VoidCallback onTap;
+  final String title;
+  final List<_ProfileRow> rows;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        label: 'Close Account',
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: onTap,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: RiderPalette.red.withValues(alpha: .08),
-              borderRadius: BorderRadius.circular(18),
-              border:
-                  Border.all(color: RiderPalette.red.withValues(alpha: .28)),
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 10),
+              child: Text(
+                title.toUpperCase(),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: .42),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1,
+                ),
+              ),
             ),
-            child: const Row(
+            RiderGlassSurface(
+              radius: 24,
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  for (var i = 0; i < rows.length; i++) ...[
+                    rows[i],
+                    if (i != rows.length - 1) const _ProfileDivider(),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+enum _ProfileRowTone { normal, danger }
+
+class _ProfileRow extends StatelessWidget {
+  const _ProfileRow({
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.onTap,
+    this.statusColor,
+    this.tone = _ProfileRowTone.normal,
+  });
+
+  final IconData icon;
+  final String title;
+  final String description;
+  final VoidCallback onTap;
+  final Color? statusColor;
+  final _ProfileRowTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = tone == _ProfileRowTone.danger
+        ? RiderPalette.red
+        : statusColor ?? RiderPalette.blue;
+    return Semantics(
+      button: true,
+      label: '$title. $description',
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 78),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            child: Row(
               children: [
-                Icon(Icons.delete_forever_outlined,
-                    color: RiderPalette.red, size: 22),
-                SizedBox(width: 12),
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: .13),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: color.withValues(alpha: .18)),
+                  ),
+                  child: Icon(icon, color: color, size: 21),
+                ),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Close Account',
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: RiderPalette.red,
+                          color: tone == _ProfileRowTone.danger
+                              ? RiderPalette.red
+                              : RiderPalette.paper,
+                          fontSize: 15,
                           fontWeight: FontWeight.w900,
-                          fontSize: 14.5,
                         ),
                       ),
-                      SizedBox(height: 3),
+                      const SizedBox(height: 3),
                       Text(
-                        'Permanently delete your Circum account and personal data.',
-                        style: TextStyle(
+                        description,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
                           color: RiderPalette.muted,
                           fontSize: 12,
-                          height: 1.3,
+                          height: 1.25,
                         ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(width: 10),
+                Icon(Icons.chevron_right_rounded,
+                    color: Colors.white.withValues(alpha: .42), size: 24),
               ],
             ),
           ),
         ),
-      );
+      ),
+    );
+  }
 }
 
-class _FooterMeta extends StatelessWidget {
-  const _FooterMeta();
-
-  @override
-  Widget build(BuildContext context) => const Column(
-        children: [
-          Text(
-            'CIRCUM RIDER',
-            style: TextStyle(
-              color: RiderPalette.muted,
-              fontFamily: RiderTypography.mono,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          SizedBox(height: 4),
-          Text(
-            'circumuk.com',
-            style: TextStyle(
-              color: RiderPalette.muted,
-              fontFamily: RiderTypography.mono,
-              fontSize: 11,
-            ),
-          ),
-        ],
-      );
-}
-
-class _HairlineDivider extends StatelessWidget {
-  const _HairlineDivider();
+class _ProfileDivider extends StatelessWidget {
+  const _ProfileDivider();
 
   @override
   Widget build(BuildContext context) => Divider(
@@ -890,8 +1071,8 @@ class _HairlineDivider extends StatelessWidget {
       );
 }
 
-class _OptionsLoading extends StatelessWidget {
-  const _OptionsLoading();
+class _ProfileLoading extends StatelessWidget {
+  const _ProfileLoading();
 
   @override
   Widget build(BuildContext context) => const Center(
@@ -899,60 +1080,61 @@ class _OptionsLoading extends StatelessWidget {
       );
 }
 
-class _OptionsError extends StatelessWidget {
-  const _OptionsError({required this.onRetry});
+class _ProfileError extends StatelessWidget {
+  const _ProfileError({required this.onRetry});
 
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) => RiderEmptyState(
         icon: Icons.error_outline_rounded,
-        title: 'Options unavailable',
-        message: 'We could not load your Rider account details.',
+        title: 'Profile unavailable',
+        message: 'We could not load your Rider profile.',
         actionLabel: 'Retry',
         onAction: onRetry,
       );
 }
 
 class RiderLegalView extends StatelessWidget {
-  const RiderLegalView({super.key});
+  const RiderLegalView({super.key, this.initial});
+
+  final String? initial;
 
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: RiderPalette.background,
         appBar: AppBar(
-          title: const Text('Legal'),
+          title: Text(initial ?? 'Legal'),
           backgroundColor: RiderPalette.background,
           foregroundColor: RiderPalette.paper,
         ),
         body: SafeArea(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
             children: [
-              _OptionsSection(
-                label: 'Legal',
-                children: [
-                  _OptionRow(
+              _ProfileSection(
+                title: 'Legal',
+                rows: [
+                  _ProfileRow(
                     icon: Icons.description_outlined,
-                    iconColor: RiderPalette.blue,
                     title: 'Terms',
-                    subtitle: 'Circum terms of service',
+                    description: 'Circum terms of service',
                     onTap: () =>
                         launchUrl(Uri.parse('https://circumuk.com/terms')),
                   ),
-                  _OptionRow(
+                  _ProfileRow(
                     icon: Icons.privacy_tip_outlined,
-                    iconColor: RiderPalette.green,
                     title: 'Privacy',
-                    subtitle: 'Privacy policy and data controls',
+                    description: 'Privacy policy and data controls',
+                    statusColor: RiderPalette.green,
                     onTap: () =>
                         launchUrl(Uri.parse('https://circumuk.com/privacy')),
                   ),
-                  _OptionRow(
+                  _ProfileRow(
                     icon: Icons.assignment_outlined,
-                    iconColor: RiderPalette.amber,
                     title: 'Rider Agreement',
-                    subtitle: 'Rider operating agreement',
+                    description: 'Rider operating agreement',
+                    statusColor: RiderPalette.amber,
                     onTap: () =>
                         launchUrl(Uri.parse('https://circumuk.com/terms')),
                   ),
@@ -964,25 +1146,6 @@ class RiderLegalView extends StatelessWidget {
       );
 }
 
-String _permissionLabel(permissions.PermissionStatus status) {
-  if (status.isGranted) return 'Allowed';
-  if (status.isLimited) return 'Limited';
-  if (status.isPermanentlyDenied) return 'Open settings';
-  if (status.isDenied) return 'Denied';
-  if (status.isRestricted) return 'Restricted';
-  return 'Not requested';
-}
-
-String _locationPermissionLabel(LocationPermission permission) {
-  return switch (permission) {
-    LocationPermission.always => 'Allowed',
-    LocationPermission.whileInUse => 'Foreground only',
-    LocationPermission.denied => 'Denied',
-    LocationPermission.deniedForever => 'Open settings',
-    LocationPermission.unableToDetermine => 'Not requested',
-  };
-}
-
 Future<void> _confirmSignOut(BuildContext context) async {
   final confirmed = await showModalBottomSheet<bool>(
     context: context,
@@ -990,8 +1153,8 @@ Future<void> _confirmSignOut(BuildContext context) async {
     builder: (context) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(18),
-        child: _OptionsGlass(
-          borderRadius: 24,
+        child: RiderGlassSurface(
+          radius: 24,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1016,7 +1179,7 @@ Future<void> _confirmSignOut(BuildContext context) async {
                   backgroundColor: RiderPalette.red,
                   minimumSize: const Size.fromHeight(48),
                 ),
-                child: const Text('Sign out'),
+                child: const Text('Sign Out'),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -1044,8 +1207,8 @@ Future<void> _confirmCloseAccount(BuildContext context) async {
     builder: (context) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(18),
-        child: _OptionsGlass(
-          borderRadius: 24,
+        child: RiderGlassSurface(
+          radius: 24,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1105,25 +1268,31 @@ Future<void> _confirmCloseAccount(BuildContext context) async {
   } on FirebaseFunctionsException catch (error) {
     if (context.mounted) {
       _showClosureError(
-          context,
-          error.message ??
-              'Your account could not be closed. Please try again.');
+        context,
+        error.message ?? 'Your account could not be closed. Please try again.',
+      );
     }
   } on FirebaseAuthException catch (error) {
     if (context.mounted) {
-      _showClosureError(context,
-          error.message ?? 'Please sign in again before closing your account.');
+      _showClosureError(
+        context,
+        error.message ?? 'Please sign in again before closing your account.',
+      );
     }
   } catch (_) {
     if (context.mounted) {
       _showClosureError(
-          context, 'Your account could not be closed. Please try again.');
+        context,
+        'Your account could not be closed. Please try again.',
+      );
     }
   }
 }
 
 Future<void> _reauthenticateRiderForClosure(
-    BuildContext context, User user) async {
+  BuildContext context,
+  User user,
+) async {
   final providers = user.providerData.map((info) => info.providerId).toSet();
   if (providers.contains('password')) {
     final password = await _showRiderPasswordReauth(context);
@@ -1217,11 +1386,65 @@ Future<bool?> _showRiderDeleteConfirmation(BuildContext context) async {
 }
 
 void _showClosureError(BuildContext context, String message) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(message)),
-  );
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
 
 void _open(BuildContext context, Widget page) {
   Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+}
+
+DateTime? timestampFromAny(Object? value) {
+  if (value is Timestamp) return value.toDate();
+  if (value is DateTime) return value;
+  if (value is String) return DateTime.tryParse(value);
+  return null;
+}
+
+String _money(double value) => '£${value.toStringAsFixed(2)}';
+
+String _prettyStatus(String value) {
+  final text = value.trim().replaceAll('_', ' ').replaceAll('-', ' ');
+  if (text.isEmpty) return '';
+  return text
+      .split(' ')
+      .where((part) => part.isNotEmpty)
+      .map((part) =>
+          '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}')
+      .join(' ');
+}
+
+String _monthYear(DateTime value) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec'
+  ];
+  return '${months[value.month - 1]} ${value.year}';
+}
+
+String _shortDate(DateTime value) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec'
+  ];
+  return '${value.day} ${months[value.month - 1]} ${value.year}';
 }

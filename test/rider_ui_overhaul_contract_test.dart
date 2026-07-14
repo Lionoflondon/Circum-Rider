@@ -169,30 +169,56 @@ void main() {
       expect(riderUi, isNot(contains('blurRadius: 34')));
     });
 
-    test('profile tab hosts the canonical Rider Options screen', () {
-      expect(profile, contains("'Options'"));
-      expect(profile, contains('Personal'));
+    test('profile tab hosts the rebuilt Rider professional profile', () {
+      expect(profile, contains('_ProfilePhoto'));
+      expect(profile, contains('Edit profile photo'));
+      expect(profile, contains('Edit Profile'));
+      expect(profile, contains('Deliveries Completed'));
+      expect(profile, contains('Customer Rating'));
+      expect(profile, contains('Acceptance Rate'));
+      expect(profile, contains('On-Time Rate'));
+      expect(profile, contains('Trust Points'));
+      expect(profile, contains('Account'));
+      expect(profile, contains('Work'));
+      expect(profile, contains('Finance'));
+      expect(profile, contains('Performance'));
+      expect(profile, contains('Settings'));
+      expect(profile, contains('Account Actions'));
+      expect(profile, contains('Personal Details'));
+      expect(profile, contains('Contact Information'));
+      expect(profile, contains('Emergency Contact'));
+      expect(profile, contains('Vehicles'));
       expect(profile, contains('Documents'));
-      expect(profile, contains('Activity'));
+      expect(profile, contains('Availability'));
+      expect(profile, contains('Earnings'));
+      expect(profile, contains('Roth Wallet'));
+      expect(profile, contains('Stripe Payouts'));
+      expect(profile, contains('Stripe Verification Status'));
+      expect(profile, contains('Available Balance'));
+      expect(profile, contains('Next Estimated Payout'));
+      expect(profile, contains('Payout History'));
+      expect(profile, contains('Transaction History'));
+      expect(profile, contains('Current Rank'));
+      expect(profile, contains('Rank Progress'));
+      expect(profile, contains('Trust Progress'));
+      expect(profile, contains('Achievements'));
       expect(profile, contains('Notifications'));
-      expect(profile, contains('Location'));
+      expect(profile, contains('Accessibility'));
       expect(profile, contains('Support'));
-      expect(profile, contains('Legal'));
+      expect(profile, contains('Safety Centre'));
       expect(profile, contains('Privacy'));
       expect(profile, contains('Terms'));
       expect(profile, contains('Rider Agreement'));
       expect(
           profile.contains('Licences') && profile.contains('notices'), isFalse);
-      expect(profile, contains('Sign out'));
-      expect(profile, contains('_OptionsScreen'));
-      expect(profile, contains('_IdentityCard'));
-      expect(profile, contains('Geolocator.checkPermission'));
-      expect(profile, contains('Permission.notification'));
+      expect(profile, contains('Sign Out'));
+      expect(profile, contains('_RiderProfileScreen'));
+      expect(profile, contains('_ProfileHero'));
+      expect(profile, contains('_StatsRow'));
       expect(profile, isNot(contains('Operations & Account')));
       expect(profile, isNot(contains('Ready to work')));
       expect(profile, isNot(contains('Work preferences')));
       expect(profile, isNot(contains('App permissions')));
-      expect(profile, isNot(contains('Performance')));
       expect(profile, isNot(contains('Earnings and payouts')));
       expect(profile, isNot(contains('Account milestones')));
       expect(profile, isNot(contains('RiderStatusBadge')));
@@ -201,7 +227,11 @@ void main() {
       expect(profile, isNot(contains('Jason Adesanya')));
       expect(profile, isNot(contains('WARDEN · 412 TRUST')));
       expect(profile, isNot(contains('Verified Rider')));
-      expect(profile, isNot(contains('payouts')));
+      expect(profile, isNot(contains('Preferred Delivery Types')));
+      expect(profile, isNot(contains('Portal')));
+      expect(profile, isNot(contains('portal')));
+      expect(profile, isNot(contains('Sender UI')));
+      expect(profile, isNot(contains('Admin UI')));
     });
 
     test('profile keeps protected fields read only and routes to details', () {
@@ -210,32 +240,37 @@ void main() {
       expect(riderTruth, contains('trustPoints'));
       expect(profile, contains('VerificationView'));
       expect(profile, contains('AccountDetails'));
-      expect(profile, contains('HistoryView'));
+      expect(profile, contains('RiderApplicationCentre'));
       expect(profile, isNot(contains('updateRank')));
       expect(profile, isNot(contains('updateTrust')));
       expect(profile, isNot(contains('approvalStatus\':')));
     });
 
-    test('options keeps existing contextual routes and live permission states',
-        () {
+    test('profile keeps existing contextual routes and account actions', () {
       expect(profile, contains('RiderNotificationsView'));
       expect(profile, contains('SupportView'));
       expect(profile, contains("collection('riderProfiles')"));
       expect(profile, contains("collection('riders')"));
+      expect(profile, contains("collection('riderEarnings')"));
       expect(profile, contains('RiderLegalView'));
-      expect(profile, contains('Geolocator.openAppSettings'));
       expect(profile, contains('showModalBottomSheet'));
       expect(profile, contains('SignOut()'));
-      expect(profile, isNot(contains('Permission.camera')));
-      expect(profile, isNot(contains('backgroundLocation')));
+      expect(profile, contains("httpsCallable('closeCircumAccount')"));
     });
 
-    test('profile avoids dashboard and rider-facing tax language', () {
+    test('profile keeps Stripe payouts and Roth wallet separate', () {
+      expect(profile, contains('Stripe Connect'));
+      expect(profile, contains('Roth Wallet'));
+      expect(profile, contains('Separate from cash earnings'));
+      expect(profile, contains('separate from payouts'));
+      expect(profile, isNot(contains('bank details')));
+      expect(profile, isNot(contains('sort code')));
+      expect(profile, isNot(contains('account number')));
+    });
+
+    test('profile avoids old operational and tax language', () {
       expect(profile, isNot(contains('Available earnings')));
       expect(profile, isNot(contains('pending earnings')));
-      expect(profile, isNot(contains('Payout history')));
-      expect(profile, isNot(contains('Payout status')));
-      expect(profile, isNot(contains('Transaction history')));
       expect(profile.toLowerCase(), isNot(contains('hmrc')));
       expect(profile.toLowerCase(), isNot(contains('tax advice')));
       expect(profile.toLowerCase(), isNot(contains('tax filing')));

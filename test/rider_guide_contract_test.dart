@@ -59,7 +59,7 @@ void main() {
     test('Rider Guide remains reachable from core Rider surfaces', () {
       expect(dashboard, contains('RiderGuideEntryCard'));
       expect(dashboard, contains('RiderGuideView'));
-      expect(profile, contains("title: 'Rider Guide'"));
+      expect(profile, contains('Safety Centre'));
       expect(profile, contains('RiderGuideView'));
       expect(pending, contains('RiderGuideEntryCard'));
       expect(pending, contains('RiderGuideProgressCard'));
