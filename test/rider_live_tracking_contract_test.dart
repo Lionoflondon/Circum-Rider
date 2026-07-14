@@ -207,14 +207,13 @@ void main() {
     final manifest =
         File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
 
-    test('uses the existing Sender live-tracking document contract', () {
-      expect(source, contains(".collection('deliveryRequests')"));
-      expect(source, contains(".collection('tracking')"));
-      expect(source, contains(".doc('liveLocation')"));
-      expect(source, contains("'riderLiveLocation'"));
-      expect(source, contains("'trackingHealth'"));
+    test('publishes live tracking through backend authority', () {
+      expect(source, contains("httpsCallable('updateDeliveryLiveLocation')"));
       expect(source, contains("'gpsSignalQuality'"));
-      expect(source, contains("'lastBackendUploadAt'"));
+      expect(source, contains("'accuracyMeters'"));
+      expect(source, contains("'backgroundCapable'"));
+      expect(source, isNot(contains(".collection('activeDeliveries')")));
+      expect(source, isNot(contains(".collection('tracking')")));
     });
 
     test('accepted delivery screen starts tracking from backend state', () {
