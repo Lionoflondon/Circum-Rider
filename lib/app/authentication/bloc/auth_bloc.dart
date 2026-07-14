@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:circum_rider/extension/email_validation.dart';
 import 'package:circum_rider/helper/location_helper.dart';
@@ -9,6 +8,7 @@ import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:circum_rider/utils/app_state/app_state.dart';
 // import 'package:geoflutterfire2/geoflutterfire2.dart';
@@ -75,7 +75,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       await permission_handler.Permission.location.status;
     }
 
-    listenForPermissionStatus();
+    if (!kIsWeb) listenForPermissionStatus();
 
     on<AuthEvent>((event, emit) async {
       if (event is SortSessionState) {

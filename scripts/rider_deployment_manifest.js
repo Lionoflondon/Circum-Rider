@@ -64,7 +64,7 @@ function validateFirebaseConfiguration(root = process.cwd()) {
 }
 
 function validateBundle(bundleSource, bootstrapSource) {
-  if (!bootstrapSource.includes("window.CIRCUM_RIDER_BUILD = 'rider-web-cache-v1'")) {
+  if (!bootstrapSource.includes("window.CIRCUM_RIDER_BUILD = 'rider-web-cache-v2'")) {
     fail('Rider bootstrap marker is missing');
   }
   if (!bundleSource.includes('Circum Rider')) {
