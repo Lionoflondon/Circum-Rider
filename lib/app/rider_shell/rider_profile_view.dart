@@ -12,11 +12,9 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../account/view/account_details.dart';
 import '../authentication/bloc/auth_bloc.dart';
-import '../founder_access/founder_rider_access.dart';
 import '../history/view/history.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../onboarding/rider_guide_view.dart';
-import '../recognitions/rider_recognitions.dart';
 import '../rider_account/rider_account_state.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
@@ -70,14 +68,9 @@ class _RiderProfileViewState extends State<RiderProfileView> {
             final rider = riderSnapshot.data?.data() ?? const {};
             final riderProfile = profileSnapshot.data?.data() ?? const {};
             final profile = <String, dynamic>{...rider, ...riderProfile};
-            final accountState = RiderAccountStateResolver.resolveRecords(
-              rider: rider,
-              riderProfile: riderProfile,
-            );
             return _OptionsScreen(
               user: user,
               profile: profile,
-              accountState: accountState,
               onSelectTab: widget.onSelectTab,
             );
           },
@@ -106,11 +99,6 @@ class _ProfileData {
     return initials.isEmpty ? 'R' : initials;
   }
 
-  static String accountStatus(RiderAccountState state) {
-    final text = RiderAccountStateResolver.storageValue(state);
-    return _sentence(text);
-  }
-
   static String verificationStatus(Map<String, dynamic> profile) {
     final state = documentSummary(profile).toLowerCase();
     if (state == 'approved') return 'Verified';
@@ -118,7 +106,7 @@ class _ProfileData {
     if (state.contains('rejected')) return 'Rejected';
     if (state.contains('expired')) return 'Expired';
     if (state.contains('attention') || state.contains('not supplied')) {
-      return 'Action required';
+      return 'Needs attention';
     }
     return documentSummary(profile);
   }
@@ -160,26 +148,17 @@ class _ProfileData {
       _ => 'Not supplied',
     };
   }
-
-  static String _sentence(String value) => value
-      .replaceAll('_', ' ')
-      .split(' ')
-      .where((part) => part.isNotEmpty)
-      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-      .join(' ');
 }
 
 class _OptionsScreen extends StatelessWidget {
   const _OptionsScreen({
     required this.user,
     required this.profile,
-    required this.accountState,
     required this.onSelectTab,
   });
 
   final User user;
   final Map<String, dynamic> profile;
-  final RiderAccountState accountState;
   final ValueChanged<int> onSelectTab;
 
   @override
@@ -190,9 +169,7 @@ class _OptionsScreen extends StatelessWidget {
         '${profile['profilePhoto'] ?? auth.profilePhoto ?? user.photoURL ?? ''}'
             .trim();
     final rank = RiderRankSnapshot.from(profile);
-    final status = _ProfileData.accountStatus(accountState);
     final verificationStatus = _ProfileData.verificationStatus(profile);
-    final recognitions = RiderRecognitions.from(profile);
 
     return CustomScrollView(
       key: const PageStorageKey('rider-options-screen'),
@@ -205,50 +182,42 @@ class _OptionsScreen extends StatelessWidget {
               children: [
                 const _OptionsTopBar(),
                 const SizedBox(height: 12),
-                const FounderRiderBadge(),
-                const SizedBox(height: 12),
                 _IdentityCard(
                   name: name,
                   photo: photo,
                   initials: _ProfileData.initials(name),
-                  rank: rank?.rank ?? 'Rank updating',
-                  trust: rank == null
-                      ? 'Trust updating'
-                      : '${rank.trustPoints} Trust',
+                  rank: rank?.rank ?? 'Pending',
                   verificationStatus: verificationStatus,
-                  accountStatus: status,
-                  recognitions: recognitions,
                   onTap: () => _open(context, const AccountDetails()),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
                 _OptionsSection(
                   label: 'Account',
                   children: [
                     _OptionRow(
                       icon: Icons.person_outline_rounded,
                       iconColor: RiderPalette.blue,
-                      title: 'Personal details',
+                      title: 'Personal',
                       subtitle: _personalDetailsSubtitle(user, profile),
                       onTap: () => _open(context, const AccountDetails()),
                     ),
                     _OptionRow(
                       icon: Icons.verified_user_outlined,
                       iconColor: RiderPalette.green,
-                      title: 'Documents & verification',
+                      title: 'Documents',
                       subtitle: verificationStatus,
                       onTap: () => _open(context, VerificationView()),
                     ),
                     _OptionRow(
                       icon: Icons.history_rounded,
                       iconColor: RiderPalette.amber,
-                      title: 'Delivery activity',
-                      subtitle:
-                          'Completed, cancelled and historical deliveries',
+                      title: 'Activity',
+                      subtitle: 'Completed and recent deliveries',
                       onTap: () => _open(context, const HistoryView()),
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
                 _OptionsSection(
                   label: 'Preferences',
                   children: [
@@ -268,7 +237,7 @@ class _OptionsScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
                 _OptionsSection(
                   label: 'Support',
                   children: [
@@ -276,7 +245,7 @@ class _OptionsScreen extends StatelessWidget {
                       icon: Icons.explore_outlined,
                       iconColor: RiderPalette.blue,
                       title: 'Rider Guide',
-                      subtitle: 'Learn how Circum Rider works',
+                      subtitle: 'How Circum Rider works',
                       onTap: () => _open(
                         context,
                         RiderGuideView(
@@ -293,19 +262,19 @@ class _OptionsScreen extends StatelessWidget {
                       icon: Icons.help_outline_rounded,
                       iconColor: RiderPalette.blue,
                       title: 'Support',
-                      subtitle: 'Contact Rider Support',
+                      subtitle: 'Get help',
                       onTap: () => _open(context, const SupportView()),
                     ),
                     _OptionRow(
                       icon: Icons.gavel_rounded,
                       iconColor: RiderPalette.muted,
                       title: 'Legal',
-                      subtitle: 'Terms, privacy, Rider agreement and licences',
+                      subtitle: 'Terms, privacy and Rider agreement',
                       onTap: () => _open(context, const RiderLegalView()),
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 28),
                 _CloseAccountButton(
                   onTap: () => _confirmCloseAccount(context),
                 ),
@@ -379,10 +348,7 @@ class _IdentityCard extends StatelessWidget {
     required this.photo,
     required this.initials,
     required this.rank,
-    required this.trust,
     required this.verificationStatus,
-    required this.accountStatus,
-    required this.recognitions,
     required this.onTap,
   });
 
@@ -390,10 +356,7 @@ class _IdentityCard extends StatelessWidget {
   final String photo;
   final String initials;
   final String rank;
-  final String trust;
   final String verificationStatus;
-  final String accountStatus;
-  final RiderRecognitions recognitions;
   final VoidCallback onTap;
 
   @override
@@ -466,47 +429,18 @@ class _IdentityCard extends StatelessWidget {
                         fontSize: 22,
                       ),
                     ),
-                    const SizedBox(height: 7),
-                    Text(
-                      verificationStatus,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _statusColor(verificationStatus),
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12,
-                      ),
+                    const SizedBox(height: 10),
+                    _IdentityMetaLine(
+                      label: 'Status',
+                      value: verificationStatus,
+                      valueColor: _statusColor(verificationStatus),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '$rank · $trust · $accountStatus',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: RiderPalette.muted,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
+                    const SizedBox(height: 5),
+                    _IdentityMetaLine(
+                      label: 'Rank',
+                      value: rank,
+                      valueColor: RiderPalette.muted,
                     ),
-                    if (recognitions.hasAny) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        children: [
-                          if (recognitions.foundingRider.awarded)
-                            _RecognitionText(
-                              label:
-                                  'Founding Rider ${recognitions.foundingRider.numberLabel(4)}',
-                            ),
-                          if (recognitions.legend.awarded)
-                            _RecognitionText(
-                              label:
-                                  'Legend ${recognitions.legend.numberLabel(4)}',
-                            ),
-                        ],
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -532,19 +466,44 @@ class _IdentityCard extends StatelessWidget {
   }
 }
 
-class _RecognitionText extends StatelessWidget {
-  const _RecognitionText({required this.label});
+class _IdentityMetaLine extends StatelessWidget {
+  const _IdentityMetaLine({
+    required this.label,
+    required this.value,
+    required this.valueColor,
+  });
 
   final String label;
+  final String value;
+  final Color valueColor;
 
   @override
-  Widget build(BuildContext context) => Text(
-        label.trim(),
-        style: const TextStyle(
-          color: RiderPalette.blue,
-          fontSize: 11.5,
-          fontWeight: FontWeight.w900,
-        ),
+  Widget build(BuildContext context) => Row(
+        children: [
+          SizedBox(
+            width: 48,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: RiderPalette.muted,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: valueColor,
+                fontWeight: FontWeight.w800,
+                fontSize: 12.5,
+              ),
+            ),
+          ),
+        ],
       );
 }
 
@@ -559,7 +518,7 @@ class _OptionsSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            padding: const EdgeInsets.only(left: 4, bottom: 10),
             child: Text(
               label.toUpperCase(),
               style: TextStyle(
@@ -607,41 +566,45 @@ class _OptionRow extends StatelessWidget {
         label: '$title. $subtitle',
         child: InkWell(
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-            child: Row(
-              children: [
-                _IconChip(icon: icon, color: iconColor),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          color: RiderPalette.paper,
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w800,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 72),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _IconChip(icon: icon, color: iconColor),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            color: RiderPalette.paper,
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: RiderPalette.muted,
-                          fontSize: 12,
-                          height: 1.3,
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: RiderPalette.muted,
+                            fontSize: 12,
+                            height: 1.3,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                const Icon(Icons.chevron_right_rounded,
-                    color: RiderPalette.muted),
-              ],
+                  const Icon(Icons.chevron_right_rounded,
+                      color: RiderPalette.muted, size: 22),
+                ],
+              ),
             ),
           ),
         ),
@@ -699,9 +662,9 @@ class _LocationSharingRow extends StatelessWidget {
           return _OptionRow(
             icon: Icons.location_searching_rounded,
             iconColor: RiderPalette.muted,
-            title: 'Location sharing',
+            title: 'Location',
             subtitle:
-                'Used only while online, travelling to collection, or completing an active delivery · $status',
+                "Used only while you're online or completing deliveries. · $status",
             onTap: onTap,
           );
         },
@@ -716,13 +679,13 @@ class _IconChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: 36,
-        height: 36,
+        width: 38,
+        height: 38,
         decoration: BoxDecoration(
           color: color.withValues(alpha: .14),
           borderRadius: BorderRadius.circular(11),
         ),
-        child: Icon(icon, color: color, size: 19),
+        child: Icon(icon, color: color, size: 20),
       );
 }
 
@@ -988,20 +951,10 @@ class RiderLegalView extends StatelessWidget {
                   _OptionRow(
                     icon: Icons.assignment_outlined,
                     iconColor: RiderPalette.amber,
-                    title: 'Rider agreement',
+                    title: 'Rider Agreement',
                     subtitle: 'Rider operating agreement',
                     onTap: () =>
                         launchUrl(Uri.parse('https://circumuk.com/terms')),
-                  ),
-                  _OptionRow(
-                    icon: Icons.info_outline_rounded,
-                    iconColor: RiderPalette.muted,
-                    title: 'Licences and notices',
-                    subtitle: 'Third-party licences and app notices',
-                    onTap: () => showLicensePage(
-                      context: context,
-                      applicationName: 'Circum Rider',
-                    ),
                   ),
                 ],
               ),

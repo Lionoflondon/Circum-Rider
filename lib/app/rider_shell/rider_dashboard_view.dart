@@ -624,7 +624,7 @@ class _RankCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Rank updating',
+            Text('Rank pending',
                 style: TextStyle(
                     color: RiderPalette.paper, fontWeight: FontWeight.w800)),
             SizedBox(height: 6),

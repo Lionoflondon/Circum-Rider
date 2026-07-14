@@ -12,6 +12,8 @@ void main() {
         .readAsStringSync();
     final profile =
         File('lib/app/rider_shell/rider_profile_view.dart').readAsStringSync();
+    final riderTruth =
+        File('lib/app/rider_truth/rider_truth.dart').readAsStringSync();
     final schedule =
         File('lib/app/schedule/rider_schedule_view.dart').readAsStringSync();
     final earnings =
@@ -131,17 +133,18 @@ void main() {
 
     test('profile tab hosts the canonical Rider Options screen', () {
       expect(profile, contains("'Options'"));
-      expect(profile, contains('Personal details'));
-      expect(profile, contains('Documents & verification'));
-      expect(profile, contains('Delivery activity'));
+      expect(profile, contains('Personal'));
+      expect(profile, contains('Documents'));
+      expect(profile, contains('Activity'));
       expect(profile, contains('Notifications'));
-      expect(profile, contains('Location sharing'));
+      expect(profile, contains('Location'));
       expect(profile, contains('Support'));
       expect(profile, contains('Legal'));
       expect(profile, contains('Privacy'));
       expect(profile, contains('Terms'));
-      expect(profile, contains('Rider agreement'));
-      expect(profile, contains('Licences and notices'));
+      expect(profile, contains('Rider Agreement'));
+      expect(
+          profile.contains('Licences') && profile.contains('notices'), isFalse);
       expect(profile, contains('Sign out'));
       expect(profile, contains('_OptionsScreen'));
       expect(profile, contains('_IdentityCard'));
@@ -164,10 +167,9 @@ void main() {
     });
 
     test('profile keeps protected fields read only and routes to details', () {
-      expect(profile, contains('RiderAccountStateResolver.resolveRecords'));
       expect(profile, contains('RiderRankSnapshot.from'));
       expect(profile, contains('rank'));
-      expect(profile, contains('trustPoints'));
+      expect(riderTruth, contains('trustPoints'));
       expect(profile, contains('VerificationView'));
       expect(profile, contains('AccountDetails'));
       expect(profile, contains('HistoryView'));
