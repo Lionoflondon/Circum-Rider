@@ -1245,20 +1245,6 @@ enum RiderDeliveryStage {
 }
 
 class RiderDeliveryStagePolicy {
-  static const ordered = [
-    RiderDeliveryStage.accepted,
-    RiderDeliveryStage.navigatingToPickup,
-    RiderDeliveryStage.arrivedAtPickup,
-    RiderDeliveryStage.pickupVerification,
-    RiderDeliveryStage.pickupVerified,
-    RiderDeliveryStage.collected,
-    RiderDeliveryStage.navigatingToDropoff,
-    RiderDeliveryStage.arrivedAtDropoff,
-    RiderDeliveryStage.waiting,
-    RiderDeliveryStage.pinRequired,
-    RiderDeliveryStage.delivered,
-  ];
-
   static RiderDeliveryStage fromRaw(dynamic value) {
     final text = '$value'.trim().toLowerCase();
     switch (text) {
@@ -1319,168 +1305,6 @@ class RiderDeliveryStagePolicy {
       case RiderDeliveryStage.accepted:
         return 'accepted';
     }
-  }
-
-  static RiderDeliveryStage? nextStage(
-    RiderDeliveryStage current, {
-    required bool verificationRequired,
-    required bool pinRequired,
-  }) {
-    switch (current) {
-      case RiderDeliveryStage.accepted:
-        return RiderDeliveryStage.navigatingToPickup;
-      case RiderDeliveryStage.navigatingToPickup:
-        return RiderDeliveryStage.arrivedAtPickup;
-      case RiderDeliveryStage.arrivedAtPickup:
-        return verificationRequired
-            ? RiderDeliveryStage.pickupVerification
-            : RiderDeliveryStage.collected;
-      case RiderDeliveryStage.pickupVerification:
-        return RiderDeliveryStage.pickupVerified;
-      case RiderDeliveryStage.pickupVerified:
-        return RiderDeliveryStage.collected;
-      case RiderDeliveryStage.collected:
-        return RiderDeliveryStage.navigatingToDropoff;
-      case RiderDeliveryStage.navigatingToDropoff:
-        return RiderDeliveryStage.arrivedAtDropoff;
-      case RiderDeliveryStage.arrivedAtDropoff:
-        return RiderDeliveryStage.waiting;
-      case RiderDeliveryStage.waiting:
-        return pinRequired
-            ? RiderDeliveryStage.pinRequired
-            : RiderDeliveryStage.delivered;
-      case RiderDeliveryStage.pinRequired:
-        return RiderDeliveryStage.delivered;
-      case RiderDeliveryStage.delivered:
-      case RiderDeliveryStage.issueReported:
-        return null;
-    }
-  }
-
-  static bool canAdvance({
-    required String riderId,
-    required Map<String, dynamic> delivery,
-    required RiderDeliveryStage current,
-    required RiderDeliveryStage target,
-    required bool verificationRequired,
-    required bool pinRequired,
-  }) {
-    final assigned =
-        '${delivery['riderId'] ?? delivery['assignedRiderId'] ?? ''}'.trim();
-    if (assigned.isNotEmpty && assigned != riderId) return false;
-    return nextStage(
-          current,
-          verificationRequired: verificationRequired,
-          pinRequired: pinRequired,
-        ) ==
-        target;
-  }
-
-  static Map<String, dynamic> transitionPatch({
-    required String deliveryId,
-    required String riderId,
-    required RiderDeliveryStage from,
-    required RiderDeliveryStage to,
-    DateTime? now,
-    Map<String, dynamic>? arrivalLocation,
-  }) {
-    final timestamp = now ?? DateTime.now().toUtc();
-    final state = storageValue(to);
-    final event = {
-      'deliveryId': deliveryId,
-      'riderId': riderId,
-      'previousState': storageValue(from),
-      'state': state,
-      'updatedBy': riderId,
-      'createdAt': Timestamp.fromDate(timestamp),
-    };
-    final patch = <String, dynamic>{
-      'state': state,
-      'deliveryStage': state,
-      'updatedAt': Timestamp.fromDate(timestamp),
-      'updatedBy': riderId,
-      'riderId': riderId,
-      'validationComplete': to != RiderDeliveryStage.pickupVerification,
-      'verificationRequired': to == RiderDeliveryStage.pickupVerification,
-      'verificationComplete':
-          to.index > RiderDeliveryStage.pickupVerification.index,
-      'history': FieldValue.arrayUnion([event]),
-    };
-    if (to == RiderDeliveryStage.arrivedAtPickup ||
-        to == RiderDeliveryStage.arrivedAtDropoff) {
-      patch.addAll(_arrivalPatch(
-        deliveryId: deliveryId,
-        riderId: riderId,
-        stage: to,
-        timestamp: timestamp,
-        arrivalLocation: arrivalLocation,
-      ));
-    }
-    return patch;
-  }
-
-  static Map<String, dynamic> _arrivalPatch({
-    required String deliveryId,
-    required String riderId,
-    required RiderDeliveryStage stage,
-    required DateTime timestamp,
-    Map<String, dynamic>? arrivalLocation,
-  }) {
-    final isPickup = stage == RiderDeliveryStage.arrivedAtPickup;
-    final freeWaitEndsAt = timestamp.add(const Duration(minutes: 3));
-    return {
-      isPickup ? 'pickupArrivedAt' : 'dropoffArrivedAt':
-          Timestamp.fromDate(timestamp),
-      'arrivedAt': Timestamp.fromDate(timestamp),
-      'arrivalLocation': arrivalLocation,
-      'waiting': {
-        'active': true,
-        'deliveryId': deliveryId,
-        'riderId': riderId,
-        'phase': isPickup ? 'pickup' : 'dropoff',
-        'freeWaitMinutes': 3,
-        'startedAt': Timestamp.fromDate(timestamp),
-        'freeWaitEndsAt': Timestamp.fromDate(freeWaitEndsAt),
-        'noShowAvailableAt': Timestamp.fromDate(freeWaitEndsAt),
-      },
-      'pendingNotification': {
-        'recipient': isPickup ? 'sender' : 'receiver',
-        'message': 'Your rider is outside.',
-        'triggeredByState': storageValue(stage),
-        'createdAt': Timestamp.fromDate(timestamp),
-      },
-    };
-  }
-
-  static bool noShowAvailable(DateTime arrivedAt, DateTime now) {
-    return !now.isBefore(arrivedAt.add(const Duration(minutes: 3)));
-  }
-
-  static Map<String, dynamic>? waitingChargeRecord({
-    required String deliveryId,
-    required String riderId,
-    required DateTime arrivedAt,
-    required DateTime now,
-    required int amountPennies,
-    String reason = 'waiting_time_after_free_period',
-  }) {
-    final chargeStart = arrivedAt.add(const Duration(minutes: 3));
-    if (now.isBefore(chargeStart)) return null;
-    return {
-      'chargeType': 'waiting',
-      'startTime': Timestamp.fromDate(chargeStart),
-      'endTime': Timestamp.fromDate(now),
-      'amount': amountPennies,
-      'reason': reason,
-      'deliveryId': deliveryId,
-      'riderId': riderId,
-      'auditEvent': {
-        'state': 'waiting_charge_recorded',
-        'deliveryId': deliveryId,
-        'riderId': riderId,
-        'createdAt': Timestamp.fromDate(now),
-      },
-    };
   }
 }
 
@@ -1630,21 +1454,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
 
   Future<void> _advance() async {
     if (_transitioning) return;
-    final next = RiderDeliveryStagePolicy.nextStage(
-      _stage,
-      verificationRequired: _verificationRequired,
-      pinRequired: _pinRequired,
-    );
-    if (next == null) return;
-    if (!RiderDeliveryStagePolicy.canAdvance(
-      riderId: widget.riderId,
-      delivery: widget.offer.raw,
-      current: _stage,
-      target: next,
-      verificationRequired: _verificationRequired,
-      pinRequired: _pinRequired,
-    )) return;
-    final action = _actionForTransition(_stage, next);
+    final action = _actionForStage(_stage);
+    if (action == null) return;
     String? pin;
     Map<String, dynamic>? evidence;
     if (_pinRequired &&
@@ -1663,10 +1474,6 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       if (evidence == null) return;
     }
     final controller = widget.deliveryController;
-    if (controller == null && widget.firestore == null) {
-      setState(() => _stage = next);
-      return;
-    }
     setState(() {
       _transitioning = true;
       _transitionError = null;
@@ -1900,37 +1707,32 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     }
   }
 
-  String _actionForTransition(
-    RiderDeliveryStage current,
-    RiderDeliveryStage next,
-  ) {
-    if (current == RiderDeliveryStage.pickupVerified) {
-      return 'confirm_collected';
-    }
-    if (current == RiderDeliveryStage.collected) {
-      return 'start_delivery';
-    }
-    switch (next) {
-      case RiderDeliveryStage.navigatingToPickup:
+  String? _actionForStage(RiderDeliveryStage current) {
+    switch (current) {
+      case RiderDeliveryStage.accepted:
         return 'start_heading_to_pickup';
-      case RiderDeliveryStage.arrivedAtPickup:
+      case RiderDeliveryStage.navigatingToPickup:
         return 'arrived_at_pickup';
+      case RiderDeliveryStage.arrivedAtPickup:
+        return _verificationRequired
+            ? 'verify_collection_pin'
+            : 'confirm_collected';
       case RiderDeliveryStage.pickupVerification:
-      case RiderDeliveryStage.pickupVerified:
-      case RiderDeliveryStage.collected:
         return 'verify_collection_pin';
-      case RiderDeliveryStage.navigatingToDropoff:
+      case RiderDeliveryStage.pickupVerified:
+        return 'confirm_collected';
+      case RiderDeliveryStage.collected:
         return 'start_delivery';
+      case RiderDeliveryStage.navigatingToDropoff:
+        return 'arrived_at_dropoff';
       case RiderDeliveryStage.arrivedAtDropoff:
       case RiderDeliveryStage.waiting:
-        return 'arrived_at_dropoff';
+        return _pinRequired ? 'verify_receiver_pin' : 'verify_receiver_pin';
       case RiderDeliveryStage.pinRequired:
-      case RiderDeliveryStage.delivered:
         return 'verify_receiver_pin';
       case RiderDeliveryStage.issueReported:
-        return 'report_issue';
-      case RiderDeliveryStage.accepted:
-        throw StateError('Accepted is not a forward transition.');
+      case RiderDeliveryStage.delivered:
+        return null;
     }
   }
 
@@ -2071,11 +1873,15 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
             if (mounted) setState(() => _stage = restored);
           });
         final terminal = '$rawStatus'.toLowerCase();
-        if ({'cancelled', 'failed', 'no_show', 'disputed'}.contains(terminal))
+        if (terminal == 'cancelled' ||
+            terminal == 'failed' ||
+            terminal.contains('no_show') ||
+            terminal == 'disputed') {
           return _StateScaffold(
               title: terminal.replaceAll('_', ' '),
               message:
                   'This delivery can no longer progress. The latest backend state has been restored.');
+        }
         scheduleMicrotask(() => _syncLiveTracking(live, restored));
         return _buildExperience(context, live);
       },
@@ -2121,14 +1927,9 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
 
   Future<void> _autoArrival(RiderDeliveryStage target) async {
     if (!mounted || _transitioning || _arrivalTransitioning) return;
-    if (!RiderDeliveryStagePolicy.canAdvance(
-      riderId: widget.riderId,
-      delivery: widget.offer.raw,
-      current: _stage,
-      target: target,
-      verificationRequired: _verificationRequired,
-      pinRequired: _pinRequired,
-    )) return;
+    final action = target == RiderDeliveryStage.arrivedAtDropoff
+        ? 'arrived_at_dropoff'
+        : 'arrived_at_pickup';
     setState(() {
       _arrivalTransitioning = true;
       _transitionError = null;
@@ -2138,9 +1939,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
           await (widget.deliveryController ?? CallableRiderDeliveryController())
               .transition(
         deliveryId: widget.offer.id,
-        action: target == RiderDeliveryStage.arrivedAtDropoff
-            ? 'arrived_at_dropoff'
-            : 'arrived_at_pickup',
+        action: action,
       );
       if (!mounted) return;
       setState(() => _stage = RiderDeliveryStagePolicy.fromRaw(result.status));
@@ -2587,6 +2386,7 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
         final noShowRecorded = data['state'] == 'sender_no_show_pickup' ||
             noShowFinancial.isNotEmpty ||
             _lastNoShowResult?['success'] == true;
+        final backendHasWaitingDeadline = deadline != null;
         return StreamBuilder<int>(
           stream: Stream<int>.periodic(
               const Duration(seconds: 1), (value) => value),
@@ -2594,7 +2394,6 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
             final remaining = deadline == null
                 ? const Duration(minutes: 3)
                 : deadline.difference(DateTime.now());
-            final noShowReady = deadline != null && remaining <= Duration.zero;
             final seconds = remaining.isNegative ? 0 : remaining.inSeconds;
             final label =
                 '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
@@ -2611,7 +2410,7 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
                   Center(
                     child: _WaitingCountdownRing(
                       label: label,
-                      noShowReady: noShowReady,
+                      noShowReady: false,
                       noShowRecorded: noShowRecorded,
                     ),
                   ),
@@ -2637,9 +2436,7 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
                     _WaitingChargeLine(
                       label: noShowRecorded
                           ? 'No-show charge recorded'
-                          : noShowReady
-                              ? 'No-show charge available'
-                              : 'No-show charge after free wait',
+                          : 'No-show charge set by Circum policy',
                       amount: feeAmount,
                       currency: currency,
                     ),
@@ -2691,12 +2488,14 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
                   _WaitingNoShowButton(
                     label: noShowRecorded
                         ? 'No Show recorded'
-                        : noShowReady
+                        : backendHasWaitingDeadline
                             ? _markingNoShow
                                 ? 'Marking No Show...'
-                                : 'Mark No Show'
-                            : 'No Show - available at $label',
-                    enabled: noShowReady && !noShowRecorded && !_markingNoShow,
+                                : 'Request No Show review'
+                            : 'Waiting for no-show policy',
+                    enabled: backendHasWaitingDeadline &&
+                        !noShowRecorded &&
+                        !_markingNoShow,
                     onTap: _markNoShow,
                   ),
                 ],
