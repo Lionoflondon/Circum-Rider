@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:circum_rider/extension/email_validation.dart';
 import 'package:circum_rider/helper/location_helper.dart';
@@ -14,6 +15,7 @@ import 'package:circum_rider/utils/app_state/app_state.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:image/image.dart' as image_lib;
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart'
     as permission_handler;
@@ -101,7 +103,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             };
             riderPhone = riderData['phone'] as String? ?? phone;
             riderPhoto =
-                '${riderData['photoURL'] ?? riderData['photoUrl'] ?? riderData['profilePhotoUrl'] ?? ''}'
+                '${riderData['profileThumbnailUrl'] ?? riderData['profilePhotoUrl'] ?? riderData['photoURL'] ?? riderData['photoUrl'] ?? ''}'
                     .trim();
             if (riderPhoto.isEmpty || riderPhoto == 'null') riderPhoto = null;
             phoneVerified = riderData['phoneVerified'] == true;
@@ -1159,43 +1161,69 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         try {
           User? user = auth.currentUser;
           if (user == null) return;
-          File imageFile = File(event.imagePath);
-          final extension = event.imagePath.split('.').last.toLowerCase();
-          const allowed = {'jpg', 'jpeg', 'png', 'webp'};
-          if (!allowed.contains(extension)) {
-            emit(state.copyWith(
-                errorMessage: 'Please choose a JPG, PNG or WEBP image.'));
+          final sourceBytes = await _profilePhotoSourceBytes(event);
+          if (sourceBytes == null || sourceBytes.isEmpty) {
+            emit(state.copyWith(errorMessage: 'Choose a profile photo.'));
             return;
           }
-          final fileSize = await imageFile.length();
-          if (fileSize > 5 * 1024 * 1024) {
+          if (sourceBytes.length > 20 * 1024 * 1024) {
             emit(state.copyWith(
-                errorMessage: 'Profile photo must be smaller than 5MB.'));
+                errorMessage: 'Profile photo must be smaller than 20MB.'));
+            return;
+          }
+          final processed = _processRiderProfilePhoto(sourceBytes);
+          if (processed == null) {
+            emit(state.copyWith(
+                errorMessage: 'Choose a JPG, PNG or HEIC profile photo.'));
             return;
           }
 
           final storageRef = FirebaseStorage.instance;
-          final path = 'rider-profile-photos/${user.uid}/profile.jpg';
-          final ref = storageRef.ref(path);
-          await ref.putFile(
-            imageFile,
-            SettableMetadata(
-              contentType: 'image/${extension == 'jpg' ? 'jpeg' : extension}',
-              customMetadata: {
-                'riderId': user.uid,
-                'source': 'rider_profile_photo',
-              },
-            ),
+          final profilePath = 'rider-profiles/${user.uid}/profile.jpg';
+          final thumbnailPath = 'rider-profiles/${user.uid}/thumbnail.jpg';
+          final current =
+              await db.collection('riderProfiles').doc(user.uid).get();
+          final previousVersion =
+              (current.data()?['profilePhotoVersion'] as num?)?.toInt() ?? 0;
+          final version = previousVersion + 1;
+          final metadata = SettableMetadata(
+            contentType: 'image/jpeg',
+            cacheControl: 'public,max-age=300',
+            customMetadata: {
+              'riderId': user.uid,
+              'source': 'rider_profile_photo',
+              'version': '$version',
+            },
           );
-          final downloadUrl = await ref.getDownloadURL();
+          final profileRef = storageRef.ref(profilePath);
+          final thumbnailRef = storageRef.ref(thumbnailPath);
+          await profileRef.putData(processed.full, metadata);
+          await thumbnailRef.putData(processed.thumbnail, metadata);
+          final downloadUrl = await profileRef.getDownloadURL();
+          final thumbnailUrl = await thumbnailRef.getDownloadURL();
 
           await user.updatePhotoURL(downloadUrl);
           final patch = {
             'photoURL': downloadUrl,
             'photoUrl': downloadUrl,
-            'photoPath': path,
+            'profilePhoto': downloadUrl,
             'profilePhotoUrl': downloadUrl,
+            'profileThumbnailUrl': thumbnailUrl,
+            'profilePhotoPath': profilePath,
+            'profileThumbnailPath': thumbnailPath,
+            'profilePhotoVersion': version,
+            'profilePhotoMetadata': {
+              'contentType': 'image/jpeg',
+              'fullBytes': processed.full.length,
+              'thumbnailBytes': processed.thumbnail.length,
+              'fullWidth': processed.fullSize,
+              'thumbnailWidth': processed.thumbnailSize,
+              'sourceMimeType': event.mimeType ?? '',
+            },
+            'photoPath': profilePath,
             'photoUpdatedAt': FieldValue.serverTimestamp(),
+            'profilePhotoUpdatedAt': FieldValue.serverTimestamp(),
+            'profilePhotoUploadedAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
           };
           await db
@@ -1207,7 +1235,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               .doc(user.uid)
               .set(patch, SetOptions(merge: true));
           emit(state.copyWith(
-              profilePhoto: downloadUrl,
+              profilePhoto: thumbnailUrl,
               errorMessage: 'Profile photo updated.'));
         } catch (_) {
           emit(state.copyWith(
@@ -1222,15 +1250,30 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           final user = auth.currentUser;
           if (user == null) return;
           const empty = '';
-          final path = 'rider-profile-photos/${user.uid}/profile.jpg';
-          await FirebaseStorage.instance.ref(path).delete().catchError((_) {});
+          final profilePath = 'rider-profiles/${user.uid}/profile.jpg';
+          final thumbnailPath = 'rider-profiles/${user.uid}/thumbnail.jpg';
+          await FirebaseStorage.instance
+              .ref(profilePath)
+              .delete()
+              .catchError((_) {});
+          await FirebaseStorage.instance
+              .ref(thumbnailPath)
+              .delete()
+              .catchError((_) {});
           await user.updatePhotoURL(null);
           final patch = {
             'photoURL': FieldValue.delete(),
             'photoUrl': FieldValue.delete(),
             'photoPath': FieldValue.delete(),
             'profilePhotoUrl': FieldValue.delete(),
+            'profileThumbnailUrl': FieldValue.delete(),
+            'profilePhotoPath': FieldValue.delete(),
+            'profileThumbnailPath': FieldValue.delete(),
+            'profilePhotoMetadata': FieldValue.delete(),
+            'profilePhoto': FieldValue.delete(),
+            'profilePhotoVersion': FieldValue.increment(1),
             'photoUpdatedAt': FieldValue.serverTimestamp(),
+            'profilePhotoUpdatedAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
           };
           await db
@@ -1551,6 +1594,51 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     });
   }
 
+  Future<Uint8List?> _profilePhotoSourceBytes(
+      UpdateUserProfilePhoto event) async {
+    if (event.imageBytes != null && event.imageBytes!.isNotEmpty) {
+      return Uint8List.fromList(event.imageBytes!);
+    }
+    final path = event.imagePath;
+    if (path == null || path.trim().isEmpty) return null;
+    return File(path).readAsBytes();
+  }
+
+  _ProcessedRiderProfilePhoto? _processRiderProfilePhoto(Uint8List bytes) {
+    final decoded = image_lib.decodeImage(bytes);
+    if (decoded == null) return null;
+    final side =
+        decoded.width < decoded.height ? decoded.width : decoded.height;
+    final cropX = ((decoded.width - side) / 2).round();
+    final cropY = ((decoded.height - side) / 2).round();
+    final square = image_lib.copyCrop(
+      decoded,
+      x: cropX,
+      y: cropY,
+      width: side,
+      height: side,
+    );
+    final full = image_lib.copyResize(
+      square,
+      width: 1024,
+      height: 1024,
+      interpolation: image_lib.Interpolation.cubic,
+    );
+    final thumbnail = image_lib.copyResize(
+      square,
+      width: 240,
+      height: 240,
+      interpolation: image_lib.Interpolation.average,
+    );
+    return _ProcessedRiderProfilePhoto(
+      full: Uint8List.fromList(image_lib.encodeJpg(full, quality: 86)),
+      thumbnail:
+          Uint8List.fromList(image_lib.encodeJpg(thumbnail, quality: 80)),
+      fullSize: full.width,
+      thumbnailSize: thumbnail.width,
+    );
+  }
+
   Future<String> uploadImage({required String imagePath}) async {
     try {
       final fileName = Uuid();
@@ -1567,4 +1655,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       throw 'Something went wrong uploading image';
     }
   }
+}
+
+class _ProcessedRiderProfilePhoto {
+  const _ProcessedRiderProfilePhoto({
+    required this.full,
+    required this.thumbnail,
+    required this.fullSize,
+    required this.thumbnailSize,
+  });
+
+  final Uint8List full;
+  final Uint8List thumbnail;
+  final int fullSize;
+  final int thumbnailSize;
 }

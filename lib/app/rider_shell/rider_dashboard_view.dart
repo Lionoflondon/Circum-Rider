@@ -345,7 +345,7 @@ class _DashboardHeader extends StatelessWidget {
             .trim();
     final firstName = rawName.isEmpty ? 'Rider' : rawName.split(' ').first;
     final photo =
-        '${profile['profilePhoto'] ?? profile['photoUrl'] ?? auth.profilePhoto ?? ''}'
+        '${profile['profileThumbnailUrl'] ?? profile['profilePhotoUrl'] ?? profile['profilePhoto'] ?? profile['photoUrl'] ?? auth.profilePhoto ?? ''}'
             .trim();
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,

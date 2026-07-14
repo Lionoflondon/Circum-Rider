@@ -22,6 +22,10 @@ void main() {
         File('lib/app/account/view/earnings.dart').readAsStringSync();
     final accountBloc =
         File('lib/app/account/bloc/account_bloc.dart').readAsStringSync();
+    final authBloc =
+        File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
+    final accountDetails =
+        File('lib/app/account/view/account_details.dart').readAsStringSync();
     final offers = File('lib/app/rider_jobs/rider_job_offer_screen.dart')
         .readAsStringSync();
 
@@ -83,6 +87,25 @@ void main() {
       expect(dashboard, contains('_InternalDiagnosticsCard'));
       expect(dashboard, contains('Internal dispatch diagnostics'));
       expect(dashboard, contains('Dispatch eligibility'));
+    });
+
+    test('rider profile photos use the canonical identity contract', () {
+      expect(authBloc, contains("rider-profiles/\${user.uid}/profile.jpg"));
+      expect(authBloc, contains("rider-profiles/\${user.uid}/thumbnail.jpg"));
+      expect(authBloc, contains('image_lib.copyCrop'));
+      expect(authBloc, contains('image_lib.encodeJpg'));
+      expect(authBloc, contains("'profilePhotoVersion'"));
+      expect(authBloc, contains("'profileThumbnailUrl'"));
+      expect(accountDetails, contains('image.readAsBytes()'));
+      expect(accountDetails, contains('_ProfilePhotoCropDialog'));
+      expect(accountDetails, contains('InteractiveViewer'));
+      expect(accountDetails, contains('RepaintBoundary'));
+      expect(dashboard.indexOf('profileThumbnailUrl'),
+          lessThan(dashboard.indexOf('profilePhotoUrl')));
+      expect(profile.indexOf('profilePhotoUrl'),
+          lessThan(profile.indexOf('photoURL')));
+      expect(homeBloc.indexOf('profileThumbnailUrl'),
+          lessThan(homeBloc.indexOf('photoURL')));
     });
 
     test('jobs expose Taken state and scheduled handoff', () {

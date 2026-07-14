@@ -166,7 +166,7 @@ class _OptionsScreen extends StatelessWidget {
     final auth = context.watch<AuthBloc>().state;
     final name = _ProfileData.name(user, profile);
     final photo =
-        '${profile['profilePhoto'] ?? auth.profilePhoto ?? user.photoURL ?? ''}'
+        '${profile['profilePhotoUrl'] ?? profile['profilePhoto'] ?? profile['photoURL'] ?? profile['photoUrl'] ?? auth.profilePhoto ?? user.photoURL ?? ''}'
             .trim();
     final rank = RiderRankSnapshot.from(profile);
     final verificationStatus = _ProfileData.verificationStatus(profile);

@@ -337,7 +337,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       final formattedDeliveryTime = formattedTimeAfterSeconds(totalTime);
       final riderPhone = riderData?['phone'] ?? user?.phoneNumber ?? '';
       final riderPhoto =
-          '${riderData?['photoURL'] ?? riderData?['photoUrl'] ?? user?.photoURL ?? ''}';
+          '${riderData?['profileThumbnailUrl'] ?? riderData?['profilePhotoUrl'] ?? riderData?['photoURL'] ?? riderData?['photoUrl'] ?? user?.photoURL ?? ''}';
 
       // final userData = await firebaseMessaging
       //     .subscribeToTopic('your_topic_name')
@@ -660,7 +660,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           // Rider photo fallback uses the authenticated user profile.
         }
         final riderPhoto =
-            '${riderSnapshotData?['photoURL'] ?? riderSnapshotData?['photoUrl'] ?? auth.currentUser?.photoURL ?? ''}';
+            '${riderSnapshotData?['profileThumbnailUrl'] ?? riderSnapshotData?['profilePhotoUrl'] ?? riderSnapshotData?['photoURL'] ?? riderSnapshotData?['photoUrl'] ?? auth.currentUser?.photoURL ?? ''}';
         final rating = prefs.getString('rating');
         final plateNumber = prefs.getString('plateNumber');
         final typeOfVehicle = prefs.getString('typeOfVehicle');

@@ -1,8 +1,12 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:bot_toast/bot_toast.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:circum_rider/utils/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -177,7 +181,19 @@ class _AccountDetailsState extends State<AccountDetails> {
           source: ImageSource.camera, imageQuality: 72, maxWidth: 1024);
     }
     if (image == null || !context.mounted) return;
-    context.read<AuthBloc>().add(UpdateUserProfilePhoto(imagePath: image.path));
+    final sourceBytes = await image.readAsBytes();
+    if (!context.mounted) return;
+    final croppedBytes = await showDialog<Uint8List>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _ProfilePhotoCropDialog(imageBytes: sourceBytes),
+    );
+    if (croppedBytes == null || !context.mounted) return;
+    context.read<AuthBloc>().add(UpdateUserProfilePhoto(
+          imagePath: image.path,
+          imageBytes: croppedBytes,
+          mimeType: image.mimeType,
+        ));
   }
 
   Widget firstName() {
@@ -462,5 +478,116 @@ class _AccountDetailsState extends State<AccountDetails> {
             ),
           );
         });
+  }
+}
+
+class _ProfilePhotoCropDialog extends StatefulWidget {
+  const _ProfilePhotoCropDialog({required this.imageBytes});
+
+  final Uint8List imageBytes;
+
+  @override
+  State<_ProfilePhotoCropDialog> createState() =>
+      _ProfilePhotoCropDialogState();
+}
+
+class _ProfilePhotoCropDialogState extends State<_ProfilePhotoCropDialog> {
+  final _cropKey = GlobalKey();
+  final _transform = TransformationController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _transform.dispose();
+    super.dispose();
+  }
+
+  Future<void> _useCrop() async {
+    setState(() => _saving = true);
+    try {
+      final boundary =
+          _cropKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) throw StateError('Crop preview is not ready.');
+      final image = await boundary.toImage(pixelRatio: 3);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (!mounted) return;
+      Navigator.of(context).pop(bytes?.buffer.asUint8List());
+    } catch (_) {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final cropSize = (size.width - 64).clamp(240.0, 320.0);
+    return Dialog(
+      backgroundColor: AppColors.secondary,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            AppText.text(
+              'Crop profile photo',
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+            const SizedBox(height: 8),
+            AppText.text(
+              'Pinch to zoom and drag to reposition.',
+              color: AppColors.textGrey,
+              fontSize: 12,
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(cropSize / 2),
+                child: RepaintBoundary(
+                  key: _cropKey,
+                  child: SizedBox.square(
+                    dimension: cropSize,
+                    child: InteractiveViewer(
+                      transformationController: _transform,
+                      minScale: 1,
+                      maxScale: 4,
+                      boundaryMargin: EdgeInsets.all(cropSize),
+                      child: Image.memory(
+                        widget.imageBytes,
+                        width: cropSize,
+                        height: cropSize,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed:
+                        _saving ? null : () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _saving ? null : _useCrop,
+                    child: Text(_saving ? 'Preparing...' : 'Use photo'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
