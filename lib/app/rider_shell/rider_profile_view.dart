@@ -16,6 +16,7 @@ import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
 import '../support/view/support.dart';
 import '../verification/view/verification.dart';
+import 'rider_profile_details_view.dart';
 
 class RiderProfileView extends StatefulWidget {
   const RiderProfileView({super.key, required this.onSelectTab});
@@ -139,22 +140,20 @@ class _RiderProfileScreen extends StatelessWidget {
                           _ProfileRow(
                             icon: Icons.badge_outlined,
                             title: 'Personal Details',
-                            description:
-                                'Legal name, date of birth and Rider ID',
-                            onTap: () => _open(context, const AccountDetails()),
+                            description: 'Name, username and personal details',
+                            onTap: () => _open(
+                              context,
+                              RiderPersonalDetailsView(user: user),
+                            ),
                           ),
                           _ProfileRow(
                             icon: Icons.contact_phone_outlined,
                             title: 'Contact Information',
                             description: data.contactSummary,
-                            onTap: () => _open(context, const AccountDetails()),
-                          ),
-                          _ProfileRow(
-                            icon: Icons.health_and_safety_outlined,
-                            title: 'Emergency Contact',
-                            description: data.emergencyContactSummary,
-                            onTap: () =>
-                                _open(context, const RiderApplicationCentre()),
+                            onTap: () => _open(
+                              context,
+                              RiderPersonalDetailsView(user: user),
+                            ),
                           ),
                         ],
                       ),
@@ -165,19 +164,16 @@ class _RiderProfileScreen extends StatelessWidget {
                             icon: Icons.two_wheeler_outlined,
                             title: 'Vehicles',
                             description: data.vehicleSummary,
-                            onTap: () => _open(context, VerificationView()),
+                            onTap: () => _open(
+                              context,
+                              RiderVehicleManagerView(userId: user.uid),
+                            ),
                           ),
                           _ProfileRow(
                             icon: Icons.verified_user_outlined,
                             title: 'Documents',
                             description: data.documentSummary,
                             onTap: () => _open(context, VerificationView()),
-                          ),
-                          _ProfileRow(
-                            icon: Icons.event_available_outlined,
-                            title: 'Availability',
-                            description: data.availabilitySummary,
-                            onTap: () => onSelectTab(0),
                           ),
                         ],
                       ),
@@ -199,15 +195,8 @@ class _RiderProfileScreen extends StatelessWidget {
                                 _open(context, const RiderApplicationCentre()),
                           ),
                           _ProfileRow(
-                            icon: Icons.payments_outlined,
-                            title: 'Stripe Payouts',
-                            description:
-                                'Manage payouts through Stripe Connect',
-                            onTap: () => onSelectTab(3),
-                          ),
-                          _ProfileRow(
                             icon: Icons.verified_outlined,
-                            title: 'Stripe Verification Status',
+                            title: 'Payout Account',
                             description: data.stripeStatus,
                             statusColor: data.stripeStatusColor,
                             onTap: () => onSelectTab(3),
@@ -242,22 +231,13 @@ class _RiderProfileScreen extends StatelessWidget {
                         title: 'Performance',
                         rows: [
                           _ProfileRow(
-                            icon: Icons.military_tech_outlined,
-                            title: 'Current Rank',
-                            description: data.rank,
-                            onTap: () => onSelectTab(0),
-                          ),
-                          _ProfileRow(
-                            icon: Icons.trending_up_outlined,
-                            title: 'Rank Progress',
-                            description: data.rankProgress,
-                            onTap: () => onSelectTab(0),
-                          ),
-                          _ProfileRow(
-                            icon: Icons.auto_awesome_outlined,
-                            title: 'Trust Progress',
-                            description: data.trustProgress,
-                            onTap: () => onSelectTab(0),
+                            icon: Icons.insights_outlined,
+                            title: 'Rank & Trust',
+                            description: '${data.rank} · ${data.trustProgress}',
+                            onTap: () => _open(
+                              context,
+                              RiderPerformanceView(profile: profile),
+                            ),
                           ),
                           _ProfileRow(
                             icon: Icons.workspace_premium_outlined,
@@ -382,18 +362,14 @@ class _RiderProfileData {
     if (joined.isNotEmpty) return joined;
     final full = text('name', fallback: text('fullName'));
     if (full.isNotEmpty) return full;
-    return user.displayName ?? 'Circum Rider';
+    return user.displayName ?? 'Rider profile';
   }
 
   String get handle {
     final raw = text('handle',
         fallback: text('riderHandle', fallback: text('username')));
     if (raw.isNotEmpty) return raw.startsWith('@') ? raw : '@$raw';
-    final derived = name
-        .toLowerCase()
-        .replaceAll(RegExp('[^a-z0-9]+'), '.')
-        .replaceAll(RegExp(r'^\.+|\.+$'), '');
-    return derived.isEmpty ? '@rider' : '@$derived';
+    return '—';
   }
 
   String get initials {
@@ -425,25 +401,33 @@ class _RiderProfileData {
     return 'Verification pending';
   }
 
-  String get rank => rankSnapshot?.rank ?? 'Rank pending';
+  String get rank => rankSnapshot?.rank ?? '—';
+  bool get hasTrustPoints =>
+      rankSnapshot != null ||
+      profile.containsKey('trustPoints') ||
+      profile.containsKey('trust');
+
   int get trustPoints =>
-      rankSnapshot?.trustPoints ?? number('trustPoints').round();
+      rankSnapshot?.trustPoints ??
+      number('trustPoints', fallback: number('trust')).round();
+
+  String get trustPointsLabel => hasTrustPoints ? '$trustPoints' : '—';
 
   String get memberSince {
     final created = timestamp('createdAt') ??
         timestamp('submittedAt') ??
         user.metadata.creationTime;
-    if (created == null) return 'Member since pending';
+    if (created == null) return 'Member since —';
     return 'Member since ${_monthYear(created)}';
   }
 
   String get deliveriesCompleted => whole('completedDeliveries',
       fallback: whole('deliveriesCompleted',
-          fallback: whole('completedJobs', fallback: '0')));
+          fallback: whole('completedJobs', fallback: '—')));
 
   String get customerRating {
     final rating = number('rating', fallback: number('customerRating'));
-    return rating <= 0 ? 'New' : rating.toStringAsFixed(1);
+    return rating <= 0 ? '—' : rating.toStringAsFixed(1);
   }
 
   String get acceptanceRate => percent('acceptanceRate');
@@ -458,14 +442,6 @@ class _RiderProfileData {
     if (phone.isNotEmpty) return 'Phone saved';
     if (email.isNotEmpty) return 'Email saved';
     return 'Add phone and email';
-  }
-
-  String get emergencyContactSummary {
-    final name = text('emergencyContactName');
-    final phone = text('emergencyContactPhone');
-    if (name.isNotEmpty && phone.isNotEmpty) return '$name · phone saved';
-    if (name.isNotEmpty) return '$name · add phone';
-    return 'Add emergency contact';
   }
 
   String get vehicleSummary {
@@ -485,13 +461,6 @@ class _RiderProfileData {
     return _prettyStatus(status);
   }
 
-  String get availabilitySummary {
-    final status = text('availabilityStatus',
-        fallback: text('driverStatus', fallback: text('status')));
-    if (status.isEmpty) return 'Manage online availability';
-    return _prettyStatus(status);
-  }
-
   String get rothSummary {
     final status = text('rothOnboardingStatus',
         fallback: profile['rothWalletId'] == null ? '' : 'connected');
@@ -503,13 +472,27 @@ class _RiderProfileData {
     final status = text('stripeConnectStatus',
         fallback:
             text('payoutStatus', fallback: text('stripeVerificationStatus')));
-    if (status.isEmpty) return 'Stripe Connect setup required';
-    return _prettyStatus(status);
+    final normalised = status.toLowerCase();
+    if (normalised.isEmpty || normalised == 'disconnected') {
+      return 'Disconnected';
+    }
+    if (normalised.contains('restrict')) return 'Restricted';
+    if (normalised.contains('action') || normalised.contains('pending')) {
+      return 'Needs Verification';
+    }
+    if (normalised.contains('verified') ||
+        normalised.contains('active') ||
+        normalised.contains('connected')) {
+      return 'Connected';
+    }
+    return 'Needs Verification';
   }
 
   Color get stripeStatusColor {
     final value = stripeStatus.toLowerCase();
-    if (value.contains('verified') || value.contains('active')) {
+    if (value.contains('connected') ||
+        value.contains('verified') ||
+        value.contains('active')) {
       return RiderPalette.green;
     }
     if (value.contains('action') || value.contains('required')) {
@@ -540,7 +523,8 @@ class _RiderProfileData {
     return '${(next - current).clamp(0, next)} trust points to ${ranks[index + 1]}';
   }
 
-  String get trustProgress => '$trustPoints trust points';
+  String get trustProgress =>
+      hasTrustPoints ? '$trustPoints trust points' : 'Trust points unavailable';
 
   String get achievementsSummary {
     final recognitions = profile['recognitions'];
@@ -574,7 +558,7 @@ class _RiderProfileData {
       final normalized = value <= 1 ? value * 100 : value;
       return '${normalized.round()}%';
     }
-    return 'New';
+    return '—';
   }
 
   double moneyValue(String key) {
@@ -778,7 +762,8 @@ class _HeroText extends StatelessWidget {
             ),
             _HeroPill(
               icon: Icons.auto_awesome_rounded,
-              label: '${data.trustPoints} trust',
+              label:
+                  data.hasTrustPoints ? '${data.trustPoints} trust' : '— trust',
               color: RiderPalette.purple,
             ),
           ],
@@ -855,7 +840,7 @@ class _StatsRow extends StatelessWidget {
       ('Customer Rating', data.customerRating),
       ('Acceptance Rate', data.acceptanceRate),
       ('On-Time Rate', data.onTimeRate),
-      ('Trust Points', '${data.trustPoints}'),
+      ('Trust Points', data.trustPointsLabel),
     ];
     return RiderGlassSurface(
       radius: 24,

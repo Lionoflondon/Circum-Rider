@@ -14,6 +14,11 @@ void main() {
         File('lib/app/home/bloc/home_bloc.dart').readAsStringSync();
     final profile =
         File('lib/app/rider_shell/rider_profile_view.dart').readAsStringSync();
+    final profileDetails =
+        File('lib/app/rider_shell/rider_profile_details_view.dart')
+            .readAsStringSync();
+    final support =
+        File('lib/app/support/view/support.dart').readAsStringSync();
     final riderTruth =
         File('lib/app/rider_truth/rider_truth.dart').readAsStringSync();
     final schedule =
@@ -186,26 +191,36 @@ void main() {
       expect(profile, contains('Account Actions'));
       expect(profile, contains('Personal Details'));
       expect(profile, contains('Contact Information'));
-      expect(profile, contains('Emergency Contact'));
+      expect(profile, isNot(contains('Emergency Contact')));
       expect(profile, contains('Vehicles'));
       expect(profile, contains('Documents'));
-      expect(profile, contains('Availability'));
+      expect(profile, isNot(contains("title: 'Availability'")));
       expect(profile, contains('Earnings'));
       expect(profile, contains('Roth Wallet'));
-      expect(profile, contains('Stripe Payouts'));
-      expect(profile, contains('Stripe Verification Status'));
+      expect(profile, contains('Payout Account'));
+      expect(profile, isNot(contains('Stripe Verification Status')));
       expect(profile, contains('Available Balance'));
       expect(profile, contains('Next Estimated Payout'));
       expect(profile, contains('Payout History'));
       expect(profile, contains('Transaction History'));
-      expect(profile, contains('Current Rank'));
-      expect(profile, contains('Rank Progress'));
-      expect(profile, contains('Trust Progress'));
+      expect(profile, contains('Rank & Trust'));
       expect(profile, contains('Achievements'));
       expect(profile, contains('Notifications'));
       expect(profile, contains('Accessibility'));
       expect(profile, contains('Support'));
       expect(profile, contains('Safety Centre'));
+      expect(profile, isNot(contains('FAQ')));
+      expect(support, isNot(contains('FAQ')));
+      expect(File('lib/app/support/view/faq.dart').existsSync(), isFalse);
+      expect(profileDetails, contains('Add vehicle'));
+      expect(profileDetails, contains('Set active'));
+      expect(profileDetails, contains("'vehicles': vehicles"));
+      expect(profileDetails, contains("'vehicle': active"));
+      expect(profileDetails, contains('Manufacturer'));
+      expect(profileDetails, contains('Registration'));
+      expect(profileDetails, contains('Insurance'));
+      expect(profileDetails, contains('MOT'));
+      expect(profileDetails, isNot(contains('Emergency Contact')));
       expect(profile, contains('Privacy'));
       expect(profile, contains('Terms'));
       expect(profile, contains('Rider Agreement'));
