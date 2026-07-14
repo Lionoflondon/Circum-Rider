@@ -14,6 +14,7 @@ import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
 import '../support/view/support.dart';
 import '../verification/view/verification.dart';
+import 'rider_accessibility_settings_view.dart';
 import 'rider_profile_details_view.dart';
 
 class RiderProfileView extends StatefulWidget {
@@ -264,8 +265,10 @@ class _RiderProfileScreen extends StatelessWidget {
                             title: 'Accessibility',
                             description:
                                 'Text, contrast and motion preferences',
-                            onTap: () =>
-                                _open(context, const RiderApplicationCentre()),
+                            onTap: () => _open(
+                              context,
+                              const RiderAccessibilitySettingsView(),
+                            ),
                           ),
                           _ProfileRow(
                             icon: Icons.lock_outline,

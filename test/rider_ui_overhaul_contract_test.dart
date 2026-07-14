@@ -17,6 +17,9 @@ void main() {
     final profileDetails =
         File('lib/app/rider_shell/rider_profile_details_view.dart')
             .readAsStringSync();
+    final accessibility =
+        File('lib/app/rider_shell/rider_accessibility_settings_view.dart')
+            .readAsStringSync();
     final support =
         File('lib/app/support/view/support.dart').readAsStringSync();
     final riderTruth =
@@ -207,6 +210,13 @@ void main() {
       expect(profile, contains('Achievements'));
       expect(profile, contains('Notifications'));
       expect(profile, contains('Accessibility'));
+      expect(profile, contains('RiderAccessibilitySettingsView'));
+      expect(accessibility, contains('Appearance'));
+      expect(accessibility, contains('Text Size'));
+      expect(accessibility, contains('High Contrast'));
+      expect(accessibility, contains('Reduce Motion'));
+      expect(accessibility, contains('Screen Reader Optimisations'));
+      expect(accessibility, contains('SharedPreferences'));
       expect(profile, contains('Support'));
       expect(profile, contains('Application Centre'));
       expect(profile, isNot(contains('FAQ')));
@@ -256,6 +266,7 @@ void main() {
       expect(profile, contains('VerificationView'));
       expect(profile, contains('AccountDetails'));
       expect(profile, contains('RiderApplicationCentre'));
+      expect(profile, contains('RiderAccessibilitySettingsView'));
       expect(profile, isNot(contains('updateRank')));
       expect(profile, isNot(contains('updateTrust')));
       expect(profile, isNot(contains('approvalStatus\':')));
