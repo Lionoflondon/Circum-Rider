@@ -176,6 +176,27 @@ void main() {
         true,
       );
     });
+
+    test('GPS signal quality is derived from accuracy', () {
+      expect(
+        RiderLiveTrackingPolicy.signalQuality(
+          _position(lat: 51.50, lng: -0.10, accuracy: 12),
+        ),
+        'high',
+      );
+      expect(
+        RiderLiveTrackingPolicy.signalQuality(
+          _position(lat: 51.50, lng: -0.10, accuracy: 60),
+        ),
+        'medium',
+      );
+      expect(
+        RiderLiveTrackingPolicy.signalQuality(
+          _position(lat: 51.50, lng: -0.10, accuracy: 120),
+        ),
+        'reduced',
+      );
+    });
   });
 
   group('Rider live tracking integration contract', () {
@@ -191,6 +212,9 @@ void main() {
       expect(source, contains(".collection('tracking')"));
       expect(source, contains(".doc('liveLocation')"));
       expect(source, contains("'riderLiveLocation'"));
+      expect(source, contains("'trackingHealth'"));
+      expect(source, contains("'gpsSignalQuality'"));
+      expect(source, contains("'lastBackendUploadAt'"));
     });
 
     test('accepted delivery screen starts tracking from backend state', () {

@@ -10,6 +10,8 @@ void main() {
     final nav = File('lib/app/bottom_nav/view/app_nav.dart').readAsStringSync();
     final dashboard = File('lib/app/rider_shell/rider_dashboard_view.dart')
         .readAsStringSync();
+    final homeBloc =
+        File('lib/app/home/bloc/home_bloc.dart').readAsStringSync();
     final profile =
         File('lib/app/rider_shell/rider_profile_view.dart').readAsStringSync();
     final riderTruth =
@@ -71,6 +73,16 @@ void main() {
       expect(dashboard, contains('No scheduled deliveries'));
       expect(dashboard, contains('Open delivery offers'));
       expect(dashboard, isNot(contains('Open the marketplace')));
+    });
+
+    test('home exposes internal GPS diagnostics and persistent heartbeat', () {
+      expect(homeBloc, contains('_presenceHeartbeatInterval'));
+      expect(homeBloc, contains('updateRiderPresence'));
+      expect(homeBloc, contains("'gpsSignalQuality'"));
+      expect(homeBloc, contains("'backgroundTracking'"));
+      expect(dashboard, contains('_InternalDiagnosticsCard'));
+      expect(dashboard, contains('Internal dispatch diagnostics'));
+      expect(dashboard, contains('Dispatch eligibility'));
     });
 
     test('jobs expose Taken state and scheduled handoff', () {

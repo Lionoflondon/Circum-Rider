@@ -34,6 +34,7 @@ part 'home_state.dart';
 
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
   static const _mapsApiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+  static const _presenceHeartbeatInterval = Duration(seconds: 45);
 
   FirebaseAuth auth = FirebaseAuth.instance;
   FirebaseFirestore db = FirebaseFirestore.instance;
@@ -45,6 +46,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   List<DirectionStep> _currentRoute = [];
   int _currentStepIndex = 0;
+  Timer? _presenceHeartbeatTimer;
 
   List<String> _remainingVerificationItems(Map<String, dynamic>? riderData) {
     final remaining = <String>[];
@@ -173,6 +175,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     }
     if (event.status == RideStatus.offline) {
       try {
+        _stopPresenceHeartbeat();
         await FirebaseFunctions.instanceFor(region: 'us-central1')
             .httpsCallable('goOffline')
             .call();
@@ -209,9 +212,14 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       }
       if (event.status == RideStatus.online) {
         try {
+          final locationPayload =
+              await _currentPresenceLocationPayload(highAccuracy: false);
           await FirebaseFunctions.instanceFor(region: 'us-central1')
               .httpsCallable('goOnline')
-              .call();
+              .call(locationPayload == null
+                  ? null
+                  : <String, dynamic>{'location': locationPayload});
+          _startPresenceHeartbeat();
           emit(state.copyWith(
               rideStatus: RideStatus.online, canGoOnline: true, message: null));
           add(GetAvailableRequests());
@@ -220,10 +228,12 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
               maxDrawerHeight: 0.75.sh));
           add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
         } on FirebaseFunctionsException catch (error) {
+          _stopPresenceHeartbeat();
           emit(state.copyWith(
               rideStatus: RideStatus.offline,
               message: error.message ?? 'Could not go online. Try again.'));
         } catch (_) {
+          _stopPresenceHeartbeat();
           emit(state.copyWith(
               rideStatus: RideStatus.offline,
               message:
@@ -769,6 +779,82 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
     emit(state.copyWith(
         chatMessages: chatMessages, chatStatus: ChatStatus.newMessage));
+  }
+
+  void _startPresenceHeartbeat() {
+    _presenceHeartbeatTimer?.cancel();
+    unawaited(_sendPresenceHeartbeat());
+    _presenceHeartbeatTimer = Timer.periodic(
+      _presenceHeartbeatInterval,
+      (_) => unawaited(_sendPresenceHeartbeat()),
+    );
+  }
+
+  void _stopPresenceHeartbeat() {
+    _presenceHeartbeatTimer?.cancel();
+    _presenceHeartbeatTimer = null;
+  }
+
+  Future<void> _sendPresenceHeartbeat() async {
+    if (auth.currentUser == null || state.rideStatus != RideStatus.online) {
+      _stopPresenceHeartbeat();
+      return;
+    }
+    try {
+      final locationPayload =
+          await _currentPresenceLocationPayload(highAccuracy: false);
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('updateRiderPresence')
+          .call(locationPayload == null
+              ? <String, dynamic>{}
+              : <String, dynamic>{'location': locationPayload});
+    } catch (_) {
+      // Dispatch excludes stale riders until heartbeats recover.
+    }
+  }
+
+  Future<Map<String, dynamic>?> _currentPresenceLocationPayload({
+    required bool highAccuracy,
+  }) async {
+    try {
+      final servicesEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!servicesEnabled) return null;
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return null;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy:
+            highAccuracy ? LocationAccuracy.high : LocationAccuracy.medium,
+      );
+      return <String, dynamic>{
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'accuracyMeters': position.accuracy,
+        'heading': position.heading,
+        'speed': position.speed,
+        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+        'gpsStatus': position.accuracy <= 100 ? 'active' : 'poorAccuracy',
+        'gpsSignalQuality': _gpsSignalQuality(position.accuracy),
+        'permission': permission.name,
+        'backgroundTracking': kIsWeb ? 'foregroundOnly' : 'available',
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _gpsSignalQuality(double accuracyMeters) {
+    if (accuracyMeters <= 25) return 'high';
+    if (accuracyMeters <= 80) return 'medium';
+    return 'reduced';
+  }
+
+  @override
+  Future<void> close() {
+    _stopPresenceHeartbeat();
+    return super.close();
   }
 
   void _handleSetNewMessage(SetNewMessage event, Emitter emit) {

@@ -264,6 +264,20 @@ class _DashboardSurface extends StatelessWidget {
                     online: data.isOnline,
                     onToggle: onToggleAvailability,
                   ),
+                  FutureBuilder<bool>(
+                    future: RiderInternalAccess.enabled(),
+                    builder: (context, snapshot) {
+                      if (snapshot.data != true) {
+                        return const SizedBox.shrink();
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 14),
+                        child: _InternalDiagnosticsCard(
+                          presence: data.presence,
+                        ),
+                      );
+                    },
+                  ),
                   const SizedBox(height: 14),
                   _DashboardGuideEntry(profile: data.profile),
                   const SizedBox(height: 14),
@@ -576,6 +590,141 @@ class _AvailabilityCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _InternalDiagnosticsCard extends StatelessWidget {
+  const _InternalDiagnosticsCard({required this.presence});
+
+  final Map<String, dynamic> presence;
+
+  @override
+  Widget build(BuildContext context) {
+    final location = presence['currentLocation'];
+    final locationMap = location is Map ? location : const {};
+    final rows = <({String label, String value})>[
+      (
+        label: 'GPS status',
+        value: _clean(presence['gpsStatus'], fallback: 'Unknown')
+      ),
+      (
+        label: 'Accuracy',
+        value: _meters(locationMap['accuracyMeters'] ?? locationMap['accuracy'])
+      ),
+      (
+        label: 'Last fix',
+        value: _age(locationMap['updatedAt'] ?? presence['lastLocationAt'])
+      ),
+      (label: 'Update frequency', value: 'Idle heartbeat: 45s'),
+      (
+        label: 'Background tracking',
+        value: _clean(presence['backgroundTracking'], fallback: 'Unknown')
+      ),
+      (
+        label: 'Connectivity',
+        value: _clean(presence['connectionStatus'], fallback: 'Unknown')
+      ),
+      (
+        label: 'Battery optimisation',
+        value: _clean(presence['batteryOptimisation'], fallback: 'Unknown')
+      ),
+      (label: 'Last backend upload', value: _age(presence['lastHeartbeatAt'])),
+      (
+        label: 'Dispatch eligibility',
+        value: presence['dispatchEligible'] == true
+            ? 'Eligible'
+            : 'Waiting for healthy GPS'
+      ),
+    ];
+
+    return RiderGlassSurface(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.monitor_heart_rounded,
+                  color: RiderPalette.blue, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Internal dispatch diagnostics',
+                style: TextStyle(
+                  color: RiderPalette.paper,
+                  fontFamily: RiderTypography.body,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      row.label,
+                      style: const TextStyle(
+                        color: RiderPalette.muted,
+                        fontFamily: RiderTypography.body,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    row.value,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      color: RiderPalette.paper,
+                      fontFamily: RiderTypography.mono,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _clean(Object? value, {required String fallback}) {
+    final text = '${value ?? ''}'.trim();
+    if (text.isEmpty) return fallback;
+    return text
+        .replaceAll('_', ' ')
+        .replaceAllMapped(RegExp(r'([a-z])([A-Z])'),
+            (match) => '${match.group(1)} ${match.group(2)}')
+        .toLowerCase()
+        .replaceFirstMapped(
+            RegExp(r'^[a-z]'), (match) => match.group(0)!.toUpperCase());
+  }
+
+  String _meters(Object? value) {
+    final meters = value is num ? value.toDouble() : double.tryParse('$value');
+    if (meters == null || meters <= 0) return 'Unknown';
+    return '${meters.toStringAsFixed(0)} m';
+  }
+
+  String _age(Object? value) {
+    final millis = _millis(value);
+    if (millis == null) return 'Unknown';
+    final elapsed =
+        DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(millis));
+    if (elapsed.inSeconds < 15) return 'Just now';
+    if (elapsed.inMinutes < 1) return '${elapsed.inSeconds}s ago';
+    if (elapsed.inHours < 1) return '${elapsed.inMinutes}m ago';
+    return '${elapsed.inHours}h ago';
+  }
+
+  int? _millis(Object? value) {
+    if (value is Timestamp) return value.millisecondsSinceEpoch;
+    if (value is num) return value.toInt();
+    return int.tryParse('${value ?? ''}');
   }
 }
 

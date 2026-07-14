@@ -239,6 +239,12 @@ class RiderLiveTrackingPolicy {
     return position.accuracy <= poorAccuracyMeters;
   }
 
+  static String signalQuality(Position position) {
+    if (position.accuracy <= 25) return 'high';
+    if (position.accuracy <= poorAccuracyMeters) return 'medium';
+    return 'reduced';
+  }
+
   static bool isStalePosition(Position position, {DateTime? now}) {
     final timestamp = position.timestamp;
     final current = now ?? DateTime.now();
@@ -707,6 +713,20 @@ class RiderLiveTrackingController {
     required _QueuedLocationUpdate update,
   }) async {
     final position = update.position;
+    final gpsSignalQuality = RiderLiveTrackingPolicy.signalQuality(position);
+    final gpsStatus = RiderLiveTrackingPolicy.isUsableAccuracy(position)
+        ? 'active'
+        : 'poorAccuracy';
+    final trackingHealth = <String, dynamic>{
+      'gpsStatus': gpsStatus,
+      'gpsSignalQuality': gpsSignalQuality,
+      'accuracyMeters': position.accuracy,
+      'lastFixClientAt': Timestamp.fromDate(update.createdAt),
+      'lastBackendUploadAt': FieldValue.serverTimestamp(),
+      'fresh': true,
+      'backgroundCapable': !kIsWeb,
+      'queueDepth': _queue.length,
+    };
     final payload = <String, dynamic>{
       'riderId': riderId,
       'activeDeliveryId': deliveryId,
@@ -718,6 +738,12 @@ class RiderLiveTrackingController {
       'speed': position.speed,
       'status': update.trackingStatus,
       'trackingStatus': 'live',
+      'gpsStatus': gpsStatus,
+      'gpsSignalQuality': gpsSignalQuality,
+      'gpsAccuracyMeters': position.accuracy,
+      'lastGpsUpdateClientAt': Timestamp.fromDate(update.createdAt),
+      'lastBackendUploadAt': FieldValue.serverTimestamp(),
+      'trackingHealth': trackingHealth,
       'clientRecordedAt': Timestamp.fromDate(update.createdAt),
       'updatedAt': FieldValue.serverTimestamp(),
       'riderLiveLocation': {
@@ -725,8 +751,12 @@ class RiderLiveTrackingController {
         'latitude': position.latitude,
         'longitude': position.longitude,
         'accuracy': position.accuracy,
+        'accuracyMeters': position.accuracy,
         'heading': position.heading,
         'speed': position.speed,
+        'gpsStatus': gpsStatus,
+        'gpsSignalQuality': gpsSignalQuality,
+        'clientRecordedAt': Timestamp.fromDate(update.createdAt),
         'updatedAt': FieldValue.serverTimestamp(),
       },
     };
@@ -745,6 +775,8 @@ class RiderLiveTrackingController {
         'riderId': riderId,
         'status': update.trackingStatus,
         'riderLiveLocation': payload['riderLiveLocation'],
+        'trackingHealth': trackingHealth,
+        'lastBackendUploadAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
