@@ -62,11 +62,12 @@ void main() {
       expect(dashboard, contains("where('status', isEqualTo: 'requested')"));
       expect(dashboard, contains('Good '));
       expect(dashboard, contains('Go online'));
-      expect(dashboard, contains('Priority operations'));
+      expect(dashboard, contains('Available deliveries'));
       expect(dashboard, contains('Upcoming schedule'));
       expect(dashboard, contains('Recent activity'));
       expect(dashboard, contains('CIRCUM RIDER'));
-      expect(dashboard, contains('No eligible jobs'));
+      expect(dashboard, contains('No deliveries available'));
+      expect(dashboard, contains('New offers will appear here automatically.'));
       expect(dashboard, contains('No scheduled deliveries'));
       expect(dashboard, contains('Open delivery offers'));
       expect(dashboard, isNot(contains('Open the marketplace')));

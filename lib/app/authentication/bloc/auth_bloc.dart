@@ -7,7 +7,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:circum_rider/utils/app_state/app_state.dart';
@@ -46,18 +45,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       required String path,
       required String step,
       String? riderDocumentId,
-    }) {
-      final uid = auth.currentUser?.uid;
-      if (error is FirebaseException) {
-        debugPrint(
-            'Rider onboarding Firebase error step=$step code=${error.code} '
-            'message=${error.message} path=$path authUid=$uid '
-            'riderDocumentId=$riderDocumentId');
-      } else {
-        debugPrint('Rider onboarding error step=$step error=$error path=$path '
-            'authUid=$uid riderDocumentId=$riderDocumentId');
-      }
-    }
+    }) {}
 
     Future<void> upsertRiderOnboarding({
       required User user,
@@ -204,7 +192,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
 
       if (event is SignupEmailChanged) {
-        // debugPrint(event.email);
         emit(state.copyWith(email: event.email));
         if (event.email!.isValidEmail()) {
           emit(state.copyWith(isEmailValid: true));

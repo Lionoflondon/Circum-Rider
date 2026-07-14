@@ -1008,7 +1008,7 @@ class _JobsStateScaffold extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     const Text(
-                      'Offers, scheduled work, active deliveries and recent jobs.',
+                      'Available deliveries, scheduled work, active deliveries and activity.',
                       style: TextStyle(
                         color: RiderPalette.muted,
                         fontSize: 13,
@@ -1133,16 +1133,16 @@ class _JobsInfoGrid extends StatelessWidget {
       children: [
         _JobsInfoTile(
           icon: Icons.wifi_tethering_rounded,
-          title: 'Availability',
+          title: 'Available deliveries',
           subtitle: offline
-              ? 'Offline. Use the centre action to go online.'
-              : 'Online status controls nearby offer listening.',
+              ? 'Go online from Home to receive new offers.'
+              : 'New offers will appear here automatically.',
           accent: offline ? RiderPalette.amber : RiderPalette.green,
         ),
         const SizedBox(height: 10),
         const _JobsInfoTile(
           icon: Icons.calendar_month_outlined,
-          title: 'Reserved scheduled jobs',
+          title: 'Scheduled deliveries',
           subtitle: 'Scheduled deliveries stay in Schedule until ready.',
           accent: RiderPalette.purple,
         ),
@@ -1156,9 +1156,9 @@ class _JobsInfoGrid extends StatelessWidget {
         const SizedBox(height: 10),
         const _JobsInfoTile(
           icon: Icons.history_rounded,
-          title: 'Recent jobs',
+          title: 'Activity',
           subtitle:
-              'Completed work remains available in activity and earnings.',
+              'Completed deliveries remain available in activity and earnings.',
           accent: RiderPalette.green,
         ),
       ],

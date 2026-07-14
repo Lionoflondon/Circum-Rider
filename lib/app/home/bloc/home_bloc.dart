@@ -158,11 +158,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                   (value) {},
                   onError: (e) {});
         }
-      } catch (e) {
-        debugPrint('Push token update failed');
+      } catch (_) {
+        // Push token updates should not block the Rider home state.
       }
-    } else {
-      debugPrint('Push token unavailable');
     }
   }
 

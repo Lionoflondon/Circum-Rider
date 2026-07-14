@@ -39,7 +39,7 @@ void main() {
 
     test('dashboard jobs cards and quick action open the same jobs destination',
         () {
-      expect(dashboard, contains('Priority operations'));
+      expect(dashboard, contains('Available deliveries'));
       expect(dashboard, contains('onAction: () => onSelectTab(1)'));
       expect(dashboard, contains('onTap: () => onSelectTab(1)'));
       expect(dashboard, contains("label: 'Jobs'"));
@@ -61,10 +61,10 @@ void main() {
       expect(
           offers,
           contains(
-              'Offers, scheduled work, active deliveries and recent jobs.'));
-      expect(offers, contains('Reserved scheduled jobs'));
+              'Available deliveries, scheduled work, active deliveries and activity.'));
+      expect(offers, contains('Scheduled deliveries'));
       expect(offers, contains('Active delivery'));
-      expect(offers, contains('Recent jobs'));
+      expect(offers, contains('Activity'));
       expect(offers, contains('_JobsStateScaffold'));
       expect(offers, contains('RiderAcceptStatus.alreadyTaken'));
       expect(offers, contains('Job no longer available'));

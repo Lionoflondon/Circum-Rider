@@ -23,7 +23,7 @@ class FounderRiderBadge extends StatelessWidget {
                   border: Border.all(color: const Color(0x66A78BFA)),
                   borderRadius: BorderRadius.circular(999),
                 ),
-                child: const Text('Test access',
+                child: const Text('Internal access',
                     style: TextStyle(
                         color: Color(0xFFA78BFA),
                         fontSize: 10,

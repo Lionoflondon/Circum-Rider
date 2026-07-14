@@ -273,8 +273,8 @@ class _DashboardSurface extends StatelessWidget {
                   _TodaySection(earnings: data.earnings),
                   const SizedBox(height: 24),
                   _SectionHeader(
-                    title: 'Priority operations',
-                    action: 'View jobs',
+                    title: 'Available deliveries',
+                    action: data.eligibleOffers.isEmpty ? null : 'View all',
                     onAction: () => onSelectTab(1),
                   ),
                   const SizedBox(height: 10),
@@ -752,7 +752,7 @@ class _TodaySection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SmallLabel('Today'),
+        const _SmallLabel("Today's earnings"),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -761,7 +761,7 @@ class _TodaySection extends StatelessWidget {
                 icon: Icons.payments_outlined,
                 color: RiderPalette.green,
                 value: '£${today.toStringAsFixed(2)}',
-                label: 'TODAY',
+                label: "Today's earnings",
               ),
             ),
             const SizedBox(width: 9),
@@ -770,7 +770,7 @@ class _TodaySection extends StatelessWidget {
                 icon: Icons.done_rounded,
                 color: RiderPalette.blue,
                 value: '$jobs',
-                label: 'JOBS',
+                label: 'Completed jobs',
               ),
             ),
             const SizedBox(width: 9),
@@ -779,7 +779,7 @@ class _TodaySection extends StatelessWidget {
                 icon: Icons.schedule_rounded,
                 color: RiderPalette.amber,
                 value: '£${pending.toStringAsFixed(2)}',
-                label: 'PENDING',
+                label: 'Pending payouts',
               ),
             ),
           ],
@@ -872,12 +872,12 @@ class _PriorityJobsCard extends StatelessWidget {
     final title = !online
         ? 'Go online for jobs'
         : count == 0
-            ? 'No eligible jobs'
+            ? 'No deliveries available'
             : '$count eligible ${count == 1 ? 'job' : 'jobs'}';
     final message = !online
         ? 'Go online to receive eligible delivery offers.'
         : count == 0
-            ? 'New eligible jobs will appear here when available.'
+            ? 'New offers will appear here automatically.'
             : 'Open delivery offers to review the swipeable card stack.';
     return _ActionRow(
       icon: Icons.map_outlined,
@@ -955,8 +955,8 @@ class _RecentActivityCard extends StatelessWidget {
     if (items.isEmpty) {
       return const _EmptyPanel(
         icon: Icons.history_rounded,
-        title: 'No completed deliveries yet',
-        message: 'Your most recent completed work will appear here.',
+        title: 'Complete your first delivery to see your activity here.',
+        message: 'Completed jobs will appear here automatically.',
       );
     }
 

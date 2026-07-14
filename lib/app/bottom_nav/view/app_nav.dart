@@ -276,9 +276,7 @@ class _CentralAction extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    liveOnline
-                                        ? 'You are online'
-                                        : 'You are offline',
+                                    liveOnline ? 'Online' : 'Offline',
                                     style: const TextStyle(
                                       color: RiderPalette.paper,
                                       fontFamily: RiderTypography.heading,
