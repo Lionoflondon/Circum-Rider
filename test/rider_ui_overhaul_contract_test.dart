@@ -208,7 +208,7 @@ void main() {
       expect(profile, contains('Notifications'));
       expect(profile, contains('Accessibility'));
       expect(profile, contains('Support'));
-      expect(profile, contains('Safety Centre'));
+      expect(profile, contains('Application Centre'));
       expect(profile, isNot(contains('FAQ')));
       expect(support, isNot(contains('FAQ')));
       expect(File('lib/app/support/view/faq.dart').existsSync(), isFalse);

@@ -10,8 +10,6 @@ import '../account/view/account_details.dart';
 import '../authentication/bloc/auth_bloc.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../onboarding/rider_application_centre.dart';
-import '../onboarding/rider_guide_view.dart';
-import '../rider_account/rider_account_state.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
 import '../support/view/support.dart';
@@ -293,19 +291,11 @@ class _RiderProfileScreen extends StatelessWidget {
                           ),
                           _ProfileRow(
                             icon: Icons.shield_outlined,
-                            title: 'Safety Centre',
-                            description: 'Guidance for safe deliveries',
-                            onTap: () => _open(
-                              context,
-                              RiderGuideView(
-                                authenticated: true,
-                                progress: RiderApprovalProgress.fromBackend(
-                                  accountExists: true,
-                                  firebaseEmailVerified: user.emailVerified,
-                                  rider: profile,
-                                ),
-                              ),
-                            ),
+                            title: 'Application Centre',
+                            description:
+                                'Documents, vehicles and review status',
+                            onTap: () =>
+                                _open(context, const RiderApplicationCentre()),
                           ),
                         ],
                       ),
