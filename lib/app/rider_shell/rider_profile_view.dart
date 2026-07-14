@@ -172,7 +172,8 @@ class _RiderProfileScreen extends StatelessWidget {
                             icon: Icons.verified_user_outlined,
                             title: 'Documents',
                             description: data.documentSummary,
-                            onTap: () => _open(context, VerificationView()),
+                            onTap: () =>
+                                _open(context, const VerificationView()),
                           ),
                         ],
                       ),
@@ -447,11 +448,26 @@ class _RiderProfileData {
   }
 
   String get documentSummary {
-    if (profile['documentsVerified'] == true) return 'Documents verified';
+    if (profile['documentsVerified'] == true) return 'Fully verified';
     final status = text('documentStatus',
         fallback: text('verificationStatus', fallback: text('identityStatus')));
-    if (status.isEmpty) return 'Identity and vehicle documents';
-    return _prettyStatus(status);
+    final normalised = status.toLowerCase();
+    if (normalised.contains('review') || normalised.contains('pending')) {
+      return 'Verification in progress';
+    }
+    if (normalised.contains('reject') ||
+        normalised.contains('expired') ||
+        normalised.contains('required') ||
+        normalised.contains('attention')) {
+      return 'Verification required';
+    }
+    final checklist = profile['documentChecklist'];
+    if (checklist is Map && checklist.isNotEmpty) return 'Partially verified';
+    if (status.isEmpty) return 'Verification required';
+    if (normalised.contains('verified') || normalised.contains('approved')) {
+      return 'Fully verified';
+    }
+    return 'Partially verified';
   }
 
   String get rothSummary {

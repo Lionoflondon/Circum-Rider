@@ -22,6 +22,8 @@ void main() {
             .readAsStringSync();
     final support =
         File('lib/app/support/view/support.dart').readAsStringSync();
+    final verification =
+        File('lib/app/verification/view/verification.dart').readAsStringSync();
     final riderTruth =
         File('lib/app/rider_truth/rider_truth.dart').readAsStringSync();
     final schedule =
@@ -197,6 +199,11 @@ void main() {
       expect(profile, isNot(contains('Emergency Contact')));
       expect(profile, contains('Vehicles'));
       expect(profile, contains('Documents'));
+      expect(profile, contains('Verification required'));
+      expect(profile, contains('Verification in progress'));
+      expect(profile, contains('Partially verified'));
+      expect(profile, contains('Fully verified'));
+      expect(profile, isNot(contains('Documents verified')));
       expect(profile, isNot(contains("title: 'Availability'")));
       expect(profile, contains('Earnings'));
       expect(profile, contains('Roth Wallet'));
@@ -257,6 +264,38 @@ void main() {
       expect(profile, isNot(contains('portal')));
       expect(profile, isNot(contains('Sender UI')));
       expect(profile, isNot(contains('Admin UI')));
+    });
+
+    test('documents open the production Verification Centre', () {
+      expect(verification, contains('Verification Centre'));
+      expect(verification,
+          contains('Complete your verification to unlock deliveries.'));
+      expect(verification, contains('_ProgressRingPainter'));
+      expect(verification, contains('verifications completed'));
+      expect(verification, contains('Ready for Deliveries'));
+      expect(verification, contains('Verification Required'));
+      expect(verification, contains('Verification Under Review'));
+      expect(verification, contains("Driver's Licence"));
+      expect(verification, contains('Passport'));
+      expect(verification, contains('Right to Work'));
+      expect(verification,
+          contains('Vehicle Registration, MOT, V5C and Road Tax'));
+      expect(verification, contains('Insurance Company and Policy Expiry'));
+      expect(verification, contains('Profile Photo'));
+      expect(verification, contains('Verification Summary'));
+      expect(verification, contains('Continue Verification'));
+      expect(verification, contains('View Submitted Documents'));
+      expect(verification, contains('Accepted formats'));
+      expect(verification, contains('Maximum file size'));
+      expect(verification, contains('Current submission'));
+      expect(verification, contains('Reviewer comments'));
+      expect(verification, contains('Resubmit'));
+      expect(verification, contains('riderDocuments'));
+      expect(verification, contains('riderApplications'));
+      expect(verification, contains('RiderAccountStateResolver.resolve'));
+      expect(verification, isNot(contains('unselected_radio.svg')));
+      expect(verification, isNot(contains('Choose a mode of verification')));
+      expect(verification, isNot(contains('Generic upload list')));
     });
 
     test('profile keeps protected fields read only and routes to details', () {
