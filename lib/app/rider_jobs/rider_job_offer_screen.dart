@@ -4088,7 +4088,7 @@ class _PickupWorkflowPanel extends StatelessWidget {
       weightBand:
           '${iris['weightBand'] ?? iris['suggestedWeightBand'] ?? raw['weightBand'] ?? offer.weightText}',
       confidence:
-          '${iris['confidence'] ?? raw['irisConfidence'] ?? 'Backend pending'}',
+          '${iris['confidence'] ?? raw['irisConfidence'] ?? 'Awaiting parcel check'}',
     );
   }
 }

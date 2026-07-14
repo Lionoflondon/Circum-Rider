@@ -15,6 +15,20 @@ void main() {
     expect(source, contains('Trust Points'));
   });
 
+  test('offer fallbacks use customer-facing route and parcel language', () {
+    final source =
+        File('lib/app/rider_jobs/rider_offer_card.dart').readAsStringSync();
+    final deliverySource = File(
+      'lib/app/rider_jobs/rider_job_offer_screen.dart',
+    ).readAsStringSync();
+    expect(source, contains('Calculating route'));
+    expect(source, contains('Calculating arrival time'));
+    expect(deliverySource, contains('Awaiting parcel check'));
+    expect(source, isNot(contains('Distance pending')));
+    expect(source, isNot(contains('ETA pending')));
+    expect(deliverySource, isNot(contains('Backend pending')));
+  });
+
   group('RiderOfferStack', () {
     setUp(() {
       TestWidgetsFlutterBinding.ensureInitialized()

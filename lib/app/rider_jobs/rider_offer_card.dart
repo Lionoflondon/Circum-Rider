@@ -75,10 +75,10 @@ class RiderJobOffer {
       earnings: price is num ? price.toDouble() : 0,
       currency: '${data['currency'] ?? 'GBP'}',
       distanceText: distance == null || '$distance'.trim().isEmpty
-          ? 'Distance pending'
+          ? 'Calculating route'
           : '$distance',
       timeText: duration == null || '$duration'.trim().isEmpty
-          ? 'ETA pending'
+          ? 'Calculating arrival time'
           : '$duration',
       parcelGuidance: '$item',
       minimumVehicle:
