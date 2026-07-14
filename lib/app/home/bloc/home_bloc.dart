@@ -250,7 +250,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           dispatchRequests: [], requestStatus: RequestStatus.loading));
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
       final HttpsCallable callable =
-          functions.httpsCallable('getAvaliableRequests');
+          functions.httpsCallable('getAvailableRequests');
       final response = await callable.call();
       final dispatchRequests = (response.data['nearestRequests'] as List)
           .map((doc) => DispatchRequest.fromJson(doc))
