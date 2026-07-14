@@ -172,6 +172,16 @@ class _EarningsContent extends StatelessWidget {
     final pendingPayout = activePayout != null;
     final sortedTransactions = [...transactions]
       ..sort((a, b) => _millis(b).compareTo(_millis(a)));
+    final hasEarnings = [
+          available,
+          pending,
+          delivery,
+          tips,
+          waiting,
+          adjustments,
+        ].any((value) => value.abs() > 0.009) ||
+        sortedPayouts.isNotEmpty ||
+        sortedTransactions.isNotEmpty;
 
     return BlocBuilder<AccountBloc, AccountState>(
       builder: (context, account) => RefreshIndicator(
@@ -183,57 +193,64 @@ class _EarningsContent extends StatelessWidget {
           children: [
             const _TopBar(),
             const SizedBox(height: 18),
-            _BalanceHero(
-              available: available,
-              pending: pending,
-              activityCount: activityCount,
-              readiness: readiness,
-              reconciled: reconciled,
-              unexplained: unexplained,
-              activePayout: activePayout,
-              busy: account.status == AccountStatus.loading,
-              onWithdraw: pendingPayout ||
-                      available <= 0 ||
-                      readiness != 'ready' ||
-                      !reconciled
-                  ? null
-                  : () => _requestWithdrawal(context, available),
-              payouts: sortedPayouts,
-            ),
-            const SizedBox(height: 24),
-            _BreakdownGrid(
-              delivery: delivery,
-              tips: tips,
-              waiting: waiting,
-              adjustments: adjustments,
-            ),
-            const SizedBox(height: 24),
-            _HistorySection(
-              title: 'Payout history',
-              seeAll: sortedPayouts.length > 6,
-              empty: const RiderEmptyState(
-                icon: Icons.account_balance_outlined,
-                title: 'No payouts yet',
-                message:
-                    'Requested and completed Stripe payouts will appear here.',
+            if (!hasEarnings) ...[
+              const _NoEarningsState(),
+            ] else ...[
+              _BalanceHero(
+                available: available,
+                pending: pending,
+                activityCount: activityCount,
+                readiness: readiness,
+                reconciled: reconciled,
+                unexplained: unexplained,
+                activePayout: activePayout,
+                busy: account.status == AccountStatus.loading,
+                onWithdraw: pendingPayout ||
+                        available <= 0 ||
+                        readiness != 'ready' ||
+                        !reconciled
+                    ? null
+                    : () => _requestWithdrawal(context, available),
+                payouts: sortedPayouts,
+                reviewRequired: _requiresPayoutReview(summary, activePayout),
+                reviewMessage:
+                    _reviewMessage(summary, activePayout, unexplained),
               ),
-              rows: sortedPayouts.take(6).map(_PayoutRow.new).toList(),
-            ),
-            const SizedBox(height: 24),
-            _HistorySection(
-              title: 'Earnings activity',
-              seeAll: sortedTransactions.length > 12,
-              empty: const RiderEmptyState(
-                icon: Icons.receipt_long_outlined,
-                title: 'No earnings activity yet',
-                message:
-                    'Completed delivery earnings and adjustments will appear here.',
+              const SizedBox(height: 24),
+              _BreakdownGrid(
+                delivery: delivery,
+                tips: tips,
+                waiting: waiting,
+                adjustments: adjustments,
               ),
-              rows:
-                  sortedTransactions.take(12).map(_TransactionRow.new).toList(),
-            ),
-            const SizedBox(height: 18),
-            const _FooterMeta(),
+              const SizedBox(height: 24),
+              _HistorySection(
+                title: 'Payout history',
+                seeAll: sortedPayouts.length > 1,
+                empty: const RiderEmptyState(
+                  icon: Icons.account_balance_outlined,
+                  title: 'No payouts yet',
+                  message:
+                      'Requested and completed Stripe payouts will appear here.',
+                ),
+                rows: sortedPayouts.take(6).map(_PayoutRow.new).toList(),
+              ),
+              const SizedBox(height: 24),
+              _HistorySection(
+                title: 'Transactions',
+                seeAll: sortedTransactions.length > 12,
+                empty: const RiderEmptyState(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'No earnings activity yet',
+                  message:
+                      'Completed delivery earnings and adjustments will appear here.',
+                ),
+                rows: sortedTransactions
+                    .take(12)
+                    .map(_TransactionRow.new)
+                    .toList(),
+              ),
+            ],
           ],
         ),
       ),
@@ -376,6 +393,8 @@ class _BalanceHero extends StatelessWidget {
     required this.unexplained,
     required this.activePayout,
     required this.payouts,
+    required this.reviewRequired,
+    required this.reviewMessage,
     required this.busy,
     required this.onWithdraw,
   });
@@ -388,6 +407,8 @@ class _BalanceHero extends StatelessWidget {
   final double unexplained;
   final Map<String, dynamic>? activePayout;
   final List<Map<String, dynamic>> payouts;
+  final bool reviewRequired;
+  final String reviewMessage;
   final bool busy;
   final VoidCallback? onWithdraw;
 
@@ -396,12 +417,6 @@ class _BalanceHero extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const _StatusBadge(
-              label: 'CASH EARNINGS',
-              color: RiderPalette.green,
-              icon: Icons.circle_outlined,
-            ),
-            const SizedBox(height: 16),
             Text(
               _money(available),
               style: const TextStyle(
@@ -413,19 +428,22 @@ class _BalanceHero extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             const Text(
-              'Available to withdraw',
+              'Available balance',
               style: TextStyle(color: RiderPalette.muted, fontSize: 13),
             ),
             const SizedBox(height: 16),
             Row(
               children: [
+                if (pending > 0) ...[
+                  Expanded(
+                    child:
+                        _MiniMetric(value: _money(pending), label: 'PENDING'),
+                  ),
+                  const SizedBox(width: 10),
+                ],
                 Expanded(
-                  child: _MiniMetric(value: _money(pending), label: 'PENDING'),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child:
-                      _MiniMetric(value: '$activityCount', label: 'ACTIVITY'),
+                  child: _MiniMetric(
+                      value: '$activityCount', label: 'TRANSACTIONS'),
                 ),
               ],
             ),
@@ -438,19 +456,15 @@ class _BalanceHero extends StatelessWidget {
             ),
             if (activePayout != null) ...[
               const SizedBox(height: 14),
-              _StatusBanner(
-                title: _activePayoutTitle(activePayout!),
-                message:
-                    '${_date(activePayout!)} · Stripe is processing this payout to your approved account.',
-                warning: false,
+              _PayoutStatusCard(
+                payout: activePayout!,
               ),
             ],
-            if (!reconciled) ...[
+            if (reviewRequired) ...[
               const SizedBox(height: 14),
               _StatusBanner(
                 title: 'Review required',
-                message:
-                    '${_money(unexplained.abs())} is outside canonical ledger categories. Withdrawal is paused until Admin review.',
+                message: reviewMessage,
                 warning: true,
               ),
             ],
@@ -475,12 +489,6 @@ class _BalanceHero extends StatelessWidget {
           ],
         ),
       );
-
-  static String _activePayoutTitle(Map<String, dynamic> item) {
-    final amount = _number(item['amount']);
-    final status = _title('${item['status'] ?? item['payoutStatus'] ?? ''}');
-    return '${_money(amount)} · ${status.isEmpty ? 'Processing' : status}';
-  }
 }
 
 class _BreakdownGrid extends StatelessWidget {
@@ -514,25 +522,25 @@ class _BreakdownGrid extends StatelessWidget {
                 icon: Icons.north_east_rounded,
                 color: RiderPalette.blue,
                 value: _money(delivery),
-                label: 'DELIVERIES',
+                label: 'Deliveries',
               ),
               _BreakdownTile(
                 icon: Icons.payments_outlined,
                 color: RiderPalette.purple,
                 value: _money(tips),
-                label: 'TIPS',
+                label: 'Tips',
               ),
               _BreakdownTile(
                 icon: Icons.schedule_rounded,
                 color: RiderPalette.amber,
                 value: _money(waiting),
-                label: 'WAITING / NO-SHOW',
+                label: 'Waiting & No-show',
               ),
               _BreakdownTile(
                 icon: Icons.format_align_left_rounded,
                 color: RiderPalette.muted,
                 value: _money(adjustments),
-                label: 'ADJUSTMENTS',
+                label: 'Adjustments',
               ),
             ],
           ),
@@ -623,7 +631,7 @@ class _HistorySection extends StatelessWidget {
               ),
               if (seeAll)
                 const Text(
-                  'See all',
+                  'View all',
                   style: TextStyle(
                     color: RiderPalette.blue,
                     fontSize: 12.5,
@@ -705,8 +713,7 @@ class _TransactionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final type = '${item['type'] ?? item['category'] ?? 'earning'}';
     final amount = _number(item['amount']);
-    final description =
-        '${item['description'] ?? item['deliveryType'] ?? item['status'] ?? _date(item)}';
+    final status = _transactionStatus(item);
     final isDebit = amount < 0 ||
         type.toLowerCase().contains('debit') ||
         type.toLowerCase().contains('payout') ||
@@ -715,8 +722,10 @@ class _TransactionRow extends StatelessWidget {
       icon: _transactionIcon(type, isDebit),
       iconColor: isDebit ? RiderPalette.red : RiderPalette.green,
       title: _transactionTitle(type),
-      subtitle: description,
+      subtitle: _date(item),
       amount: _signedMoney(amount),
+      status: status,
+      statusColor: _statusColor(status),
       amountMuted: isDebit,
     );
   }
@@ -734,18 +743,112 @@ class _TransactionRow extends StatelessWidget {
 
   static String _transactionTitle(String type) {
     final value = type.toLowerCase();
-    if (value.contains('delivery')) return 'Delivery Earning';
+    if (value.contains('delivery')) return 'Delivery';
     if (value.contains('tip')) return 'Tip';
-    if (value.contains('waiting')) return 'Waiting Fee';
-    if (value.contains('no_show')) return 'No-show Fee';
-    if (value.contains('adjustment_credit')) return 'Adjustment Credit';
-    if (value.contains('adjustment_debit')) return 'Adjustment Debit';
-    if (value.contains('payout')) return 'Payout Debit';
+    if (value.contains('waiting') || value.contains('no_show')) {
+      return 'Waiting & No-show';
+    }
+    if (value.contains('adjustment')) return 'Adjustment';
+    if (value.contains('payout')) return 'Payout';
     if (value.contains('reversal') || value.contains('correction')) {
-      return 'Reversal Or Correction';
+      return 'Correction';
     }
     return _title(type);
   }
+}
+
+class _PayoutStatusCard extends StatelessWidget {
+  const _PayoutStatusCard({required this.payout});
+
+  final Map<String, dynamic> payout;
+
+  @override
+  Widget build(BuildContext context) {
+    final amount = _number(payout['amount'] ?? payout['riderGrossShare']);
+    final status = _payoutStatusLabel(payout);
+    final arrival = _estimatedArrival(payout);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .035),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: .08)),
+      ),
+      child: Row(
+        children: [
+          _IconBox(
+            icon: Icons.account_balance_wallet_outlined,
+            color: _statusColor(status),
+            size: 34,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$status · ${_money(amount)}',
+                  style: const TextStyle(
+                    color: RiderPalette.paper,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  arrival == null
+                      ? 'Payout status updates automatically.'
+                      : 'Estimated arrival $arrival',
+                  style: const TextStyle(
+                    color: RiderPalette.muted,
+                    fontSize: 11.5,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoEarningsState extends StatelessWidget {
+  const _NoEarningsState();
+
+  @override
+  Widget build(BuildContext context) => const _EarningsGlass(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _IconBox(
+              icon: Icons.account_balance_wallet_outlined,
+              color: RiderPalette.blue,
+              size: 42,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'No earnings yet',
+              style: TextStyle(
+                color: RiderPalette.paper,
+                fontFamily: RiderTypography.heading,
+                fontSize: 26,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Completed delivery earnings, tips, waiting payments and adjustments will appear here.',
+              style: TextStyle(
+                color: RiderPalette.muted,
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class _LedgerRow extends StatelessWidget {
@@ -933,44 +1036,6 @@ class _MiniMetric extends StatelessWidget {
       );
 }
 
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({
-    required this.label,
-    required this.color,
-    required this.icon,
-  });
-
-  final String label;
-  final Color color;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: .14),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withValues(alpha: .35)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 11),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 11,
-                fontWeight: FontWeight.w900,
-                letterSpacing: .2,
-              ),
-            ),
-          ],
-        ),
-      );
-}
-
 class _TinyPill extends StatelessWidget {
   const _TinyPill({required this.label, required this.color});
 
@@ -1097,34 +1162,6 @@ class _Hairline extends StatelessWidget {
       );
 }
 
-class _FooterMeta extends StatelessWidget {
-  const _FooterMeta();
-
-  @override
-  Widget build(BuildContext context) => const Column(
-        children: [
-          Text(
-            'CIRCUM RIDER',
-            style: TextStyle(
-              color: RiderPalette.muted,
-              fontFamily: RiderTypography.mono,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          SizedBox(height: 4),
-          Text(
-            'circumuk.com',
-            style: TextStyle(
-              color: RiderPalette.muted,
-              fontFamily: RiderTypography.mono,
-              fontSize: 11,
-            ),
-          ),
-        ],
-      );
-}
-
 class _EarningsLoading extends StatelessWidget {
   const _EarningsLoading();
 
@@ -1169,6 +1206,90 @@ bool _isActivePayout(Map<String, dynamic> item) {
   return {'requested', 'pending', 'approved', 'processing'}.contains(status);
 }
 
+bool _requiresPayoutReview(
+    Map<String, dynamic> summary, Map<String, dynamic>? activePayout) {
+  final readiness = '${summary['connectReadiness'] ?? ''}'.toLowerCase();
+  final payoutStatus =
+      '${activePayout?['status'] ?? activePayout?['payoutStatus'] ?? ''}'
+          .toLowerCase();
+  return summary['accountReviewRequired'] == true ||
+      summary['payoutHold'] == true ||
+      summary['payoutReviewRequired'] == true ||
+      readiness.contains('review') ||
+      readiness.contains('hold') ||
+      payoutStatus.contains('review') ||
+      payoutStatus.contains('hold') ||
+      '${activePayout?['reviewReason'] ?? ''}'.trim().isNotEmpty;
+}
+
+String _reviewMessage(Map<String, dynamic> summary,
+    Map<String, dynamic>? activePayout, double unexplained) {
+  final reason =
+      '${activePayout?['reviewReason'] ?? summary['reviewReason'] ?? summary['payoutHoldReason'] ?? ''}'
+          .trim();
+  if (reason.isNotEmpty) return reason;
+  if (unexplained.abs() > 0.009) {
+    return '${_money(unexplained.abs())} is under payout review.';
+  }
+  return 'Your payout is under review. We will update this status automatically.';
+}
+
+String _payoutStatusLabel(Map<String, dynamic> item) {
+  final status = _title('${item['status'] ?? item['payoutStatus'] ?? ''}');
+  return status.isEmpty ? 'Processing' : status;
+}
+
+String? _estimatedArrival(Map<String, dynamic> item) {
+  final value = item['estimatedArrival'] ??
+      item['estimatedArrivalAt'] ??
+      item['expectedArrival'] ??
+      item['expectedArrivalAt'] ??
+      item['arrivalAt'];
+  if (value is Timestamp) return _formatDateTime(value);
+  final text = '$value'.trim();
+  return text.isEmpty || text == 'null' ? null : text;
+}
+
+String _transactionStatus(Map<String, dynamic> item) {
+  final raw =
+      '${item['status'] ?? item['ledgerStatus'] ?? item['payoutStatus'] ?? ''}'
+          .trim()
+          .toLowerCase();
+  if (raw.contains('paid') ||
+      raw.contains('complete') ||
+      raw.contains('settled')) {
+    return 'Paid';
+  }
+  if (raw.contains('pending') ||
+      raw.contains('processing') ||
+      raw.contains('review')) {
+    return 'Pending';
+  }
+  if (raw.contains('available') ||
+      raw.contains('posted') ||
+      raw.contains('cleared')) {
+    return 'Available';
+  }
+  return 'Available';
+}
+
+Color _statusColor(String status) {
+  final value = status.toLowerCase();
+  if (value.contains('paid') ||
+      value.contains('available') ||
+      value.contains('complete') ||
+      value.contains('settled')) {
+    return RiderPalette.green;
+  }
+  if (value.contains('fail') || value.contains('reject')) {
+    return RiderPalette.red;
+  }
+  if (value.contains('review') || value.contains('hold')) {
+    return RiderPalette.amber;
+  }
+  return RiderPalette.blue;
+}
+
 Map<String, dynamic>? _firstWhereOrNull(
   Iterable<Map<String, dynamic>> items,
   bool Function(Map<String, dynamic>) test,
@@ -1190,14 +1311,14 @@ String _withdrawalLabel(String readiness, Map<String, dynamic>? active,
   if (active != null) {
     final amount = _number(active['amount']);
     return amount > 0
-        ? 'Withdrawal processing — ${_money(amount)}'
-        : 'Withdrawal processing';
+        ? 'Payout processing — ${_money(amount)}'
+        : 'Payout processing';
   }
   final failed = _firstWhereOrNull(
     payouts,
     (p) => '${p['status'] ?? p['payoutStatus']}'.toLowerCase() == 'failed',
   );
-  if (failed != null) return 'Withdrawal failed — Review';
+  if (failed != null) return 'Payout failed';
   return 'Request withdrawal';
 }
 
@@ -1223,6 +1344,14 @@ String _title(String value) => value
 String _date(Map<String, dynamic> item) {
   final value = item['createdAt'] ?? item['updatedAt'] ?? item['paidAt'];
   if (value is! Timestamp) return 'Status pending';
+  return _formatDateTime(value);
+}
+
+String _formatDateTime(Timestamp value) {
   final date = value.toDate().toLocal();
-  return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+  final day = date.day.toString().padLeft(2, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  final hour = date.hour.toString().padLeft(2, '0');
+  final minute = date.minute.toString().padLeft(2, '0');
+  return '$day/$month/${date.year} · $hour:$minute';
 }
