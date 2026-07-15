@@ -11,6 +11,7 @@ class _BackendStageController implements RiderDeliveryController {
 
   final List<String> results;
   final List<String> actions = [];
+  int irisConfirmationCalls = 0;
 
   @override
   Future<RiderDeliveryTransitionResult> transition({
@@ -46,6 +47,20 @@ class _BackendStageController implements RiderDeliveryController {
     String? note,
   }) async =>
       {'success': true};
+
+  @override
+  Future<Map<String, dynamic>> confirmIrisAssessment({
+    required String deliveryId,
+  }) async {
+    irisConfirmationCalls += 1;
+    return {
+      'success': true,
+      'acknowledgement': {
+        'deliveryId': deliveryId,
+        'acknowledgementStatus': 'confirmed',
+      },
+    };
+  }
 }
 
 void main() {
@@ -223,13 +238,98 @@ void main() {
 
       expect(find.text('Pickup Workflow'), findsOneWidget);
       expect(find.text('IRIS Recommendation'), findsOneWidget);
-      expect(find.text('Confirm'), findsNothing);
+      expect(find.text('Confirm'), findsOneWidget);
       expect(find.text('Report Difference'), findsOneWidget);
       expect(
           find.text(
               'Gift verification: photo required. Requirements are read from backend state.'),
           findsOneWidget);
       expect(find.textContaining('Vanguard Protection'), findsNothing);
+    });
+
+    testWidgets('IRIS confirmation acknowledges without advancing delivery',
+        (tester) async {
+      final controller = _BackendStageController([]);
+      final base = _offers.last;
+      final offer = RiderJobOffer(
+        id: base.id,
+        requestId: base.requestId,
+        pickupArea: base.pickupArea,
+        dropoffArea: base.dropoffArea,
+        pickupAddress: base.pickupAddress,
+        dropoffAddress: base.dropoffAddress,
+        earnings: base.earnings,
+        currency: base.currency,
+        distanceText: base.distanceText,
+        timeText: base.timeText,
+        parcelGuidance: base.parcelGuidance,
+        minimumVehicle: base.minimumVehicle,
+        weightText: base.weightText,
+        pickupTiming: base.pickupTiming,
+        warningChips: base.warningChips,
+        raw: {...base.raw, 'deliveryStage': 'arrived_at_pickup'},
+      );
+      await tester.pumpWidget(MaterialApp(
+        home: RiderAcceptedJobScreen(
+          offer: offer,
+          deliveryController: controller,
+        ),
+      ));
+
+      await tester.tap(find.byKey(const Key('accepted_panel_toggle')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Confirm'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+
+      expect(controller.irisConfirmationCalls, 1);
+      expect(controller.actions, isEmpty);
+      expect(find.text('Confirmed'), findsOneWidget);
+      expect(find.text('Report Difference'), findsOneWidget);
+
+      await tester.tap(find.text('Confirmed'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(controller.irisConfirmationCalls, 1);
+    });
+
+    testWidgets('IRIS confirmation restores from backend delivery state',
+        (tester) async {
+      final base = _offers.last;
+      final offer = RiderJobOffer(
+        id: base.id,
+        requestId: base.requestId,
+        pickupArea: base.pickupArea,
+        dropoffArea: base.dropoffArea,
+        pickupAddress: base.pickupAddress,
+        dropoffAddress: base.dropoffAddress,
+        earnings: base.earnings,
+        currency: base.currency,
+        distanceText: base.distanceText,
+        timeText: base.timeText,
+        parcelGuidance: base.parcelGuidance,
+        minimumVehicle: base.minimumVehicle,
+        weightText: base.weightText,
+        pickupTiming: base.pickupTiming,
+        warningChips: base.warningChips,
+        raw: {
+          ...base.raw,
+          'deliveryStage': 'arrived_at_pickup',
+          'riderIrisAcknowledgement': {
+            'riderId': 'preview-rider',
+            'acknowledgementStatus': 'confirmed',
+          },
+        },
+      );
+      await tester.pumpWidget(MaterialApp(
+        home: RiderAcceptedJobScreen(offer: offer),
+      ));
+
+      await tester.tap(find.byKey(const Key('accepted_panel_toggle')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Confirmed'), findsOneWidget);
+      expect(find.text('Confirm'), findsNothing);
     });
 
     testWidgets('pickup CTA renders backend-returned delivery stage',
@@ -293,6 +393,8 @@ void main() {
       expect(controller,
           contains("httpsCallable('updateDeliveryTrackingStatus')"));
       expect(controller, contains("httpsCallable('markRiderNoShow')"));
+      expect(
+          controller, contains("httpsCallable('confirmRiderIrisAssessment')"));
     });
   });
 }

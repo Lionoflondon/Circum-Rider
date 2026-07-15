@@ -1342,6 +1342,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   bool _expanded = false;
   bool _transitioning = false;
   bool _arrivalTransitioning = false;
+  bool _confirmingIris = false;
+  bool _irisConfirmedFromBackend = false;
   String? _transitionError;
 
   bool get _vanguard =>
@@ -1960,6 +1962,9 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
           onNavigateTab: widget.onNavigateTab,
           onReportIssue: _reportIssue);
     final nextTitle = _nextActionTitle(_stage);
+    final irisConfirmed = _irisConfirmed(live);
+    final differenceReported =
+        live['loadDiscrepancy'] != null || live['adjustmentId'] != null;
     return Scaffold(
       backgroundColor: const Color(0xFF07090F),
       body: Stack(
@@ -2051,13 +2056,24 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                     signatureRequired: _signatureRequired,
                     healthPlus: _healthPlus,
                     gift: _gift,
+                    irisConfirmed: irisConfirmed,
+                    irisConfirmationPending: _confirmingIris,
                     cta: _transitioning ? 'Updating...' : nextTitle,
                     onToggle: () => setState(() => _expanded = !_expanded),
                     onIssue: _transitioning ? null : _reportIssue,
                     onCustomerResponded: _transitioning
                         ? null
                         : () => _customerResponded(widget.offer.id),
-                    onReportDifference: _transitioning ? null : _reportIssue,
+                    onReportDifference:
+                        _transitioning || irisConfirmed || differenceReported
+                            ? null
+                            : _reportIssue,
+                    onConfirmIris: irisConfirmed ||
+                            differenceReported ||
+                            _confirmingIris ||
+                            !_canConfirmIrisAtPickup(live)
+                        ? null
+                        : _confirmIrisAssessment,
                     onPrimary: _transitioning ? null : _advance,
                   ),
                 ],
@@ -2067,6 +2083,59 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _confirmIrisAssessment() async {
+    if (_confirmingIris || _irisConfirmedFromBackend) return;
+    setState(() {
+      _confirmingIris = true;
+      _transitionError = null;
+    });
+    try {
+      final result =
+          await (widget.deliveryController ?? CallableRiderDeliveryController())
+              .confirmIrisAssessment(deliveryId: widget.offer.id);
+      final acknowledgement = result['acknowledgement'] is Map
+          ? Map<String, dynamic>.from(result['acknowledgement'] as Map)
+          : const <String, dynamic>{};
+      if (result['success'] == true &&
+          acknowledgement['acknowledgementStatus'] == 'confirmed' &&
+          mounted) {
+        setState(() => _irisConfirmedFromBackend = true);
+      }
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted) {
+        setState(() => _transitionError =
+            error.message ?? 'IRIS confirmation failed. Retry.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _transitionError =
+            'IRIS confirmation failed. Check your connection and retry.');
+      }
+    } finally {
+      if (mounted) setState(() => _confirmingIris = false);
+    }
+  }
+
+  bool _irisConfirmed(Map<String, dynamic> live) {
+    if (_irisConfirmedFromBackend) return true;
+    final acknowledgement = live['riderIrisAcknowledgement'];
+    if (acknowledgement is! Map) return false;
+    final data = Map<String, dynamic>.from(acknowledgement);
+    return data['acknowledgementStatus'] == 'confirmed' &&
+        '${data['riderId'] ?? ''}' == widget.riderId;
+  }
+
+  bool _canConfirmIrisAtPickup(Map<String, dynamic> live) {
+    if (_stage != RiderDeliveryStage.waiting) {
+      return _stage == RiderDeliveryStage.arrivedAtPickup ||
+          _stage == RiderDeliveryStage.pickupVerification ||
+          _stage == RiderDeliveryStage.pickupVerified;
+    }
+    final waiting = live['waiting'];
+    final phase = waiting is Map ? '${waiting['phase'] ?? ''}' : '';
+    return phase != 'dropoff';
   }
 
   Future<void> _customerResponded(String deliveryId) async {
@@ -3432,12 +3501,15 @@ class _AcceptedBottomPanel extends StatelessWidget {
   final bool signatureRequired;
   final bool healthPlus;
   final bool gift;
+  final bool irisConfirmed;
+  final bool irisConfirmationPending;
   final String cta;
   final VoidCallback onToggle;
   final VoidCallback? onPrimary;
   final VoidCallback? onIssue;
   final VoidCallback? onCustomerResponded;
   final VoidCallback? onReportDifference;
+  final VoidCallback? onConfirmIris;
 
   const _AcceptedBottomPanel({
     required this.offer,
@@ -3451,12 +3523,15 @@ class _AcceptedBottomPanel extends StatelessWidget {
     required this.signatureRequired,
     required this.healthPlus,
     required this.gift,
+    required this.irisConfirmed,
+    required this.irisConfirmationPending,
     required this.cta,
     required this.onToggle,
     required this.onPrimary,
     required this.onIssue,
     required this.onCustomerResponded,
     required this.onReportDifference,
+    required this.onConfirmIris,
   });
 
   @override
@@ -3524,6 +3599,9 @@ class _AcceptedBottomPanel extends StatelessWidget {
                           vanguard: vanguard,
                           verificationRequired: verificationRequired,
                           offer: offer,
+                          irisConfirmed: irisConfirmed,
+                          irisConfirmationPending: irisConfirmationPending,
+                          onConfirmIris: onConfirmIris,
                           onReportDifference: onReportDifference,
                         ),
                         const SizedBox(height: 10),
@@ -3750,12 +3828,18 @@ class _PickupWorkflowPanel extends StatelessWidget {
   final bool vanguard;
   final bool verificationRequired;
   final RiderJobOffer offer;
+  final bool irisConfirmed;
+  final bool irisConfirmationPending;
+  final VoidCallback? onConfirmIris;
   final VoidCallback? onReportDifference;
 
   const _PickupWorkflowPanel({
     required this.vanguard,
     required this.verificationRequired,
     required this.offer,
+    required this.irisConfirmed,
+    required this.irisConfirmationPending,
+    required this.onConfirmIris,
     required this.onReportDifference,
   });
 
@@ -3845,10 +3929,30 @@ class _PickupWorkflowPanel extends StatelessWidget {
                 _IrisLine('Suggested Weight Band', iris.weightBand),
                 _IrisLine('Confidence', iris.confidence),
                 const SizedBox(height: 8),
-                _MiniGlassButton(
-                  label: 'Report Difference',
-                  icon: Icons.report_outlined,
-                  onTap: onReportDifference,
+                Row(
+                  children: [
+                    Expanded(
+                      child: _MiniGlassButton(
+                        label: irisConfirmed
+                            ? 'Confirmed'
+                            : irisConfirmationPending
+                                ? 'Confirming...'
+                                : 'Confirm',
+                        icon: irisConfirmed
+                            ? Icons.verified_rounded
+                            : Icons.check_rounded,
+                        onTap: irisConfirmed ? null : onConfirmIris,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _MiniGlassButton(
+                        label: 'Report Difference',
+                        icon: Icons.report_outlined,
+                        onTap: irisConfirmed ? null : onReportDifference,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

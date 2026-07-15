@@ -32,6 +32,10 @@ abstract class RiderDeliveryController {
     required String type,
     String? note,
   });
+
+  Future<Map<String, dynamic>> confirmIrisAssessment({
+    required String deliveryId,
+  });
 }
 
 class CallableRiderDeliveryController implements RiderDeliveryController {
@@ -115,6 +119,16 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
       'type': type,
       if (note != null) 'note': note,
     });
+    return Map<String, dynamic>.from(result.data as Map);
+  }
+
+  @override
+  Future<Map<String, dynamic>> confirmIrisAssessment({
+    required String deliveryId,
+  }) async {
+    final result = await functions
+        .httpsCallable('confirmRiderIrisAssessment')
+        .call({'deliveryId': deliveryId});
     return Map<String, dynamic>.from(result.data as Map);
   }
 }
