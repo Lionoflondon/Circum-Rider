@@ -77,8 +77,6 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
         'username': handle,
         'dateOfBirth': _dob.text.trim(),
         'gender': _gender.text.trim(),
-        'phoneNumber': _phone.text.trim(),
-        'email': _email.text.trim(),
         'homeAddress': _address.text.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
@@ -172,9 +170,10 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
                   radius: 24,
                   child: Column(
                     children: [
-                      _field(_phone, 'Phone', keyboard: TextInputType.phone),
+                      _field(_phone, 'Phone',
+                          keyboard: TextInputType.phone, readOnly: true),
                       _field(_email, 'Email',
-                          keyboard: TextInputType.emailAddress),
+                          keyboard: TextInputType.emailAddress, readOnly: true),
                       _field(_address, 'Home address', lines: 2),
                     ],
                   ),
@@ -213,12 +212,14 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
       {bool required = false,
       String? prefix,
       TextInputType? keyboard,
+      bool readOnly = false,
       int lines = 1}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextFormField(
         controller: controller,
         keyboardType: keyboard,
+        readOnly: readOnly,
         maxLines: lines,
         style: const TextStyle(color: RiderPalette.paper),
         validator: required
@@ -226,7 +227,11 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
                 ? '$label is required'
                 : null
             : null,
-        decoration: InputDecoration(labelText: label, prefixText: prefix),
+        decoration: InputDecoration(
+          labelText: label,
+          prefixText: prefix,
+          suffixIcon: readOnly ? const Icon(Icons.lock_outline_rounded) : null,
+        ),
       ),
     );
   }

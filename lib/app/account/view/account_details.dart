@@ -290,69 +290,41 @@ class _AccountDetailsState extends State<AccountDetails> {
   Widget email() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return state.email != null && state.email != ''
-          ? TextButton(
-              // borderSide: BorderSide.none,
-              // backgroundColor: AppColors.secondary,
-              style: TextButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AppText.text('Email address',
-                          color: AppColors.textGrey, fontSize: 12),
-                      AppText.text('${state.email}',
-                          fontSize: 16, color: AppColors.textGrey)
-                    ],
-                  ),
-                  Icon(
-                    Icons.keyboard_arrow_right_rounded,
-                    color: Colors.white.withOpacity(0.15),
-                  )
-                ],
-              ),
-              onPressed: () {})
-          : Container();
+          ? _readOnlyContactRow('Email address', '${state.email}')
+          : const SizedBox.shrink();
     });
   }
 
   Widget phone() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return state.phoneNumber != null
-          ? TextButton(
-              // borderSide: BorderSide.none,
-              // backgroundColor: AppColors.secondary,
-              style: TextButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          ? _readOnlyContactRow('Phone number', '${state.phoneNumber}')
+          : const SizedBox.shrink();
+    });
+  }
+
+  Widget _readOnlyContactRow(String label, String value) {
+    return Semantics(
+      label: '$label. $value. Read only.',
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AppText.text('Phone number',
-                          color: AppColors.textGrey, fontSize: 12),
-                      AppText.text('${state.phoneNumber}',
-                          fontSize: 16, color: AppColors.textGrey)
-                    ],
-                  ),
-                  Icon(
-                    Icons.keyboard_arrow_right_rounded,
-                    color: Colors.white.withOpacity(0.15),
-                  )
+                  AppText.text(label, color: AppColors.textGrey, fontSize: 12),
+                  AppText.text(value, fontSize: 16, color: AppColors.textGrey),
                 ],
               ),
-              onPressed: () {})
-          : Container();
-    });
+            ),
+            Icon(Icons.lock_outline_rounded,
+                size: 18, color: Colors.white.withValues(alpha: 0.15)),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget logout() {

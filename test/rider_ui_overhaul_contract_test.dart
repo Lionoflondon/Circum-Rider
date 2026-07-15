@@ -233,6 +233,10 @@ void main() {
       expect(profileDetails, contains('Set active'));
       expect(profileDetails, contains("'vehicles': vehicles"));
       expect(profileDetails, contains("'vehicle': active"));
+      expect(profileDetails, contains("_field(_phone, 'Phone',"));
+      expect(profileDetails, contains('readOnly: true'));
+      expect(profileDetails, isNot(contains("'phoneNumber': _phone.text")));
+      expect(profileDetails, isNot(contains("'email': _email.text")));
       expect(profileDetails, contains('Manufacturer'));
       expect(profileDetails, contains('Registration'));
       expect(profileDetails, contains('Insurance'));
