@@ -114,53 +114,6 @@ abstract class RiderJobTransactionStore {
   });
 }
 
-class FirestoreRiderJobTransactionStore implements RiderJobTransactionStore {
-  final FirebaseFirestore firestore;
-
-  const FirestoreRiderJobTransactionStore({required this.firestore});
-
-  @override
-  Future<RiderAcceptResult> acceptInTransaction({
-    required String jobId,
-    required RiderProfileSnapshot rider,
-  }) async {
-    try {
-      return firestore.runTransaction((transaction) async {
-        final ref = firestore.collection('deliveryRequests').doc(jobId);
-        final snapshot = await transaction.get(ref);
-        final data = snapshot.data();
-
-        if (!snapshot.exists || data == null) {
-          return const RiderAcceptResult(
-            status: RiderAcceptStatus.alreadyTaken,
-            message: 'This delivery is no longer available.',
-          );
-        }
-
-        if (!RiderMarketplaceRules.canAcceptJob(data)) {
-          return const RiderAcceptResult(
-            status: RiderAcceptStatus.alreadyTaken,
-            message: 'This delivery has already been accepted.',
-          );
-        }
-
-        final patch = RiderMarketplaceRules.firstAcceptancePatch(rider: rider);
-        transaction.update(ref, patch);
-        return RiderAcceptResult(
-          status: RiderAcceptStatus.accepted,
-          message: 'Delivery accepted.',
-          patch: patch,
-        );
-      });
-    } catch (_) {
-      return const RiderAcceptResult(
-        status: RiderAcceptStatus.networkError,
-        message: 'We could not accept this delivery. Please try again.',
-      );
-    }
-  }
-}
-
 class CallableRiderJobTransactionStore implements RiderJobTransactionStore {
   CallableRiderJobTransactionStore({FirebaseFunctions? functions})
       : functions =
