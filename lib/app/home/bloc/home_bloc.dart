@@ -123,7 +123,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<SetNewMessage>(_handleSetNewMessage);
     on<LoadChatMessages>(_handleLoadChatMessages);
     on<MessageUser>(_handleMessageUser);
-    on<RateUser>(_handleRateUser);
   }
 
   void _handleCheckForPushToken(CheckForPushToken event, Emitter emit) async {
@@ -898,19 +897,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       add(IncomingMessage(data: messageData));
     } catch (_) {
       emit(state.copyWith(message: event.message));
-    }
-  }
-
-  void _handleRateUser(RateUser event, Emitter emit) async {
-    try {
-      final SharedPreferences prefs = await SharedPreferences.getInstance();
-      final String? lastTrip = prefs.getString('lastTrip');
-      await db
-          .collection('history')
-          .doc(lastTrip)
-          .update({'userRating': event.rating, 'updatedAt': DateTime.now()});
-    } catch (_) {
-      emit(state.copyWith(requestStatus: RequestStatus.failure));
     }
   }
 }

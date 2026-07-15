@@ -12,6 +12,7 @@ import '../notifications/rider_notifications_view.dart';
 import '../onboarding/rider_application_centre.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
+import '../ratings/rider_appreciation.dart';
 import '../support/view/support.dart';
 import '../verification/view/verification.dart';
 import 'rider_accessibility_settings_view.dart';
@@ -237,6 +238,15 @@ class _RiderProfileScreen extends StatelessWidget {
                             onTap: () => _open(
                               context,
                               RiderPerformanceView(profile: profile),
+                            ),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.star_outline_rounded,
+                            title: 'Ratings & Tips',
+                            description: 'Reviews and appreciation history',
+                            onTap: () => _open(
+                              context,
+                              RiderRatingsHistoryView(riderId: user.uid),
                             ),
                           ),
                           _ProfileRow(

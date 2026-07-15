@@ -5,6 +5,7 @@ import '../../account/view/earnings.dart';
 import '../../home/bloc/home_bloc.dart';
 import '../../rider_design/rider_ui.dart';
 import '../../rider_jobs/rider_job_offer_screen.dart';
+import '../../ratings/rider_appreciation.dart';
 import '../../rider_shell/rider_dashboard_view.dart';
 import '../../rider_shell/rider_profile_view.dart';
 import '../../schedule/rider_schedule_view.dart';
@@ -37,13 +38,15 @@ class AppNavView extends StatelessWidget {
           RiderProfileView(onSelectTab: select),
         ];
 
-        return RiderMobileFrame(
-          child: Scaffold(
-            backgroundColor: RiderPalette.background,
-            body: IndexedStack(index: nav.currentNavIndex, children: screens),
-            bottomNavigationBar: _RiderDashboardNav(
-              currentIndex: nav.currentNavIndex,
-              onSelect: select,
+        return RiderAppreciationListener(
+          child: RiderMobileFrame(
+            child: Scaffold(
+              backgroundColor: RiderPalette.background,
+              body: IndexedStack(index: nav.currentNavIndex, children: screens),
+              bottomNavigationBar: _RiderDashboardNav(
+                currentIndex: nav.currentNavIndex,
+                onSelect: select,
+              ),
             ),
           ),
         );

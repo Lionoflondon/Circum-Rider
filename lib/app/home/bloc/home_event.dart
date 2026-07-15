@@ -92,12 +92,6 @@ class MessageUser extends HomeEvent {
   MessageUser({required this.message});
 }
 
-class RateUser extends HomeEvent {
-  final double rating;
-
-  RateUser({required this.rating});
-}
-
 class DeclineRequest extends HomeEvent {
   String? requestId;
   DeclineRequest({required this.requestId});
