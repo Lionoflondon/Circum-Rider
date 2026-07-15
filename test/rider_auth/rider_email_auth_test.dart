@@ -51,12 +51,12 @@ void main() {
     expect(index, contains('src="flutter_bootstrap.js"'));
     expect(index, isNot(contains('loadEntrypoint')));
     expect(index, isNot(contains('manifest.json')));
-    expect(bootstrap, contains('getRegistrations()'));
-    expect(bootstrap, contains('registration.unregister()'));
-    expect(bootstrap, contains('caches.keys()'));
-    expect(bootstrap, contains('caches.delete(cacheName)'));
     expect(bootstrap, contains('serviceWorkerSettings: null'));
-    expect(bootstrap, contains("CIRCUM_RIDER_BUILD = 'rider-web-cache-v1'"));
+    expect(bootstrap, contains("CIRCUM_RIDER_BUILD = 'rider-web-cache-v2'"));
+    expect(bootstrap, contains('showRiderBootstrapError()'));
+    expect(index, contains('id="startup-shell"'));
+    expect(index, contains('flutter-first-frame'));
+    expect(index, contains('Reference: RDR-WEB-BOOT-001'));
   });
 
   test('new sign-in form exposes email, password, reset and account navigation',
