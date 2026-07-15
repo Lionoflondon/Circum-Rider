@@ -223,6 +223,8 @@ void main() {
 
       expect(find.text('Pickup Workflow'), findsOneWidget);
       expect(find.text('IRIS Recommendation'), findsOneWidget);
+      expect(find.text('Confirm'), findsNothing);
+      expect(find.text('Report Difference'), findsOneWidget);
       expect(
           find.text(
               'Gift verification: photo required. Requirements are read from backend state.'),

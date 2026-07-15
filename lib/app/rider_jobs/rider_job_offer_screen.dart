@@ -3845,24 +3845,10 @@ class _PickupWorkflowPanel extends StatelessWidget {
                 _IrisLine('Suggested Weight Band', iris.weightBand),
                 _IrisLine('Confidence', iris.confidence),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _MiniGlassButton(
-                        label: 'Confirm',
-                        icon: Icons.check_rounded,
-                        onTap: () {},
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: _MiniGlassButton(
-                        label: 'Report Difference',
-                        icon: Icons.report_outlined,
-                        onTap: onReportDifference,
-                      ),
-                    ),
-                  ],
+                _MiniGlassButton(
+                  label: 'Report Difference',
+                  icon: Icons.report_outlined,
+                  onTap: onReportDifference,
                 ),
               ],
             ),
