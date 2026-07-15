@@ -15,7 +15,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../../helper/bitmap_descriptor_helper.dart';
 import '../../../helper/formatted_string_after_seconds.dart';
@@ -27,7 +26,6 @@ import '../models/dispatch_request.m..dart';
 import '../models/message.m.dart';
 import '../models/place_coordinates.m.dart';
 import '../repo/direction_service.dart';
-import '../repo/home_repo.dart';
 
 part 'home_event.dart';
 part 'home_state.dart';
@@ -113,9 +111,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<SetDrawerHeight>(_handleSetDrawerHeight);
     on<SetPanelControlStatus>(_handleSetPanelControlStatus);
     on<GetPolylines>(_handleGetPolylines);
-    on<ArrivedAtPickUpLocation>(_handleArrivedAtPickUpLocation);
-    on<StartDelivery>(_handleStartDelivery);
-    on<RideCompleted>(_handleRideCompleted);
     on<CancelRequest>(_handlerCancelRequest);
     on<BroadcastLocation>(_handleBroadcastLocation);
     on<CheckForActiveRequest>(_handleCheckForActiveRequest);
@@ -509,98 +504,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       add(SetSourceAndDestinationStatus(
           status: SourceAndDestinationStatus.selected));
-    }
-  }
-
-  void _handleArrivedAtPickUpLocation(
-      ArrivedAtPickUpLocation event, Emitter emit) async {
-    emit(state.copyWith(
-        actionButtonStatus: ActionButtonStatus.arrivedPickupLocation));
-  }
-
-  void _handleStartDelivery(StartDelivery event, Emitter emit) async {
-    try {
-      emit(state.copyWith(requestStatus: RequestStatus.loading));
-      final SharedPreferences prefs = await SharedPreferences.getInstance();
-      final String? activeRequest = prefs.getString('activeRequest');
-      final documentReference = db
-          .collection('deliveryRequests')
-          .where('requestId', isEqualTo: activeRequest);
-
-      final docResponse = await documentReference.get();
-      final doc = docResponse.docs.firstOrNull;
-      if (doc != null) {
-        // await doc.data().update('status', (value) => 'outForDelivery');
-
-        await db
-            .collection('deliveryRequests')
-            .doc(doc.id)
-            .update({'status': 'outForDelivery', 'updatedAt': DateTime.now()});
-
-        final newRideData = doc.data();
-        newRideData['status'] = 'outForDelivery';
-
-        final activeRide = DispatchRequest.fromJson(newRideData);
-        PlaceCoordinate pickupCoordinates = PlaceCoordinate(
-            lat: activeRide.pickupData.position.geopoint.latitude,
-            lng: activeRide.pickupData.position.geopoint.longitude);
-        PlaceCoordinate desinationCoordinate = PlaceCoordinate(
-            lat: activeRide.dropoffData.position.geopoint.latitude,
-            lng: activeRide.dropoffData.position.geopoint.longitude);
-        add(GetPolylines(
-            desinationCoordinate: desinationCoordinate,
-            pickupCoordinate: pickupCoordinates));
-        emit(state.copyWith(
-            activeRequest: activeRide,
-            actionButtonStatus: ActionButtonStatus.outForDelivery,
-            rideStatus: RideStatus.outForDelivery,
-            requestStatus: RequestStatus.success));
-      }
-    } catch (e) {
-      emit(state.copyWith(requestStatus: RequestStatus.failure));
-    }
-  }
-
-  void _handleRideCompleted(RideCompleted event, Emitter emit) async {
-    try {
-      emit(state.copyWith(requestStatus: RequestStatus.loading));
-      final uuid1 = const Uuid().v4();
-      final uuid2 = const Uuid().v4();
-      final uuiduuid = '$uuid1$uuid2';
-      final User user = auth.currentUser!;
-      final SharedPreferences prefs = await SharedPreferences.getInstance();
-      final String? activeRequest = prefs.getString('activeRequest');
-      final code = prefs.getString('code');
-      final String? riderId = prefs.getString('riderId');
-
-      final historyId = await HomeRepo().endTrip(
-          riderId: riderId!,
-          requestId: activeRequest!,
-          riderName: user.displayName!);
-
-      await prefs.setString('lastTrip', historyId);
-
-      await MessagingServer().sendMessage(data: {
-        'type': 'delivery-completed',
-        'data': '''{
-                    'riderId': '$riderId',
-                    'code': '$code',
-                    'historyId': '$historyId'
-                  }'''
-      }, code: state.activeRequest!.code, message: "Delivery completed");
-
-      add(CancelRequest());
-
-      emit(state.copyWith(
-        actionButtonStatus: ActionButtonStatus.initialized,
-        rideStatus: RideStatus.delivered,
-        requestStatus: RequestStatus.success,
-        dispatchRequests: [],
-      ));
-
-      add(GetAvailableRequests());
-    } catch (e) {
-      emit(state.copyWith(requestStatus: RequestStatus.failure));
     }
   }
 

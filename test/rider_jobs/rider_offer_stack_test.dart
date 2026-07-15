@@ -383,6 +383,10 @@ void main() {
       final controller =
           File('lib/app/rider_jobs/rider_delivery_controller.dart')
               .readAsStringSync();
+      final legacyHome =
+          File('lib/app/home/bloc/home_bloc.dart').readAsStringSync();
+      final legacyEvents =
+          File('lib/app/home/bloc/home_event.dart').readAsStringSync();
 
       expect(source, isNot(contains('transitionPatch')));
       expect(source, isNot(contains('waitingChargeRecord')));
@@ -395,6 +399,10 @@ void main() {
       expect(controller, contains("httpsCallable('markRiderNoShow')"));
       expect(
           controller, contains("httpsCallable('confirmRiderIrisAssessment')"));
+      expect(legacyHome, isNot(contains("'status': 'outForDelivery'")));
+      expect(legacyHome, isNot(contains('HomeRepo().endTrip')));
+      expect(legacyEvents, isNot(contains('class StartDelivery')));
+      expect(legacyEvents, isNot(contains('class RideCompleted')));
     });
   });
 }
