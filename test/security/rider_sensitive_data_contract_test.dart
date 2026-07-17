@@ -34,6 +34,7 @@ void main() {
   test('release-critical Rider paths do not use raw print diagnostics', () {
     final root = Directory.current;
     final releaseCriticalSources = <File>[
+      File('${root.path}/lib/app/authentication/bloc/auth_bloc.dart'),
       File('${root.path}/lib/app/home/bloc/home_bloc.dart'),
       File('${root.path}/lib/app/tracking/rider_live_tracking_controller.dart'),
     ];

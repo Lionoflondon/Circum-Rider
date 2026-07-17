@@ -8,7 +8,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:circum_rider/utils/app_state/app_state.dart';
@@ -48,15 +48,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       required String step,
       String? riderDocumentId,
     }) {
-      final uid = auth.currentUser?.uid;
+      if (!kDebugMode) return;
       if (error is FirebaseException) {
         debugPrint(
             'Rider onboarding Firebase error step=$step code=${error.code} '
-            'message=${error.message} path=$path authUid=$uid '
-            'riderDocumentId=$riderDocumentId');
+            'path=${path.split('/').first} hasRiderDocument=${riderDocumentId != null}');
       } else {
-        debugPrint('Rider onboarding error step=$step error=$error path=$path '
-            'authUid=$uid riderDocumentId=$riderDocumentId');
+        debugPrint('Rider onboarding error step=$step '
+            'path=${path.split('/').first} hasRiderDocument=${riderDocumentId != null}');
       }
     }
 
@@ -83,8 +82,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
 
     void listenForPermissionStatus() async {
-      final permission = await permission_handler.Permission.location.status;
-      print(permission);
+      await permission_handler.Permission.location.status;
     }
 
     listenForPermissionStatus();
@@ -95,7 +93,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         User? user = auth.currentUser;
 
         if (user != null) {
-          print("User is signed in: ${user.uid}");
           final phone = (await storage.readAll())["phone"];
           String? riderPhone = phone;
           bool phoneVerified = false;
@@ -170,7 +167,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             add(SignOut());
           }
         } else {
-          print('User not signed in');
           emit(state.copyWith(currentState: AppState.unauthenticated));
         }
       }
@@ -453,7 +449,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                   : AuthenticatedStatus.authenticated));
 
           if (appleCredential.givenName != null) {
-            print('New user, updating user data');
             // emit(state.copyWith(
             //     authenticatedStatus: AuthenticatedStatus.authenticated));
             add(UpdateUserProfile(
@@ -463,9 +458,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await Future.delayed(const Duration(seconds: 2));
 
           // await googleSignIn.signOut();
-        } catch (e) {
-          print(e);
-        }
+        } catch (_) {}
       }
 
       if (event is SignInWithGoogle) {
@@ -513,19 +506,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await auth.verifyPhoneNumber(
             phoneNumber: state.phoneNumber,
             verificationCompleted: (_) {},
-            verificationFailed: (_) {
-              print('Verification failed');
-              print(_);
-            },
+            verificationFailed: (_) {},
             codeSent: (String verificationId, int? resendToken) async {
               _verificationId = verificationId;
               _resendToken = resendToken;
               completer.complete(true);
             },
-            codeAutoRetrievalTimeout: (_) {
-              print('Code timed out');
-              print(_);
-            },
+            codeAutoRetrievalTimeout: (_) {},
           );
           await completer.future;
           emit(state.copyWith(
@@ -583,13 +570,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             }
           }
         } on FirebaseException catch (e) {
-          print(e.code);
           if (e.code == 'invalid-verification-code') {
             emit(state.copyWith(errorMessage: 'Invalid verification code'));
           }
-        } catch (e) {
-          print(e);
-        }
+        } catch (_) {}
       }
 
       if (event is UpdateUserProfile) {
@@ -651,8 +635,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'vehicleRegistration': state.vehicleRegistration?.trim(),
               'plateNumber': state.vehicleRegistration?.trim(),
               'typeOfVehicle': state.vehicleType?.trim(),
-            }).then((value) => print("DocumentSnapshot successfully updated!"),
-                onError: (e) => print("Error updating document $e"));
+            });
           } else {
             // Document does not exist
             // print('Document does not exist');
@@ -684,8 +667,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'vehicleRegistration': state.vehicleRegistration?.trim(),
               'plateNumber': state.vehicleRegistration?.trim(),
               'typeOfVehicle': state.vehicleType?.trim(),
-            }).then((value) => print("DocumentSnapshot successfully created!"),
-                onError: (e) => print("Error updating document $e"));
+            });
           }
 
           await rothOnboarding.ensureWalletForRider(
@@ -699,9 +681,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               status: Status.success,
               authenticatedStatus: AuthenticatedStatus.authenticated,
               username: event.username));
-        } catch (e) {
-          print(e);
-        }
+        } catch (_) {}
       }
       if (event is SubmitOTP) {
         emit(state.copyWith(isLoading: true, status: Status.success));
@@ -785,14 +765,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
           GeoFirePoint myLocation = GeoFirePoint(
               GeoPoint(locationData.latitude, locationData.longitude));
-          print('Latitude: ${locationData.latitude}');
-          print('Longitude: ${locationData.longitude}');
           emit(state.copyWith(
             locationData: locationData,
             hasLocationPermission: true,
             isLocationEnabled: true,
           ));
-          await db.collection("riders").doc(user?.uid).update({
+          await db.collection("riders").doc(user.uid).update({
             'position': myLocation.data,
             'locationEnabled': true,
             'approvalStatus': 'pending',
@@ -804,8 +782,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             'roles': ['rider'],
             'riderRank': 'agent',
             'submittedAt': FieldValue.serverTimestamp(),
-          }).then((value) => print("DocumentSnapshot successfully updated!"),
-              onError: (e) => print("Error updating document $e"));
+          });
           await db.collection('riderOnboardingEvents').add({
             'riderId': user.uid,
             'eventType': 'profile_complete',
@@ -817,7 +794,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             email: user.email,
           );
         } catch (e) {
-          print(e);
           if (e == 'Location permissions are permanently denied') {
             emit(state.copyWith(
                 hasLocationPermission: false,
@@ -833,8 +809,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
           GeoFirePoint myLocation = GeoFirePoint(
               GeoPoint(locationData.latitude, locationData.longitude));
-          print('Latitude: ${locationData.latitude}');
-          print('Longitude: ${locationData.longitude}');
           emit(state.copyWith(
               locationData: locationData,
               hasLocationPermission: true,
@@ -843,19 +817,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await db
               .collection("riders")
               .doc(user?.uid)
-              .update({'position': myLocation.data}).then(
-                  (value) => print("DocumentSnapshot successfully updated!"),
-                  onError: (e) => print("Error updating document $e"));
+              .update({'position': myLocation.data});
         } catch (e) {
-          print(e);
           if (e == 'Location permissions are permanently denied') {
-            final _openLocationSettings =
-                await Geolocator.openLocationSettings();
+            await Geolocator.openLocationSettings();
           }
 
           if (e == 'Location services are disabled') {
-            final _openLocationSettings = await Geolocator.openAppSettings();
-            print(_openLocationSettings);
+            await Geolocator.openAppSettings();
           }
         }
       }
@@ -915,9 +884,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           // print(user?.displayName);
           emit(state.copyWith(username: event.value));
         }
-      } catch (e) {
-        print(e);
-      }
+      } catch (_) {}
     }));
 
     on<UpdateLastName>(((event, emit) async {
@@ -934,9 +901,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           // print(user?.displayName);
           emit(state.copyWith(username: event.value));
         }
-      } catch (e) {
-        print(e);
-      }
+      } catch (_) {}
     }));
 
     on<SetVerificationUploadStatus>((event, emit) =>
@@ -1081,8 +1046,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             await db.collection("riders").doc(user?.uid).update({
               'verificationData': verificationData,
               'verificationStatus': 'under_review'
-            }).then((value) => print("DocumentSnapshot successfully updated!"),
-                onError: (e) => print("Error updating document $e"));
+            });
             final uid = user?.uid;
             if (uid != null) {
               await writeRiderDocumentRecord(
@@ -1095,10 +1059,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.uploaded));
-          } catch (e) {
+          } catch (_) {
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.failure));
-            print(e);
           }
         }
 
@@ -1118,8 +1081,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             await db.collection("riders").doc(user?.uid).update({
               'verificationData': verificationData,
               'verificationStatus': 'under_review'
-            }).then((value) => print("DocumentSnapshot successfully updated!"),
-                onError: (e) => print("Error updating document $e"));
+            });
             final uid = user?.uid;
             if (uid != null) {
               await writeRiderDocumentRecord(
@@ -1130,10 +1092,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             }
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.uploaded));
-          } catch (e) {
+          } catch (_) {
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.failure));
-            print(e);
           }
         }
 
@@ -1215,10 +1176,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             emit(state.copyWith(
                 vehicleRegistrationDocumentStatus: 'under_review',
                 verificationUploadStatus: VerificationUploadStatus.uploaded));
-          } catch (e) {
+          } catch (_) {
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.failure));
-            print(e);
           }
         }
       },
@@ -1313,8 +1273,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               .set(patch, SetOptions(merge: true));
           emit(state.copyWith(
               profilePhoto: empty, errorMessage: 'Profile photo removed.'));
-        } catch (e) {
-          print(e);
+        } catch (_) {
           emit(state.copyWith(
               errorMessage: 'Profile photo could not be removed.'));
         }
@@ -1337,7 +1296,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           const storage = FlutterSecureStorage();
 
           if (auth.currentUser?.emailVerified == false) {
-            print('Email not verified');
             await auth.currentUser?.sendEmailVerification();
             emit(state.copyWith(
               status: Status.unverifiedEmail,
@@ -1470,14 +1428,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             );
           }
 
-          print('done');
           emit(state.copyWith(
             username: fullName.isEmpty ? state.username : fullName,
             status: Status.initial,
           ));
           add(SendPhoneOtp());
         } on FirebaseAuthException catch (e) {
-          print(e.code);
           emit(state.copyWith(status: Status.failure));
           if (e.code == 'invalid-email') {
             // print('Email is invalid');
@@ -1508,7 +1464,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         try {
           User? user = auth.currentUser;
           FlutterSecureStorage storage = const FlutterSecureStorage();
-          print(event.value);
 
           final documentReference = db.collection('riders').doc(user?.uid);
           // Get the document snapshot
@@ -1525,16 +1480,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
             emit(state.copyWith(phoneNumber: event.value));
           }
-        } catch (e) {
-          print(e);
-        }
+        } catch (_) {}
       },
     );
 
     on<ConfirmEmailVerification>((event, emit) async {
       await auth.currentUser?.reload();
       if (auth.currentUser?.emailVerified == true) {
-        print('Email Verified');
         final user = auth.currentUser;
         if (user != null) {
           await upsertRiderOnboarding(user: user, data: {
@@ -1565,8 +1517,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             profilePhoto: auth.currentUser?.photoURL,
           ));
         }
-      } else {
-        print('Email not Verified');
       }
     });
 
@@ -1605,9 +1555,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         if (e.code == 'invalid-verification-code') {
           emit(state.copyWith(errorMessage: 'Invalid verification code'));
         }
-      } catch (error) {
+      } catch (_) {
         // An error occurred during reauthentication or account deletion
-        print("Error deleting account: $error");
         // Handle error (e.g., display error message)
       }
 
@@ -1622,7 +1571,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(status: Status.passwordResetEmailSent));
       } on FirebaseAuthException catch (err) {
         emit(state.copyWith(status: Status.failure));
-        print(err.code);
         if (err.code == 'invalid-email') {
           emit(state.copyWith(errorMessage: 'Invalid email'));
         }
@@ -1634,7 +1582,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         throw Exception(err.message.toString());
       } catch (err) {
         emit(state.copyWith(status: Status.failure));
-        print(err.toString());
         throw Exception(err.toString());
       }
     });
@@ -1642,7 +1589,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<String> uploadImage({required String imagePath}) async {
     try {
-      print('Uploading Image');
       final fileName = Uuid();
       File imageFile = File(imagePath);
 
@@ -1652,11 +1598,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           .ref('verification-photos/$fileName')
           .getDownloadURL();
 
-      print(downloadUrl);
-
       return downloadUrl;
-    } catch (e) {
-      print(e);
+    } catch (_) {
       throw 'Something went wrong uploading image';
     }
   }
