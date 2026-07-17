@@ -1,9 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'package:circum_rider/app/account/bloc/account_bloc.dart';
-// import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -12,8 +9,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import 'app.dart';
 import 'app/authentication/bloc/auth_bloc.dart';
@@ -21,6 +16,7 @@ import 'app/bottom_nav/bloc/navbar_bloc.dart';
 import 'app/home/bloc/home_bloc.dart';
 import 'app/history/bloc/history_bloc.dart';
 import 'app/rider_jobs/rider_job_offer_screen.dart';
+import 'app/security/rider_app_check.dart';
 import 'app/support/bloc/support_bloc.dart';
 import 'app/verification/bloc/verification_bloc.dart';
 import 'helper/chats_help.dart';
@@ -67,15 +63,12 @@ void main() async {
     await Firebase.initializeApp();
   }
 
-  // Activate app check after initialization, but before
-  // usage of any Firebase services.
-  // await FirebaseAppCheck.instance
-  //     // Your personal reCaptcha public key goes here:
-  //     .activate(
-  //   androidProvider: AndroidProvider.playIntegrity,
-  //   appleProvider: AppleProvider.appAttest,
-  // webProvider: ReCaptchaV3Provider(kWebRecaptchaSiteKey),
-  // );
+  final appCheckStartup = await initializeRiderAppCheck();
+  if (appCheckStartup.blockStartup) {
+    FlutterNativeSplash.remove();
+    runApp(RiderStartupBlocked(message: appCheckStartup.message));
+    return;
+  }
 
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
     alert: true, // Required to display a heads up notification
@@ -114,6 +107,36 @@ void main() async {
     Bloc.observer = SimpleBlocObserver();
     runApp(const CircumRider());
   });
+}
+
+class RiderStartupBlocked extends StatelessWidget {
+  const RiderStartupBlocked({required this.message, super.key});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: const Color(0xFF05070D),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class CircumRider extends StatelessWidget {
