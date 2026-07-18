@@ -139,7 +139,47 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
         ));
   }
 
-  String _profilePhotoUrl(Map<String, dynamic> data) {
+  String _firstText(List<Map<String, dynamic>> sources, List<String> keys,
+      {String fallback = ''}) {
+    for (final source in sources) {
+      for (final key in keys) {
+        final value = '${source[key] ?? ''}'.trim();
+        if (value.isNotEmpty && value != 'null') return value;
+      }
+    }
+    return fallback;
+  }
+
+  String _profilePhotoUrl(
+    Map<String, dynamic> rider,
+    Map<String, dynamic> profile,
+  ) {
+    return _firstText([
+      profile,
+      rider,
+    ], [
+      'profileThumbnailUrl',
+      'profilePhotoUrl',
+      'profilePhoto',
+      'photoURL',
+      'photoUrl',
+    ], fallback: widget.user.photoURL ?? '');
+  }
+
+  String _profileText(
+    Map<String, dynamic> rider,
+    Map<String, dynamic> profile,
+    List<String> keys, {
+    String fallback = '',
+  }) {
+    return _firstText([profile, rider], keys, fallback: fallback);
+  }
+
+  Map<String, dynamic> _profileData(
+    Map<String, dynamic> rider,
+    Map<String, dynamic> profile,
+  ) {
+    final data = <String, dynamic>{...rider, ...profile};
     for (final key in [
       'profileThumbnailUrl',
       'profilePhotoUrl',
@@ -147,10 +187,18 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
       'photoURL',
       'photoUrl',
     ]) {
-      final value = '${data[key] ?? ''}'.trim();
-      if (value.isNotEmpty && value != 'null') return value;
+      final value = _profileText(rider, profile, [key]);
+      if (value.isNotEmpty) data[key] = value;
     }
-    return widget.user.photoURL ?? '';
+    for (final key in [
+      'handle',
+      'username',
+      'riderHandle',
+    ]) {
+      final value = _profileText(rider, profile, [key]);
+      if (value.isNotEmpty) data[key] = value;
+    }
+    return data;
   }
 
   @override
@@ -179,12 +227,11 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
                       child:
                           CircularProgressIndicator(color: RiderPalette.blue));
                 }
-                final data = <String, dynamic>{
-                  ...?riderSnapshot.data?.data(),
-                  ...?profileSnapshot.data?.data(),
-                };
+                final rider = riderSnapshot.data?.data() ?? const {};
+                final profile = profileSnapshot.data?.data() ?? const {};
+                final data = _profileData(rider, profile);
                 _hydrate(data);
-                final profilePhotoUrl = _profilePhotoUrl(data);
+                final profilePhotoUrl = _profilePhotoUrl(rider, profile);
                 return Form(
                   key: _formKey,
                   child: ListView(

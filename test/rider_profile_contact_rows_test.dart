@@ -103,7 +103,8 @@ void main() {
     expect(details, contains("collection('riders')"));
     expect(details, contains("collection('riderProfiles')"));
     expect(details, contains('Your Rider username is saved'));
-    expect(profile, contains("text('handle'"));
-    expect(profile, contains("text('username'"));
+    expect(profile, contains("'handle'"));
+    expect(profile, contains("'riderHandle'"));
+    expect(profile, contains("'username'"));
   });
 }

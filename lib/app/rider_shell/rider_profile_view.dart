@@ -373,8 +373,7 @@ class _RiderProfileData {
   }
 
   String get handle {
-    final raw = text('handle',
-        fallback: text('riderHandle', fallback: text('username')));
+    final raw = textAny(['handle', 'riderHandle', 'username']);
     if (raw.isNotEmpty) return raw.startsWith('@') ? raw : '@$raw';
     return '—';
   }
@@ -385,10 +384,13 @@ class _RiderProfileData {
     return value.isEmpty ? 'R' : value;
   }
 
-  String get photoUrl => text('profilePhotoUrl',
-      fallback: text('profilePhoto',
-          fallback: text('photoURL',
-              fallback: text('photoUrl', fallback: user.photoURL ?? ''))));
+  String get photoUrl => textAny([
+        'profileThumbnailUrl',
+        'profilePhotoUrl',
+        'profilePhoto',
+        'photoURL',
+        'photoUrl',
+      ], fallback: user.photoURL ?? '');
 
   String get verifiedLabel {
     final value = text('verificationStatus',
@@ -559,6 +561,14 @@ class _RiderProfileData {
   String text(String key, {String fallback = ''}) {
     final value = '${profile[key] ?? fallback}'.trim();
     return value == 'null' ? '' : value;
+  }
+
+  String textAny(List<String> keys, {String fallback = ''}) {
+    for (final key in keys) {
+      final value = text(key);
+      if (value.isNotEmpty) return value;
+    }
+    return fallback;
   }
 
   double number(String key, {double fallback = 0}) {
