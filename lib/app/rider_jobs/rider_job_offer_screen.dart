@@ -1968,8 +1968,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     final discrepancy = live['loadDiscrepancy'] is Map
         ? Map<String, dynamic>.from(live['loadDiscrepancy'] as Map)
         : const <String, dynamic>{};
-    final discrepancyStatus =
-        _riderDiscrepancyStatus(live: live, discrepancy: discrepancy);
+    final discrepancyReview =
+        _riderDiscrepancyReviewState(live: live, discrepancy: discrepancy);
     return Scaffold(
       backgroundColor: const Color(0xFF07090F),
       body: Stack(
@@ -2062,7 +2062,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                     healthPlus: _healthPlus,
                     gift: _gift,
                     irisConfirmed: irisConfirmed,
-                    discrepancyStatus: discrepancyStatus,
+                    discrepancyReview: discrepancyReview,
                     irisConfirmationPending: _confirmingIris,
                     cta: _transitioning ? 'Updating...' : nextTitle,
                     onToggle: () => setState(() => _expanded = !_expanded),
@@ -3508,7 +3508,7 @@ class _AcceptedBottomPanel extends StatelessWidget {
   final bool healthPlus;
   final bool gift;
   final bool irisConfirmed;
-  final String discrepancyStatus;
+  final _RiderDiscrepancyReviewState discrepancyReview;
   final bool irisConfirmationPending;
   final String cta;
   final VoidCallback onToggle;
@@ -3531,7 +3531,7 @@ class _AcceptedBottomPanel extends StatelessWidget {
     required this.healthPlus,
     required this.gift,
     required this.irisConfirmed,
-    required this.discrepancyStatus,
+    required this.discrepancyReview,
     required this.irisConfirmationPending,
     required this.cta,
     required this.onToggle,
@@ -3608,7 +3608,7 @@ class _AcceptedBottomPanel extends StatelessWidget {
                           verificationRequired: verificationRequired,
                           offer: offer,
                           irisConfirmed: irisConfirmed,
-                          discrepancyStatus: discrepancyStatus,
+                          discrepancyReview: discrepancyReview,
                           irisConfirmationPending: irisConfirmationPending,
                           onConfirmIris: onConfirmIris,
                           onReportDifference: onReportDifference,
@@ -3667,25 +3667,91 @@ class _AcceptedBottomPanel extends StatelessWidget {
   }
 }
 
-String _riderDiscrepancyStatus({
+class _RiderDiscrepancyReviewState {
+  const _RiderDiscrepancyReviewState({
+    required this.status,
+    required this.explanation,
+    required this.nextAction,
+    required this.timestamp,
+  });
+
+  final String status;
+  final String explanation;
+  final String nextAction;
+  final String timestamp;
+
+  bool get isEmpty => status.isEmpty;
+}
+
+_RiderDiscrepancyReviewState _riderDiscrepancyReviewState({
   required Map<String, dynamic> live,
   required Map<String, dynamic> discrepancy,
 }) {
   final adminDecision = '${discrepancy['adminDecision'] ?? ''}'.toLowerCase();
   final senderDecision = '${discrepancy['senderDecision'] ?? ''}'.toLowerCase();
   final status = '${live['status'] ?? ''}'.toLowerCase();
+  final reviewedAt = _formatReviewTimestamp(
+    discrepancy['adminReviewedAt'] ?? discrepancy['adminReviewRequestedAt'],
+  );
   if (adminDecision == 'more_evidence_requested') {
-    return 'More evidence requested';
+    return _RiderDiscrepancyReviewState(
+      status: 'More evidence requested',
+      explanation: 'Admin needs more evidence before deciding this report.',
+      nextAction: 'Add the requested evidence before collection continues.',
+      timestamp: reviewedAt,
+    );
   }
-  if (adminDecision == 'rejected') return 'Rejected';
-  if (senderDecision == 'approved_and_paid') return 'Approved';
+  if (adminDecision == 'rejected') {
+    return _RiderDiscrepancyReviewState(
+      status: 'Rejected',
+      explanation:
+          'Admin rejected the adjustment. The original booking remains authoritative.',
+      nextAction: 'Continue only if the delivery is still assigned and safe.',
+      timestamp: reviewedAt,
+    );
+  }
+  if (senderDecision == 'approved_and_paid') {
+    return _RiderDiscrepancyReviewState(
+      status: 'Approved',
+      explanation:
+          'The adjustment was approved and the Sender completed payment.',
+      nextAction: 'Continue with the updated delivery instructions.',
+      timestamp: reviewedAt,
+    );
+  }
   if (adminDecision == 'approved' || status == 'awaiting_sender_adjustment') {
-    return 'Approved - awaiting sender payment';
+    return _RiderDiscrepancyReviewState(
+      status: 'Approved - awaiting sender payment',
+      explanation:
+          'Admin approved the report. The Sender must complete payment before collection continues.',
+      nextAction: 'Wait for Sender payment confirmation.',
+      timestamp: reviewedAt,
+    );
   }
   if (discrepancy.isNotEmpty || live['adjustmentId'] != null) {
-    return 'Submitted - awaiting Admin review';
+    return _RiderDiscrepancyReviewState(
+      status: 'Submitted - awaiting Admin review',
+      explanation: 'Your report has been submitted securely for Admin review.',
+      nextAction: 'Hold collection until Circum reviews the evidence.',
+      timestamp: _formatReviewTimestamp(
+        discrepancy['reportedAt'] ?? live['adjustmentReportedAt'],
+      ),
+    );
   }
-  return '';
+  return const _RiderDiscrepancyReviewState(
+    status: '',
+    explanation: '',
+    nextAction: '',
+    timestamp: '',
+  );
+}
+
+String _formatReviewTimestamp(Object? value) {
+  if (value == null) return 'Time not recorded';
+  if (value is DateTime) return value.toLocal().toString();
+  final parsed = DateTime.tryParse('$value');
+  if (parsed != null) return parsed.toLocal().toString();
+  return '$value';
 }
 
 class _AcceptedEssentialSummary extends StatelessWidget {
@@ -3859,7 +3925,7 @@ class _PickupWorkflowPanel extends StatelessWidget {
   final bool verificationRequired;
   final RiderJobOffer offer;
   final bool irisConfirmed;
-  final String discrepancyStatus;
+  final _RiderDiscrepancyReviewState discrepancyReview;
   final bool irisConfirmationPending;
   final VoidCallback? onConfirmIris;
   final VoidCallback? onReportDifference;
@@ -3869,7 +3935,7 @@ class _PickupWorkflowPanel extends StatelessWidget {
     required this.verificationRequired,
     required this.offer,
     required this.irisConfirmed,
-    required this.discrepancyStatus,
+    required this.discrepancyReview,
     required this.irisConfirmationPending,
     required this.onConfirmIris,
     required this.onReportDifference,
@@ -3960,9 +4026,12 @@ class _PickupWorkflowPanel extends StatelessWidget {
                 _IrisLine('Suggested Category', iris.category),
                 _IrisLine('Suggested Weight Band', iris.weightBand),
                 _IrisLine('Confidence', iris.confidence),
-                if (discrepancyStatus.isNotEmpty) ...[
+                if (!discrepancyReview.isEmpty) ...[
                   const SizedBox(height: 8),
-                  _IrisLine('Rider report', discrepancyStatus),
+                  _IrisLine('Rider report', discrepancyReview.status),
+                  _IrisLine('Submitted', discrepancyReview.timestamp),
+                  _IrisLine('Now', discrepancyReview.explanation),
+                  _IrisLine('Next', discrepancyReview.nextAction),
                 ],
                 const SizedBox(height: 8),
                 Row(
@@ -3983,11 +4052,11 @@ class _PickupWorkflowPanel extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: _MiniGlassButton(
-                        label: discrepancyStatus.isEmpty
+                        label: discrepancyReview.isEmpty
                             ? 'Report Difference'
                             : 'Report Submitted',
                         icon: Icons.report_outlined,
-                        onTap: irisConfirmed || discrepancyStatus.isNotEmpty
+                        onTap: irisConfirmed || !discrepancyReview.isEmpty
                             ? null
                             : onReportDifference,
                       ),

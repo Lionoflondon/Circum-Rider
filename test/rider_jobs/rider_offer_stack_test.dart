@@ -340,6 +340,14 @@ void main() {
       expect(source, contains('Submitted - awaiting Admin review'));
       expect(source, contains('More evidence requested'));
       expect(source, contains('Approved - awaiting sender payment'));
+      expect(
+          source,
+          contains(
+              'The adjustment was approved and the Sender completed payment.'));
+      expect(source,
+          contains('Hold collection until Circum reviews the evidence.'));
+      expect(source,
+          contains('Add the requested evidence before collection continues.'));
       expect(source, contains('Report Submitted'));
       expect(source, isNot(contains("collection('deliveryAdjustments').doc")));
       expect(source, isNot(contains(".update({'price'")));
