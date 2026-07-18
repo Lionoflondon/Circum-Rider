@@ -28,7 +28,9 @@ void main() {
         () {
       expect(authBloc, contains('RiderRothOnboarding'));
       expect(authBloc, contains('ensureWalletForRider'));
-      expect(authBloc, contains("'approvalStatus': 'pending'"));
+      expect(authBloc, isNot(contains("'approvalStatus': 'pending'")));
+      expect(authBloc,
+          isNot(contains("'verificationStatus': 'verification_pending'")));
       expect(authBloc, isNot(contains("'approvalStatus': 'approved'")));
       expect(authBloc, isNot(contains("'onboardingStatus': 'approved'")));
     });

@@ -614,7 +614,6 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
         'documentChecklist.$safeType': 'under_review',
         if (section == 'vehicle_documents')
           'vehicleRegistrationDocumentStatus': 'under_review',
-        'verificationStatus': 'under_review',
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     }, success: 'Document uploaded for Admin review.');
@@ -633,7 +632,6 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
       await _db.collection('riders').doc(uid).set({
-        'approvalStatus': 'submitted',
         'onboardingStatus': 'application_submitted',
         'applicationSubmittedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),

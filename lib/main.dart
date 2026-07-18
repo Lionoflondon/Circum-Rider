@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:async';
 
 import 'package:circum_rider/app/account/bloc/account_bloc.dart';
-// import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -18,6 +17,7 @@ import 'app/bottom_nav/bloc/navbar_bloc.dart';
 import 'app/home/bloc/home_bloc.dart';
 import 'app/history/bloc/history_bloc.dart';
 import 'app/rider_jobs/rider_job_offer_screen.dart';
+import 'app/security/rider_app_check.dart';
 import 'app/support/bloc/support_bloc.dart';
 import 'app/verification/bloc/verification_bloc.dart';
 import 'helper/notifications_helper.dart';
@@ -68,15 +68,12 @@ void main() async {
 
   await Firebase.initializeApp();
 
-  // Activate app check after initialization, but before
-  // usage of any Firebase services.
-  // await FirebaseAppCheck.instance
-  //     // Your personal reCaptcha public key goes here:
-  //     .activate(
-  //   androidProvider: AndroidProvider.playIntegrity,
-  //   appleProvider: AppleProvider.appAttest,
-  // webProvider: ReCaptchaV3Provider(kWebRecaptchaSiteKey),
-  // );
+  final appCheckStartup = await initializeRiderAppCheck();
+  if (appCheckStartup.blockStartup) {
+    FlutterNativeSplash.remove();
+    runApp(RiderStartupBlocked(message: appCheckStartup.message));
+    return;
+  }
 
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
     alert: true, // Required to display a heads up notification
@@ -118,6 +115,42 @@ Future<void> _initializeRiderWeb() async {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
   } on FirebaseException catch (error) {
     if (error.code != 'duplicate-app') rethrow;
+  }
+  final appCheckStartup = await initializeRiderAppCheck();
+  if (appCheckStartup.blockStartup) {
+    throw StateError(appCheckStartup.message);
+  }
+}
+
+class RiderStartupBlocked extends StatelessWidget {
+  const RiderStartupBlocked({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: const Color(0xFF07090F),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

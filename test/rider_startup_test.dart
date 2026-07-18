@@ -15,8 +15,9 @@ void main() {
       appBuilder: (_) => const MaterialApp(home: Text('Rider ready')),
     ));
 
-    expect(find.text('Starting Rider'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
+    expect(scaffold.backgroundColor, const Color(0xFF131313));
+    expect(find.byType(CircularProgressIndicator), findsNothing);
 
     completer.complete();
     await tester.pumpAndSettle();

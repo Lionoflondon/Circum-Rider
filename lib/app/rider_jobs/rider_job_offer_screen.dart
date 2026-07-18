@@ -1965,6 +1965,11 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     final irisConfirmed = _irisConfirmed(live);
     final differenceReported =
         live['loadDiscrepancy'] != null || live['adjustmentId'] != null;
+    final discrepancy = live['loadDiscrepancy'] is Map
+        ? Map<String, dynamic>.from(live['loadDiscrepancy'] as Map)
+        : const <String, dynamic>{};
+    final discrepancyStatus =
+        _riderDiscrepancyStatus(live: live, discrepancy: discrepancy);
     return Scaffold(
       backgroundColor: const Color(0xFF07090F),
       body: Stack(
@@ -2057,6 +2062,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                     healthPlus: _healthPlus,
                     gift: _gift,
                     irisConfirmed: irisConfirmed,
+                    discrepancyStatus: discrepancyStatus,
                     irisConfirmationPending: _confirmingIris,
                     cta: _transitioning ? 'Updating...' : nextTitle,
                     onToggle: () => setState(() => _expanded = !_expanded),
@@ -3502,6 +3508,7 @@ class _AcceptedBottomPanel extends StatelessWidget {
   final bool healthPlus;
   final bool gift;
   final bool irisConfirmed;
+  final String discrepancyStatus;
   final bool irisConfirmationPending;
   final String cta;
   final VoidCallback onToggle;
@@ -3524,6 +3531,7 @@ class _AcceptedBottomPanel extends StatelessWidget {
     required this.healthPlus,
     required this.gift,
     required this.irisConfirmed,
+    required this.discrepancyStatus,
     required this.irisConfirmationPending,
     required this.cta,
     required this.onToggle,
@@ -3600,6 +3608,7 @@ class _AcceptedBottomPanel extends StatelessWidget {
                           verificationRequired: verificationRequired,
                           offer: offer,
                           irisConfirmed: irisConfirmed,
+                          discrepancyStatus: discrepancyStatus,
                           irisConfirmationPending: irisConfirmationPending,
                           onConfirmIris: onConfirmIris,
                           onReportDifference: onReportDifference,
@@ -3656,6 +3665,27 @@ class _AcceptedBottomPanel extends StatelessWidget {
                 : 'Standard';
     return '$service verification: ${methods.join(', ')}. Requirements are read from backend state.';
   }
+}
+
+String _riderDiscrepancyStatus({
+  required Map<String, dynamic> live,
+  required Map<String, dynamic> discrepancy,
+}) {
+  final adminDecision = '${discrepancy['adminDecision'] ?? ''}'.toLowerCase();
+  final senderDecision = '${discrepancy['senderDecision'] ?? ''}'.toLowerCase();
+  final status = '${live['status'] ?? ''}'.toLowerCase();
+  if (adminDecision == 'more_evidence_requested') {
+    return 'More evidence requested';
+  }
+  if (adminDecision == 'rejected') return 'Rejected';
+  if (senderDecision == 'approved_and_paid') return 'Approved';
+  if (adminDecision == 'approved' || status == 'awaiting_sender_adjustment') {
+    return 'Approved - awaiting sender payment';
+  }
+  if (discrepancy.isNotEmpty || live['adjustmentId'] != null) {
+    return 'Submitted - awaiting Admin review';
+  }
+  return '';
 }
 
 class _AcceptedEssentialSummary extends StatelessWidget {
@@ -3829,6 +3859,7 @@ class _PickupWorkflowPanel extends StatelessWidget {
   final bool verificationRequired;
   final RiderJobOffer offer;
   final bool irisConfirmed;
+  final String discrepancyStatus;
   final bool irisConfirmationPending;
   final VoidCallback? onConfirmIris;
   final VoidCallback? onReportDifference;
@@ -3838,6 +3869,7 @@ class _PickupWorkflowPanel extends StatelessWidget {
     required this.verificationRequired,
     required this.offer,
     required this.irisConfirmed,
+    required this.discrepancyStatus,
     required this.irisConfirmationPending,
     required this.onConfirmIris,
     required this.onReportDifference,
@@ -3928,6 +3960,10 @@ class _PickupWorkflowPanel extends StatelessWidget {
                 _IrisLine('Suggested Category', iris.category),
                 _IrisLine('Suggested Weight Band', iris.weightBand),
                 _IrisLine('Confidence', iris.confidence),
+                if (discrepancyStatus.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _IrisLine('Rider report', discrepancyStatus),
+                ],
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -3947,9 +3983,13 @@ class _PickupWorkflowPanel extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: _MiniGlassButton(
-                        label: 'Report Difference',
+                        label: discrepancyStatus.isEmpty
+                            ? 'Report Difference'
+                            : 'Report Submitted',
                         icon: Icons.report_outlined,
-                        onTap: irisConfirmed ? null : onReportDifference,
+                        onTap: irisConfirmed || discrepancyStatus.isNotEmpty
+                            ? null
+                            : onReportDifference,
                       ),
                     ),
                   ],

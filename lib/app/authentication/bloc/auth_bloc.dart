@@ -582,20 +582,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             // Document exists
             await db.collection("riders").doc(user.uid).update({
               'name': event.username,
-              'role': 'rider',
-              'roles': ['rider'],
               'phone': user.phoneNumber ?? state.phoneNumber,
               'phoneVerified': state.isPhoneVerified,
               if (state.isPhoneVerified)
                 'phoneVerifiedAt': FieldValue.serverTimestamp(),
               'status': 'offline',
-              'approvalStatus': 'pending',
-              'verificationStatus': 'verification_pending',
               'profileCompletionStatus': 'complete',
               'onboardingStatus': 'profile_complete',
-              'driverStatus': 'offline',
-              'riderRank': 'agent',
-              'rating': '0.0',
               'vehicle': {
                 'type': state.vehicleType?.trim(),
                 'makeModel': state.vehicleMakeModel?.trim(),
@@ -613,20 +606,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             // Document does not exist
             await db.collection("riders").doc(user.uid).set({
               'name': event.username,
-              "role": 'rider',
-              'roles': ['rider'],
               'phone': user.phoneNumber ?? state.phoneNumber,
               'phoneVerified': state.isPhoneVerified,
               if (state.isPhoneVerified)
                 'phoneVerifiedAt': FieldValue.serverTimestamp(),
               'status': 'offline',
-              'approvalStatus': 'pending',
-              'verificationStatus': 'verification_pending',
               'profileCompletionStatus': 'complete',
               'onboardingStatus': 'profile_complete',
-              'driverStatus': 'offline',
-              'riderRank': 'agent',
-              'rating': '0.0',
               'vehicle': {
                 'type': state.vehicleType?.trim(),
                 'makeModel': state.vehicleMakeModel?.trim(),
@@ -745,14 +731,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await db.collection("riders").doc(user?.uid).update({
             'position': myLocation.data,
             'locationEnabled': true,
-            'approvalStatus': 'pending',
-            'verificationStatus': 'verification_pending',
             'profileCompletionStatus': 'complete',
             'onboardingStatus': 'profile_complete',
-            'driverStatus': 'offline',
-            'role': 'rider',
-            'roles': ['rider'],
-            'riderRank': 'agent',
             'submittedAt': FieldValue.serverTimestamp(),
           });
           await db.collection('riderOnboardingEvents').add({
@@ -807,14 +787,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         try {
           await upsertRiderOnboarding(user: user, data: {
             'locationEnabled': event.locationEnabled,
-            'approvalStatus': 'pending',
-            'verificationStatus': 'verification_pending',
             'profileCompletionStatus': 'complete',
             'onboardingStatus': 'profile_complete',
-            'driverStatus': 'offline',
-            'role': 'rider',
-            'roles': ['rider'],
-            'riderRank': 'agent',
             'submittedAt': FieldValue.serverTimestamp(),
           });
           await db.collection('riderOnboardingEvents').add({
@@ -989,7 +963,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       await db.collection('riders').doc(uid).set({
         statusField: 'under_review',
         'documentChecklist.$key': 'under_review',
-        'verificationStatus': 'under_review',
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     }
@@ -1017,7 +990,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
             await db.collection("riders").doc(user?.uid).update({
               'verificationData': verificationData,
-              'verificationStatus': 'under_review'
             });
             final uid = user?.uid;
             if (uid != null) {
@@ -1052,7 +1024,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
             await db.collection("riders").doc(user?.uid).update({
               'verificationData': verificationData,
-              'verificationStatus': 'under_review'
             });
             final uid = user?.uid;
             if (uid != null) {
@@ -1142,7 +1113,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               },
               'vehicleRegistrationDocumentStatus': 'under_review',
               'documentChecklist.vehicle_registration': 'under_review',
-              'verificationStatus': 'under_review',
               'updatedAt': FieldValue.serverTimestamp(),
             }, SetOptions(merge: true));
             emit(state.copyWith(
@@ -1407,18 +1377,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             final vehicleRegistration = state.vehicleRegistration?.trim();
             await upsertRiderOnboarding(user: user, data: {
               'name': fullName,
-              'role': 'rider',
-              'roles': ['rider'],
-              'riderRank': 'agent',
               'phone': state.phoneNumber,
               'phoneVerified': false,
-              'approvalStatus': 'pending',
-              'verificationStatus': 'verification_pending',
               'profileCompletionStatus': 'started',
               'onboardingStatus': 'profile_started',
-              'driverStatus': 'pending',
               'status': 'offline',
-              'rating': '0.0',
               'vehicle': {
                 'type': state.vehicleType?.trim(),
                 'makeModel': state.vehicleMakeModel?.trim(),

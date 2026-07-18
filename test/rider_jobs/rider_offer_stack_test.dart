@@ -332,6 +332,19 @@ void main() {
       expect(find.text('Confirm'), findsNothing);
     });
 
+    test(
+        'Rider discrepancy states are backend-read and do not mutate authority',
+        () {
+      final source = File('lib/app/rider_jobs/rider_job_offer_screen.dart')
+          .readAsStringSync();
+      expect(source, contains('Submitted - awaiting Admin review'));
+      expect(source, contains('More evidence requested'));
+      expect(source, contains('Approved - awaiting sender payment'));
+      expect(source, contains('Report Submitted'));
+      expect(source, isNot(contains("collection('deliveryAdjustments').doc")));
+      expect(source, isNot(contains(".update({'price'")));
+    });
+
     testWidgets('pickup CTA renders backend-returned delivery stage',
         (tester) async {
       final controller = _BackendStageController([
