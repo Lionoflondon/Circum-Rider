@@ -165,7 +165,7 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
   @override
   Widget build(BuildContext context) {
     if (_ready) return widget.appBuilder(context);
-    if (_error == null) return const _RiderSplashHold();
+    if (_error == null) return const _RiderStartupHold();
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(useMaterial3: true),
@@ -243,8 +243,8 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
   }
 }
 
-class _RiderSplashHold extends StatelessWidget {
-  const _RiderSplashHold();
+class _RiderStartupHold extends StatelessWidget {
+  const _RiderStartupHold();
 
   @override
   Widget build(BuildContext context) {
@@ -252,13 +252,6 @@ class _RiderSplashHold extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       home: Scaffold(
         backgroundColor: Color(0xFF131313),
-        body: Center(
-          child: Image(
-            image: AssetImage('assets/images/splash.png'),
-            width: 152,
-            fit: BoxFit.contain,
-          ),
-        ),
       ),
     );
   }

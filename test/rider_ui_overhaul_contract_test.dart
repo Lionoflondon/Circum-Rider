@@ -72,9 +72,10 @@ void main() {
       expect(mainSource, isNot(contains('textScaleFactor: 1.0')));
     });
 
-    test('startup uses splash hold instead of rotating boot copy', () {
-      expect(mainSource, contains('_RiderSplashHold'));
-      expect(mainSource, contains("AssetImage('assets/images/splash.png')"));
+    test('startup uses one branded splash without rotating boot copy', () {
+      expect(mainSource, contains('_RiderStartupHold'));
+      expect(mainSource,
+          isNot(contains("AssetImage('assets/images/splash.png')")));
       expect(mainSource, isNot(contains('Starting Rider')));
       expect(mainSource, isNot(contains('CircularProgressIndicator(')));
       expect(webIndex, contains('startup-logo'));
