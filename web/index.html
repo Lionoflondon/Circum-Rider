@@ -46,18 +46,15 @@
           background-size: 100% 100%;
     }
 
-    #startup-shell { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; color: #F5F7FB; font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif; background: #07090F; z-index: 9999; }
+    #startup-shell { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; color: #F5F7FB; font-family: Inter, -apple-system, BlinkMacSystemFont, sans-serif; background: #131313; z-index: 9999; }
     .startup-card { width: min(420px, 100%); text-align: center; }
-    .startup-brand { color: #3B82F6; font-size: 13px; font-weight: 800; letter-spacing: 2px; }
-    .startup-spinner { width: 28px; height: 28px; margin: 24px auto 18px; border: 3px solid rgba(59,130,246,.22); border-top-color: #3B82F6; border-radius: 50%; animation: spin .8s linear infinite; }
+    .startup-logo { width: 152px; max-width: 44vw; height: auto; opacity: .98; }
     .startup-title { margin: 0; font-size: 21px; }
     .startup-copy { color: #9CA8B8; line-height: 1.5; }
     .startup-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
     .startup-actions button { min-height: 46px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); padding: 0 20px; color: #F5F7FB; background: #111827; font-weight: 700; cursor: pointer; }
     .startup-actions button:first-child { background: #3B82F6; border-color: #3B82F6; }
     #startup-error { display: none; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    @media (prefers-reduced-motion: reduce) { .startup-spinner { animation: none; } }
   </style>
   <script id="splash-screen-script">
     function removeStartupShell() {
@@ -68,10 +65,8 @@
 <body>
   <div id="startup-shell" role="status" aria-live="polite">
     <div class="startup-card">
-      <div class="startup-brand">CIRCUM RIDER</div>
       <div id="startup-loading">
-        <div class="startup-spinner" aria-hidden="true"></div>
-        <h1 class="startup-title">Starting Rider</h1>
+        <img class="startup-logo" src="splash/img/dark-3x.png" alt="Circum Rider">
       </div>
       <div id="startup-error" role="alert">
         <h1 class="startup-title">Something went wrong.</h1>

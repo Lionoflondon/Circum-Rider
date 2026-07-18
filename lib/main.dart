@@ -165,6 +165,7 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
   @override
   Widget build(BuildContext context) {
     if (_ready) return widget.appBuilder(context);
+    if (_error == null) return const _RiderSplashHold();
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(useMaterial3: true),
@@ -184,87 +185,78 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      const Icon(
+                        Icons.error_outline_rounded,
+                        color: Color(0xFFF87171),
+                        size: 34,
+                      ),
+                      const SizedBox(height: 16),
                       const Text(
-                        'CIRCUM RIDER',
+                        'Something went wrong.',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: Color(0xFF3B82F6),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 2,
+                          color: Color(0xFFF5F7FB),
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'We could not start Rider. Check your connection and try again.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFF9CA8B8),
+                          height: 1.45,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Reference: RDR-START-001',
+                        style: TextStyle(
+                          color: Color(0xFF6B7280),
+                          fontSize: 12,
+                          fontFamily: 'monospace',
                         ),
                       ),
                       const SizedBox(height: 22),
-                      if (_error == null) ...[
-                        const SizedBox(
-                          width: 28,
-                          height: 28,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Color(0xFF3B82F6),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: FilledButton.icon(
+                          onPressed: _start,
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Retry'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF3B82F6),
                           ),
                         ),
-                        const SizedBox(height: 18),
-                        const Text(
-                          'Starting Rider',
-                          style: TextStyle(
-                            color: Color(0xFFF5F7FB),
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ] else ...[
-                        const Icon(
-                          Icons.error_outline_rounded,
-                          color: Color(0xFFF87171),
-                          size: 34,
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Something went wrong.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Color(0xFFF5F7FB),
-                            fontSize: 22,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'We could not start Rider. Check your connection and try again.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Color(0xFF9CA8B8),
-                            height: 1.45,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Reference: RDR-START-001',
-                          style: TextStyle(
-                            color: Color(0xFF6B7280),
-                            fontSize: 12,
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                        const SizedBox(height: 22),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: FilledButton.icon(
-                            onPressed: _start,
-                            icon: const Icon(Icons.refresh_rounded),
-                            label: const Text('Retry'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF3B82F6),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ],
                   ),
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RiderSplashHold extends StatelessWidget {
+  const _RiderSplashHold();
+
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: Scaffold(
+        backgroundColor: Color(0xFF131313),
+        body: Center(
+          child: Image(
+            image: AssetImage('assets/images/splash.png'),
+            width: 152,
+            fit: BoxFit.contain,
           ),
         ),
       ),

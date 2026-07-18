@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('canonical Rider presentation replacement', () {
     final mainSource = File('lib/main.dart').readAsStringSync();
+    final webIndex = File('web/index.html').readAsStringSync();
     final nav = File('lib/app/bottom_nav/view/app_nav.dart').readAsStringSync();
     final dashboard = File('lib/app/rider_shell/rider_dashboard_view.dart')
         .readAsStringSync();
@@ -69,6 +70,17 @@ void main() {
       expect(mainSource, isNot(contains('/rider/jobs/offers/preview')));
       expect(mainSource, isNot(contains('previewOffers:')));
       expect(mainSource, isNot(contains('textScaleFactor: 1.0')));
+    });
+
+    test('startup uses splash hold instead of rotating boot copy', () {
+      expect(mainSource, contains('_RiderSplashHold'));
+      expect(mainSource, contains("AssetImage('assets/images/splash.png')"));
+      expect(mainSource, isNot(contains('Starting Rider')));
+      expect(mainSource, isNot(contains('CircularProgressIndicator(')));
+      expect(webIndex, contains('startup-logo'));
+      expect(webIndex, contains('splash/img/dark-3x.png'));
+      expect(webIndex, isNot(contains('startup-spinner')));
+      expect(webIndex, isNot(contains('Starting Rider')));
     });
 
     test('home is compact, backend driven and operational', () {
