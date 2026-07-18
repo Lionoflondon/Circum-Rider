@@ -1,0 +1,25 @@
+name: Circum Rider CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  rider:
+    name: Rider analyze, tests and isolation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - run: node scripts/absolute_product_ownership.js

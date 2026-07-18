@@ -1,0 +1,56 @@
+{
+  "products": {
+    "rider-app": {
+      "description": "Independent Circum Rider application.",
+      "entrypoints": [
+        "lib/main.dart"
+      ],
+      "ownedPrefixes": [
+        ".firebaserc",
+        ".github/",
+        ".gitignore",
+        ".metadata",
+        "README.md",
+        "analysis_options.yaml",
+        "android/",
+        "assets/",
+        "build/",
+        "deploy-manifest.json",
+        "docs/",
+        "firebase.json",
+        "ios/",
+        "lib/",
+        "linux/",
+        "macos/",
+        "pubspec.lock",
+        "pubspec.yaml",
+        "scripts/",
+        "test/",
+        "web/",
+        "windows/"
+      ],
+      "forbiddenImportFragments": [
+        "package:circum/",
+        "sender_mobile",
+        "web_sender",
+        "sender_app",
+        "lib/website",
+        "website/",
+        "public_web",
+        "admin_root",
+        "main_admin_web",
+        "main_public_web"
+      ],
+      "forbiddenContentFragments": [
+        "CIRCUM_BUILD_ID=sender-app",
+        "CIRCUM_BUILD_ID=circum-web",
+        "CIRCUM_ADMIN_PORTAL_CANONICAL_V1",
+        "sender-root",
+        "admin-root"
+      ],
+      "hostingTarget": "rider",
+      "output": "build/web"
+    }
+  },
+  "sharedFiles": []
+}
