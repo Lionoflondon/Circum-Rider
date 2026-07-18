@@ -4,10 +4,10 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../account/view/account_details.dart';
 import '../../onboarding/rider_application_centre.dart';
 import '../../rider_account/rider_account_state.dart';
 import '../../rider_design/rider_ui.dart';
+import '../../rider_shell/rider_profile_details_view.dart';
 import '../bloc/verification_bloc.dart';
 import 'upload_id.dart';
 
@@ -65,6 +65,7 @@ class VerificationView extends StatelessWidget {
                             'documentId': doc.id,
                           })
                       .toList(),
+                  profilePhotoRoute: RiderPersonalDetailsView(user: user),
                 );
                 return _VerificationCentre(state: state);
               },
@@ -667,6 +668,7 @@ class _VerificationState {
     required Map<String, dynamic> rider,
     required Map<String, dynamic> application,
     required List<Map<String, dynamic>> documents,
+    required Widget profilePhotoRoute,
   }) {
     final docs = documents.where((doc) => doc['active'] != false).toList();
     final byType = <String, Map<String, dynamic>>{};
@@ -795,7 +797,7 @@ class _VerificationState {
         acceptedFormats: 'JPG, PNG or HEIC',
         maxFileSize: '10 MB',
         reviewTime: 'Usually within 2 hours',
-        uploadRoute: const AccountDetails(),
+        uploadRoute: profilePhotoRoute,
       ),
     ];
 

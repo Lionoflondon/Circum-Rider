@@ -307,7 +307,8 @@ void main() {
       expect(profile, contains('rank'));
       expect(riderTruth, contains('trustPoints'));
       expect(profile, contains('VerificationView'));
-      expect(profile, contains('AccountDetails'));
+      expect(profile, contains('RiderPersonalDetailsView'));
+      expect(profile, isNot(contains('AccountDetails')));
       expect(profile, contains('RiderApplicationCentre'));
       expect(profile, contains('RiderAccessibilitySettingsView'));
       expect(profile, isNot(contains('updateRank')));

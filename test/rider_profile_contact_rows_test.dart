@@ -35,4 +35,19 @@ void main() {
     expect(source, isNot(contains("'phoneNumber': _phone.text")));
     expect(source, isNot(contains("'email': _email.text")));
   });
+
+  test('Rider profile navigation avoids the legacy account editor', () {
+    final profile =
+        File('lib/app/rider_shell/rider_profile_view.dart').readAsStringSync();
+    final details = File('lib/app/rider_shell/rider_profile_details_view.dart')
+        .readAsStringSync();
+    final verification =
+        File('lib/app/verification/view/verification.dart').readAsStringSync();
+
+    expect(profile, contains('RiderPersonalDetailsView'));
+    expect(profile, isNot(contains('AccountDetails')));
+    expect(details, isNot(contains('AccountDetails')));
+    expect(verification, contains('RiderPersonalDetailsView'));
+    expect(verification, isNot(contains('AccountDetails')));
+  });
 }

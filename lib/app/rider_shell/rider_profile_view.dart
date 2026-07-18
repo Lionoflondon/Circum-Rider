@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../account/view/account_details.dart';
 import '../authentication/bloc/auth_bloc.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../onboarding/rider_application_centre.dart';
@@ -126,10 +125,14 @@ class _RiderProfileScreen extends StatelessWidget {
                     children: [
                       _ProfileHero(
                         data: data,
-                        onEditPhoto: () =>
-                            _open(context, const AccountDetails()),
-                        onEditProfile: () =>
-                            _open(context, const AccountDetails()),
+                        onEditPhoto: () => _open(
+                          context,
+                          RiderPersonalDetailsView(user: user),
+                        ),
+                        onEditProfile: () => _open(
+                          context,
+                          RiderPersonalDetailsView(user: user),
+                        ),
                       ),
                       const SizedBox(height: 16),
                       _StatsRow(data: data),

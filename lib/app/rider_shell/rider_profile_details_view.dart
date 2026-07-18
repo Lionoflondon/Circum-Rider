@@ -1,8 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:image_picker/image_picker.dart';
 
-import '../account/view/account_details.dart';
+import '../account/view/bottom_sheets/image_bs.dart';
+import '../authentication/bloc/auth_bloc.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
 
@@ -109,6 +112,34 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
     }
   }
 
+  Future<void> _pickProfilePhoto() async {
+    final picker = ImagePicker();
+    final imageSource = await showImageBottomSheet(context);
+    XFile? image;
+    if (imageSource == 'library') {
+      image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 72,
+        maxWidth: 1024,
+      );
+    }
+    if (imageSource == 'camera') {
+      image = await picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 72,
+        maxWidth: 1024,
+      );
+    }
+    if (image == null || !mounted) return;
+    final bytes = await image.readAsBytes();
+    if (!mounted) return;
+    context.read<AuthBloc>().add(UpdateUserProfilePhoto(
+          imagePath: image.path,
+          imageBytes: bytes,
+          mimeType: image.mimeType,
+        ));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -142,10 +173,7 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
                           color: RiderPalette.blue, size: 54),
                       const SizedBox(height: 10),
                       OutlinedButton.icon(
-                        onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const AccountDetails())),
+                        onPressed: _pickProfilePhoto,
                         icon: const Icon(Icons.photo_camera_outlined),
                         label: const Text('Change profile photo'),
                       ),
