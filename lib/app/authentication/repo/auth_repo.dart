@@ -17,9 +17,7 @@ class AuthRepository {
   Future<bool> signIn({required String email, required String password}) async {
     try {
       return true;
-    } catch (e) {
-      print(e);
-    }
+    } catch (_) {}
     throw Exception("Something went wrong");
     // SubmissionFailed(Exception());
   }
@@ -45,7 +43,7 @@ class AuthRepository {
     //   print(e);
     //   throw Exception("Something went wrong");
     // }
-    return UserModel();
+    return const UserModel();
   }
 
   // Request for an OTP while registering
@@ -66,8 +64,7 @@ class AuthRepository {
   Future<bool> verifyOTP() async {
     try {
       return true;
-    } catch (e) {
-      print(e);
+    } catch (_) {
       throw Exception("Something went wrong");
     }
   }
@@ -77,6 +74,6 @@ class AuthRepository {
   Future updateUser() async {}
 
   Future<void> signOut() async {
-    await Future.delayed(Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 2));
   }
 }

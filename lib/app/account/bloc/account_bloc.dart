@@ -28,10 +28,8 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
           // print(earningsData);
           emit(state.copyWith(
               earnings: earningsData, status: AccountStatus.initialized));
-        } catch (e) {
+        } catch (_) {
           emit(state.copyWith(status: AccountStatus.failure));
-          print('Failed to get earnings, reasons:');
-          print(e);
         }
       },
     );
@@ -58,8 +56,7 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
             isWithdrawRequestActive: true,
             withdrawRequest: request,
           ));
-        } catch (e) {
-          print(e);
+        } catch (_) {
           emit(state.copyWith(status: AccountStatus.failure));
         }
       },
@@ -87,8 +84,7 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
             // print(data);
           }
           emit(state.copyWith(status: AccountStatus.initialized));
-        } catch (e) {
-          print(e);
+        } catch (_) {
           emit(state.copyWith(status: AccountStatus.failure));
         }
       },

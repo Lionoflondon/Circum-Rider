@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:bloc/bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../helper/chats_help.dart';
@@ -57,10 +57,7 @@ class SupportBloc extends Bloc<SupportEvent, SupportState> {
           add(IncomingSupportMessage(data: messageData));
 
           ChatsHelper().storeChat(messageData);
-        } catch (e) {
-          print('Sending messsage failed');
-          print(e);
-        }
+        } catch (_) {}
       },
     );
 
@@ -70,7 +67,6 @@ class SupportBloc extends Bloc<SupportEvent, SupportState> {
         final chats = File('${directory.path}/support.json');
 
         if (await chats.exists()) {
-          print('Loading chats');
           final contents = await chats.readAsString();
           // print(contents);
           final jsonData = await jsonDecode(contents) as List;

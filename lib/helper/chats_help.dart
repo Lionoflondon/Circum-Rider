@@ -6,7 +6,6 @@ import 'package:path_provider/path_provider.dart';
 class ChatsHelper {
   Future<bool> storeChat(message) async {
     try {
-      print('Storing a new message');
       // final messageJson = jsonDecode(message.data['data']);
 
       final directory = await getApplicationDocumentsDirectory();
@@ -23,12 +22,8 @@ class ChatsHelper {
 
       await chats.writeAsString(jsonString);
 
-      print('New message');
-      print(message['conversationId']);
-
       return true;
-    } catch (e) {
-      print(e);
+    } catch (_) {
       return false;
     }
   }

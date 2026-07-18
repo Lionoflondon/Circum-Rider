@@ -3,7 +3,6 @@ part of './main.dart';
 foregoundMessage() {
   // chatBloc.add(event);
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-    print('Got a message whilst in the foreground!');
     // print('Message data: ${message.data}');
     if (message.data['type'] == 'message') {
       // Parse the modified string into a map
@@ -32,8 +31,6 @@ foregoundMessage() {
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (Firebase.apps.isEmpty) await Firebase.initializeApp();
 
-  print('Got a message whilst in the background!');
-  print('Message data: ${message.data}');
   if (message.data['type'] == 'message') {
     final msg = jsonDecode(message.data['data']);
     homeBloc.add(IncomingMessage(data: msg));
