@@ -56,10 +56,9 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
               .doc(uid)
               .snapshots(),
           builder: (context, riderSnapshot) {
-            final profile = <String, dynamic>{
-              ...?riderSnapshot.data?.data(),
-              ...?profileSnapshot.data?.data(),
-            };
+            final rider = riderSnapshot.data?.data() ?? const {};
+            final profileDoc = profileSnapshot.data?.data() ?? const {};
+            final profile = _dashboardProfileData(rider, profileDoc);
             return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
                   .collection('riderEarnings')
@@ -177,6 +176,48 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
         item['createdAt'];
     return value is Timestamp ? value.millisecondsSinceEpoch : 0;
   }
+}
+
+Map<String, dynamic> _dashboardProfileData(
+  Map<String, dynamic> rider,
+  Map<String, dynamic> profile,
+) {
+  final data = <String, dynamic>{...rider, ...profile};
+  for (final key in [
+    'profileThumbnailUrl',
+    'profilePhotoUrl',
+    'profilePhoto',
+    'photoURL',
+    'photoUrl',
+    'handle',
+    'username',
+    'riderHandle',
+  ]) {
+    final value = _firstProfileTextFromSources([profile, rider], [key]);
+    if (value.isNotEmpty) data[key] = value;
+  }
+  return data;
+}
+
+String _firstProfileText(
+  Map<String, dynamic> source,
+  List<String> keys, {
+  String fallback = '',
+}) =>
+    _firstProfileTextFromSources([source], keys, fallback: fallback);
+
+String _firstProfileTextFromSources(
+  List<Map<String, dynamic>> sources,
+  List<String> keys, {
+  String fallback = '',
+}) {
+  for (final source in sources) {
+    for (final key in keys) {
+      final value = '${source[key] ?? ''}'.trim();
+      if (value.isNotEmpty && value != 'null') return value;
+    }
+  }
+  return fallback.trim();
 }
 
 class _DashboardData {
@@ -344,9 +385,16 @@ class _DashboardHeader extends StatelessWidget {
         '${profile['firstName'] ?? profile['name'] ?? auth.username ?? ''}'
             .trim();
     final firstName = rawName.isEmpty ? 'Rider' : rawName.split(' ').first;
-    final photo =
-        '${profile['profileThumbnailUrl'] ?? profile['profilePhotoUrl'] ?? profile['profilePhoto'] ?? profile['photoUrl'] ?? auth.profilePhoto ?? ''}'
-            .trim();
+    final photo = _firstProfileText(
+        profile,
+        [
+          'profileThumbnailUrl',
+          'profilePhotoUrl',
+          'profilePhoto',
+          'photoURL',
+          'photoUrl',
+        ],
+        fallback: auth.profilePhoto ?? '');
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -386,22 +434,7 @@ class _DashboardHeader extends StatelessWidget {
           label: 'Open Rider profile',
           child: GestureDetector(
             onTap: onProfile,
-            child: CircleAvatar(
-              radius: 20,
-              backgroundColor: RiderPalette.blue,
-              backgroundImage:
-                  photo.isEmpty ? null : CachedNetworkImageProvider(photo),
-              child: photo.isEmpty
-                  ? Text(
-                      _initials(rawName),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                      ),
-                    )
-                  : null,
-            ),
+            child: _HeaderProfilePhoto(photoUrl: photo),
           ),
         ),
       ],
@@ -414,14 +447,38 @@ class _DashboardHeader extends StatelessWidget {
     if (hour < 18) return 'afternoon';
     return 'evening';
   }
+}
 
-  static String _initials(String name) {
-    final parts = name
-        .split(RegExp(r'\s+'))
-        .where((part) => part.trim().isNotEmpty)
-        .toList();
-    if (parts.isEmpty) return 'R';
-    return parts.take(2).map((part) => part[0].toUpperCase()).join();
+class _HeaderProfilePhoto extends StatelessWidget {
+  const _HeaderProfilePhoto({required this.photoUrl});
+
+  final String photoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = photoUrl.isNotEmpty;
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white.withValues(alpha: .16)),
+        color: Colors.white.withValues(alpha: .06),
+        image: hasPhoto
+            ? DecorationImage(
+                image: CachedNetworkImageProvider(photoUrl),
+                fit: BoxFit.cover,
+              )
+            : null,
+      ),
+      child: hasPhoto
+          ? null
+          : const Icon(
+              Icons.person_rounded,
+              color: RiderPalette.muted,
+              size: 22,
+            ),
+    );
   }
 }
 

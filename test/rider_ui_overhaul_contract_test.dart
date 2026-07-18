@@ -75,6 +75,7 @@ void main() {
       expect(dashboard, contains("collection('riderProfiles')"));
       expect(dashboard, contains("collection('riderEarnings')"));
       expect(dashboard, contains("collection('deliveryRequests')"));
+      expect(dashboard, contains('watchUnreadNotificationCount'));
       expect(dashboard, contains("where('status', isEqualTo: 'requested')"));
       expect(dashboard, contains('Good '));
       expect(dashboard, contains('Go online'));
@@ -112,6 +113,10 @@ void main() {
       expect(accountDetails, contains('RepaintBoundary'));
       expect(dashboard.indexOf('profileThumbnailUrl'),
           lessThan(dashboard.indexOf('profilePhotoUrl')));
+      expect(dashboard, contains('_dashboardProfileData'));
+      expect(dashboard, contains('_HeaderProfilePhoto'));
+      expect(dashboard, contains('Icons.person_rounded'));
+      expect(dashboard, isNot(contains('_initials(rawName)')));
       expect(profile.indexOf('profilePhotoUrl'),
           lessThan(profile.indexOf('photoURL')));
       expect(homeBloc.indexOf('profileThumbnailUrl'),
