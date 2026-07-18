@@ -24,12 +24,6 @@ class ImageButtSheet extends StatefulWidget {
 
 class ImageButtSheetState extends State<ImageButtSheet> {
   @override
-  void initState() {
-    // TODO: implement initState
-    super.initState();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
         padding: MediaQuery.of(context).viewInsets,
@@ -64,7 +58,6 @@ class ImageButtSheetState extends State<ImageButtSheet> {
                             fontSize: 16, fontWeight: FontWeight.w600)),
                     onPressed: () {
                       Navigator.pop(context, 'camera');
-                      // print(_textFieldController.text);
                     }),
                 const SizedBox(height: 12),
                 AppButton.button(
@@ -74,7 +67,6 @@ class ImageButtSheetState extends State<ImageButtSheet> {
                             fontSize: 16, fontWeight: FontWeight.w600)),
                     onPressed: () {
                       Navigator.pop(context, 'library');
-                      // print(_textFieldController.text);
                     }),
                 const SizedBox(height: 20),
               ],

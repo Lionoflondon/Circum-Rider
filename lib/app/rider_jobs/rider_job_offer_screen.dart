@@ -13,15 +13,13 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../communication/rider_conversation_view.dart';
 import '../home/bloc/home_bloc.dart';
-import '../founder_access/founder_rider_access.dart';
+import '../rider_internal_access/rider_internal_access.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
 import '../support/view/support.dart';
 import '../tracking/rider_live_tracking_controller.dart';
-import '../tracking/rider_map_navigation_policy.dart';
 import 'rider_accept_controller.dart';
 import 'rider_delivery_controller.dart';
-import 'rider_dispatch_policy.dart';
 import 'rider_offer_card.dart';
 import 'rider_offer_stack.dart';
 
@@ -105,9 +103,9 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
 
     context.watch<HomeBloc>().state;
     return FutureBuilder<bool>(
-        future: FounderRiderAccess.enabled(),
-        builder: (context, founderSnapshot) {
-          final founder = founderSnapshot.data == true;
+        future: RiderInternalAccess.enabled(),
+        builder: (context, internalAccessSnapshot) {
+          final internalAccess = internalAccessSnapshot.data == true;
           return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: _firestore.collection('riders').doc(user.uid).snapshots(),
             builder: (context, riderSnapshot) {
@@ -117,123 +115,100 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                     .doc(user.uid)
                     .snapshots(),
                 builder: (context, profileSnapshot) {
-                  return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                    stream: _firestore
-                        .collection('riderPresence')
-                        .doc(user.uid)
-                        .snapshots(),
-                    builder: (context, presenceSnapshot) {
-                      final riderData = <String, dynamic>{
-                        ...?profileSnapshot.data?.data(),
-                        ...?riderSnapshot.data?.data()
-                      };
-                      final presence =
-                          presenceSnapshot.data?.data() ?? const {};
-                      final rider =
-                          _riderProfile(user.uid, riderData, founder: founder);
-                      final online = presence['isOnline'] == true &&
-                          '${presence['availabilityStatus'] ?? ''}'
-                                  .toLowerCase() !=
-                              'offline';
-                      final connectionLost =
-                          '${presence['connectionStatus'] ?? ''}'
-                                  .toLowerCase() ==
-                              'lost';
+                  final riderData = <String, dynamic>{
+                    ...?profileSnapshot.data?.data(),
+                    ...?riderSnapshot.data?.data()
+                  };
+                  final rider = _riderProfile(user.uid, riderData,
+                      internalAccess: internalAccess);
+                  final online = {'online', 'available', 'busy'}.contains(
+                      '${riderData['availabilityStatus'] ?? riderData['status'] ?? ''}'
+                          .toLowerCase());
 
-                      if (!rider.canAcceptJobs)
-                        return _JobsStateScaffold(
-                            title: 'Account action required',
-                            message: rider.blockedReason ??
-                                'Your Rider account cannot receive jobs right now.');
-                      if (!online)
-                        return _JobsStateScaffold(
-                            title: "You're offline",
-                            message:
-                                'Go online to receive eligible delivery offers.',
-                            actionLabel: 'Go Online',
-                            onAction: () => context
-                                .read<HomeBloc>()
-                                .add(SetRideStatus(status: RideStatus.online)));
-                      if (connectionLost)
+                  if (!rider.canAcceptJobs)
+                    return _JobsStateScaffold(
+                        title: 'Account action required',
+                        message: rider.blockedReason ??
+                            'Your Rider account cannot receive jobs right now.');
+                  if (!online)
+                    return _JobsStateScaffold(
+                        title: "You're offline",
+                        message:
+                            'Go online to receive eligible delivery offers.',
+                        actionLabel: 'Go Online',
+                        onAction: () => context
+                            .read<HomeBloc>()
+                            .add(SetRideStatus(status: RideStatus.online)));
+
+                  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: _firestore
+                        .collection('deliveryRequests')
+                        .where('status', isEqualTo: 'requested')
+                        .limit(20)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
                         return const _JobsStateScaffold(
-                          title: 'Reconnecting',
+                          title: 'Network error',
                           message:
-                              'You are still online. We will show nearby offers once your live location reconnects.',
+                              'We could not load offers. Please try again.',
+                        );
+                      }
+
+                      if (!snapshot.hasData ||
+                          (riderSnapshot.connectionState ==
+                                  ConnectionState.waiting &&
+                              profileSnapshot.connectionState ==
+                                  ConnectionState.waiting)) {
+                        return const _JobsStateScaffold(
+                          title: 'Loading offers',
+                          message: 'Checking nearby delivery requests.',
                           loading: true,
                         );
+                      }
 
-                      return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                        stream: _firestore
-                            .collection('deliveryRequests')
-                            .where('status', isEqualTo: 'requested')
-                            .limit(20)
-                            .snapshots(),
-                        builder: (context, snapshot) {
-                          if (snapshot.hasError) {
-                            return const _JobsStateScaffold(
-                              title: 'Network error',
-                              message:
-                                  'We could not load offers. Please try again.',
-                            );
-                          }
+                      final offers = _filterOffers(
+                        docs: snapshot.data!.docs,
+                        riderId: user.uid,
+                        riderVehicle: rider.riderVehicle,
+                        internalAccess: internalAccess,
+                      );
 
-                          if (!snapshot.hasData ||
-                              (riderSnapshot.connectionState ==
-                                      ConnectionState.waiting &&
-                                  profileSnapshot.connectionState ==
-                                      ConnectionState.waiting)) {
-                            return const _JobsStateScaffold(
-                              title: 'Loading offers',
-                              message: 'Checking nearby delivery requests.',
-                              loading: true,
-                            );
-                          }
+                      if (_activeIndex >= offers.length && offers.isNotEmpty) {
+                        scheduleMicrotask(() {
+                          if (mounted)
+                            setState(() => _activeIndex = offers.length - 1);
+                        });
+                      }
 
-                          final offers = _filterOffers(
-                            docs: snapshot.data!.docs,
-                            rider: rider,
-                            founder: founder,
-                          );
+                      if (offers.isEmpty) {
+                        return const _JobsStateScaffold(
+                          title: 'No offers nearby',
+                          message:
+                              'New delivery offers will appear here when available.',
+                        );
+                      }
 
-                          if (_activeIndex >= offers.length &&
-                              offers.isNotEmpty) {
-                            scheduleMicrotask(() {
-                              if (mounted)
-                                setState(
-                                    () => _activeIndex = offers.length - 1);
-                            });
-                          }
-
-                          if (offers.isEmpty) {
-                            return const _JobsStateScaffold(
-                              title: 'No offers nearby',
-                              message:
-                                  'New delivery offers will appear here when available.',
-                            );
-                          }
-
-                          final safeIndex =
-                              _activeIndex.clamp(0, offers.length - 1);
-                          return _OfferExperience(
-                            offers: offers,
-                            activeIndex: safeIndex,
-                            accepting: _accepting,
-                            accepted: _accepted,
-                            riderRank: rider.riderRank ?? 'Sentinel',
-                            statusMessage: _statusMessage,
-                            acceptStatus: _acceptStatus,
-                            onBackToFeed: _resetTakenState,
-                            onIndexChanged: (index) {
-                              setState(() {
-                                _activeIndex = index;
-                                _accepted = false;
-                                _statusMessage = null;
-                                _acceptStatus = null;
-                              });
-                            },
-                            onAccept: (offer) => _accept(offer, rider),
-                          );
+                      final safeIndex =
+                          _activeIndex.clamp(0, offers.length - 1);
+                      return _OfferExperience(
+                        offers: offers,
+                        activeIndex: safeIndex,
+                        accepting: _accepting,
+                        accepted: _accepted,
+                        riderRank: rider.riderRank ?? 'Sentinel',
+                        statusMessage: _statusMessage,
+                        acceptStatus: _acceptStatus,
+                        onBackToFeed: _resetTakenState,
+                        onIndexChanged: (index) {
+                          setState(() {
+                            _activeIndex = index;
+                            _accepted = false;
+                            _statusMessage = null;
+                            _acceptStatus = null;
+                          });
                         },
+                        onAccept: (offer) => _accept(offer, rider),
                       );
                     },
                   );
@@ -245,8 +220,9 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
   }
 
   RiderProfileSnapshot _riderProfile(String uid, Map<String, dynamic> riderData,
-      {bool founder = false}) {
-    final canAccept = founder || RiderOnboardingPolicy.canAcceptJobs(riderData);
+      {bool internalAccess = false}) {
+    final canAccept =
+        internalAccess || RiderOnboardingPolicy.canAcceptJobs(riderData);
     final firstName = '${riderData['firstName'] ?? ''}'.trim();
     final lastName = '${riderData['lastName'] ?? ''}'.trim();
     final displayName =
@@ -254,56 +230,49 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     final vehicle = riderData['vehicle'] is Map
         ? '${riderData['vehicle']['type'] ?? riderData['vehicleType'] ?? ''}'
         : '${riderData['vehicleType'] ?? riderData['typeOfVehicle'] ?? ''}';
-    final vehicles = _riderVehicles(riderData, vehicle);
-    final trustPoints =
-        _intValue(riderData['trustPoints'] ?? riderData['trustTotal']) ?? 0;
-    final activeDeliveryId =
-        '${riderData['activeDeliveryId'] ?? riderData['currentDeliveryId'] ?? ''}'
-            .trim();
-    final reservedScheduled = _stringList(riderData['reservedScheduledJobIds']);
 
     return RiderProfileSnapshot(
       riderId: uid,
       riderName: displayName.isEmpty ? null : displayName,
       riderVehicle: vehicle.trim().isEmpty ? null : vehicle.trim(),
-      riderVehicles: vehicles,
       riderRank: RiderRankSnapshot.from(riderData)?.rank,
-      trustPoints: trustPoints,
       canAcceptJobs: canAccept,
       blockedReason:
           canAccept ? null : RiderOnboardingPolicy.blockedReason(riderData),
-      activeDeliveryId: activeDeliveryId.isEmpty ? null : activeDeliveryId,
-      reservedScheduledJobIds: reservedScheduled,
     );
   }
 
   List<RiderJobOffer> _filterOffers({
     required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-    required RiderProfileSnapshot rider,
-    bool founder = false,
+    required String riderId,
+    required String? riderVehicle,
+    bool internalAccess = false,
   }) {
     return docs
-        .where((doc) => _isVisibleToRider(doc.data(), rider, founder: founder))
+        .where((doc) => _isVisibleToRider(doc.data(), riderId, riderVehicle,
+            internalAccess: internalAccess))
         .map((doc) =>
             RiderJobOffer.fromFirestore(docId: doc.id, data: doc.data()))
         .toList();
   }
 
-  bool _isVisibleToRider(Map<String, dynamic> data, RiderProfileSnapshot rider,
-      {bool founder = false}) {
-    return RiderDispatchPolicy.visibleToRider(
-      job: data,
-      rider: RiderDispatchContext(
-        riderId: rider.riderId,
-        vehicles: rider.riderVehicles.isEmpty
-            ? [if ((rider.riderVehicle ?? '').isNotEmpty) rider.riderVehicle!]
-            : rider.riderVehicles,
-        activeDeliveryId: rider.activeDeliveryId,
-        reservedScheduledJobIds: rider.reservedScheduledJobIds,
-        trustPoints: rider.trustPoints,
-        founderOverride: founder,
-      ),
-    ).eligible;
+  bool _isVisibleToRider(
+      Map<String, dynamic> data, String riderId, String? riderVehicle,
+      {bool internalAccess = false}) {
+    final ignored = _stringList(data['ignoredRiders']);
+    final rejected = _stringList(data['rejectedRiders']);
+    if (ignored.contains(riderId) || rejected.contains(riderId)) return false;
+
+    final matchingStatus =
+        '${data['matchingStatus'] ?? 'available'}'.trim().toLowerCase();
+    if (matchingStatus != 'available' && matchingStatus != 'requested') {
+      return false;
+    }
+
+    final minimumVehicle =
+        '${data['minimumVehicle'] ?? data['recommendedVehicle'] ?? 'Bike'}';
+    return internalAccess ||
+        _vehicleMeetsMinimum(riderVehicle ?? 'Bike', minimumVehicle);
   }
 
   List<String> _stringList(dynamic value) {
@@ -316,33 +285,15 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     return const [];
   }
 
-  List<String> _riderVehicles(Map<String, dynamic> riderData, String vehicle) {
-    final vehicles = <String>[];
-    void add(dynamic value) {
-      final text = '$value'.trim();
-      if (value != null && text.isNotEmpty && text != 'null') {
-        vehicles.add(text);
-      }
+  bool _vehicleMeetsMinimum(String riderVehicle, String minimumVehicle) {
+    int rank(String value) {
+      final normalized = value.trim().toLowerCase();
+      if (normalized.contains('van')) return 3;
+      if (normalized.contains('car')) return 2;
+      return 1;
     }
 
-    add(vehicle);
-    final rawVehicles = riderData['vehicles'];
-    if (rawVehicles is Iterable) {
-      for (final item in rawVehicles) {
-        if (item is Map) {
-          add(item['type'] ?? item['vehicleType'] ?? item['class']);
-        } else {
-          add(item);
-        }
-      }
-    }
-    return vehicles.toSet().toList();
-  }
-
-  int? _intValue(dynamic value) {
-    if (value is int) return value;
-    if (value is num) return value.round();
-    return int.tryParse('$value');
+    return rank(riderVehicle) >= rank(minimumVehicle);
   }
 
   Future<void> _accept(
@@ -458,12 +409,7 @@ class _OfferExperience extends StatelessWidget {
       backgroundColor: const Color(0xFF07090F),
       body: Stack(
         children: [
-          _OfferMapBackground(
-            offer: activeOffer,
-            focusPickup: accepted,
-            activeTrackingStatus:
-                accepted ? RiderLiveTrackingStatus.live : null,
-          ),
+          _OfferMapBackground(offer: activeOffer, focusPickup: accepted),
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -581,15 +527,12 @@ class RiderJobOfferPreview {
         dropoffAddress: '41 King\'s Road, Chelsea, London SW3 4NB',
         earnings: 14.80,
         currency: 'GBP',
-        pickupDistanceText: '1.2 mi to pickup',
         distanceText: '3.4 mi',
         timeText: '22 min',
         parcelGuidance: 'IRIS: Prescription box - Vanguard included',
         minimumVehicle: 'Bike',
         weightText: '0.2kg',
         pickupTiming: 'ASAP',
-        expiryText: 'Expires in 8m',
-        irisSummary: 'IRIS 96% match',
         warningChips: const ['Health+', 'Vanguard', 'Scheduled'],
         raw: const {
           'isHealthPlus': true,
@@ -607,15 +550,12 @@ class RiderJobOfferPreview {
         dropoffAddress: '7 Prince of Wales Drive, Battersea, London SW11 4FA',
         earnings: 18.40,
         currency: 'GBP',
-        pickupDistanceText: '0.9 mi to pickup',
         distanceText: '4.8 mi',
         timeText: '31 min',
         parcelGuidance: 'IRIS: Gift parcel - Handle carefully',
         minimumVehicle: 'Car',
         weightText: '1.4kg',
         pickupTiming: 'Today 16:30',
-        expiryText: 'Expires in 6m',
-        irisSummary: 'IRIS gift match',
         warningChips: const ['Gift', 'Vanguard'],
         raw: const {
           'isGift': true,
@@ -632,15 +572,12 @@ class RiderJobOfferPreview {
         dropoffAddress: '20 Bank Street, Canary Wharf, London E14 5JP',
         earnings: 21.50,
         currency: 'GBP',
-        pickupDistanceText: '2.1 mi to pickup',
         distanceText: '5.7 mi',
         timeText: '36 min',
         parcelGuidance: 'IRIS: Business documents - Small equipment',
         minimumVehicle: 'Car',
         weightText: '5kg',
         pickupTiming: 'Scheduled',
-        expiryText: 'Expires in 10m',
-        irisSummary: 'IRIS business documents',
         warningChips: const ['Business', 'Heavy'],
         raw: const {
           'isBusiness': true,
@@ -712,13 +649,11 @@ class _OfferMapBackground extends StatefulWidget {
   final RiderJobOffer offer;
   final bool focusPickup;
   final Position? riderPosition;
-  final RiderLiveTrackingStatus? activeTrackingStatus;
 
   const _OfferMapBackground({
     required this.offer,
     this.focusPickup = false,
     this.riderPosition,
-    this.activeTrackingStatus,
   });
 
   @override
@@ -727,9 +662,6 @@ class _OfferMapBackground extends StatefulWidget {
 
 class _OfferMapBackgroundState extends State<_OfferMapBackground> {
   GoogleMapController? _controller;
-  bool _followingRider = true;
-  bool _cameraAnimating = false;
-  Position? _lastCameraPosition;
 
   @override
   void didUpdateWidget(covariant _OfferMapBackground oldWidget) {
@@ -740,13 +672,19 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
     final oldPosition = oldWidget.riderPosition;
     final nextPosition = widget.riderPosition;
     if (nextPosition != null &&
-        RiderMapNavigationPolicy.shouldMoveCamera(
-          current: nextPosition,
-          previous: _lastCameraPosition ?? oldPosition,
-          following: _followingRider,
-        )) {
-      _lastCameraPosition = nextPosition;
-      _followRider(nextPosition);
+        (oldPosition == null ||
+            Geolocator.distanceBetween(
+                  oldPosition.latitude,
+                  oldPosition.longitude,
+                  nextPosition.latitude,
+                  nextPosition.longitude,
+                ) >
+                8)) {
+      _controller?.animateCamera(
+        CameraUpdate.newLatLng(
+          LatLng(nextPosition.latitude, nextPosition.longitude),
+        ),
+      );
     }
   }
 
@@ -754,51 +692,9 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
     final pickup = _latLng(
         widget.offer.raw['pickupDetails'] ?? widget.offer.raw['pickup']);
     if (pickup == null) return;
-    _animateCamera(CameraUpdate.newCameraPosition(
+    _controller?.animateCamera(CameraUpdate.newCameraPosition(
       CameraPosition(target: pickup, zoom: 15.5),
     ));
-  }
-
-  void _followRider(Position position) {
-    final target = LatLng(position.latitude, position.longitude);
-    final heading = position.heading.isFinite ? position.heading : 0.0;
-    _animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(
-          target: target,
-          zoom: 16.2,
-          bearing: heading,
-          tilt: 42,
-        ),
-      ),
-    );
-  }
-
-  void _animateCamera(CameraUpdate update) {
-    final controller = _controller;
-    if (controller == null) return;
-    _cameraAnimating = true;
-    controller.animateCamera(update).whenComplete(() {
-      Future<void>.delayed(const Duration(milliseconds: 250), () {
-        if (mounted) _cameraAnimating = false;
-      });
-    });
-  }
-
-  void _resumeFollow(Position? position) {
-    setState(() => _followingRider = true);
-    if (position != null) {
-      _lastCameraPosition = position;
-      _followRider(position);
-      return;
-    }
-    final pickup = _latLng(
-        widget.offer.raw['pickupDetails'] ?? widget.offer.raw['pickup']);
-    final dropoff = _latLng(
-        widget.offer.raw['dropoffDetails'] ?? widget.offer.raw['dropoff']);
-    if (pickup != null && dropoff != null) {
-      _fitRoute(pickup, dropoff, null);
-    }
   }
 
   @override
@@ -819,186 +715,66 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
             widget.riderPosition!.longitude,
           );
 
-    final liveLocationFresh = _liveLocationFresh(widget.activeTrackingStatus);
-    final activeRoute = _activeRoutePoints(
-      pickup: pickup,
-      dropoff: dropoff,
-      rider: riderLatLng,
-    );
-    final contextRoute = _contextRoutePoints(
-      pickup: pickup,
-      dropoff: dropoff,
-      rider: riderLatLng,
-    );
-
-    return Stack(
-      children: [
-        GoogleMap(
-          onMapCreated: (controller) {
-            _controller = controller;
-            controller.setMapStyle(_riderDarkMapStyle);
-            if (widget.focusPickup) {
-              _focusPickup();
-            } else {
-              _fitRoute(pickup, dropoff, riderLatLng);
-            }
-          },
-          onCameraMoveStarted: () {
-            if (!_cameraAnimating) {
-              setState(() => _followingRider = false);
-            }
-          },
-          initialCameraPosition: CameraPosition(
-            target: LatLng(
-              (pickup.latitude + dropoff.latitude) / 2,
-              (pickup.longitude + dropoff.longitude) / 2,
-            ),
-            zoom: 12,
-          ),
-          zoomControlsEnabled: false,
-          myLocationButtonEnabled: false,
-          compassEnabled: true,
-          mapToolbarEnabled: false,
-          markers: {
-            Marker(
-              markerId: const MarkerId('pickup'),
-              position: pickup,
-              icon: BitmapDescriptor.defaultMarkerWithHue(
-                  BitmapDescriptor.hueAzure),
-            ),
-            Marker(
-              markerId: const MarkerId('dropoff'),
-              position: dropoff,
-              icon: BitmapDescriptor.defaultMarkerWithHue(
-                  BitmapDescriptor.hueBlue),
-            ),
-            if (widget.riderPosition != null)
-              Marker(
-                markerId: const MarkerId('rider'),
-                position: riderLatLng!,
-                rotation: widget.riderPosition!.heading.isFinite
-                    ? widget.riderPosition!.heading
-                    : 0,
-                anchor: const Offset(.5, .5),
-                flat: true,
-                zIndex: 4,
-                icon: BitmapDescriptor.defaultMarkerWithHue(
-                    BitmapDescriptor.hueCyan),
-              ),
-          },
-          polylines: {
-            if (contextRoute.length > 1)
-              Polyline(
-                polylineId: const PolylineId('route-context-stale'),
-                points: contextRoute,
-                color: const Color(0xFF60A5FA).withValues(alpha: .24),
-                width: 4,
-                patterns: [
-                  PatternItem.dash(18),
-                  PatternItem.gap(14),
-                ],
-              ),
-            Polyline(
-              polylineId: const PolylineId('route-active-circum'),
-              points: activeRoute,
-              color: liveLocationFresh
-                  ? const Color(0xFF3B82F6)
-                  : const Color(0xFF60A5FA).withValues(alpha: .48),
-              width: liveLocationFresh ? 6 : 5,
-            ),
-          },
-          circles: {
-            if (riderLatLng != null && liveLocationFresh)
-              Circle(
-                circleId: const CircleId('rider-live-pulse'),
-                center: riderLatLng,
-                radius: widget.riderPosition!.accuracy.clamp(12, 42).toDouble(),
-                fillColor: const Color(0xFF38BDF8).withValues(alpha: .16),
-                strokeColor: const Color(0xFF60A5FA).withValues(alpha: .58),
-                strokeWidth: 2,
-              ),
-          },
+    return GoogleMap(
+      onMapCreated: (controller) {
+        _controller = controller;
+        if (widget.focusPickup) _focusPickup();
+      },
+      initialCameraPosition: CameraPosition(
+        target: LatLng(
+          (pickup.latitude + dropoff.latitude) / 2,
+          (pickup.longitude + dropoff.longitude) / 2,
         ),
-        Positioned(
-          right: 16,
-          top: 112,
-          child: Column(
-            children: [
-              _MapControlButton(
-                tooltip: _followingRider ? 'Following rider' : 'Resume follow',
-                icon: _followingRider
-                    ? Icons.gps_fixed_rounded
-                    : Icons.my_location_rounded,
-                onTap: riderLatLng == null
-                    ? null
-                    : () => _resumeFollow(widget.riderPosition),
-              ),
-              const SizedBox(height: 10),
-              _MapControlButton(
-                tooltip: 'Fit route',
-                icon: Icons.zoom_out_map_rounded,
-                onTap: () => _fitRoute(pickup, dropoff, riderLatLng),
-              ),
-            ],
-          ),
-        ),
-        Positioned(
-          left: 16,
-          top: 112,
-          child: _MapMiniStatus(
-            label: liveLocationFresh
-                ? 'Live route'
-                : widget.activeTrackingStatus ==
-                        RiderLiveTrackingStatus.foregroundOnly
-                    ? 'Foreground only'
-                    : 'Route preview',
-            sublabel: _followingRider ? 'Camera following' : 'Manual map',
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _fitRoute(LatLng pickup, LatLng dropoff, LatLng? rider) {
-    final points = [pickup, dropoff, if (rider != null) rider];
-    setState(() => _followingRider = false);
-    _animateCamera(
-      CameraUpdate.newLatLngBounds(
-        RiderMapNavigationPolicy.boundsFor(points),
-        _routePadding(context),
+        zoom: 12,
       ),
+      zoomControlsEnabled: false,
+      myLocationButtonEnabled: false,
+      compassEnabled: false,
+      mapToolbarEnabled: false,
+      markers: {
+        Marker(
+          markerId: const MarkerId('pickup'),
+          position: pickup,
+          icon:
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+        ),
+        Marker(
+          markerId: const MarkerId('dropoff'),
+          position: dropoff,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+        ),
+        if (widget.riderPosition != null)
+          Marker(
+            markerId: const MarkerId('rider'),
+            position: riderLatLng!,
+            rotation: widget.riderPosition!.heading.isFinite
+                ? widget.riderPosition!.heading
+                : 0,
+            anchor: const Offset(.5, .5),
+            icon:
+                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
+          ),
+      },
+      polylines: {
+        Polyline(
+          polylineId: const PolylineId('route'),
+          points: [pickup, dropoff],
+          color: const Color(0xFF60A5FA),
+          width: 5,
+        ),
+      },
+      circles: {
+        if (riderLatLng != null)
+          Circle(
+            circleId: const CircleId('rider-live-pulse'),
+            center: riderLatLng,
+            radius: widget.riderPosition!.accuracy.clamp(12, 42).toDouble(),
+            fillColor: const Color(0xFF38BDF8).withValues(alpha: .16),
+            strokeColor: const Color(0xFF60A5FA).withValues(alpha: .58),
+            strokeWidth: 2,
+          ),
+      },
     );
-  }
-
-  List<LatLng> _activeRoutePoints({
-    required LatLng pickup,
-    required LatLng dropoff,
-    required LatLng? rider,
-  }) {
-    if (rider != null) return [rider, widget.focusPickup ? pickup : dropoff];
-    return widget.focusPickup ? [pickup, dropoff] : [pickup, dropoff];
-  }
-
-  List<LatLng> _contextRoutePoints({
-    required LatLng pickup,
-    required LatLng dropoff,
-    required LatLng? rider,
-  }) {
-    if (rider == null) return const [];
-    return widget.focusPickup ? [pickup, dropoff] : [pickup, rider];
-  }
-
-  double _routePadding(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    final shortest = size.shortestSide;
-    return shortest < 380 ? 62 : 86;
-  }
-
-  static bool _liveLocationFresh(RiderLiveTrackingStatus? status) {
-    return status == RiderLiveTrackingStatus.live ||
-        status == RiderLiveTrackingStatus.backgroundActive ||
-        status == RiderLiveTrackingStatus.arrivedAtPickup ||
-        status == RiderLiveTrackingStatus.arrivedAtDropoff;
   }
 
   static LatLng? _latLng(dynamic value) {
@@ -1018,110 +794,6 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
     final lng = value['lng'] ?? value['longitude'];
     if (lat is num && lng is num) return LatLng(lat.toDouble(), lng.toDouble());
     return null;
-  }
-}
-
-class _MapControlButton extends StatelessWidget {
-  const _MapControlButton({
-    required this.tooltip,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String tooltip;
-  final IconData icon;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Semantics(
-        button: true,
-        label: tooltip,
-        enabled: onTap != null,
-        child: GestureDetector(
-          onTap: onTap,
-          child: SizedBox(
-            width: 44,
-            height: 44,
-            child: RiderGlassSurface(
-              radius: 16,
-              opacity: .62,
-              blur: 14,
-              borderColor: Colors.white.withValues(alpha: .14),
-              child: Icon(
-                icon,
-                color: onTap == null
-                    ? Colors.white.withValues(alpha: .28)
-                    : const Color(0xFF60A5FA),
-                size: 20,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MapMiniStatus extends StatelessWidget {
-  const _MapMiniStatus({
-    required this.label,
-    required this.sublabel,
-  });
-
-  final String label;
-  final String sublabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return RiderGlassSurface(
-      radius: 16,
-      opacity: .58,
-      blur: 12,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-      borderColor: Colors.white.withValues(alpha: .12),
-      child: Semantics(
-        label: '$label. $sublabel.',
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: const BoxDecoration(
-                color: Color(0xFF3B82F6),
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: RiderPalette.paper,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                Text(
-                  sublabel,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: .62),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -1146,85 +818,6 @@ RiderGeoPoint? _trackingPoint(dynamic value) {
   }
   return null;
 }
-
-const String _riderDarkMapStyle = '''
-[
-  {
-    "elementType": "geometry",
-    "stylers": [
-      { "color": "#07090F" }
-    ]
-  },
-  {
-    "elementType": "labels.icon",
-    "stylers": [
-      { "visibility": "off" }
-    ]
-  },
-  {
-    "elementType": "labels.text.fill",
-    "stylers": [
-      { "color": "#AAB7CF" }
-    ]
-  },
-  {
-    "elementType": "labels.text.stroke",
-    "stylers": [
-      { "color": "#07090F" }
-    ]
-  },
-  {
-    "featureType": "poi",
-    "elementType": "geometry",
-    "stylers": [
-      { "color": "#0B1020" }
-    ]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry",
-    "stylers": [
-      { "color": "#111827" }
-    ]
-  },
-  {
-    "featureType": "road.arterial",
-    "elementType": "geometry",
-    "stylers": [
-      { "color": "#172033" }
-    ]
-  },
-  {
-    "featureType": "road.highway",
-    "elementType": "geometry",
-    "stylers": [
-      { "color": "#1D4ED8" },
-      { "lightness": -35 }
-    ]
-  },
-  {
-    "featureType": "road.highway",
-    "elementType": "geometry.stroke",
-    "stylers": [
-      { "color": "#3B82F6" },
-      { "lightness": -20 }
-    ]
-  },
-  {
-    "featureType": "transit",
-    "stylers": [
-      { "visibility": "off" }
-    ]
-  },
-  {
-    "featureType": "water",
-    "elementType": "geometry",
-    "stylers": [
-      { "color": "#020617" }
-    ]
-  }
-]
-''';
 
 class _MapFallback extends StatelessWidget {
   const _MapFallback();
@@ -1416,7 +1009,7 @@ class _JobsStateScaffold extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     const Text(
-                      'Offers, scheduled work, active deliveries and recent jobs.',
+                      'Available deliveries, scheduled work, active deliveries and activity.',
                       style: TextStyle(
                         color: RiderPalette.muted,
                         fontSize: 13,
@@ -1541,16 +1134,16 @@ class _JobsInfoGrid extends StatelessWidget {
       children: [
         _JobsInfoTile(
           icon: Icons.wifi_tethering_rounded,
-          title: 'Availability',
+          title: 'Available deliveries',
           subtitle: offline
-              ? 'Offline. Use the centre action to go online.'
-              : 'Online status controls nearby offer listening.',
+              ? 'Go online from Home to receive new offers.'
+              : 'New offers will appear here automatically.',
           accent: offline ? RiderPalette.amber : RiderPalette.green,
         ),
         const SizedBox(height: 10),
         const _JobsInfoTile(
           icon: Icons.calendar_month_outlined,
-          title: 'Reserved scheduled jobs',
+          title: 'Scheduled deliveries',
           subtitle: 'Scheduled deliveries stay in Schedule until ready.',
           accent: RiderPalette.purple,
         ),
@@ -1564,9 +1157,9 @@ class _JobsInfoGrid extends StatelessWidget {
         const SizedBox(height: 10),
         const _JobsInfoTile(
           icon: Icons.history_rounded,
-          title: 'Recent jobs',
+          title: 'Activity',
           subtitle:
-              'Completed work remains available in activity and earnings.',
+              'Completed deliveries remain available in activity and earnings.',
           accent: RiderPalette.green,
         ),
       ],
@@ -1639,13 +1232,11 @@ class _JobsInfoTile extends StatelessWidget {
 enum RiderDeliveryStage {
   accepted,
   navigatingToPickup,
-  approachingPickup,
   arrivedAtPickup,
   pickupVerification,
   pickupVerified,
   collected,
   navigatingToDropoff,
-  approachingDropoff,
   arrivedAtDropoff,
   waiting,
   pinRequired,
@@ -1654,30 +1245,11 @@ enum RiderDeliveryStage {
 }
 
 class RiderDeliveryStagePolicy {
-  static const ordered = [
-    RiderDeliveryStage.accepted,
-    RiderDeliveryStage.navigatingToPickup,
-    RiderDeliveryStage.approachingPickup,
-    RiderDeliveryStage.arrivedAtPickup,
-    RiderDeliveryStage.pickupVerification,
-    RiderDeliveryStage.pickupVerified,
-    RiderDeliveryStage.collected,
-    RiderDeliveryStage.navigatingToDropoff,
-    RiderDeliveryStage.approachingDropoff,
-    RiderDeliveryStage.arrivedAtDropoff,
-    RiderDeliveryStage.waiting,
-    RiderDeliveryStage.pinRequired,
-    RiderDeliveryStage.delivered,
-  ];
-
   static RiderDeliveryStage fromRaw(dynamic value) {
     final text = '$value'.trim().toLowerCase();
     switch (text) {
       case 'navigating_to_pickup':
-      case 'travelling_to_pickup':
         return RiderDeliveryStage.navigatingToPickup;
-      case 'approaching_pickup':
-        return RiderDeliveryStage.approachingPickup;
       case 'arrived_at_pickup':
         return RiderDeliveryStage.arrivedAtPickup;
       case 'pickup_verification':
@@ -1689,11 +1261,7 @@ class RiderDeliveryStagePolicy {
       case 'collected':
         return RiderDeliveryStage.collected;
       case 'navigating_to_dropoff':
-      case 'travelling_to_dropoff':
         return RiderDeliveryStage.navigatingToDropoff;
-      case 'approaching_dropoff':
-      case 'approaching_destination':
-        return RiderDeliveryStage.approachingDropoff;
       case 'arrived_at_dropoff':
         return RiderDeliveryStage.arrivedAtDropoff;
       case 'waiting':
@@ -1714,8 +1282,6 @@ class RiderDeliveryStagePolicy {
     switch (stage) {
       case RiderDeliveryStage.navigatingToPickup:
         return 'navigating_to_pickup';
-      case RiderDeliveryStage.approachingPickup:
-        return 'approaching_pickup';
       case RiderDeliveryStage.arrivedAtPickup:
         return 'arrived_at_pickup';
       case RiderDeliveryStage.pickupVerification:
@@ -1726,8 +1292,6 @@ class RiderDeliveryStagePolicy {
         return 'collected';
       case RiderDeliveryStage.navigatingToDropoff:
         return 'navigating_to_dropoff';
-      case RiderDeliveryStage.approachingDropoff:
-        return 'approaching_dropoff';
       case RiderDeliveryStage.arrivedAtDropoff:
         return 'arrived_at_dropoff';
       case RiderDeliveryStage.waiting:
@@ -1741,170 +1305,6 @@ class RiderDeliveryStagePolicy {
       case RiderDeliveryStage.accepted:
         return 'accepted';
     }
-  }
-
-  static RiderDeliveryStage? nextStage(
-    RiderDeliveryStage current, {
-    required bool verificationRequired,
-    required bool pinRequired,
-  }) {
-    switch (current) {
-      case RiderDeliveryStage.accepted:
-        return RiderDeliveryStage.navigatingToPickup;
-      case RiderDeliveryStage.navigatingToPickup:
-      case RiderDeliveryStage.approachingPickup:
-        return RiderDeliveryStage.arrivedAtPickup;
-      case RiderDeliveryStage.arrivedAtPickup:
-        return verificationRequired
-            ? RiderDeliveryStage.pickupVerification
-            : RiderDeliveryStage.collected;
-      case RiderDeliveryStage.pickupVerification:
-        return RiderDeliveryStage.pickupVerified;
-      case RiderDeliveryStage.pickupVerified:
-        return RiderDeliveryStage.collected;
-      case RiderDeliveryStage.collected:
-        return RiderDeliveryStage.navigatingToDropoff;
-      case RiderDeliveryStage.navigatingToDropoff:
-      case RiderDeliveryStage.approachingDropoff:
-        return RiderDeliveryStage.arrivedAtDropoff;
-      case RiderDeliveryStage.arrivedAtDropoff:
-        return RiderDeliveryStage.waiting;
-      case RiderDeliveryStage.waiting:
-        return pinRequired
-            ? RiderDeliveryStage.pinRequired
-            : RiderDeliveryStage.delivered;
-      case RiderDeliveryStage.pinRequired:
-        return RiderDeliveryStage.delivered;
-      case RiderDeliveryStage.delivered:
-      case RiderDeliveryStage.issueReported:
-        return null;
-    }
-  }
-
-  static bool canAdvance({
-    required String riderId,
-    required Map<String, dynamic> delivery,
-    required RiderDeliveryStage current,
-    required RiderDeliveryStage target,
-    required bool verificationRequired,
-    required bool pinRequired,
-  }) {
-    final assigned =
-        '${delivery['riderId'] ?? delivery['assignedRiderId'] ?? ''}'.trim();
-    if (assigned.isNotEmpty && assigned != riderId) return false;
-    return nextStage(
-          current,
-          verificationRequired: verificationRequired,
-          pinRequired: pinRequired,
-        ) ==
-        target;
-  }
-
-  static Map<String, dynamic> transitionPatch({
-    required String deliveryId,
-    required String riderId,
-    required RiderDeliveryStage from,
-    required RiderDeliveryStage to,
-    DateTime? now,
-    Map<String, dynamic>? arrivalLocation,
-  }) {
-    final timestamp = now ?? DateTime.now().toUtc();
-    final state = storageValue(to);
-    final event = {
-      'deliveryId': deliveryId,
-      'riderId': riderId,
-      'previousState': storageValue(from),
-      'state': state,
-      'updatedBy': riderId,
-      'createdAt': Timestamp.fromDate(timestamp),
-    };
-    final patch = <String, dynamic>{
-      'state': state,
-      'deliveryStage': state,
-      'updatedAt': Timestamp.fromDate(timestamp),
-      'updatedBy': riderId,
-      'riderId': riderId,
-      'validationComplete': to != RiderDeliveryStage.pickupVerification,
-      'verificationRequired': to == RiderDeliveryStage.pickupVerification,
-      'verificationComplete':
-          to.index > RiderDeliveryStage.pickupVerification.index,
-      'history': FieldValue.arrayUnion([event]),
-    };
-    if (to == RiderDeliveryStage.arrivedAtPickup ||
-        to == RiderDeliveryStage.arrivedAtDropoff) {
-      patch.addAll(_arrivalPatch(
-        deliveryId: deliveryId,
-        riderId: riderId,
-        stage: to,
-        timestamp: timestamp,
-        arrivalLocation: arrivalLocation,
-      ));
-    }
-    return patch;
-  }
-
-  static Map<String, dynamic> _arrivalPatch({
-    required String deliveryId,
-    required String riderId,
-    required RiderDeliveryStage stage,
-    required DateTime timestamp,
-    Map<String, dynamic>? arrivalLocation,
-  }) {
-    final isPickup = stage == RiderDeliveryStage.arrivedAtPickup;
-    final freeWaitEndsAt = timestamp.add(const Duration(minutes: 3));
-    return {
-      isPickup ? 'pickupArrivedAt' : 'dropoffArrivedAt':
-          Timestamp.fromDate(timestamp),
-      'arrivedAt': Timestamp.fromDate(timestamp),
-      'arrivalLocation': arrivalLocation,
-      'waiting': {
-        'active': true,
-        'deliveryId': deliveryId,
-        'riderId': riderId,
-        'phase': isPickup ? 'pickup' : 'dropoff',
-        'freeWaitMinutes': 3,
-        'startedAt': Timestamp.fromDate(timestamp),
-        'freeWaitEndsAt': Timestamp.fromDate(freeWaitEndsAt),
-        'noShowAvailableAt': Timestamp.fromDate(freeWaitEndsAt),
-      },
-      'pendingNotification': {
-        'recipient': isPickup ? 'sender' : 'receiver',
-        'message': 'Your rider is outside.',
-        'triggeredByState': storageValue(stage),
-        'createdAt': Timestamp.fromDate(timestamp),
-      },
-    };
-  }
-
-  static bool noShowAvailable(DateTime arrivedAt, DateTime now) {
-    return !now.isBefore(arrivedAt.add(const Duration(minutes: 3)));
-  }
-
-  static Map<String, dynamic>? waitingChargeRecord({
-    required String deliveryId,
-    required String riderId,
-    required DateTime arrivedAt,
-    required DateTime now,
-    required int amountPennies,
-    String reason = 'waiting_time_after_free_period',
-  }) {
-    final chargeStart = arrivedAt.add(const Duration(minutes: 3));
-    if (now.isBefore(chargeStart)) return null;
-    return {
-      'chargeType': 'waiting',
-      'startTime': Timestamp.fromDate(chargeStart),
-      'endTime': Timestamp.fromDate(now),
-      'amount': amountPennies,
-      'reason': reason,
-      'deliveryId': deliveryId,
-      'riderId': riderId,
-      'auditEvent': {
-        'state': 'waiting_charge_recorded',
-        'deliveryId': deliveryId,
-        'riderId': riderId,
-        'createdAt': Timestamp.fromDate(now),
-      },
-    };
   }
 }
 
@@ -1942,21 +1342,39 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   bool _expanded = false;
   bool _transitioning = false;
   bool _arrivalTransitioning = false;
+  bool _confirmingIris = false;
+  bool _irisConfirmedFromBackend = false;
   String? _transitionError;
 
   bool get _vanguard =>
       widget.offer.warningChips.contains('Vanguard') ||
       widget.offer.raw['requiresVanguard'] == true;
-  bool get _pinRequired => _vanguard || widget.offer.raw['pinRequired'] == true;
+  bool get _healthPlus =>
+      widget.offer.warningChips.contains('Health+') ||
+      widget.offer.raw['serviceType'] == 'health_plus' ||
+      widget.offer.raw['isHealthPlus'] == true;
+  bool get _gift =>
+      widget.offer.warningChips.contains('Gift') ||
+      widget.offer.raw['serviceType'] == 'gift' ||
+      widget.offer.raw['isGift'] == true;
+  bool get _pinRequired =>
+      _vanguard ||
+      _healthPlus ||
+      widget.offer.raw['pinRequired'] == true ||
+      widget.offer.raw['receiverPinRequired'] == true;
+  bool get _photoRequired =>
+      _gift ||
+      widget.offer.raw['photoRequired'] == true ||
+      widget.offer.raw['proofPhotoRequired'] == true;
+  bool get _signatureRequired =>
+      widget.offer.raw['signatureRequired'] == true ||
+      widget.offer.raw['receiverSignatureRequired'] == true;
   bool get _verificationRequired =>
       _vanguard ||
+      _healthPlus ||
+      _gift ||
       widget.offer.raw['verificationRequired'] == true ||
       widget.offer.raw['requiresVerification'] == true;
-  bool get _proofOfDeliveryRequired =>
-      widget.offer.raw['proofOfDeliveryRequired'] == true ||
-      widget.offer.raw['requiresProofOfDelivery'] == true ||
-      widget.offer.raw['photoProofRequired'] == true ||
-      _vanguard;
 
   @override
   void initState() {
@@ -1988,13 +1406,11 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     final phase = snapshot.arrivalPhase;
     if (phase == null || _arrivalTransitioning) return;
     if (phase == RiderTrackingArrivalPhase.pickup &&
-        (_stage == RiderDeliveryStage.navigatingToPickup ||
-            _stage == RiderDeliveryStage.approachingPickup)) {
+        _stage == RiderDeliveryStage.navigatingToPickup) {
       unawaited(_autoArrival(RiderDeliveryStage.arrivedAtPickup));
     }
     if (phase == RiderTrackingArrivalPhase.dropoff &&
-        (_stage == RiderDeliveryStage.navigatingToDropoff ||
-            _stage == RiderDeliveryStage.approachingDropoff)) {
+        _stage == RiderDeliveryStage.navigatingToDropoff) {
       unawaited(_autoArrival(RiderDeliveryStage.arrivedAtDropoff));
     }
   }
@@ -2040,21 +1456,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
 
   Future<void> _advance() async {
     if (_transitioning) return;
-    final next = RiderDeliveryStagePolicy.nextStage(
-      _stage,
-      verificationRequired: _verificationRequired,
-      pinRequired: _pinRequired,
-    );
-    if (next == null) return;
-    if (!RiderDeliveryStagePolicy.canAdvance(
-      riderId: widget.riderId,
-      delivery: widget.offer.raw,
-      current: _stage,
-      target: next,
-      verificationRequired: _verificationRequired,
-      pinRequired: _pinRequired,
-    )) return;
-    final action = _actionForTransition(_stage, next);
+    final action = _actionForStage(_stage);
+    if (action == null) return;
     String? pin;
     Map<String, dynamic>? evidence;
     if (_pinRequired &&
@@ -2066,18 +1469,13 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       if (pin == null) return;
     }
     if ((action == 'verify_collection_pin' && _verificationRequired) ||
-        (action == 'verify_receiver_pin' &&
-            (_pinRequired || _proofOfDeliveryRequired))) {
+        (action == 'verify_receiver_pin' && _pinRequired)) {
       evidence = await _captureEvidence(
         pickup: action == 'verify_collection_pin',
       );
       if (evidence == null) return;
     }
     final controller = widget.deliveryController;
-    if (controller == null && widget.firestore == null) {
-      setState(() => _stage = next);
-      return;
-    }
     setState(() {
       _transitioning = true;
       _transitionError = null;
@@ -2092,6 +1490,12 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       );
       if (!mounted) return;
       setState(() => _stage = RiderDeliveryStagePolicy.fromRaw(result.status));
+      if (action == 'start_heading_to_pickup') {
+        unawaited(_openNavigationOptions(toPickup: true));
+      }
+      if (action == 'start_delivery') {
+        unawaited(_openNavigationOptions(toPickup: false));
+      }
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
       setState(() => _transitionError = error.message ?? 'Action failed.');
@@ -2215,8 +1619,14 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
               DropdownButtonFormField<String>(
                 value: category,
                 items: const {
+                  'vehicle_breakdown': 'Vehicle breakdown',
+                  'accident': 'Accident',
+                  'road_closure': 'Road closure',
+                  'medical_emergency': 'Medical emergency',
+                  'customer_change_request': 'Customer requests change',
                   'sender_unavailable': 'Sender unavailable',
                   'recipient_unavailable': 'Recipient unavailable',
+                  'access_problem': 'Unable to access property',
                   'address_problem': 'Address problem',
                   'parcel_mismatch': 'Parcel mismatch',
                   'unsafe_situation': 'Unsafe situation',
@@ -2299,41 +1709,32 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     }
   }
 
-  String _actionForTransition(
-    RiderDeliveryStage current,
-    RiderDeliveryStage next,
-  ) {
-    if (current == RiderDeliveryStage.pickupVerified) {
-      return 'confirm_collected';
-    }
-    if (current == RiderDeliveryStage.collected) {
-      return 'start_delivery';
-    }
-    switch (next) {
+  String? _actionForStage(RiderDeliveryStage current) {
+    switch (current) {
+      case RiderDeliveryStage.accepted:
+        return 'start_heading_to_pickup';
       case RiderDeliveryStage.navigatingToPickup:
-        return 'start_heading_to_pickup';
-      case RiderDeliveryStage.approachingPickup:
-        return 'start_heading_to_pickup';
-      case RiderDeliveryStage.arrivedAtPickup:
         return 'arrived_at_pickup';
+      case RiderDeliveryStage.arrivedAtPickup:
+        return _verificationRequired
+            ? 'verify_collection_pin'
+            : 'confirm_collected';
       case RiderDeliveryStage.pickupVerification:
-      case RiderDeliveryStage.pickupVerified:
-      case RiderDeliveryStage.collected:
         return 'verify_collection_pin';
+      case RiderDeliveryStage.pickupVerified:
+        return 'confirm_collected';
+      case RiderDeliveryStage.collected:
+        return 'start_delivery';
       case RiderDeliveryStage.navigatingToDropoff:
-        return 'start_delivery';
-      case RiderDeliveryStage.approachingDropoff:
-        return 'start_delivery';
+        return 'arrived_at_dropoff';
       case RiderDeliveryStage.arrivedAtDropoff:
       case RiderDeliveryStage.waiting:
-        return 'arrived_at_dropoff';
+        return _pinRequired ? 'verify_receiver_pin' : 'verify_receiver_pin';
       case RiderDeliveryStage.pinRequired:
-      case RiderDeliveryStage.delivered:
         return 'verify_receiver_pin';
       case RiderDeliveryStage.issueReported:
-        return 'report_issue';
-      case RiderDeliveryStage.accepted:
-        throw StateError('Accepted is not a forward transition.');
+      case RiderDeliveryStage.delivered:
+        return null;
     }
   }
 
@@ -2365,6 +1766,79 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     );
     input.dispose();
     return value != null && RegExp(r'^\d{6}$').hasMatch(value) ? value : null;
+  }
+
+  Future<void> _openNavigationOptions({required bool toPickup}) async {
+    final target = toPickup
+        ? _locationPayload(
+            widget.offer.raw['pickupDetails'] ?? widget.offer.raw['pickup'])
+        : _locationPayload(
+            widget.offer.raw['dropoffDetails'] ?? widget.offer.raw['dropoff']);
+    final label = Uri.encodeComponent(
+        toPickup ? widget.offer.pickupAddress : widget.offer.dropoffAddress);
+    final lat = target.$1;
+    final lng = target.$2;
+    final query = lat != null && lng != null ? '$lat,$lng' : label;
+    if (!mounted) return;
+    final app = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: RiderGlassSurface(
+            padding: const EdgeInsets.all(16),
+            radius: 24,
+            opacity: .78,
+            blur: 18,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const [
+                Text('Navigate',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900)),
+                SizedBox(height: 10),
+                _MapChoice(
+                    label: 'Google Maps',
+                    icon: Icons.map_rounded,
+                    value: 'google'),
+                _MapChoice(
+                    label: 'Apple Maps',
+                    icon: Icons.navigation_rounded,
+                    value: 'apple'),
+                _MapChoice(
+                    label: 'Waze',
+                    icon: Icons.alt_route_rounded,
+                    value: 'waze'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (app == null) return;
+    final uri = switch (app) {
+      'google' =>
+        Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$query'),
+      'apple' => Uri.parse('https://maps.apple.com/?daddr=$query'),
+      'waze' => Uri.parse('https://waze.com/ul?q=$query&navigate=yes'),
+      _ => null,
+    };
+    if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
+  (double?, double?) _locationPayload(Object? value) {
+    if (value is! Map) return (null, null);
+    final data = Map<String, dynamic>.from(value);
+    final lat = data['lat'] ?? data['latitude'];
+    final lng = data['lng'] ?? data['longitude'];
+    return (
+      lat is num ? lat.toDouble() : null,
+      lng is num ? lng.toDouble() : null
+    );
   }
 
   @override
@@ -2401,11 +1875,15 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
             if (mounted) setState(() => _stage = restored);
           });
         final terminal = '$rawStatus'.toLowerCase();
-        if ({'cancelled', 'failed', 'no_show', 'disputed'}.contains(terminal))
+        if (terminal == 'cancelled' ||
+            terminal == 'failed' ||
+            terminal.contains('no_show') ||
+            terminal == 'disputed') {
           return _StateScaffold(
               title: terminal.replaceAll('_', ' '),
               message:
                   'This delivery can no longer progress. The latest backend state has been restored.');
+        }
         scheduleMicrotask(() => _syncLiveTracking(live, restored));
         return _buildExperience(context, live);
       },
@@ -2451,14 +1929,9 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
 
   Future<void> _autoArrival(RiderDeliveryStage target) async {
     if (!mounted || _transitioning || _arrivalTransitioning) return;
-    if (!RiderDeliveryStagePolicy.canAdvance(
-      riderId: widget.riderId,
-      delivery: widget.offer.raw,
-      current: _stage,
-      target: target,
-      verificationRequired: _verificationRequired,
-      pinRequired: _pinRequired,
-    )) return;
+    final action = target == RiderDeliveryStage.arrivedAtDropoff
+        ? 'arrived_at_dropoff'
+        : 'arrived_at_pickup';
     setState(() {
       _arrivalTransitioning = true;
       _transitionError = null;
@@ -2468,9 +1941,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
           await (widget.deliveryController ?? CallableRiderDeliveryController())
               .transition(
         deliveryId: widget.offer.id,
-        action: target == RiderDeliveryStage.arrivedAtDropoff
-            ? 'arrived_at_dropoff'
-            : 'arrived_at_pickup',
+        action: action,
       );
       if (!mounted) return;
       setState(() => _stage = RiderDeliveryStagePolicy.fromRaw(result.status));
@@ -2488,8 +1959,12 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       return _DeliveryCompleteView(
           offer: widget.offer,
           delivery: live,
-          onNavigateTab: widget.onNavigateTab);
+          onNavigateTab: widget.onNavigateTab,
+          onReportIssue: _reportIssue);
     final nextTitle = _nextActionTitle(_stage);
+    final irisConfirmed = _irisConfirmed(live);
+    final differenceReported =
+        live['loadDiscrepancy'] != null || live['adjustmentId'] != null;
     return Scaffold(
       backgroundColor: const Color(0xFF07090F),
       body: Stack(
@@ -2498,7 +1973,6 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
             offer: widget.offer,
             riderPosition: _displayRiderPosition ?? _trackingSnapshot.position,
             focusPickup: _stage.index < RiderDeliveryStage.collected.index,
-            activeTrackingStatus: _trackingSnapshot.status,
           ),
           Container(
             decoration: BoxDecoration(
@@ -2544,6 +2018,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                   _NavigationInstructionCard(
                     title: nextTitle,
                     subtitle: _navigationSubtitle(_stage),
+                    status: _connectionStatus(_trackingSnapshot.status),
                   ),
                   const SizedBox(height: 10),
                   _CompactProgressIndicator(stage: _stage),
@@ -2575,11 +2050,30 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                     stage: _stage,
                     expanded: _expanded,
                     vanguard: _vanguard,
-                    pinRequired: _pinRequired,
                     verificationRequired: _verificationRequired,
+                    pinRequired: _pinRequired,
+                    photoRequired: _photoRequired,
+                    signatureRequired: _signatureRequired,
+                    healthPlus: _healthPlus,
+                    gift: _gift,
+                    irisConfirmed: irisConfirmed,
+                    irisConfirmationPending: _confirmingIris,
                     cta: _transitioning ? 'Updating...' : nextTitle,
                     onToggle: () => setState(() => _expanded = !_expanded),
                     onIssue: _transitioning ? null : _reportIssue,
+                    onCustomerResponded: _transitioning
+                        ? null
+                        : () => _customerResponded(widget.offer.id),
+                    onReportDifference:
+                        _transitioning || irisConfirmed || differenceReported
+                            ? null
+                            : _reportIssue,
+                    onConfirmIris: irisConfirmed ||
+                            differenceReported ||
+                            _confirmingIris ||
+                            !_canConfirmIrisAtPickup(live)
+                        ? null
+                        : _confirmIrisAssessment,
                     onPrimary: _transitioning ? null : _advance,
                   ),
                 ],
@@ -2591,12 +2085,98 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     );
   }
 
+  Future<void> _confirmIrisAssessment() async {
+    if (_confirmingIris || _irisConfirmedFromBackend) return;
+    setState(() {
+      _confirmingIris = true;
+      _transitionError = null;
+    });
+    try {
+      final result =
+          await (widget.deliveryController ?? CallableRiderDeliveryController())
+              .confirmIrisAssessment(deliveryId: widget.offer.id);
+      final acknowledgement = result['acknowledgement'] is Map
+          ? Map<String, dynamic>.from(result['acknowledgement'] as Map)
+          : const <String, dynamic>{};
+      if (result['success'] == true &&
+          acknowledgement['acknowledgementStatus'] == 'confirmed' &&
+          mounted) {
+        setState(() => _irisConfirmedFromBackend = true);
+      }
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted) {
+        setState(() => _transitionError =
+            error.message ?? 'IRIS confirmation failed. Retry.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _transitionError =
+            'IRIS confirmation failed. Check your connection and retry.');
+      }
+    } finally {
+      if (mounted) setState(() => _confirmingIris = false);
+    }
+  }
+
+  bool _irisConfirmed(Map<String, dynamic> live) {
+    if (_irisConfirmedFromBackend) return true;
+    final acknowledgement = live['riderIrisAcknowledgement'];
+    if (acknowledgement is! Map) return false;
+    final data = Map<String, dynamic>.from(acknowledgement);
+    return data['acknowledgementStatus'] == 'confirmed' &&
+        '${data['riderId'] ?? ''}' == widget.riderId;
+  }
+
+  bool _canConfirmIrisAtPickup(Map<String, dynamic> live) {
+    if (_stage != RiderDeliveryStage.waiting) {
+      return _stage == RiderDeliveryStage.arrivedAtPickup ||
+          _stage == RiderDeliveryStage.pickupVerification ||
+          _stage == RiderDeliveryStage.pickupVerified;
+    }
+    final waiting = live['waiting'];
+    final phase = waiting is Map ? '${waiting['phase'] ?? ''}' : '';
+    return phase != 'dropoff';
+  }
+
+  Future<void> _customerResponded(String deliveryId) async {
+    setState(() {
+      _transitioning = true;
+      _transitionError = null;
+    });
+    try {
+      await (widget.deliveryController ?? CallableRiderDeliveryController())
+          .reportWaitingContext(
+        deliveryId: deliveryId,
+        type: 'customer_responded',
+        note: 'Customer responded during waiting period',
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() =>
+            _transitionError = 'Could not update waiting context. Retry.');
+      }
+    } finally {
+      if (mounted) setState(() => _transitioning = false);
+    }
+  }
+
+  String _connectionStatus(RiderLiveTrackingStatus status) {
+    return switch (status) {
+      RiderLiveTrackingStatus.live ||
+      RiderLiveTrackingStatus.backgroundActive ||
+      RiderLiveTrackingStatus.arrivedAtPickup ||
+      RiderLiveTrackingStatus.arrivedAtDropoff =>
+        'Live',
+      RiderLiveTrackingStatus.offline => 'Offline',
+      _ => 'Syncing',
+    };
+  }
+
   String _nextActionTitle(RiderDeliveryStage stage) {
     switch (stage) {
       case RiderDeliveryStage.accepted:
         return 'Navigate to Pickup';
       case RiderDeliveryStage.navigatingToPickup:
-      case RiderDeliveryStage.approachingPickup:
         return 'I\'ve Arrived';
       case RiderDeliveryStage.arrivedAtPickup:
         return _verificationRequired ? 'Verify Parcel' : 'Confirm Pickup';
@@ -2607,7 +2187,6 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       case RiderDeliveryStage.collected:
         return 'Navigate to Drop-off';
       case RiderDeliveryStage.navigatingToDropoff:
-      case RiderDeliveryStage.approachingDropoff:
         return 'I\'ve Arrived';
       case RiderDeliveryStage.arrivedAtDropoff:
       case RiderDeliveryStage.waiting:
@@ -2638,10 +2217,12 @@ class _DeliveryCompleteView extends StatelessWidget {
   const _DeliveryCompleteView(
       {required this.offer,
       required this.delivery,
-      required this.onNavigateTab});
+      required this.onNavigateTab,
+      required this.onReportIssue});
   final RiderJobOffer offer;
   final Map<String, dynamic> delivery;
   final ValueChanged<int>? onNavigateTab;
+  final VoidCallback? onReportIssue;
 
   @override
   Widget build(BuildContext context) {
@@ -2651,12 +2232,10 @@ class _DeliveryCompleteView extends StatelessWidget {
         ? Map<String, dynamic>.from(delivery['riderEarningBreakdown'] as Map)
         : const <String, dynamic>{};
     num part(String key) => breakdown[key] is num ? breakdown[key] as num : 0;
-    final rothBalance = delivery['rothBalance'] ??
-        delivery['currentRothBalance'] ??
-        delivery['riderRothBalance'];
-    final rothReward = delivery['rothReward'] ??
-        delivery['rothEarned'] ??
-        delivery['rothTransactionAmount'];
+    final feedback = delivery['feedbackRequired'] == true ||
+        delivery['requiresFeedback'] == true ||
+        delivery['senderRatingRequired'] == true ||
+        delivery['deliveryIssuePromptRequired'] == true;
     return Scaffold(
         backgroundColor: const Color(0xFF07090F),
         body: Stack(children: [
@@ -2717,18 +2296,28 @@ class _DeliveryCompleteView extends StatelessWidget {
                                     color: Color(0xFFA78BFA),
                                     fontWeight: FontWeight.w800)),
                             const SizedBox(height: 5),
-                            _RothCompletionSummary(
-                              balance: rothBalance,
-                              reward: rothReward,
-                            ),
-                            const SizedBox(height: 8),
                             const Text(
-                              'Delivery chat is now read-only. Support and Admin messages remain visible.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  color: Colors.white54, fontSize: 11),
-                            ),
+                                'Roth is separate from withdrawable cash.',
+                                style: TextStyle(
+                                    color: Colors.white54, fontSize: 11)),
                             const SizedBox(height: 20),
+                            if (feedback) ...[
+                              SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton(
+                                      onPressed: () {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(const SnackBar(
+                                          content: Text(
+                                              'Sender rating is not available for this delivery yet.'),
+                                        ));
+                                      },
+                                      child: const Text('Rate Sender'))),
+                              TextButton(
+                                  onPressed: onReportIssue,
+                                  child: const Text('Report Delivery Issue')),
+                              const SizedBox(height: 4),
+                            ],
                             SizedBox(
                                 width: double.infinity,
                                 child: FilledButton(
@@ -2736,7 +2325,9 @@ class _DeliveryCompleteView extends StatelessWidget {
                                       onNavigateTab?.call(0);
                                       Navigator.of(context).pop();
                                     },
-                                    child: const Text('Return to Home'))),
+                                    child: Text(feedback
+                                        ? 'Return to Home'
+                                        : 'Return Home'))),
                             TextButton(
                                 onPressed: () {
                                   onNavigateTab?.call(3);
@@ -2775,52 +2366,7 @@ class _CompletionRow extends StatelessWidget {
       ]));
 }
 
-class _RothCompletionSummary extends StatelessWidget {
-  const _RothCompletionSummary({
-    required this.balance,
-    required this.reward,
-  });
-
-  final Object? balance;
-  final Object? reward;
-
-  @override
-  Widget build(BuildContext context) {
-    final balanceText = _formatRoth(balance);
-    final rewardText = _formatRoth(reward);
-    return Column(
-      children: [
-        Text(
-          rewardText == null
-              ? 'Roth balance remains separate from delivery cash.'
-              : 'Roth earned: $rewardText',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Color(0xFF60A5FA),
-            fontSize: 11.5,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        if (balanceText != null)
-          Text(
-            'Current Roth balance: $balanceText',
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.white54, fontSize: 11),
-          ),
-      ],
-    );
-  }
-
-  static String? _formatRoth(Object? value) {
-    if (value == null) return null;
-    if (value is num) return '${value.toStringAsFixed(2)} Roth';
-    final text = '$value'.trim();
-    if (text.isEmpty || text == 'null') return null;
-    return text.contains('Roth') ? text : '$text Roth';
-  }
-}
-
-class _WaitingPolicyCard extends StatelessWidget {
+class _WaitingPolicyCard extends StatefulWidget {
   final FirebaseFirestore firestore;
   final String deliveryId;
   final RiderDeliveryController controller;
@@ -2832,21 +2378,84 @@ class _WaitingPolicyCard extends StatelessWidget {
   });
 
   @override
+  State<_WaitingPolicyCard> createState() => _WaitingPolicyCardState();
+}
+
+class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
+  bool _updatingContext = false;
+  bool _markingNoShow = false;
+  String? _error;
+  Map<String, dynamic>? _lastNoShowResult;
+
+  Future<void> _customerResponded() async {
+    setState(() {
+      _updatingContext = true;
+      _error = null;
+    });
+    try {
+      await widget.controller.reportWaitingContext(
+        deliveryId: widget.deliveryId,
+        type: 'customer_responded',
+        note: 'Customer responded during waiting period',
+      );
+    } catch (_) {
+      if (mounted) setState(() => _error = 'Could not update waiting context.');
+    } finally {
+      if (mounted) setState(() => _updatingContext = false);
+    }
+  }
+
+  Future<void> _markNoShow() async {
+    setState(() {
+      _markingNoShow = true;
+      _error = null;
+    });
+    try {
+      final result =
+          await widget.controller.markNoShow(deliveryId: widget.deliveryId);
+      if (mounted) setState(() => _lastNoShowResult = result);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'No-show failed. Retry.');
+    } finally {
+      if (mounted) setState(() => _markingNoShow = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream:
-          firestore.collection('deliveryRequests').doc(deliveryId).snapshots(),
+      stream: widget.firestore
+          .collection('deliveryRequests')
+          .doc(widget.deliveryId)
+          .snapshots(),
       builder: (context, snapshot) {
         final data = snapshot.data?.data() ?? const <String, dynamic>{};
         final waiting = data['waiting'] is Map
             ? Map<String, dynamic>.from(data['waiting'] as Map)
             : const <String, dynamic>{};
+        final noShowFinancial = data['noShowFinancial'] is Map
+            ? Map<String, dynamic>.from(data['noShowFinancial'] as Map)
+            : _lastNoShowResult?['financial'] is Map
+                ? Map<String, dynamic>.from(
+                    _lastNoShowResult!['financial'] as Map)
+                : const <String, dynamic>{};
         final rawDeadline = waiting['noShowAvailableAt'];
         final deadline = rawDeadline is Timestamp
             ? rawDeadline.toDate()
             : rawDeadline is num
                 ? DateTime.fromMillisecondsSinceEpoch(rawDeadline.toInt())
                 : null;
+        final feeAmount = _moneyValue(
+            noShowFinancial['amount'] ?? waiting['noShowFeeAmount']);
+        final riderCompensation = _moneyValue(
+            noShowFinancial['riderCompensation'] ??
+                waiting['noShowRiderCompensation']);
+        final currency =
+            '${noShowFinancial['currency'] ?? waiting['currency'] ?? 'GBP'}';
+        final noShowRecorded = data['state'] == 'sender_no_show_pickup' ||
+            noShowFinancial.isNotEmpty ||
+            _lastNoShowResult?['success'] == true;
+        final backendHasWaitingDeadline = deadline != null;
         return StreamBuilder<int>(
           stream: Stream<int>.periodic(
               const Duration(seconds: 1), (value) => value),
@@ -2854,57 +2463,325 @@ class _WaitingPolicyCard extends StatelessWidget {
             final remaining = deadline == null
                 ? const Duration(minutes: 3)
                 : deadline.difference(DateTime.now());
-            final noShowReady = deadline != null && remaining <= Duration.zero;
             final seconds = remaining.isNegative ? 0 : remaining.inSeconds;
             final label =
                 '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
             return RiderGlassSurface(
               width: double.infinity,
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.all(16),
               radius: 18,
               opacity: .64,
               blur: 18,
               borderColor: Colors.white.withValues(alpha: .16),
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Sender notified',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800)),
-                        Text(
-                          noShowReady
-                              ? 'No-show review available'
-                              : 'Free wait $label',
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.7)),
+                  Center(
+                    child: _WaitingCountdownRing(
+                      label: label,
+                      noShowReady: false,
+                      noShowRecorded: noShowRecorded,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  const Text('Sender notified on arrival',
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontFamily: RiderTypography.mono,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: .8)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Waiting timer is server-side - this screen mirrors the backend clock and won\'t drift if you background the app.',
+                    style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.70),
+                        fontSize: 12,
+                        height: 1.35,
+                        fontWeight: FontWeight.w600),
+                  ),
+                  if (feeAmount != null) ...[
+                    const SizedBox(height: 10),
+                    _WaitingChargeLine(
+                      label: noShowRecorded
+                          ? 'No-show charge recorded'
+                          : 'No-show charge set by Circum policy',
+                      amount: feeAmount,
+                      currency: currency,
+                    ),
+                    if (riderCompensation != null)
+                      _WaitingChargeLine(
+                        label: noShowRecorded
+                            ? 'Rider compensation recorded'
+                            : 'Rider compensation if backend approves',
+                        amount: riderCompensation,
+                        currency: currency,
+                        muted: !noShowRecorded,
+                      ),
+                  ],
+                  if (_error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(_error!,
+                        style: const TextStyle(
+                            color: Color(0xFFFF8A8A),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700)),
+                  ],
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _WaitingActionButton(
+                          label: 'Contact sender',
+                          icon: Icons.chat_bubble_outline_rounded,
+                          onTap: () => widget.controller.reportWaitingContext(
+                            deliveryId: widget.deliveryId,
+                            type: 'waiting_for_building_access',
+                            note: 'Rider contacted sender during wait',
+                          ),
                         ),
-                      ],
-                    ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _WaitingActionButton(
+                          label: _updatingContext
+                              ? 'Updating...'
+                              : 'Customer Responded',
+                          icon: Icons.mark_chat_read_outlined,
+                          onTap: _updatingContext ? null : _customerResponded,
+                        ),
+                      ),
+                    ],
                   ),
-                  TextButton(
-                    onPressed: () => controller.reportWaitingContext(
-                      deliveryId: deliveryId,
-                      type: 'waiting_for_building_access',
-                      note: 'Contact established by rider',
-                    ),
-                    child: const Text('Contact made'),
+                  const SizedBox(height: 8),
+                  _WaitingNoShowButton(
+                    label: noShowRecorded
+                        ? 'No Show recorded'
+                        : backendHasWaitingDeadline
+                            ? _markingNoShow
+                                ? 'Marking No Show...'
+                                : 'Request No Show review'
+                            : 'Waiting for no-show policy',
+                    enabled: backendHasWaitingDeadline &&
+                        !noShowRecorded &&
+                        !_markingNoShow,
+                    onTap: _markNoShow,
                   ),
-                  if (noShowReady)
-                    TextButton(
-                      onPressed: () =>
-                          controller.markNoShow(deliveryId: deliveryId),
-                      child: const Text('No Show'),
-                    ),
                 ],
               ),
             );
           },
         );
       },
+    );
+  }
+
+  double? _moneyValue(Object? value) {
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+}
+
+class _WaitingCountdownRing extends StatelessWidget {
+  const _WaitingCountdownRing({
+    required this.label,
+    required this.noShowReady,
+    required this.noShowRecorded,
+  });
+
+  final String label;
+  final bool noShowReady;
+  final bool noShowRecorded;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = noShowRecorded
+        ? const Color(0xFF34D399)
+        : noShowReady
+            ? const Color(0xFFFF452B)
+            : const Color(0xFF3B82F6);
+    return Container(
+      width: 152,
+      height: 152,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: SweepGradient(
+          colors: [
+            color,
+            color,
+            Colors.white.withValues(alpha: .08),
+            Colors.white.withValues(alpha: .08),
+          ],
+          stops: const [0, .72, .72, 1],
+        ),
+      ),
+      child: Center(
+        child: Container(
+          width: 128,
+          height: 128,
+          decoration: const BoxDecoration(
+            color: Color(0xFF07090F),
+            shape: BoxShape.circle,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                noShowRecorded
+                    ? 'DONE'
+                    : noShowReady
+                        ? '00:00'
+                        : label,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 31,
+                    fontFamily: RiderTypography.mono,
+                    fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                noShowRecorded
+                    ? 'backend recorded'
+                    : noShowReady
+                        ? 'no-show available'
+                        : 'free wait remaining',
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: .52),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _WaitingChargeLine extends StatelessWidget {
+  const _WaitingChargeLine({
+    required this.label,
+    required this.amount,
+    required this.currency,
+    this.muted = false,
+  });
+
+  final String label;
+  final double amount;
+  final String currency;
+  final bool muted;
+
+  @override
+  Widget build(BuildContext context) {
+    final symbol = currency.toUpperCase() == 'GBP' ? '£' : '$currency ';
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: muted ? .48 : .72),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700)),
+          ),
+          Text('$symbol${amount.toStringAsFixed(2)}',
+              style: TextStyle(
+                  color: muted
+                      ? Colors.white.withValues(alpha: .50)
+                      : Colors.white,
+                  fontSize: 13,
+                  fontFamily: RiderTypography.mono,
+                  fontWeight: FontWeight.w900)),
+        ],
+      ),
+    );
+  }
+}
+
+class _WaitingActionButton extends StatelessWidget {
+  const _WaitingActionButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 42),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: .12)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: const Color(0xFF60A5FA), size: 15),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WaitingNoShowButton extends StatelessWidget {
+  const _WaitingNoShowButton({
+    required this.label,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(12),
+      child: AnimatedOpacity(
+        opacity: enabled ? 1 : .46,
+        duration: const Duration(milliseconds: 180),
+        child: Container(
+          width: double.infinity,
+          constraints: const BoxConstraints(minHeight: 42),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFF452B).withValues(alpha: .08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+                color: const Color(0xFFFF452B).withValues(alpha: .30)),
+          ),
+          child: Text(label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  color: Color(0xFFFF7A63),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900)),
+        ),
+      ),
     );
   }
 }
@@ -2987,7 +2864,6 @@ class _CompactProgressIndicator extends StatelessWidget {
       case RiderDeliveryStage.accepted:
         return 0;
       case RiderDeliveryStage.navigatingToPickup:
-      case RiderDeliveryStage.approachingPickup:
       case RiderDeliveryStage.arrivedAtPickup:
         return 1;
       case RiderDeliveryStage.pickupVerification:
@@ -2996,7 +2872,6 @@ class _CompactProgressIndicator extends StatelessWidget {
       case RiderDeliveryStage.collected:
         return 3;
       case RiderDeliveryStage.navigatingToDropoff:
-      case RiderDeliveryStage.approachingDropoff:
       case RiderDeliveryStage.arrivedAtDropoff:
       case RiderDeliveryStage.waiting:
         return 4;
@@ -3497,9 +3372,10 @@ class _TrackingPermissionCard extends StatelessWidget {
 class _NavigationInstructionCard extends StatelessWidget {
   final String title;
   final String subtitle;
+  final String status;
 
   const _NavigationInstructionCard(
-      {required this.title, required this.subtitle});
+      {required this.title, required this.subtitle, required this.status});
 
   @override
   Widget build(BuildContext context) {
@@ -3545,8 +3421,70 @@ class _NavigationInstructionCard extends StatelessWidget {
               ],
             ),
           ),
+          const SizedBox(width: 8),
+          _ConnectionPill(status: status),
         ],
       ),
+    );
+  }
+}
+
+class _ConnectionPill extends StatelessWidget {
+  const _ConnectionPill({required this.status});
+
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (status) {
+      'Live' => const Color(0xFF34D399),
+      'Offline' => const Color(0xFFFF452B),
+      _ => const Color(0xFFE0A93A),
+    };
+    return Semantics(
+      label: 'Connection status $status',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: .10),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: .35)),
+        ),
+        child: Text(
+          status,
+          style: TextStyle(
+            color: color,
+            fontSize: 10,
+            fontFamily: RiderTypography.mono,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MapChoice extends StatelessWidget {
+  const _MapChoice({
+    required this.label,
+    required this.icon,
+    required this.value,
+  });
+
+  final String label;
+  final IconData icon;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      minLeadingWidth: 28,
+      leading: Icon(icon, color: const Color(0xFF60A5FA)),
+      title: Text(label,
+          style: const TextStyle(
+              color: Colors.white, fontWeight: FontWeight.w800)),
+      trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white54),
+      onTap: () => Navigator.pop(context, value),
     );
   }
 }
@@ -3557,12 +3495,21 @@ class _AcceptedBottomPanel extends StatelessWidget {
   final RiderDeliveryStage stage;
   final bool expanded;
   final bool vanguard;
-  final bool pinRequired;
   final bool verificationRequired;
+  final bool pinRequired;
+  final bool photoRequired;
+  final bool signatureRequired;
+  final bool healthPlus;
+  final bool gift;
+  final bool irisConfirmed;
+  final bool irisConfirmationPending;
   final String cta;
   final VoidCallback onToggle;
   final VoidCallback? onPrimary;
   final VoidCallback? onIssue;
+  final VoidCallback? onCustomerResponded;
+  final VoidCallback? onReportDifference;
+  final VoidCallback? onConfirmIris;
 
   const _AcceptedBottomPanel({
     required this.offer,
@@ -3570,12 +3517,21 @@ class _AcceptedBottomPanel extends StatelessWidget {
     required this.stage,
     required this.expanded,
     required this.vanguard,
-    required this.pinRequired,
     required this.verificationRequired,
+    required this.pinRequired,
+    required this.photoRequired,
+    required this.signatureRequired,
+    required this.healthPlus,
+    required this.gift,
+    required this.irisConfirmed,
+    required this.irisConfirmationPending,
     required this.cta,
     required this.onToggle,
     required this.onPrimary,
     required this.onIssue,
+    required this.onCustomerResponded,
+    required this.onReportDifference,
+    required this.onConfirmIris,
   });
 
   @override
@@ -3630,41 +3586,43 @@ class _AcceptedBottomPanel extends StatelessWidget {
                           const _VanguardGuidance(),
                           const SizedBox(height: 10),
                         ],
-                        _DeliveryPartyAndInstructionPanel(
-                          offer: offer,
-                          stage: stage,
-                        ),
-                        const SizedBox(height: 10),
                         _ExpandedLine(
                             title: 'Pickup', body: offer.pickupAddress),
                         _ExpandedLine(
                             title: 'Drop-off', body: offer.dropoffAddress),
-                        _PinAndIrisPanel(
-                          offer: offer,
-                          vanguard: vanguard,
-                          pinRequired: pinRequired,
-                          verificationRequired: verificationRequired,
+                        _ExpandedLine(
+                          title: 'IRIS Brief',
+                          body:
+                              '${offer.parcelGuidance}\nVehicle: ${offer.minimumVehicle} - Weight: ${offer.weightText}',
                         ),
                         _PickupWorkflowPanel(
                           vanguard: vanguard,
                           verificationRequired: verificationRequired,
+                          offer: offer,
+                          irisConfirmed: irisConfirmed,
+                          irisConfirmationPending: irisConfirmationPending,
+                          onConfirmIris: onConfirmIris,
+                          onReportDifference: onReportDifference,
                         ),
                         const SizedBox(height: 10),
                         _ExpandedLine(
                           title: 'Verification',
-                          body: verificationRequired
-                              ? 'Parcel condition verification is required before collection.'
-                              : 'Check parcel condition at pickup.',
+                          body: _verificationCopy,
                         ),
                         _StageTracker(
                             stage: stage,
                             verificationRequired: verificationRequired),
+                        if (stage == RiderDeliveryStage.arrivedAtPickup ||
+                            stage == RiderDeliveryStage.waiting) ...[
+                          const SizedBox(height: 10),
+                          _SecondaryButton(
+                            icon: Icons.mark_chat_read_outlined,
+                            label: 'Customer Responded',
+                            onTap: onCustomerResponded ?? () {},
+                          ),
+                        ],
                         const SizedBox(height: 10),
-                        _SecondaryContactRow(
-                          offer: offer,
-                          stage: stage,
-                          vanguard: vanguard,
-                        ),
+                        _SecondaryContactRow(offer: offer, vanguard: vanguard),
                         const SizedBox(height: 10),
                         TextButton.icon(
                           onPressed: onIssue,
@@ -3681,6 +3639,22 @@ class _AcceptedBottomPanel extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String get _verificationCopy {
+    final methods = <String>[];
+    if (pinRequired) methods.add('PIN mandatory');
+    if (photoRequired) methods.add('photo required');
+    if (signatureRequired) methods.add('signature required');
+    if (methods.isEmpty) methods.add('photo optional');
+    final service = healthPlus
+        ? 'Health+'
+        : vanguard
+            ? 'Vanguard'
+            : gift
+                ? 'Gift'
+                : 'Standard';
+    return '$service verification: ${methods.join(', ')}. Requirements are read from backend state.';
   }
 }
 
@@ -3819,246 +3793,6 @@ class _VanguardGuidance extends StatelessWidget {
   }
 }
 
-class _DeliveryPartyAndInstructionPanel extends StatelessWidget {
-  const _DeliveryPartyAndInstructionPanel({
-    required this.offer,
-    required this.stage,
-  });
-
-  final RiderJobOffer offer;
-  final RiderDeliveryStage stage;
-
-  @override
-  Widget build(BuildContext context) {
-    final raw = offer.raw;
-    final headingToDropoff = stage.index >= RiderDeliveryStage.collected.index;
-    final partyTitle = headingToDropoff ? 'Recipient' : 'Sender';
-    final partyName = _firstText(
-        raw,
-        headingToDropoff
-            ? const ['recipientName', 'receiverName', 'dropoffContactName']
-            : const ['senderName', 'pickupContactName', 'customerName']);
-    final instructions = _firstText(
-        raw,
-        headingToDropoff
-            ? const ['recipientInstructions', 'dropoffInstructions']
-            : const ['senderInstructions', 'pickupInstructions']);
-    final access = _firstText(raw, const [
-      'buildingAccess',
-      'accessDetails',
-      'entryInstructions',
-      'dropoffAccessDetails',
-      'pickupAccessDetails',
-    ]);
-    final parking = _firstText(raw, const [
-      'safeParkingNotes',
-      'parkingNotes',
-      'riderParkingNotes',
-    ]);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.055),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _OperationalLine(
-            title: partyTitle,
-            body: partyName.isEmpty
-                ? 'Shown when provided by booking'
-                : partyName,
-          ),
-          if (instructions.isNotEmpty)
-            _OperationalLine(title: 'Instructions', body: instructions),
-          if (access.isNotEmpty)
-            _OperationalLine(title: 'Building access', body: access),
-          if (parking.isNotEmpty)
-            _OperationalLine(title: 'Safe parking', body: parking),
-          if (instructions.isEmpty && access.isEmpty && parking.isEmpty)
-            Text(
-              'No extra access, parking or handover notes were provided.',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.62),
-                fontSize: 12,
-                height: 1.3,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PinAndIrisPanel extends StatelessWidget {
-  const _PinAndIrisPanel({
-    required this.offer,
-    required this.vanguard,
-    required this.pinRequired,
-    required this.verificationRequired,
-  });
-
-  final RiderJobOffer offer;
-  final bool vanguard;
-  final bool pinRequired;
-  final bool verificationRequired;
-
-  @override
-  Widget build(BuildContext context) {
-    final raw = offer.raw;
-    final quantity = _firstText(raw, const ['quantity', 'itemQuantity']);
-    final handling = _firstText(raw, const [
-      'handlingInstructions',
-      'irisHandling',
-      'handlingRequirements',
-    ]);
-    final valueState = raw['highValue'] == true || raw['isHighValue'] == true
-        ? 'High value'
-        : '';
-    final fragile =
-        raw['fragile'] == true || raw['isFragile'] == true ? 'Fragile' : '';
-    final senderPin = raw['senderPinRequired'] == true ||
-        raw['pickupPinRequired'] == true ||
-        pinRequired;
-    final receiverPin = raw['receiverPinRequired'] == true ||
-        raw['recipientPinRequired'] == true ||
-        pinRequired;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(13),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.055),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'IRIS Brief',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 8),
-          _OperationalLine(
-            title: 'Matched item',
-            body: offer.parcelGuidance,
-            mono: false,
-          ),
-          _OperationalLine(
-            title: 'Quantity',
-            body: quantity.isEmpty ? 'Confirm at pickup' : quantity,
-            mono: true,
-          ),
-          _OperationalLine(
-            title: 'Weight and vehicle',
-            body: '${offer.weightText} - ${offer.minimumVehicle}',
-          ),
-          if (handling.isNotEmpty)
-            _OperationalLine(title: 'Handling', body: handling),
-          if (fragile.isNotEmpty || valueState.isNotEmpty || vanguard)
-            _OperationalLine(
-              title: 'Indicators',
-              body: [
-                if (fragile.isNotEmpty) fragile,
-                if (valueState.isNotEmpty) valueState,
-                if (vanguard) 'Vanguard protected',
-              ].join(' - '),
-            ),
-          _OperationalLine(
-            title: 'Sender PIN',
-            body: senderPin
-                ? 'Required before collection. Never show recipient PIN here.'
-                : 'Not required for collection',
-            mono: senderPin,
-          ),
-          _OperationalLine(
-            title: 'Recipient PIN',
-            body: receiverPin
-                ? 'Required before completion. Kept separate from Sender PIN.'
-                : 'Not required for completion',
-            mono: receiverPin,
-          ),
-          if (verificationRequired)
-            const Text(
-              'Rider verification is not final truth. Material mismatch escalates to Circum operations.',
-              style: TextStyle(
-                color: Color(0xFFF5A623),
-                fontSize: 11.5,
-                height: 1.3,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _OperationalLine extends StatelessWidget {
-  const _OperationalLine({
-    required this.title,
-    required this.body,
-    this.mono = false,
-  });
-
-  final String title;
-  final String body;
-  final bool mono;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 7),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 96,
-            child: Text(
-              title,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.56),
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              body,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.78),
-                fontSize: 12,
-                height: 1.28,
-                fontFamily: mono ? RiderTypography.mono : null,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-String _firstText(Map<String, dynamic> raw, List<String> keys) {
-  for (final key in keys) {
-    final value = raw[key];
-    if (value is num) return '$value';
-    final text = '$value'.trim();
-    if (text.isNotEmpty && text != 'null') return text;
-  }
-  return '';
-}
-
 class _ExpandedLine extends StatelessWidget {
   final String title;
   final String body;
@@ -4093,10 +3827,20 @@ class _ExpandedLine extends StatelessWidget {
 class _PickupWorkflowPanel extends StatelessWidget {
   final bool vanguard;
   final bool verificationRequired;
+  final RiderJobOffer offer;
+  final bool irisConfirmed;
+  final bool irisConfirmationPending;
+  final VoidCallback? onConfirmIris;
+  final VoidCallback? onReportDifference;
 
   const _PickupWorkflowPanel({
     required this.vanguard,
     required this.verificationRequired,
+    required this.offer,
+    required this.irisConfirmed,
+    required this.irisConfirmationPending,
+    required this.onConfirmIris,
+    required this.onReportDifference,
   });
 
   @override
@@ -4114,6 +3858,7 @@ class _PickupWorkflowPanel extends StatelessWidget {
             'Add parcel photo if required',
             'Confirm collection',
           ];
+    final iris = _irisRecommendation(offer);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(13),
@@ -4160,7 +3905,173 @@ class _PickupWorkflowPanel extends StatelessWidget {
               ),
             ),
           ),
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF3B82F6).withValues(alpha: .10),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                  color: const Color(0xFF60A5FA).withValues(alpha: .22)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('IRIS Recommendation',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900)),
+                const SizedBox(height: 8),
+                _IrisLine('Detected Item', iris.detectedItem),
+                _IrisLine('Suggested Category', iris.category),
+                _IrisLine('Suggested Weight Band', iris.weightBand),
+                _IrisLine('Confidence', iris.confidence),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _MiniGlassButton(
+                        label: irisConfirmed
+                            ? 'Confirmed'
+                            : irisConfirmationPending
+                                ? 'Confirming...'
+                                : 'Confirm',
+                        icon: irisConfirmed
+                            ? Icons.verified_rounded
+                            : Icons.check_rounded,
+                        onTap: irisConfirmed ? null : onConfirmIris,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _MiniGlassButton(
+                        label: 'Report Difference',
+                        icon: Icons.report_outlined,
+                        onTap: irisConfirmed ? null : onReportDifference,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ],
+      ),
+    );
+  }
+
+  static _IrisRecommendation _irisRecommendation(RiderJobOffer offer) {
+    final raw = offer.raw;
+    final iris = raw['irisRecommendation'] is Map
+        ? Map<String, dynamic>.from(raw['irisRecommendation'] as Map)
+        : raw['iris'] is Map
+            ? Map<String, dynamic>.from(raw['iris'] as Map)
+            : const <String, dynamic>{};
+    return _IrisRecommendation(
+      detectedItem:
+          '${iris['detectedItem'] ?? raw['itemName'] ?? offer.parcelGuidance}',
+      category:
+          '${iris['suggestedCategory'] ?? raw['suggestedCategory'] ?? offer.points.label}',
+      weightBand:
+          '${iris['weightBand'] ?? iris['suggestedWeightBand'] ?? raw['weightBand'] ?? offer.weightText}',
+      confidence:
+          '${iris['confidence'] ?? raw['irisConfidence'] ?? 'Awaiting parcel check'}',
+    );
+  }
+}
+
+class _IrisRecommendation {
+  const _IrisRecommendation({
+    required this.detectedItem,
+    required this.category,
+    required this.weightBand,
+    required this.confidence,
+  });
+
+  final String detectedItem;
+  final String category;
+  final String weightBand;
+  final String confidence;
+}
+
+class _IrisLine extends StatelessWidget {
+  const _IrisLine(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label,
+                style: TextStyle(
+                    color: Colors.white.withValues(alpha: .50),
+                    fontSize: 10,
+                    fontFamily: RiderTypography.mono,
+                    fontWeight: FontWeight.w800)),
+          ),
+          Flexible(
+            child: Text(value,
+                textAlign: TextAlign.right,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniGlassButton extends StatelessWidget {
+  const _MiniGlassButton({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 42),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .06),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: .11)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: const Color(0xFF60A5FA), size: 16),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -4219,7 +4130,6 @@ class _StageTracker extends StatelessWidget {
       case RiderDeliveryStage.accepted:
         return 'Accepted';
       case RiderDeliveryStage.navigatingToPickup:
-      case RiderDeliveryStage.approachingPickup:
         return 'Navigate to Pickup';
       case RiderDeliveryStage.arrivedAtPickup:
         return 'I\'ve Arrived';
@@ -4229,7 +4139,6 @@ class _StageTracker extends StatelessWidget {
       case RiderDeliveryStage.collected:
         return 'Collected Parcel';
       case RiderDeliveryStage.navigatingToDropoff:
-      case RiderDeliveryStage.approachingDropoff:
         return 'Navigate to Drop-off';
       case RiderDeliveryStage.arrivedAtDropoff:
         return 'I\'ve Arrived';
@@ -4246,25 +4155,19 @@ class _StageTracker extends StatelessWidget {
 
 class _SecondaryContactRow extends StatelessWidget {
   final RiderJobOffer offer;
-  final RiderDeliveryStage stage;
   final bool vanguard;
 
-  const _SecondaryContactRow({
-    required this.offer,
-    required this.stage,
-    required this.vanguard,
-  });
+  const _SecondaryContactRow({required this.offer, required this.vanguard});
 
   @override
   Widget build(BuildContext context) {
-    final recipientPhase = stage.index >= RiderDeliveryStage.collected.index;
     return Row(
       children: [
         Expanded(
             child: _SecondaryButton(
                 icon: Icons.call_rounded,
-                label: recipientPhase ? 'Call Recipient' : 'Call Sender',
-                onTap: () => _call(offer.raw, recipient: recipientPhase))),
+                label: 'Call',
+                onTap: () => _call(offer.raw))),
         const SizedBox(width: 8),
         Expanded(
             child: _SecondaryButton(
@@ -4291,26 +4194,12 @@ class _SecondaryContactRow extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: _SecondaryButton(
-            icon: Icons.health_and_safety_rounded,
-            label: 'Emergency',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SupportView()),
-            ),
-          ),
-        ),
       ],
     );
   }
 
-  Future<void> _call(Map<String, dynamic> raw,
-      {required bool recipient}) async {
-    final number = (recipient
-            ? '${raw['recipientPhone'] ?? raw['receiverPhone'] ?? raw['dropoffPhone'] ?? ''}'
-            : '${raw['senderPhone'] ?? raw['pickupPhone'] ?? raw['contactPhone'] ?? ''}')
+  Future<void> _call(Map<String, dynamic> raw) async {
+    final number = '${raw['senderPhone'] ?? raw['contactPhone'] ?? ''}'
         .replaceAll(RegExp(r'[^0-9+]'), '');
     if (number.isEmpty) return;
     await launchUrl(Uri.parse('tel:$number'));

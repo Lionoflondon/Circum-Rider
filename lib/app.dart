@@ -6,7 +6,7 @@ import 'app/authentication/view/add_details.dart';
 import 'app/authentication/view/application_submitted.dart';
 import 'app/rider_account/rider_account_state.dart';
 import 'app/rider_account/rider_account_status_view.dart';
-import 'app/founder_access/founder_rider_access.dart';
+import 'app/rider_internal_access/rider_internal_access.dart';
 import 'utils/nav/nav_key.dart';
 
 import '../app/authentication/view/index.dart';
@@ -20,15 +20,15 @@ class App extends StatelessWidget {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       if (state.currentState == AppState.authenticated) {
         return FutureBuilder<bool>(
-            future: FounderRiderAccess.enabled(forceRefresh: true),
-            builder: (context, founder) =>
-                _buildNavigator(state, founder.data == true));
+            future: RiderInternalAccess.enabled(forceRefresh: true),
+            builder: (context, internalAccess) =>
+                _buildNavigator(state, internalAccess.data == true));
       }
       return _buildNavigator(state, false);
     });
   }
 
-  Widget _buildNavigator(AuthState state, bool founder) {
+  Widget _buildNavigator(AuthState state, bool internalAccess) {
     return Navigator(
       key: NavKey.navKey,
       pages: [
@@ -42,7 +42,7 @@ class App extends StatelessWidget {
             child: OnboardingView(),
           ),
 
-        if (!founder &&
+        if (!internalAccess &&
             state.currentState == AppState.authenticated &&
             (state.riderAccountState ==
                     RiderAccountState.onboardingNotStarted ||
@@ -50,13 +50,13 @@ class App extends StatelessWidget {
                     RiderAccountState.onboardingInProgress))
           const MaterialPage(child: AddDetailsView()),
 
-        if (!founder &&
+        if (!internalAccess &&
             state.currentState == AppState.authenticated &&
             (state.riderAccountState == RiderAccountState.submitted ||
                 state.riderAccountState == RiderAccountState.pendingReview))
           const MaterialPage(child: ApplicationSubmittedView()),
 
-        if (!founder &&
+        if (!internalAccess &&
             state.currentState == AppState.authenticated &&
             (state.riderAccountState ==
                     RiderAccountState.moreInformationRequired ||
@@ -73,7 +73,8 @@ class App extends StatelessWidget {
         // Authenticated app state
         if (state.currentState == AppState.authenticated &&
             state.authenticatedStatus == AuthenticatedStatus.authenticated &&
-            (founder || state.riderAccountState == RiderAccountState.approved))
+            (internalAccess ||
+                state.riderAccountState == RiderAccountState.approved))
           const MaterialPage(child: AppNavView()),
       ],
       onPopPage: (route, result) {

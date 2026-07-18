@@ -45,6 +45,15 @@
         ]
       },
       {
+        "source": "/deployment-manifest.json",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-store, no-cache, must-revalidate"
+          }
+        ]
+      },
+      {
         "source": "/main.dart.js",
         "headers": [
           {

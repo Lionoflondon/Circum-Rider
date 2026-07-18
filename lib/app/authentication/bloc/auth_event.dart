@@ -216,8 +216,20 @@ class UpdateLastName extends AuthEvent {
 }
 
 class UpdateUserProfilePhoto extends AuthEvent {
-  final String imagePath;
-  const UpdateUserProfilePhoto({required this.imagePath});
+  final String? imagePath;
+  final List<int>? imageBytes;
+  final String? mimeType;
+  const UpdateUserProfilePhoto({
+    this.imagePath,
+    this.imageBytes,
+    this.mimeType,
+  });
+  @override
+  List<Object> get props => [
+        imagePath ?? '',
+        imageBytes?.length ?? 0,
+        mimeType ?? '',
+      ];
 }
 
 class RemoveUserProfilePhoto extends AuthEvent {

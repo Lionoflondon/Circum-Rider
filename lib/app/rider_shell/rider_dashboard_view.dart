@@ -6,7 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../authentication/bloc/auth_bloc.dart';
 import '../communication/rider_communication_service.dart';
-import '../founder_access/founder_rider_access.dart';
+import '../rider_internal_access/rider_internal_access.dart';
 import '../home/bloc/home_bloc.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../onboarding/rider_guide_view.dart';
@@ -250,7 +250,6 @@ class _DashboardSurface extends StatelessWidget {
                     ),
                     onProfile: () => onSelectTab(4),
                   ),
-                  const FounderRiderBadge(),
                   if (data.hasDataError) ...[
                     const SizedBox(height: 14),
                     const _InlineNotice(
@@ -265,6 +264,20 @@ class _DashboardSurface extends StatelessWidget {
                     online: data.isOnline,
                     onToggle: onToggleAvailability,
                   ),
+                  FutureBuilder<bool>(
+                    future: RiderInternalAccess.enabled(),
+                    builder: (context, snapshot) {
+                      if (snapshot.data != true) {
+                        return const SizedBox.shrink();
+                      }
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 14),
+                        child: _InternalDiagnosticsCard(
+                          presence: data.presence,
+                        ),
+                      );
+                    },
+                  ),
                   const SizedBox(height: 14),
                   _DashboardGuideEntry(profile: data.profile),
                   const SizedBox(height: 14),
@@ -273,8 +286,8 @@ class _DashboardSurface extends StatelessWidget {
                   _TodaySection(earnings: data.earnings),
                   const SizedBox(height: 24),
                   _SectionHeader(
-                    title: 'Priority operations',
-                    action: 'View jobs',
+                    title: 'Available deliveries',
+                    action: data.eligibleOffers.isEmpty ? null : 'View all',
                     onAction: () => onSelectTab(1),
                   ),
                   const SizedBox(height: 10),
@@ -332,7 +345,7 @@ class _DashboardHeader extends StatelessWidget {
             .trim();
     final firstName = rawName.isEmpty ? 'Rider' : rawName.split(' ').first;
     final photo =
-        '${profile['profilePhoto'] ?? profile['photoUrl'] ?? auth.profilePhoto ?? ''}'
+        '${profile['profileThumbnailUrl'] ?? profile['profilePhotoUrl'] ?? profile['profilePhoto'] ?? profile['photoUrl'] ?? auth.profilePhoto ?? ''}'
             .trim();
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -533,10 +546,10 @@ class _AvailabilityCard extends StatelessWidget {
           ],
           const SizedBox(height: 16),
           FutureBuilder<bool>(
-            future: FounderRiderAccess.enabled(),
-            builder: (context, founder) {
+            future: RiderInternalAccess.enabled(),
+            builder: (context, internalAccess) {
               final allowed =
-                  founder.data == true || home.canGoOnline || online;
+                  internalAccess.data == true || home.canGoOnline || online;
               return SizedBox(
                 height: 52,
                 width: double.infinity,
@@ -577,6 +590,141 @@ class _AvailabilityCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _InternalDiagnosticsCard extends StatelessWidget {
+  const _InternalDiagnosticsCard({required this.presence});
+
+  final Map<String, dynamic> presence;
+
+  @override
+  Widget build(BuildContext context) {
+    final location = presence['currentLocation'];
+    final locationMap = location is Map ? location : const {};
+    final rows = <({String label, String value})>[
+      (
+        label: 'GPS status',
+        value: _clean(presence['gpsStatus'], fallback: 'Unknown')
+      ),
+      (
+        label: 'Accuracy',
+        value: _meters(locationMap['accuracyMeters'] ?? locationMap['accuracy'])
+      ),
+      (
+        label: 'Last fix',
+        value: _age(locationMap['updatedAt'] ?? presence['lastLocationAt'])
+      ),
+      (label: 'Update frequency', value: 'Idle heartbeat: 45s'),
+      (
+        label: 'Background tracking',
+        value: _clean(presence['backgroundTracking'], fallback: 'Unknown')
+      ),
+      (
+        label: 'Connectivity',
+        value: _clean(presence['connectionStatus'], fallback: 'Unknown')
+      ),
+      (
+        label: 'Battery optimisation',
+        value: _clean(presence['batteryOptimisation'], fallback: 'Unknown')
+      ),
+      (label: 'Last backend upload', value: _age(presence['lastHeartbeatAt'])),
+      (
+        label: 'Dispatch eligibility',
+        value: presence['dispatchEligible'] == true
+            ? 'Eligible'
+            : 'Waiting for healthy GPS'
+      ),
+    ];
+
+    return RiderGlassSurface(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.monitor_heart_rounded,
+                  color: RiderPalette.blue, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Internal dispatch diagnostics',
+                style: TextStyle(
+                  color: RiderPalette.paper,
+                  fontFamily: RiderTypography.body,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      row.label,
+                      style: const TextStyle(
+                        color: RiderPalette.muted,
+                        fontFamily: RiderTypography.body,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    row.value,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      color: RiderPalette.paper,
+                      fontFamily: RiderTypography.mono,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _clean(Object? value, {required String fallback}) {
+    final text = '${value ?? ''}'.trim();
+    if (text.isEmpty) return fallback;
+    return text
+        .replaceAll('_', ' ')
+        .replaceAllMapped(RegExp(r'([a-z])([A-Z])'),
+            (match) => '${match.group(1)} ${match.group(2)}')
+        .toLowerCase()
+        .replaceFirstMapped(
+            RegExp(r'^[a-z]'), (match) => match.group(0)!.toUpperCase());
+  }
+
+  String _meters(Object? value) {
+    final meters = value is num ? value.toDouble() : double.tryParse('$value');
+    if (meters == null || meters <= 0) return 'Unknown';
+    return '${meters.toStringAsFixed(0)} m';
+  }
+
+  String _age(Object? value) {
+    final millis = _millis(value);
+    if (millis == null) return 'Unknown';
+    final elapsed =
+        DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(millis));
+    if (elapsed.inSeconds < 15) return 'Just now';
+    if (elapsed.inMinutes < 1) return '${elapsed.inSeconds}s ago';
+    if (elapsed.inHours < 1) return '${elapsed.inMinutes}m ago';
+    return '${elapsed.inHours}h ago';
+  }
+
+  int? _millis(Object? value) {
+    if (value is Timestamp) return value.millisecondsSinceEpoch;
+    if (value is num) return value.toInt();
+    return int.tryParse('${value ?? ''}');
   }
 }
 
@@ -624,7 +772,7 @@ class _RankCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Rank updating',
+            Text('Rank pending',
                 style: TextStyle(
                     color: RiderPalette.paper, fontWeight: FontWeight.w800)),
             SizedBox(height: 6),
@@ -752,7 +900,7 @@ class _TodaySection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SmallLabel('Today'),
+        const _SmallLabel("Today's earnings"),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -761,7 +909,7 @@ class _TodaySection extends StatelessWidget {
                 icon: Icons.payments_outlined,
                 color: RiderPalette.green,
                 value: '£${today.toStringAsFixed(2)}',
-                label: 'TODAY',
+                label: "Today's earnings",
               ),
             ),
             const SizedBox(width: 9),
@@ -770,7 +918,7 @@ class _TodaySection extends StatelessWidget {
                 icon: Icons.done_rounded,
                 color: RiderPalette.blue,
                 value: '$jobs',
-                label: 'JOBS',
+                label: 'Completed jobs',
               ),
             ),
             const SizedBox(width: 9),
@@ -779,7 +927,7 @@ class _TodaySection extends StatelessWidget {
                 icon: Icons.schedule_rounded,
                 color: RiderPalette.amber,
                 value: '£${pending.toStringAsFixed(2)}',
-                label: 'PENDING',
+                label: 'Pending payouts',
               ),
             ),
           ],
@@ -872,12 +1020,12 @@ class _PriorityJobsCard extends StatelessWidget {
     final title = !online
         ? 'Go online for jobs'
         : count == 0
-            ? 'No eligible jobs'
+            ? 'No deliveries available'
             : '$count eligible ${count == 1 ? 'job' : 'jobs'}';
     final message = !online
         ? 'Go online to receive eligible delivery offers.'
         : count == 0
-            ? 'New eligible jobs will appear here when available.'
+            ? 'New offers will appear here automatically.'
             : 'Open delivery offers to review the swipeable card stack.';
     return _ActionRow(
       icon: Icons.map_outlined,
@@ -955,8 +1103,8 @@ class _RecentActivityCard extends StatelessWidget {
     if (items.isEmpty) {
       return const _EmptyPanel(
         icon: Icons.history_rounded,
-        title: 'No completed deliveries yet',
-        message: 'Your most recent completed work will appear here.',
+        title: 'Complete your first delivery to see your activity here.',
+        message: 'Completed jobs will appear here automatically.',
       );
     }
 

@@ -17,7 +17,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../helper/bitmap_descriptor_helper.dart';
-import '../../../helper/chats_help.dart';
 import '../../../helper/formatted_string_after_seconds.dart';
 import '../../../helper/messaging_server.dart';
 import '../../../utils/theme/theme.dart';
@@ -27,18 +26,15 @@ import '../models/dispatch_request.m..dart';
 import '../models/message.m.dart';
 import '../models/place_coordinates.m.dart';
 import '../repo/direction_service.dart';
-import '../repo/home_repo.dart';
 
 part 'home_event.dart';
 part 'home_state.dart';
 
-const _riderMapsDirectionsApiKey =
-    String.fromEnvironment('RIDER_GOOGLE_MAPS_DIRECTIONS_API_KEY');
-
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
+  static const _mapsApiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+  static const _presenceHeartbeatInterval = Duration(seconds: 45);
+
   FirebaseAuth auth = FirebaseAuth.instance;
-  // Init firestore and geoFlutterFire
-  // final geo = GeoFlutterFire();
   FirebaseFirestore db = FirebaseFirestore.instance;
   final FirebaseMessaging firebaseMessaging = FirebaseMessaging.instance;
 
@@ -47,6 +43,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       RiderCommunicationService();
 
   List<DirectionStep> _currentRoute = [];
+  int _currentStepIndex = 0;
+  Timer? _presenceHeartbeatTimer;
 
   List<String> _remainingVerificationItems(Map<String, dynamic>? riderData) {
     final remaining = <String>[];
@@ -113,9 +111,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<SetDrawerHeight>(_handleSetDrawerHeight);
     on<SetPanelControlStatus>(_handleSetPanelControlStatus);
     on<GetPolylines>(_handleGetPolylines);
-    on<ArrivedAtPickUpLocation>(_handleArrivedAtPickUpLocation);
-    on<StartDelivery>(_handleStartDelivery);
-    on<RideCompleted>(_handleRideCompleted);
     on<CancelRequest>(_handlerCancelRequest);
     on<BroadcastLocation>(_handleBroadcastLocation);
     on<CheckForActiveRequest>(_handleCheckForActiveRequest);
@@ -123,14 +118,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<SetNewMessage>(_handleSetNewMessage);
     on<LoadChatMessages>(_handleLoadChatMessages);
     on<MessageUser>(_handleMessageUser);
-    on<RateUser>(_handleRateUser);
   }
 
   void _handleCheckForPushToken(CheckForPushToken event, Emitter emit) async {
-    // if (Firebase.apps.isEmpty) print('Firebase not initialized');
-    // if (Firebase.apps.isEmpty) await Firebase.initializeApp();
     final User? user = auth.currentUser;
-    final founder = user == null
+    final internalAccess = user == null
         ? false
         : (await user.getIdTokenResult()).claims?['founderRider'] == true;
     if (!kIsWeb && Platform.isIOS) {
@@ -150,7 +142,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           final remaining =
               _remainingVerificationItems(documentSnapshot.data());
           emit(state.copyWith(
-              canGoOnline: founder || remaining.isEmpty,
+              canGoOnline: internalAccess || remaining.isEmpty,
               verificationChecklist: remaining));
           await db
               .collection("riders")
@@ -160,16 +152,14 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                   onError: (e) {});
         }
       } catch (_) {
-        debugPrint('Push token update failed');
+        // Push token updates should not block the Rider home state.
       }
-    } else {
-      debugPrint('Push token unavailable');
     }
   }
 
   void _handleSetRideStatus(SetRideStatus event, Emitter emit) async {
     final User? user = auth.currentUser;
-    final founder = user == null
+    final internalAccess = user == null
         ? false
         : (await user.getIdTokenResult()).claims?['founderRider'] == true;
     if (user == null) {
@@ -179,6 +169,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     }
     if (event.status == RideStatus.offline) {
       try {
+        _stopPresenceHeartbeat();
         await FirebaseFunctions.instanceFor(region: 'us-central1')
             .httpsCallable('goOffline')
             .call();
@@ -191,8 +182,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       }
       return;
     } else {
-      final accountState = await _loadAccountState(user.uid);
-      if (!founder && !RiderAccountStateResolver.canOperate(accountState)) {
+      final accountState = await _loadAccountState(user?.uid);
+      if (!internalAccess &&
+          !RiderAccountStateResolver.canOperate(accountState)) {
         emit(state.copyWith(
           rideStatus: RideStatus.offline,
           canGoOnline: false,
@@ -200,8 +192,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         ));
         return;
       }
-      final remaining = await _loadRemainingVerificationItems(user.uid);
-      if (!founder &&
+      final remaining = await _loadRemainingVerificationItems(user?.uid);
+      if (!internalAccess &&
           event.status == RideStatus.online &&
           remaining.isNotEmpty) {
         emit(state.copyWith(
@@ -214,9 +206,14 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       }
       if (event.status == RideStatus.online) {
         try {
+          final locationPayload =
+              await _currentPresenceLocationPayload(highAccuracy: false);
           await FirebaseFunctions.instanceFor(region: 'us-central1')
               .httpsCallable('goOnline')
-              .call();
+              .call(locationPayload == null
+                  ? null
+                  : <String, dynamic>{'location': locationPayload});
+          _startPresenceHeartbeat();
           emit(state.copyWith(
               rideStatus: RideStatus.online, canGoOnline: true, message: null));
           add(GetAvailableRequests());
@@ -225,10 +222,12 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
               maxDrawerHeight: 0.75.sh));
           add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
         } on FirebaseFunctionsException catch (error) {
+          _stopPresenceHeartbeat();
           emit(state.copyWith(
               rideStatus: RideStatus.offline,
               message: error.message ?? 'Could not go online. Try again.'));
         } catch (_) {
+          _stopPresenceHeartbeat();
           emit(state.copyWith(
               rideStatus: RideStatus.offline,
               message:
@@ -245,7 +244,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           dispatchRequests: [], requestStatus: RequestStatus.loading));
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
       final HttpsCallable callable =
-          functions.httpsCallable('getAvaliableRequests');
+          functions.httpsCallable('getAvailableRequests');
       final response = await callable.call();
       final dispatchRequests = (response.data['nearestRequests'] as List)
           .map((doc) => DispatchRequest.fromJson(doc))
@@ -253,7 +252,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       emit(state.copyWith(
           dispatchRequests: dispatchRequests,
           requestStatus: RequestStatus.success));
-    } catch (_) {
+    } catch (e) {
       emit(state.copyWith(requestStatus: RequestStatus.failure));
     }
   }
@@ -274,28 +273,26 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       final riderData = documentSnapshot.data();
 
-      // print('riderData: $riderData');
-
       emit(state.copyWith(
           rideStatus: RideStatus.acceptedARide,
           selectedRequestIndex: event.selectedRequestIndex,
-          activeRequest: state.dispatchRequests[event.selectedRequestIndex]));
+          activeRequest: state.dispatchRequests![event.selectedRequestIndex]));
 
-      final riderLng = prefs.getDouble('longitude')!;
-      final riderLat = prefs.getDouble('latitude')!;
+      final double? riderLng = prefs.getDouble('longitude');
+      final double? riderLat = prefs.getDouble('latitude');
 
-      final riderCoordinates = PlaceCoordinate(lat: riderLat, lng: riderLng);
+      final riderCoordinates = PlaceCoordinate(lat: riderLat!, lng: riderLng!);
       final userPickupCoordinates = PlaceCoordinate(
-        lat: state.dispatchRequests[event.selectedRequestIndex].pickupData
+        lat: state.dispatchRequests![event.selectedRequestIndex].pickupData
             .position.geopoint.latitude,
-        lng: state.dispatchRequests[event.selectedRequestIndex].pickupData
+        lng: state.dispatchRequests![event.selectedRequestIndex].pickupData
             .position.geopoint.longitude,
       );
 
       final userDestinationCoordinates = PlaceCoordinate(
-        lat: state.dispatchRequests[event.selectedRequestIndex].dropoffData
+        lat: state.dispatchRequests![event.selectedRequestIndex].dropoffData
             .position.geopoint.latitude,
-        lng: state.dispatchRequests[event.selectedRequestIndex].dropoffData
+        lng: state.dispatchRequests![event.selectedRequestIndex].dropoffData
             .position.geopoint.longitude,
       );
 
@@ -306,16 +303,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       PolylinePoints points = PolylinePoints();
 
-      if (_riderMapsDirectionsApiKey.isEmpty) {
-        if (kDebugMode) {
-          debugPrint('Rider route preview key is not configured.');
-        }
-        return;
-      }
-
       PolylineResult startingPolylineResult =
           await points.getRouteBetweenCoordinates(
-              googleApiKey: _riderMapsDirectionsApiKey,
+              googleApiKey: _mapsApiKey,
               request: PolylineRequest(
                 origin: PointLatLng(riderLat, riderLng),
                 destination: PointLatLng(
@@ -325,7 +315,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       PolylineResult endingPolylineResult =
           await points.getRouteBetweenCoordinates(
-              googleApiKey: _riderMapsDirectionsApiKey,
+              googleApiKey: _mapsApiKey,
               request: PolylineRequest(
                 origin: PointLatLng(
                     userPickupCoordinates.lat, userPickupCoordinates.lng),
@@ -338,19 +328,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           startingPolylineResult.totalDurationValue! +
           endingPolylineResult.totalDistanceValue!;
 
-      // print(startingPolylineResult.durationValue);
-      // print(startingPolylineResult.duration);
-      // print(endingPolylineResult.durationValue);
-      // print(endingPolylineResult.duration);
-
       final formattedDeliveryTime = formattedTimeAfterSeconds(totalTime);
       final riderPhone = riderData?['phone'] ?? user?.phoneNumber ?? '';
       final riderPhoto =
-          '${riderData?['photoURL'] ?? riderData?['photoUrl'] ?? user?.photoURL ?? ''}';
+          '${riderData?['profileThumbnailUrl'] ?? riderData?['profilePhotoUrl'] ?? riderData?['photoURL'] ?? riderData?['photoUrl'] ?? user?.photoURL ?? ''}';
 
       // final userData = await firebaseMessaging
       //     .subscribeToTopic('your_topic_name')
-      //     .then((value) => print(
       //         'Successfully subscribed to your_topic_name')); // Replace with your topic name
       await MessagingServer().sendMessage(
           data: {
@@ -388,10 +372,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       Timer.periodic(const Duration(seconds: 2), (timer) async {
         final requestID =
-            state.dispatchRequests[event.selectedRequestIndex].requestId;
+            state.dispatchRequests?[event.selectedRequestIndex].requestId;
         final docReference = db
             .collection('deliveryRequests')
-            .where('requestId', isEqualTo: requestID);
+            .where('requestId', isEqualTo: '$requestID');
 
         final docResponse = await docReference.get();
         final doc = docResponse.docs.firstOrNull;
@@ -399,8 +383,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         if (doc != null) {
           final data = doc.data();
           if (data['riderId'] != null && data['riderId'] == user!.uid) {
-            // print('Ride assigned to me 🎉');
-            // print(timer.tick);
             // Set user as the active delivery;
             await documentReference.update(
                 {'activeDelivery': doc.id, 'updatedAt': DateTime.now()});
@@ -432,12 +414,14 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             state.dispatchRequests[event.selectedRequestIndex].requestId);
         emit(state.copyWith(
             rideStatus: RideStatus.userConfirmedRide,
-            activeRequest: state.dispatchRequests[event.selectedRequestIndex],
+            activeRequest: state.dispatchRequests?[event.selectedRequestIndex],
             actionButtonStatus: ActionButtonStatus.goingToPickupLocation));
 
         add(BroadcastLocation());
       }
-    } catch (_) {}
+    } catch (_) {
+      emit(state.copyWith(requestStatus: RequestStatus.failure));
+    }
   }
 
   void _handleDeclineRequest(DeclineRequest event, Emitter emit) async {
@@ -523,96 +507,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     }
   }
 
-  void _handleArrivedAtPickUpLocation(
-      ArrivedAtPickUpLocation event, Emitter emit) async {
-    emit(state.copyWith(
-        actionButtonStatus: ActionButtonStatus.arrivedPickupLocation));
-  }
-
-  void _handleStartDelivery(StartDelivery event, Emitter emit) async {
-    try {
-      emit(state.copyWith(requestStatus: RequestStatus.loading));
-      final SharedPreferences prefs = await SharedPreferences.getInstance();
-      final String? activeRequest = prefs.getString('activeRequest');
-      final documentReference = db
-          .collection('deliveryRequests')
-          .where('requestId', isEqualTo: activeRequest);
-
-      final docResponse = await documentReference.get();
-      // print('Doc length: ${docResponse.docs.length}');
-      final doc = docResponse.docs.firstOrNull;
-      if (doc != null) {
-        // await doc.data().update('status', (value) => 'outForDelivery');
-
-        await db
-            .collection('deliveryRequests')
-            .doc(doc.id)
-            .update({'status': 'outForDelivery', 'updatedAt': DateTime.now()});
-
-        final newRideData = doc.data();
-        newRideData['status'] = 'outForDelivery';
-
-        final activeRide = DispatchRequest.fromJson(newRideData);
-        PlaceCoordinate pickupCoordinates = PlaceCoordinate(
-            lat: activeRide.pickupData.position.geopoint.latitude,
-            lng: activeRide.pickupData.position.geopoint.longitude);
-        PlaceCoordinate desinationCoordinate = PlaceCoordinate(
-            lat: activeRide.dropoffData.position.geopoint.latitude,
-            lng: activeRide.dropoffData.position.geopoint.longitude);
-        add(GetPolylines(
-            desinationCoordinate: desinationCoordinate,
-            pickupCoordinate: pickupCoordinates));
-        emit(state.copyWith(
-            activeRequest: activeRide,
-            actionButtonStatus: ActionButtonStatus.outForDelivery,
-            rideStatus: RideStatus.outForDelivery,
-            requestStatus: RequestStatus.success));
-      }
-    } catch (_) {
-      emit(state.copyWith(requestStatus: RequestStatus.failure));
-    }
-  }
-
-  void _handleRideCompleted(RideCompleted event, Emitter emit) async {
-    try {
-      emit(state.copyWith(requestStatus: RequestStatus.loading));
-      final User user = auth.currentUser!;
-      final SharedPreferences prefs = await SharedPreferences.getInstance();
-      final String? activeRequest = prefs.getString('activeRequest');
-      final code = prefs.getString('code');
-      final String? riderId = prefs.getString('riderId');
-
-      final historyId = await HomeRepo().endTrip(
-          riderId: riderId!,
-          requestId: activeRequest!,
-          riderName: user.displayName!);
-
-      await prefs.setString('lastTrip', historyId);
-
-      await MessagingServer().sendMessage(data: {
-        'type': 'delivery-completed',
-        'data': '''{
-                    'riderId': '$riderId',
-                    'code': '$code',
-                    'historyId': '$historyId'
-                  }'''
-      }, code: state.activeRequest!.code, message: "Delivery completed");
-
-      add(CancelRequest());
-
-      emit(state.copyWith(
-        actionButtonStatus: ActionButtonStatus.initialized,
-        rideStatus: RideStatus.delivered,
-        requestStatus: RequestStatus.success,
-        dispatchRequests: [],
-      ));
-
-      add(GetAvailableRequests());
-    } catch (_) {
-      emit(state.copyWith(requestStatus: RequestStatus.failure));
-    }
-  }
-
   void _handlerCancelRequest(CancelRequest event, Emitter emit) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.remove('activeRequest');
@@ -647,25 +541,28 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
                 "assets/svg/bike_top.svg");
         final Marker riderLocationMarker = Marker(
-            markerId: const MarkerId('rider_location_marker'),
+            markerId: MarkerId('rider_location_marker'),
             position:
                 LatLng(riderLat!, riderLng!), // Destination address location
             icon: icon);
 
         Map<MarkerId, Marker> markers = Map.of(state.markers);
 
-        markers[const MarkerId('rider_location_marker')] = riderLocationMarker;
+        markers[MarkerId('rider_location_marker')] = riderLocationMarker;
 
         emit(state.copyWith(markers: markers));
+
         // final SharedPreferences prefs = await SharedPreferences.getInstance();
         final courierName = prefs.getString('courierName');
         Map<String, dynamic>? riderSnapshotData;
         try {
           riderSnapshotData =
               (await db.collection('riders').doc(riderId).get()).data();
-        } catch (_) {}
+        } catch (_) {
+          // Rider photo fallback uses the authenticated user profile.
+        }
         final riderPhoto =
-            '${riderSnapshotData?['photoURL'] ?? riderSnapshotData?['photoUrl'] ?? auth.currentUser?.photoURL ?? ''}';
+            '${riderSnapshotData?['profileThumbnailUrl'] ?? riderSnapshotData?['profilePhotoUrl'] ?? riderSnapshotData?['photoURL'] ?? riderSnapshotData?['photoUrl'] ?? auth.currentUser?.photoURL ?? ''}';
         final rating = prefs.getString('rating');
         final plateNumber = prefs.getString('plateNumber');
         final typeOfVehicle = prefs.getString('typeOfVehicle');
@@ -694,7 +591,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         await Future.delayed(const Duration(seconds: 5));
         emit(state.copyWith(broadcastStatus: BroadcastStatus.initialized));
       }
-    } catch (_) {
+    } catch (e) {
       emit(state.copyWith(broadcastStatus: BroadcastStatus.initialized));
     }
   }
@@ -703,9 +600,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       CheckForActiveRequest event, Emitter emit) async {
     User? user = auth.currentUser;
     final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final String? activeRequest = prefs.getString('activeRequest');
     final double? riderLng = prefs.getDouble('longitude');
     final double? riderLat = prefs.getDouble('latitude');
-    final statusString = prefs.getString('status');
+    final String? riderId = prefs.getString('riderId');
+    String? statusString = prefs.getString('status');
     RideStatus? status;
     if (statusString == 'online') {
       status = RideStatus.online;
@@ -715,7 +614,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           minDrawerHeight: state.minDrawerHeight, maxDrawerHeight: 0.75.sh));
       add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
     }
-
     final documentReference = db
         .collection('deliveryRequests')
         .where('riderId', isEqualTo: user!.uid);
@@ -726,9 +624,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     for (final doc in docResponse.docs) {
       final data = doc.data();
       final activeRequest = DispatchRequest.fromJson(data);
-      // print('code: ${activeRequest.code}');
-      // print('currency: ${activeRequest.currency}');
-      // print('requestId: ${activeRequest.requestId}');
 
       PlaceCoordinate pickupCoordinates;
       PlaceCoordinate desinationCoordinate;
@@ -760,6 +655,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         emit(state.copyWith(
             actionButtonStatus: ActionButtonStatus.outForDelivery));
       }
+
       add(SetRideStatus(status: status ?? RideStatus.offline));
 
       emit(state.copyWith(rideStatus: status));
@@ -787,6 +683,82 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         chatMessages: chatMessages, chatStatus: ChatStatus.newMessage));
   }
 
+  void _startPresenceHeartbeat() {
+    _presenceHeartbeatTimer?.cancel();
+    unawaited(_sendPresenceHeartbeat());
+    _presenceHeartbeatTimer = Timer.periodic(
+      _presenceHeartbeatInterval,
+      (_) => unawaited(_sendPresenceHeartbeat()),
+    );
+  }
+
+  void _stopPresenceHeartbeat() {
+    _presenceHeartbeatTimer?.cancel();
+    _presenceHeartbeatTimer = null;
+  }
+
+  Future<void> _sendPresenceHeartbeat() async {
+    if (auth.currentUser == null || state.rideStatus != RideStatus.online) {
+      _stopPresenceHeartbeat();
+      return;
+    }
+    try {
+      final locationPayload =
+          await _currentPresenceLocationPayload(highAccuracy: false);
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('updateRiderPresence')
+          .call(locationPayload == null
+              ? <String, dynamic>{}
+              : <String, dynamic>{'location': locationPayload});
+    } catch (_) {
+      // Dispatch excludes stale riders until heartbeats recover.
+    }
+  }
+
+  Future<Map<String, dynamic>?> _currentPresenceLocationPayload({
+    required bool highAccuracy,
+  }) async {
+    try {
+      final servicesEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!servicesEnabled) return null;
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return null;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy:
+            highAccuracy ? LocationAccuracy.high : LocationAccuracy.medium,
+      );
+      return <String, dynamic>{
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'accuracyMeters': position.accuracy,
+        'heading': position.heading,
+        'speed': position.speed,
+        'updatedAt': DateTime.now().millisecondsSinceEpoch,
+        'gpsStatus': position.accuracy <= 100 ? 'active' : 'poorAccuracy',
+        'gpsSignalQuality': _gpsSignalQuality(position.accuracy),
+        'permission': permission.name,
+        'backgroundTracking': kIsWeb ? 'foregroundOnly' : 'available',
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _gpsSignalQuality(double accuracyMeters) {
+    if (accuracyMeters <= 25) return 'high';
+    if (accuracyMeters <= 80) return 'medium';
+    return 'reduced';
+  }
+
+  @override
+  Future<void> close() {
+    _stopPresenceHeartbeat();
+    return super.close();
+  }
+
   void _handleSetNewMessage(SetNewMessage event, Emitter emit) {
     emit(state.copyWith(message: event.value));
   }
@@ -798,7 +770,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
     if (await chats.exists()) {
       final contents = await chats.readAsString();
-      // print(contents);
       final jsonData = await jsonDecode(contents) as List;
 
       final messagesList = jsonData.map((e) => Message.fromJson(e)).toList();
@@ -827,19 +798,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       );
 
       add(IncomingMessage(data: messageData));
-
-      ChatsHelper().storeChat(messageData);
-    } catch (_) {}
-  }
-
-  void _handleRateUser(RateUser event, Emitter emit) async {
-    try {
-      final SharedPreferences prefs = await SharedPreferences.getInstance();
-      final String? lastTrip = prefs.getString('lastTrip');
-      await db
-          .collection('history')
-          .doc(lastTrip)
-          .update({'userRating': event.rating, 'updatedAt': DateTime.now()});
-    } catch (_) {}
+    } catch (_) {
+      emit(state.copyWith(message: event.message));
+    }
   }
 }

@@ -1,8 +1,26 @@
+import 'dart:io';
+
 import 'package:circum_rider/app/rider_jobs/rider_accept_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('RiderAcceptController', () {
+    test('production acceptance uses only the canonical callable store', () {
+      final controllerSource = File(
+        'lib/app/rider_jobs/rider_accept_controller.dart',
+      ).readAsStringSync();
+      final screenSource = File(
+        'lib/app/rider_jobs/rider_job_offer_screen.dart',
+      ).readAsStringSync();
+
+      expect(controllerSource, contains("httpsCallable('acceptRideRequests')"));
+      expect(controllerSource,
+          isNot(contains('FirestoreRiderJobTransactionStore')));
+      expect(controllerSource, isNot(contains('runTransaction(')));
+      expect(
+          screenSource, contains('store: CallableRiderJobTransactionStore()'));
+    });
+
     test('blocks riders who are not eligible to accept jobs', () async {
       final store = _MemoryStore({
         'job-1': {'status': 'requested'},

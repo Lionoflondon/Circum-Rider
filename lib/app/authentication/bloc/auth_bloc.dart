@@ -4,18 +4,18 @@ import 'dart:io';
 import 'package:circum_rider/extension/email_validation.dart';
 import 'package:circum_rider/helper/location_helper.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:circum_rider/utils/app_state/app_state.dart';
 // import 'package:geoflutterfire2/geoflutterfire2.dart';
 import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:image/image.dart' as image_lib;
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart'
     as permission_handler;
@@ -47,17 +47,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       required String path,
       required String step,
       String? riderDocumentId,
-    }) {
-      if (!kDebugMode) return;
-      if (error is FirebaseException) {
-        debugPrint(
-            'Rider onboarding Firebase error step=$step code=${error.code} '
-            'path=${path.split('/').first} hasRiderDocument=${riderDocumentId != null}');
-      } else {
-        debugPrint('Rider onboarding error step=$step '
-            'path=${path.split('/').first} hasRiderDocument=${riderDocumentId != null}');
-      }
-    }
+    }) {}
 
     Future<void> upsertRiderOnboarding({
       required User user,
@@ -85,7 +75,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       await permission_handler.Permission.location.status;
     }
 
-    listenForPermissionStatus();
+    if (!kIsWeb) listenForPermissionStatus();
 
     on<AuthEvent>((event, emit) async {
       if (event is SortSessionState) {
@@ -113,7 +103,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             };
             riderPhone = riderData['phone'] as String? ?? phone;
             riderPhoto =
-                '${riderData['photoURL'] ?? riderData['photoUrl'] ?? riderData['profilePhotoUrl'] ?? ''}'
+                '${riderData['profileThumbnailUrl'] ?? riderData['profilePhotoUrl'] ?? riderData['photoURL'] ?? riderData['photoUrl'] ?? ''}'
                     .trim();
             if (riderPhoto.isEmpty || riderPhoto == 'null') riderPhoto = null;
             phoneVerified = riderData['phoneVerified'] == true;
@@ -201,14 +191,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
 
       if (event is SignupEmailChanged) {
-        // debugPrint(event.email);
         emit(state.copyWith(email: event.email));
         if (event.email!.isValidEmail()) {
           emit(state.copyWith(isEmailValid: true));
-          // print('Valid email!');
         } else {
           emit(state.copyWith(isEmailValid: false));
-          // print('Invalid email!');
         }
       }
 
@@ -228,11 +215,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (event is SignupPasswordChanged) {
         // Passwords must never be persisted in bloc state. The canonical
         // email auth flow passes credentials directly to Firebase Auth.
-        emit(state.copyWith(password: null));
+        emit(state.copyWith(clearSensitiveAuthFields: true));
       }
 
       if (event is ConfirmPasswordChanged) {
-        emit(state.copyWith(confirmPassword: null));
+        emit(state.copyWith(clearSensitiveAuthFields: true));
       }
       if (event is DateOfBirthChanged) {
         if (event.dateOfBirth.length == 10) {
@@ -412,11 +399,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
           // SignInWithApple
 
-          // print(appleCredential);
-          // print(appleCredential.email);
-          // print(appleCredential.givenName);
-          // print(appleCredential.familyName);
-
           // final GoogleSignInAuthentication googleSignInAuthentication =
           //     await googleSignInAccount.authentication;
 
@@ -430,12 +412,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           // Sign in with credential
           UserCredential userCredential =
               await auth.signInWithCredential(oauthCredential);
-          // print(userCredential.user?.displayName);
-          // print(userCredential.user?.email);
-          // print(userCredential.user?.emailVerified);
-          // print('>>>>>>>>>>>>>>>>>>>>>>>>>>>');
-          // print(userCredential.user?.displayName?.split(' ').first);
-          // print(userCredential.user?.displayName?.split(' ').last);
 
           emit(state.copyWith(
               username: userCredential.user?.displayName,
@@ -449,8 +425,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                   : AuthenticatedStatus.authenticated));
 
           if (appleCredential.givenName != null) {
-            // emit(state.copyWith(
-            //     authenticatedStatus: AuthenticatedStatus.authenticated));
             add(UpdateUserProfile(
                 username:
                     "${appleCredential.givenName} ${appleCredential.familyName}"));
@@ -458,7 +432,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await Future.delayed(const Duration(seconds: 2));
 
           // await googleSignIn.signOut();
-        } catch (_) {}
+        } catch (_) {
+          // OAuth profile enrichment should not block sign-in.
+        }
       }
 
       if (event is SignInWithGoogle) {
@@ -519,10 +495,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               verificationId: _verificationId,
               resendToken: _resendToken,
               status: Status.success));
-          // print(_verificationId);
-          // print(_resendToken);
         } catch (e) {
-          // print(e);
           emit(state.copyWith(
               errorMessage: e.toString().split(':').last.trim(),
               isLoading: false,
@@ -573,7 +546,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           if (e.code == 'invalid-verification-code') {
             emit(state.copyWith(errorMessage: 'Invalid verification code'));
           }
-        } catch (_) {}
+        } catch (_) {
+          emit(state.copyWith(status: Status.failure));
+        }
       }
 
       if (event is UpdateUserProfile) {
@@ -594,7 +569,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           // if (state.oAuthPhotoURL != null) {
           //   await user!.updatePhotoURL(state.oAuthPhotoURL!);
           // }
-          // print(event.username);
 
           final documentReference = db.collection('riders').doc(user.uid);
           final SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -606,7 +580,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
           if (documentSnapshot.exists) {
             // Document exists
-            // print('Document exists');
             await db.collection("riders").doc(user.uid).update({
               'name': event.username,
               'role': 'rider',
@@ -638,7 +611,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             });
           } else {
             // Document does not exist
-            // print('Document does not exist');
             await db.collection("riders").doc(user.uid).set({
               'name': event.username,
               "role": 'rider',
@@ -675,13 +647,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             email: user.email,
           );
 
-          // print(user);
-
           emit(state.copyWith(
               status: Status.success,
               authenticatedStatus: AuthenticatedStatus.authenticated,
               username: event.username));
-        } catch (_) {}
+        } catch (_) {
+          emit(state.copyWith(status: Status.failure));
+        }
       }
       if (event is SubmitOTP) {
         emit(state.copyWith(isLoading: true, status: Status.success));
@@ -770,7 +742,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             hasLocationPermission: true,
             isLocationEnabled: true,
           ));
-          await db.collection("riders").doc(user.uid).update({
+          await db.collection("riders").doc(user?.uid).update({
             'position': myLocation.data,
             'locationEnabled': true,
             'approvalStatus': 'pending',
@@ -877,14 +849,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
         if (lastName != null) {
           await user?.updateDisplayName('${event.value} $lastName');
-          // print('${event.value} $lastName');
           emit(state.copyWith(username: '${event.value} $lastName'));
         } else {
           await user?.updateDisplayName(event.value);
-          // print(user?.displayName);
           emit(state.copyWith(username: event.value));
         }
-      } catch (_) {}
+      } catch (_) {
+        emit(state.copyWith(status: Status.failure));
+      }
     }));
 
     on<UpdateLastName>(((event, emit) async {
@@ -894,14 +866,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
         if (firstName != null) {
           await user?.updateDisplayName('$firstName ${event.value}');
-          // print(user?.displayName);
           emit(state.copyWith(username: '$firstName ${event.value}'));
         } else {
           await user?.updateDisplayName(event.value);
-          // print(user?.displayName);
           emit(state.copyWith(username: event.value));
         }
-      } catch (_) {}
+      } catch (_) {
+        emit(state.copyWith(status: Status.failure));
+      }
     }));
 
     on<SetVerificationUploadStatus>((event, emit) =>
@@ -1059,7 +1031,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.uploaded));
-          } catch (_) {
+          } catch (e) {
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.failure));
           }
@@ -1092,7 +1064,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             }
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.uploaded));
-          } catch (_) {
+          } catch (e) {
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.failure));
           }
@@ -1176,7 +1148,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             emit(state.copyWith(
                 vehicleRegistrationDocumentStatus: 'under_review',
                 verificationUploadStatus: VerificationUploadStatus.uploaded));
-          } catch (_) {
+          } catch (e) {
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.failure));
           }
@@ -1189,43 +1161,69 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         try {
           User? user = auth.currentUser;
           if (user == null) return;
-          File imageFile = File(event.imagePath);
-          final extension = event.imagePath.split('.').last.toLowerCase();
-          const allowed = {'jpg', 'jpeg', 'png', 'webp'};
-          if (!allowed.contains(extension)) {
-            emit(state.copyWith(
-                errorMessage: 'Please choose a JPG, PNG or WEBP image.'));
+          final sourceBytes = await _profilePhotoSourceBytes(event);
+          if (sourceBytes == null || sourceBytes.isEmpty) {
+            emit(state.copyWith(errorMessage: 'Choose a profile photo.'));
             return;
           }
-          final fileSize = await imageFile.length();
-          if (fileSize > 5 * 1024 * 1024) {
+          if (sourceBytes.length > 20 * 1024 * 1024) {
             emit(state.copyWith(
-                errorMessage: 'Profile photo must be smaller than 5MB.'));
+                errorMessage: 'Profile photo must be smaller than 20MB.'));
+            return;
+          }
+          final processed = _processRiderProfilePhoto(sourceBytes);
+          if (processed == null) {
+            emit(state.copyWith(
+                errorMessage: 'Choose a JPG, PNG or HEIC profile photo.'));
             return;
           }
 
           final storageRef = FirebaseStorage.instance;
-          final path = 'rider-profile-photos/${user.uid}/profile.jpg';
-          final ref = storageRef.ref(path);
-          await ref.putFile(
-            imageFile,
-            SettableMetadata(
-              contentType: 'image/${extension == 'jpg' ? 'jpeg' : extension}',
-              customMetadata: {
-                'riderId': user.uid,
-                'source': 'rider_profile_photo',
-              },
-            ),
+          final profilePath = 'rider-profiles/${user.uid}/profile.jpg';
+          final thumbnailPath = 'rider-profiles/${user.uid}/thumbnail.jpg';
+          final current =
+              await db.collection('riderProfiles').doc(user.uid).get();
+          final previousVersion =
+              (current.data()?['profilePhotoVersion'] as num?)?.toInt() ?? 0;
+          final version = previousVersion + 1;
+          final metadata = SettableMetadata(
+            contentType: 'image/jpeg',
+            cacheControl: 'public,max-age=300',
+            customMetadata: {
+              'riderId': user.uid,
+              'source': 'rider_profile_photo',
+              'version': '$version',
+            },
           );
-          final downloadUrl = await ref.getDownloadURL();
+          final profileRef = storageRef.ref(profilePath);
+          final thumbnailRef = storageRef.ref(thumbnailPath);
+          await profileRef.putData(processed.full, metadata);
+          await thumbnailRef.putData(processed.thumbnail, metadata);
+          final downloadUrl = await profileRef.getDownloadURL();
+          final thumbnailUrl = await thumbnailRef.getDownloadURL();
 
           await user.updatePhotoURL(downloadUrl);
           final patch = {
             'photoURL': downloadUrl,
             'photoUrl': downloadUrl,
-            'photoPath': path,
+            'profilePhoto': downloadUrl,
             'profilePhotoUrl': downloadUrl,
+            'profileThumbnailUrl': thumbnailUrl,
+            'profilePhotoPath': profilePath,
+            'profileThumbnailPath': thumbnailPath,
+            'profilePhotoVersion': version,
+            'profilePhotoMetadata': {
+              'contentType': 'image/jpeg',
+              'fullBytes': processed.full.length,
+              'thumbnailBytes': processed.thumbnail.length,
+              'fullWidth': processed.fullSize,
+              'thumbnailWidth': processed.thumbnailSize,
+              'sourceMimeType': event.mimeType ?? '',
+            },
+            'photoPath': profilePath,
             'photoUpdatedAt': FieldValue.serverTimestamp(),
+            'profilePhotoUpdatedAt': FieldValue.serverTimestamp(),
+            'profilePhotoUploadedAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
           };
           await db
@@ -1237,7 +1235,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               .doc(user.uid)
               .set(patch, SetOptions(merge: true));
           emit(state.copyWith(
-              profilePhoto: downloadUrl,
+              profilePhoto: thumbnailUrl,
               errorMessage: 'Profile photo updated.'));
         } catch (_) {
           emit(state.copyWith(
@@ -1252,15 +1250,30 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           final user = auth.currentUser;
           if (user == null) return;
           const empty = '';
-          final path = 'rider-profile-photos/${user.uid}/profile.jpg';
-          await FirebaseStorage.instance.ref(path).delete().catchError((_) {});
+          final profilePath = 'rider-profiles/${user.uid}/profile.jpg';
+          final thumbnailPath = 'rider-profiles/${user.uid}/thumbnail.jpg';
+          await FirebaseStorage.instance
+              .ref(profilePath)
+              .delete()
+              .catchError((_) {});
+          await FirebaseStorage.instance
+              .ref(thumbnailPath)
+              .delete()
+              .catchError((_) {});
           await user.updatePhotoURL(null);
           final patch = {
             'photoURL': FieldValue.delete(),
             'photoUrl': FieldValue.delete(),
             'photoPath': FieldValue.delete(),
             'profilePhotoUrl': FieldValue.delete(),
+            'profileThumbnailUrl': FieldValue.delete(),
+            'profilePhotoPath': FieldValue.delete(),
+            'profileThumbnailPath': FieldValue.delete(),
+            'profilePhotoMetadata': FieldValue.delete(),
+            'profilePhoto': FieldValue.delete(),
+            'profilePhotoVersion': FieldValue.increment(1),
             'photoUpdatedAt': FieldValue.serverTimestamp(),
+            'profilePhotoUpdatedAt': FieldValue.serverTimestamp(),
             'updatedAt': FieldValue.serverTimestamp(),
           };
           await db
@@ -1273,7 +1286,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               .set(patch, SetOptions(merge: true));
           emit(state.copyWith(
               profilePhoto: empty, errorMessage: 'Profile photo removed.'));
-        } catch (_) {
+        } catch (e) {
           emit(state.copyWith(
               errorMessage: 'Profile photo could not be removed.'));
         }
@@ -1299,6 +1312,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             await auth.currentUser?.sendEmailVerification();
             emit(state.copyWith(
               status: Status.unverifiedEmail,
+              clearSensitiveAuthFields: true,
             ));
           } else {
             final user = auth.currentUser;
@@ -1346,17 +1360,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 verificationId: '',
                 otp: '',
                 phoneNumber: riderPhone,
-                currentState: AppState.authenticated));
+                currentState: AppState.authenticated,
+                clearSensitiveAuthFields: true));
           }
         } on FirebaseAuthException catch (e) {
           emit(state.copyWith(
             status: Status.failure,
             errorMessage: RiderAuthError.messageFor(e.code),
+            clearSensitiveAuthFields: true,
           ));
         } catch (_) {
           emit(state.copyWith(
             status: Status.failure,
             errorMessage: RiderAuthError.messageFor('unknown'),
+            clearSensitiveAuthFields: true,
           ));
         }
       },
@@ -1431,30 +1448,31 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(state.copyWith(
             username: fullName.isEmpty ? state.username : fullName,
             status: Status.initial,
+            clearSensitiveAuthFields: true,
           ));
           add(SendPhoneOtp());
         } on FirebaseAuthException catch (e) {
-          emit(state.copyWith(status: Status.failure));
+          emit(state.copyWith(
+            status: Status.failure,
+            clearSensitiveAuthFields: true,
+          ));
           if (e.code == 'invalid-email') {
-            // print('Email is invalid');
             emit(state.copyWith(errorMessage: 'Email is invalid'));
           }
           if (e.code == 'email-already-in-use') {
-            // print('User already exists');
             emit(state.copyWith(errorMessage: 'User already exists'));
           }
           if (e.code == 'user-not-found') {
-            // print('User not found');
             emit(state.copyWith(errorMessage: 'User not found'));
           }
           if (e.code == 'weak-password') {
-            // print('Weak password');
             emit(state.copyWith(errorMessage: 'Use a strong password'));
           }
         } catch (e) {
-          // print(e);
           emit(state.copyWith(
-              status: Status.failure, errorMessage: 'Something went wrong'));
+              status: Status.failure,
+              errorMessage: 'Something went wrong',
+              clearSensitiveAuthFields: true));
         }
       },
     );
@@ -1464,14 +1482,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         try {
           User? user = auth.currentUser;
           FlutterSecureStorage storage = const FlutterSecureStorage();
-
           final documentReference = db.collection('riders').doc(user?.uid);
           // Get the document snapshot
           final documentSnapshot = await documentReference.get();
 
           if (documentSnapshot.exists) {
-            // Document exists
-            // print('Document exists');
             await db.collection("riders").doc(user!.uid).update({
               'phone': event.value,
             });
@@ -1480,7 +1495,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
             emit(state.copyWith(phoneNumber: event.value));
           }
-        } catch (_) {}
+        } catch (_) {
+          // Profile update failures are surfaced by the next account refresh.
+        }
       },
     );
 
@@ -1517,21 +1534,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             profilePhoto: auth.currentUser?.photoURL,
           ));
         }
-      }
+      } else {}
     });
 
     on<SignOut>(
       (event, emit) async {
         FlutterSecureStorage storage = const FlutterSecureStorage();
-        try {
-          if (auth.currentUser != null) {
-            await FirebaseFunctions.instanceFor(region: 'us-central1')
-                .httpsCallable('goOffline')
-                .call({'reason': 'sign_out'});
-          }
-        } catch (_) {
-          // Sign-out must still complete if the device is offline.
-        }
         await auth.signOut();
         emit(const AuthState());
         emit(state.copyWith(currentState: AppState.unauthenticated));
@@ -1556,8 +1564,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(state.copyWith(errorMessage: 'Invalid verification code'));
         }
       } catch (_) {
-        // An error occurred during reauthentication or account deletion
-        // Handle error (e.g., display error message)
+        // Reauthentication failures are handled by the account closure UI.
       }
 
       // Navigator.pushNamedAndRemoveUntil(
@@ -1587,6 +1594,51 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     });
   }
 
+  Future<Uint8List?> _profilePhotoSourceBytes(
+      UpdateUserProfilePhoto event) async {
+    if (event.imageBytes != null && event.imageBytes!.isNotEmpty) {
+      return Uint8List.fromList(event.imageBytes!);
+    }
+    final path = event.imagePath;
+    if (path == null || path.trim().isEmpty) return null;
+    return File(path).readAsBytes();
+  }
+
+  _ProcessedRiderProfilePhoto? _processRiderProfilePhoto(Uint8List bytes) {
+    final decoded = image_lib.decodeImage(bytes);
+    if (decoded == null) return null;
+    final side =
+        decoded.width < decoded.height ? decoded.width : decoded.height;
+    final cropX = ((decoded.width - side) / 2).round();
+    final cropY = ((decoded.height - side) / 2).round();
+    final square = image_lib.copyCrop(
+      decoded,
+      x: cropX,
+      y: cropY,
+      width: side,
+      height: side,
+    );
+    final full = image_lib.copyResize(
+      square,
+      width: 1024,
+      height: 1024,
+      interpolation: image_lib.Interpolation.cubic,
+    );
+    final thumbnail = image_lib.copyResize(
+      square,
+      width: 240,
+      height: 240,
+      interpolation: image_lib.Interpolation.average,
+    );
+    return _ProcessedRiderProfilePhoto(
+      full: Uint8List.fromList(image_lib.encodeJpg(full, quality: 86)),
+      thumbnail:
+          Uint8List.fromList(image_lib.encodeJpg(thumbnail, quality: 80)),
+      fullSize: full.width,
+      thumbnailSize: thumbnail.width,
+    );
+  }
+
   Future<String> uploadImage({required String imagePath}) async {
     try {
       final fileName = Uuid();
@@ -1603,4 +1655,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       throw 'Something went wrong uploading image';
     }
   }
+}
+
+class _ProcessedRiderProfilePhoto {
+  const _ProcessedRiderProfilePhoto({
+    required this.full,
+    required this.thumbnail,
+    required this.fullSize,
+    required this.thumbnailSize,
+  });
+
+  final Uint8List full;
+  final Uint8List thumbnail;
+  final int fullSize;
+  final int thumbnailSize;
 }

@@ -68,12 +68,6 @@ class BroadcastLocation extends HomeEvent {}
 
 class CheckForActiveRequest extends HomeEvent {}
 
-class ArrivedAtPickUpLocation extends HomeEvent {}
-
-class StartDelivery extends HomeEvent {}
-
-class RideCompleted extends HomeEvent {}
-
 class SetNewMessage extends HomeEvent {
   final String value;
   SetNewMessage({required this.value});
@@ -90,12 +84,6 @@ class LoadChatMessages extends HomeEvent {}
 class MessageUser extends HomeEvent {
   final String message;
   MessageUser({required this.message});
-}
-
-class RateUser extends HomeEvent {
-  final double rating;
-
-  RateUser({required this.rating});
 }
 
 class DeclineRequest extends HomeEvent {

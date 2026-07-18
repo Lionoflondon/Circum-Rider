@@ -1,12 +1,10 @@
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../communication/rider_conversation_view.dart';
 import '../rider_account/rider_account_state.dart';
@@ -23,28 +21,28 @@ enum RiderApplicationSectionStatus {
 
 extension RiderApplicationSectionStatusCopy on RiderApplicationSectionStatus {
   String get label => switch (this) {
-    RiderApplicationSectionStatus.notStarted => 'Not started',
-    RiderApplicationSectionStatus.inProgress => 'In progress',
-    RiderApplicationSectionStatus.submitted => 'Submitted',
-    RiderApplicationSectionStatus.needsAttention => 'Needs attention',
-    RiderApplicationSectionStatus.approved => 'Approved',
-  };
+        RiderApplicationSectionStatus.notStarted => 'Not started',
+        RiderApplicationSectionStatus.inProgress => 'In progress',
+        RiderApplicationSectionStatus.submitted => 'Submitted',
+        RiderApplicationSectionStatus.needsAttention => 'Needs attention',
+        RiderApplicationSectionStatus.approved => 'Approved',
+      };
 
   String get storageValue => switch (this) {
-    RiderApplicationSectionStatus.notStarted => 'not_started',
-    RiderApplicationSectionStatus.inProgress => 'in_progress',
-    RiderApplicationSectionStatus.submitted => 'submitted',
-    RiderApplicationSectionStatus.needsAttention => 'needs_attention',
-    RiderApplicationSectionStatus.approved => 'approved',
-  };
+        RiderApplicationSectionStatus.notStarted => 'not_started',
+        RiderApplicationSectionStatus.inProgress => 'in_progress',
+        RiderApplicationSectionStatus.submitted => 'submitted',
+        RiderApplicationSectionStatus.needsAttention => 'needs_attention',
+        RiderApplicationSectionStatus.approved => 'approved',
+      };
 
   Color get color => switch (this) {
-    RiderApplicationSectionStatus.notStarted => RiderPalette.muted,
-    RiderApplicationSectionStatus.inProgress => RiderPalette.blue,
-    RiderApplicationSectionStatus.submitted => RiderPalette.amber,
-    RiderApplicationSectionStatus.needsAttention => RiderPalette.red,
-    RiderApplicationSectionStatus.approved => RiderPalette.green,
-  };
+        RiderApplicationSectionStatus.notStarted => RiderPalette.muted,
+        RiderApplicationSectionStatus.inProgress => RiderPalette.blue,
+        RiderApplicationSectionStatus.submitted => RiderPalette.amber,
+        RiderApplicationSectionStatus.needsAttention => RiderPalette.red,
+        RiderApplicationSectionStatus.approved => RiderPalette.green,
+      };
 }
 
 RiderApplicationSectionStatus riderApplicationStatusFrom(Object? raw) {
@@ -53,10 +51,12 @@ RiderApplicationSectionStatus riderApplicationStatusFrom(Object? raw) {
     'approved' || 'verified' => RiderApplicationSectionStatus.approved,
     'needs_attention' ||
     'action_required' ||
-    'rejected' => RiderApplicationSectionStatus.needsAttention,
+    'rejected' =>
+      RiderApplicationSectionStatus.needsAttention,
     'submitted' ||
     'under_review' ||
-    'reviewing' => RiderApplicationSectionStatus.submitted,
+    'reviewing' =>
+      RiderApplicationSectionStatus.submitted,
     'in_progress' || 'started' => RiderApplicationSectionStatus.inProgress,
     _ => RiderApplicationSectionStatus.notStarted,
   };
@@ -75,8 +75,7 @@ class RiderApplicationCentre extends StatefulWidget {
   State<RiderApplicationCentre> createState() => _RiderApplicationCentreState();
 }
 
-class _RiderApplicationCentreState extends State<RiderApplicationCentre>
-    with WidgetsBindingObserver {
+class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
   final _db = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
   final _storage = FirebaseStorage.instance;
@@ -84,32 +83,8 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
 
   String? _message;
   bool _busy = false;
-  bool _payoutOnboardingOpened = false;
 
   String? get _uid => _auth.currentUser?.uid;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && _payoutOnboardingOpened) {
-      final uid = _uid;
-      if (uid != null) {
-        _payoutOnboardingOpened = false;
-        _refreshStripeConnectStatus(uid);
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -148,8 +123,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
                     final rider = riderSnapshot.data?.data() ?? const {};
                     final application =
                         applicationSnapshot.data?.data() ?? const {};
-                    final documents =
-                        documentSnapshot.data?.docs
+                    final documents = documentSnapshot.data?.docs
                             .map((doc) => {'id': doc.id, ...doc.data()})
                             .toList() ??
                         const <Map<String, dynamic>>[];
@@ -170,8 +144,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
                             sliver: SliverList.list(
                               children: [
                                 _TopBar(
-                                  onBack: () => Navigator.maybePop(context),
-                                ),
+                                    onBack: () => Navigator.maybePop(context)),
                                 const SizedBox(height: 16),
                                 _ApplicationHero(
                                   progress: progress,
@@ -221,9 +194,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
   }
 
   String _overallStatus(
-    Map<String, dynamic> application,
-    Map<String, dynamic> rider,
-  ) {
+      Map<String, dynamic> application, Map<String, dynamic> rider) {
     final state = RiderAccountStateResolver.resolve({...application, ...rider});
     return switch (state) {
       RiderAccountState.approved => 'Approved and ready',
@@ -252,8 +223,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
         icon: Icons.person_outline_rounded,
         status: _statusFor(
           explicit: statuses['personal_details'],
-          complete:
-              '${rider['legalFirstName'] ?? rider['firstName'] ?? ''}'
+          complete: '${rider['legalFirstName'] ?? rider['firstName'] ?? ''}'
                   .trim()
                   .isNotEmpty &&
               '${rider['legalSurname'] ?? rider['lastName'] ?? ''}'
@@ -280,8 +250,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
         icon: Icons.phone_iphone_rounded,
         status: _statusFor(
           explicit: statuses['contact_details'],
-          complete:
-              '${rider['phone'] ?? _auth.currentUser?.phoneNumber ?? ''}'
+          complete: '${rider['phone'] ?? _auth.currentUser?.phoneNumber ?? ''}'
                   .trim()
                   .isNotEmpty ||
               '${rider['email'] ?? _auth.currentUser?.email ?? ''}'
@@ -318,8 +287,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
         icon: Icons.two_wheeler_outlined,
         status: _statusFor(
           explicit: statuses['vehicle_details'],
-          complete:
-              _vehicleList(rider).isNotEmpty ||
+          complete: _vehicleList(rider).isNotEmpty ||
               '${rider['vehicleType'] ?? ''}'.trim().isNotEmpty,
         ),
       ),
@@ -344,8 +312,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
         icon: Icons.account_balance_wallet_outlined,
         status: _statusFor(
           explicit: statuses['payout_details'],
-          complete:
-              rider['payoutSetupComplete'] == true ||
+          complete: rider['payoutSetupComplete'] == true ||
               rider['stripeConnectReady'] == true,
         ),
       ),
@@ -375,7 +342,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
           explicit: statuses['review_status'],
           complete:
               RiderAccountStateResolver.resolve({...application, ...rider}) ==
-              RiderAccountState.approved,
+                  RiderAccountState.approved,
         ),
       ),
     ];
@@ -390,27 +357,19 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
     required Set<String> match,
   }) {
     final docs = documents.where((doc) {
-      final type = _normalise(
-        doc['documentType'] ?? doc['idType'] ?? doc['type'],
-      );
+      final type =
+          _normalise(doc['documentType'] ?? doc['idType'] ?? doc['type']);
       return match.contains(type);
     }).toList();
-    final hasAttention = docs.any(
-      (doc) =>
-          riderApplicationStatusFrom(
-            doc['status'] ?? doc['verificationStatus'],
-          ) ==
-          RiderApplicationSectionStatus.needsAttention,
-    );
-    final approved =
-        docs.isNotEmpty &&
-        docs.any(
-          (doc) =>
-              riderApplicationStatusFrom(
-                doc['status'] ?? doc['verificationStatus'],
-              ) ==
-              RiderApplicationSectionStatus.approved,
-        );
+    final hasAttention = docs.any((doc) =>
+        riderApplicationStatusFrom(
+            doc['status'] ?? doc['verificationStatus']) ==
+        RiderApplicationSectionStatus.needsAttention);
+    final approved = docs.isNotEmpty &&
+        docs.any((doc) =>
+            riderApplicationStatusFrom(
+                doc['status'] ?? doc['verificationStatus']) ==
+            RiderApplicationSectionStatus.approved);
     return _ApplicationSection(
       key: key,
       title: title,
@@ -419,10 +378,10 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
       status: hasAttention
           ? RiderApplicationSectionStatus.needsAttention
           : approved
-          ? RiderApplicationSectionStatus.approved
-          : docs.isEmpty
-          ? RiderApplicationSectionStatus.notStarted
-          : RiderApplicationSectionStatus.submitted,
+              ? RiderApplicationSectionStatus.approved
+              : docs.isEmpty
+                  ? RiderApplicationSectionStatus.notStarted
+                  : RiderApplicationSectionStatus.submitted,
     );
   }
 
@@ -503,47 +462,16 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
           ),
         );
       case 'payout_details':
-        await _startStripePayoutSetup(uid);
+        await _runGuard(() async {
+          await _saveSectionStatus(
+            uid,
+            section.key,
+            RiderApplicationSectionStatus.inProgress,
+          );
+        }, success: 'Payout setup status will update from Stripe Connect.');
       case 'review_status':
         await _submitApplication(uid);
     }
-  }
-
-  Future<void> _startStripePayoutSetup(String uid) async {
-    await _runGuard(() async {
-      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-      await functions.httpsCallable('createStripeConnectAccountForRider').call({
-        'riderId': uid,
-      });
-      final response = await functions
-          .httpsCallable('createStripeOnboardingLink')
-          .call({'riderId': uid});
-      final data = response.data is Map
-          ? Map<String, dynamic>.from(response.data as Map)
-          : const <String, dynamic>{};
-      final url = Uri.tryParse('${data['url'] ?? ''}');
-      if (url == null || !(url.isScheme('https') || url.isScheme('http'))) {
-        throw StateError('Stripe did not return a valid onboarding link.');
-      }
-      final opened = await launchUrl(url, mode: LaunchMode.externalApplication);
-      if (!opened) {
-        throw StateError('Could not open Stripe onboarding. Please try again.');
-      }
-      _payoutOnboardingOpened = true;
-      await _saveSectionStatus(
-        uid,
-        'payout_details',
-        RiderApplicationSectionStatus.inProgress,
-      );
-    }, success: 'Stripe payout setup opened. Return here to refresh status.');
-  }
-
-  Future<void> _refreshStripeConnectStatus(String uid) async {
-    await _runGuard(() async {
-      await FirebaseFunctions.instanceFor(
-        region: 'us-central1',
-      ).httpsCallable('syncStripeConnectStatus').call({'riderId': uid});
-    }, success: 'Stripe payout status refreshed.');
   }
 
   Future<void> _saveApplicationPatch(
@@ -552,7 +480,10 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
     Map<String, dynamic> patch,
   ) async {
     await _runGuard(() async {
-      final data = {...patch, 'updatedAt': FieldValue.serverTimestamp()};
+      final data = {
+        ...patch,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
       await _db
           .collection('riders')
           .doc(uid)
@@ -658,7 +589,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
             'actor': uid,
             'note': 'Document uploaded by rider.',
             'timestamp': Timestamp.now(),
-          },
+          }
         ]),
         if (existingData != null)
           'archivedVersions': FieldValue.arrayUnion([
@@ -670,7 +601,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
               'reviewedBy': existingData['reviewedBy'],
               'rejectionReason': existingData['rejectionReason'],
               'archivedAt': Timestamp.now(),
-            },
+            }
           ]),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
@@ -695,12 +626,12 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
           .collection(RiderApplicationCentre.applicationCollection)
           .doc(uid)
           .set({
-            'riderId': uid,
-            'status': 'submitted',
-            'onboardingStatus': 'application_submitted',
-            'submittedAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
+        'riderId': uid,
+        'status': 'submitted',
+        'onboardingStatus': 'application_submitted',
+        'submittedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
       await _db.collection('riders').doc(uid).set({
         'approvalStatus': 'submitted',
         'onboardingStatus': 'application_submitted',
@@ -726,10 +657,10 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
         .collection(RiderApplicationCentre.applicationCollection)
         .doc(uid)
         .set({
-          'riderId': uid,
-          'sectionStatus.$section': status.storageValue,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+      'riderId': uid,
+      'sectionStatus.$section': status.storageValue,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
     await _db.collection(RiderApplicationCentre.auditCollection).add({
       'riderId': uid,
       'actor': uid,
@@ -754,8 +685,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
     } catch (error) {
       if (mounted) {
         setState(
-          () => _message = error.toString().replaceFirst('Bad state: ', ''),
-        );
+            () => _message = error.toString().replaceFirst('Bad state: ', ''));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -766,8 +696,8 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
     if (rider['vehicles'] is Iterable) {
       return List<Map<String, dynamic>>.from(
         (rider['vehicles'] as Iterable).whereType<Map>().map(
-          (item) => Map<String, dynamic>.from(item),
-        ),
+              (item) => Map<String, dynamic>.from(item),
+            ),
       );
     }
     if (rider['vehicle'] is Map) {
@@ -781,7 +711,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
           'colour': rider['vehicleColour'],
           'registration': rider['vehicleRegistration'],
           'primary': true,
-        },
+        }
       ];
     }
     return const [];
@@ -794,24 +724,21 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre>
       .replaceAll(RegExp(r'_+$'), '');
 
   static String _documentLabel(String type) => switch (type) {
-    'passport' => 'Passport',
-    'drivers_license' || 'driving_licence' => 'Driving licence',
-    'national_identity_card' => 'National identity card',
-    'right_to_work' || 'work_permit' => 'Right-to-work evidence',
-    'proof_of_address' => 'Proof of address',
-    'identity_selfie' => 'Selfie verification image',
-    'vehicle_registration' || 'v5c' || 'mot' => 'V5C or MOT evidence',
-    'insurance' => 'Insurance evidence',
-    _ =>
-      type
-          .split('_')
-          .map(
-            (part) => part.isEmpty
+        'passport' => 'Passport',
+        'drivers_license' || 'driving_licence' => 'Driving licence',
+        'national_identity_card' => 'National identity card',
+        'right_to_work' || 'work_permit' => 'Right-to-work evidence',
+        'proof_of_address' => 'Proof of address',
+        'identity_selfie' => 'Selfie verification image',
+        'vehicle_registration' || 'v5c' || 'mot' => 'V5C or MOT evidence',
+        'insurance' => 'Insurance evidence',
+        _ => type
+            .split('_')
+            .map((part) => part.isEmpty
                 ? part
-                : '${part[0].toUpperCase()}${part.substring(1)}',
-          )
-          .join(' '),
-  };
+                : '${part[0].toUpperCase()}${part.substring(1)}')
+            .join(' '),
+      };
 }
 
 class _ApplicationSection {
@@ -908,10 +835,7 @@ class _ApplicationHero extends StatelessWidget {
           const Text(
             'Complete each section, submit documents securely, and message Admin if review changes are requested.',
             style: TextStyle(
-              color: RiderPalette.muted,
-              fontSize: 13,
-              height: 1.45,
-            ),
+                color: RiderPalette.muted, fontSize: 13, height: 1.45),
           ),
           const SizedBox(height: 14),
           LinearProgressIndicator(
@@ -947,7 +871,10 @@ class _ApplicationHero extends StatelessWidget {
 }
 
 class _ApplicationSectionRow extends StatelessWidget {
-  const _ApplicationSectionRow({required this.section, required this.onTap});
+  const _ApplicationSectionRow({
+    required this.section,
+    required this.onTap,
+  });
 
   final _ApplicationSection section;
   final VoidCallback onTap;
@@ -1056,9 +983,8 @@ class _ProgressChecklist extends StatelessWidget {
                     child: Text(
                       item.$1,
                       style: TextStyle(
-                        color: item.$2
-                            ? RiderPalette.paper
-                            : RiderPalette.muted,
+                        color:
+                            item.$2 ? RiderPalette.paper : RiderPalette.muted,
                         fontSize: 12.5,
                         fontWeight: item.$2 ? FontWeight.w800 : FontWeight.w600,
                       ),
@@ -1100,14 +1026,14 @@ class _PersonalApplicationFormState extends State<_PersonalApplicationForm> {
       'home_address' => ['homeAddress'],
       'contact_details' => ['phone', 'email'],
       _ => [
-        'legalFirstName',
-        'legalSurname',
-        'preferredName',
-        'dateOfBirth',
-        'emergencyContactName',
-        'emergencyContactPhone',
-        'accessibilityNeeds',
-      ],
+          'legalFirstName',
+          'legalSurname',
+          'preferredName',
+          'dateOfBirth',
+          'emergencyContactName',
+          'emergencyContactPhone',
+          'accessibilityNeeds',
+        ],
     };
     for (final field in fields) {
       _controllers[field] = TextEditingController();
@@ -1136,9 +1062,8 @@ class _PersonalApplicationFormState extends State<_PersonalApplicationForm> {
                 labelText: _fieldLabel(entry.key),
                 labelStyle: const TextStyle(color: RiderPalette.muted),
                 enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(
-                    color: Colors.white.withValues(alpha: .12),
-                  ),
+                  borderSide:
+                      BorderSide(color: Colors.white.withValues(alpha: .12)),
                 ),
                 focusedBorder: const OutlineInputBorder(
                   borderSide: BorderSide(color: RiderPalette.blue),
@@ -1167,20 +1092,23 @@ class _PersonalApplicationFormState extends State<_PersonalApplicationForm> {
   }
 
   String _fieldLabel(String key) => switch (key) {
-    'legalFirstName' => 'Legal first name',
-    'legalSurname' => 'Legal surname',
-    'preferredName' => 'Preferred name',
-    'dateOfBirth' => 'Date of birth',
-    'homeAddress' => 'Home address',
-    'emergencyContactName' => 'Emergency contact name',
-    'emergencyContactPhone' => 'Emergency contact phone',
-    'accessibilityNeeds' => 'Optional accessibility needs',
-    _ => key,
-  };
+        'legalFirstName' => 'Legal first name',
+        'legalSurname' => 'Legal surname',
+        'preferredName' => 'Preferred name',
+        'dateOfBirth' => 'Date of birth',
+        'homeAddress' => 'Home address',
+        'emergencyContactName' => 'Emergency contact name',
+        'emergencyContactPhone' => 'Emergency contact phone',
+        'accessibilityNeeds' => 'Optional accessibility needs',
+        _ => key,
+      };
 }
 
 class _VehicleApplicationForm extends StatefulWidget {
-  const _VehicleApplicationForm({required this.load, required this.save});
+  const _VehicleApplicationForm({
+    required this.load,
+    required this.save,
+  });
 
   final Future<List<Map<String, dynamic>>> Function() load;
   final Future<void> Function(List<Map<String, dynamic>> vehicles) save;
@@ -1200,9 +1128,8 @@ class _VehicleApplicationFormState extends State<_VehicleApplicationForm> {
     widget.load().then((vehicles) {
       if (!mounted) return;
       setState(() {
-        for (final vehicle in vehicles.take(
-          RiderApplicationCentre.maxVehicles,
-        )) {
+        for (final vehicle
+            in vehicles.take(RiderApplicationCentre.maxVehicles)) {
           _vehicles.add(_controllersFor(vehicle));
         }
         if (_vehicles.isEmpty) _vehicles.add(_controllersFor(const {}));
@@ -1233,13 +1160,9 @@ class _VehicleApplicationFormState extends State<_VehicleApplicationForm> {
           ),
           const SizedBox(height: 14),
           for (var i = 0; i < _vehicles.length; i++) ...[
-            Text(
-              'Vehicle ${i + 1}',
-              style: const TextStyle(
-                color: RiderPalette.paper,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
+            Text('Vehicle ${i + 1}',
+                style: const TextStyle(
+                    color: RiderPalette.paper, fontWeight: FontWeight.w900)),
             const SizedBox(height: 8),
             for (final key in [
               'type',
@@ -1283,7 +1206,7 @@ class _VehicleApplicationFormState extends State<_VehicleApplicationForm> {
                             if (entry.value.text.trim().isNotEmpty)
                               entry.key: entry.value.text.trim(),
                           'primary': i == 0,
-                        },
+                        }
                     ]);
                     if (context.mounted) Navigator.pop(context);
                   },
@@ -1295,8 +1218,7 @@ class _VehicleApplicationFormState extends State<_VehicleApplicationForm> {
   }
 
   Map<String, TextEditingController> _controllersFor(
-    Map<String, dynamic> data,
-  ) {
+      Map<String, dynamic> data) {
     return {
       for (final key in [
         'type',
@@ -1312,14 +1234,17 @@ class _VehicleApplicationFormState extends State<_VehicleApplicationForm> {
   }
 
   String _vehicleLabel(String key) => switch (key) {
-    'type' => 'Vehicle type',
-    'ownershipStatus' => 'Ownership status',
-    _ => '${key[0].toUpperCase()}${key.substring(1)}',
-  };
+        'type' => 'Vehicle type',
+        'ownershipStatus' => 'Ownership status',
+        _ => '${key[0].toUpperCase()}${key.substring(1)}',
+      };
 }
 
 class _DocumentUploadSection extends StatefulWidget {
-  const _DocumentUploadSection({required this.section, required this.upload});
+  const _DocumentUploadSection({
+    required this.section,
+    required this.upload,
+  });
 
   final _ApplicationSection section;
   final Future<void> Function(String type, XFile file) upload;
@@ -1340,22 +1265,22 @@ class _DocumentUploadSectionState extends State<_DocumentUploadSection> {
   }
 
   List<String> get _types => switch (widget.section.key) {
-    'right_to_work' => ['right_to_work', 'share_code'],
-    'vehicle_documents' => [
-      'vehicle_registration',
-      'v5c',
-      'mot',
-      'insurance',
-      'vehicle_supporting_document',
-    ],
-    _ => [
-      'passport',
-      'drivers_license',
-      'national_identity_card',
-      'proof_of_address',
-      'identity_selfie',
-    ],
-  };
+        'right_to_work' => ['right_to_work', 'share_code'],
+        'vehicle_documents' => [
+            'vehicle_registration',
+            'v5c',
+            'mot',
+            'insurance',
+            'vehicle_supporting_document',
+          ],
+        _ => [
+            'passport',
+            'drivers_license',
+            'national_identity_card',
+            'proof_of_address',
+            'identity_selfie',
+          ],
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -1406,7 +1331,10 @@ class _DocumentUploadSectionState extends State<_DocumentUploadSection> {
 }
 
 class _SectionScaffold extends StatelessWidget {
-  const _SectionScaffold({required this.title, required this.child});
+  const _SectionScaffold({
+    required this.title,
+    required this.child,
+  });
 
   final String title;
   final Widget child;

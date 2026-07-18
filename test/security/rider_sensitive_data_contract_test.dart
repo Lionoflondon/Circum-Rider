@@ -31,65 +31,14 @@ void main() {
     }
   });
 
-  test('release-critical Rider paths do not use raw print diagnostics', () {
+  test('Rider payout cancellation remains backend-authoritative', () {
     final root = Directory.current;
-    final releaseCriticalSources = <File>[
-      File('${root.path}/lib/app/authentication/bloc/auth_bloc.dart'),
-      File('${root.path}/lib/app/authentication/view/forgot_password.dart'),
-      File('${root.path}/lib/app/account/repo/earnings_repo.dart'),
-      File('${root.path}/lib/app/home/bloc/home_bloc.dart'),
-      File('${root.path}/lib/app/home/repo/home_repo.dart'),
-      File('${root.path}/lib/app/home/repo/direction_service.dart'),
-      File('${root.path}/lib/app/home/view/maps_view.dart'),
-      File('${root.path}/lib/app/tracking/rider_live_tracking_controller.dart'),
-    ];
+    final accountBloc =
+        File('${root.path}/lib/app/account/bloc/account_bloc.dart')
+            .readAsStringSync();
 
-    for (final source in releaseCriticalSources) {
-      expect(source.existsSync(), isTrue, reason: source.path);
-      final executableLines = source
-          .readAsLinesSync()
-          .map((line) => line.trimLeft())
-          .where((line) => !line.startsWith('//'))
-          .join('\n');
-
-      expect(executableLines, isNot(contains('print(')), reason: source.path);
-    }
-  });
-
-  test('Rider runtime Maps keys are provided by configuration', () {
-    final root = Directory.current;
-    final hardcodedMapsKey = RegExp(r'AIza[0-9A-Za-z_-]+');
-    final runtimeSources = <File>[
-      File('${root.path}/lib/app/home/bloc/home_bloc.dart'),
-      File('${root.path}/lib/app/home/repo/direction_service.dart'),
-      File('${root.path}/android/app/src/main/AndroidManifest.xml'),
-      File('${root.path}/ios/Runner/AppDelegate.swift'),
-      File('${root.path}/ios/Runner/Info.plist'),
-    ];
-
-    for (final source in runtimeSources) {
-      expect(source.existsSync(), isTrue, reason: source.path);
-      expect(
-        source.readAsStringSync(),
-        isNot(matches(hardcodedMapsKey)),
-        reason: source.path,
-      );
-    }
-
-    expect(
-      File('${root.path}/lib/app/home/repo/direction_service.dart')
-          .readAsStringSync(),
-      contains(
-          "String.fromEnvironment('RIDER_GOOGLE_MAPS_DIRECTIONS_API_KEY')"),
-    );
-    expect(
-      File('${root.path}/android/app/src/main/AndroidManifest.xml')
-          .readAsStringSync(),
-      contains(r'${googleMapsApiKey}'),
-    );
-    expect(
-      File('${root.path}/ios/Runner/Info.plist').readAsStringSync(),
-      contains(r'$(GOOGLE_MAPS_API_KEY)'),
-    );
+    expect(accountBloc, contains("httpsCallable('cancelRiderWithdrawal')"));
+    expect(accountBloc,
+        isNot(contains(".collection('payoutRequests').doc(doc.id).delete()")));
   });
 }

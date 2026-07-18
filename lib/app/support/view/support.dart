@@ -7,10 +7,9 @@ import '../../../utils/theme/theme.dart';
 import '../../communication/rider_conversation_view.dart';
 import '../../rider_design/rider_ui.dart';
 import '../bloc/support_bloc.dart';
-import 'faq.dart';
 
 class SupportView extends StatelessWidget {
-  const SupportView({Key? key}) : super(key: key);
+  const SupportView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +46,7 @@ class SupportView extends StatelessWidget {
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 24, vertical: 16),
-                        shape: RoundedRectangleBorder(),
+                        shape: const RoundedRectangleBorder(),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -63,7 +62,7 @@ class SupportView extends StatelessWidget {
                           ),
                           Icon(
                             Icons.keyboard_arrow_right_rounded,
-                            color: Colors.white.withOpacity(0.15),
+                            color: Colors.white.withValues(alpha: 0.15),
                           )
                         ],
                       ),
@@ -77,40 +76,6 @@ class SupportView extends StatelessWidget {
                                       title: 'Circum Support',
                                       subtitle: 'Rider support conversation',
                                     )));
-                      }),
-                  Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: Colors.white.withOpacity(0.15)),
-                  TextButton(
-                      // borderSide: BorderSide.none,
-                      // backgroundColor: AppColors.secondary,
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 16),
-                        shape: RoundedRectangleBorder(),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Row(
-                            children: [
-                              SvgPicture.asset('assets/svg/support.svg'),
-                              const SizedBox(width: 16),
-                              AppText.text(
-                                'FAQ',
-                              )
-                            ],
-                          ),
-                          Icon(
-                            Icons.keyboard_arrow_right_rounded,
-                            color: Colors.white.withOpacity(0.15),
-                          )
-                        ],
-                      ),
-                      onPressed: () {
-                        Navigator.push(context,
-                            MaterialPageRoute(builder: (_) => const FAQView()));
                       }),
                 ],
               )));

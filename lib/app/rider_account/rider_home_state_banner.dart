@@ -56,7 +56,7 @@ class RiderHomeStateBanner extends StatelessWidget {
                               Text(
                                 state == RiderAccountState.approved
                                     ? (online
-                                        ? 'You are online'
+                                        ? 'Online'
                                         : 'Ready when you are, ${_firstName(rider)}')
                                     : 'Rider account update',
                                 style: const TextStyle(
@@ -130,7 +130,7 @@ class RiderHomeStateBanner extends StatelessWidget {
       if (vehicle.isNotEmpty) vehicle,
       if (rank.isNotEmpty) rank,
       if (trust is num) '${trust.toStringAsFixed(0)} trust points',
-      if (earnings is num) 'Today: £${earnings.toStringAsFixed(2)}',
+      if (earnings is num) "Today's earnings: £${earnings.toStringAsFixed(2)}",
     ];
     return details.isEmpty
         ? (online

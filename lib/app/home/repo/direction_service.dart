@@ -1,10 +1,6 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-
-const _riderDirectionsApiKey =
-    String.fromEnvironment('RIDER_GOOGLE_MAPS_DIRECTIONS_API_KEY');
 
 extension on DirectionsService {
   // Decode Google's encoded polyline
@@ -43,18 +39,12 @@ extension on DirectionsService {
 class DirectionsService {
   final Dio _dio;
   final FlutterTts flutterTts = FlutterTts();
+  static const _mapsApiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
 
   DirectionsService() : _dio = Dio();
 
   Future<List<DirectionStep>> getDetailedDirections(
       LatLng origin, LatLng destination) async {
-    if (_riderDirectionsApiKey.isEmpty) {
-      if (kDebugMode) {
-        debugPrint('Rider directions key is not configured.');
-      }
-      return [];
-    }
-
     final String url = 'https://maps.googleapis.com/maps/api/directions/json';
 
     try {
@@ -63,7 +53,7 @@ class DirectionsService {
         queryParameters: {
           'origin': '${origin.latitude},${origin.longitude}',
           'destination': '${destination.latitude},${destination.longitude}',
-          'key': _riderDirectionsApiKey,
+          if (_mapsApiKey.isNotEmpty) 'key': _mapsApiKey,
           'polyline': 'true'
         },
       );
@@ -96,11 +86,7 @@ class DirectionsService {
           }
         }
       }
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error fetching directions: $e');
-      }
-    }
+    } catch (_) {}
 
     return [];
   }

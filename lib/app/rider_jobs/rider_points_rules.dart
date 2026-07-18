@@ -40,7 +40,6 @@ class RiderPointsRules {
     RiderJobCategory.gift,
     RiderJobCategory.scheduled,
     RiderJobCategory.vanguard,
-    RiderJobCategory.heavyDuty,
     RiderJobCategory.business,
     RiderJobCategory.marketplace,
     RiderJobCategory.standard,

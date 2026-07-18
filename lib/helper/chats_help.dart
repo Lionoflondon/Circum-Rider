@@ -4,27 +4,23 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
 class ChatsHelper {
+  @Deprecated(
+      'Use the canonical communication engine. This helper is read-only compatibility only.')
   Future<bool> storeChat(message) async {
+    return false;
+  }
+
+  Future<List<dynamic>> readStoredChat(String requestId) async {
+    if (requestId.trim().isEmpty) return const [];
     try {
-      // final messageJson = jsonDecode(message.data['data']);
-
       final directory = await getApplicationDocumentsDirectory();
-      final chats = File('${directory.path}/${message['requestId']}.json');
-      List jsonData = [];
-      if (await chats.exists()) {
-        final contents = await chats.readAsString();
-        final parsingData = await jsonDecode(contents) as List;
-        jsonData = [...parsingData];
-      }
-      jsonData.add(message);
-      // final jsonDataa = jsonData.map((message) => message.toJson()).toList();
-      final jsonString = jsonEncode(jsonData);
-
-      await chats.writeAsString(jsonString);
-
-      return true;
+      final chats = File('${directory.path}/$requestId.json');
+      if (!await chats.exists()) return const [];
+      final contents = await chats.readAsString();
+      final parsed = jsonDecode(contents);
+      return parsed is List ? parsed : const [];
     } catch (_) {
-      return false;
+      return const [];
     }
   }
 }

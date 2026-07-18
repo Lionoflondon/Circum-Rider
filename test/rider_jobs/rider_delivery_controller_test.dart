@@ -6,6 +6,7 @@ class _RecordingController implements RiderDeliveryController {
   String? deliveryId;
   String? action;
   String? pin;
+  int irisConfirmationCalls = 0;
 
   @override
   Future<RiderDeliveryTransitionResult> transition({
@@ -43,6 +44,20 @@ class _RecordingController implements RiderDeliveryController {
     String? note,
   }) async =>
       {'success': true};
+
+  @override
+  Future<Map<String, dynamic>> confirmIrisAssessment({
+    required String deliveryId,
+  }) async {
+    irisConfirmationCalls += 1;
+    return {
+      'success': true,
+      'acknowledgement': {
+        'deliveryId': deliveryId,
+        'acknowledgementStatus': 'confirmed',
+      },
+    };
+  }
 }
 
 void main() {
@@ -61,5 +76,18 @@ void main() {
     expect(controller.action, 'verify_collection_pin');
     expect(controller.pin, '123456');
     expect(result.status, 'pickup_verified');
+  });
+
+  test('IRIS confirmation uses its canonical acknowledgement operation',
+      () async {
+    final controller = _RecordingController();
+
+    final result =
+        await controller.confirmIrisAssessment(deliveryId: 'delivery-1');
+
+    expect(controller.irisConfirmationCalls, 1);
+    expect(result['success'], true);
+    expect((result['acknowledgement'] as Map)['acknowledgementStatus'],
+        'confirmed');
   });
 }

@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 
 import '../rider_design/rider_ui.dart';
-import 'rider_dispatch_policy.dart';
 import 'rider_points_rules.dart';
 
 class RiderJobOffer {
@@ -15,15 +14,12 @@ class RiderJobOffer {
   final String dropoffAddress;
   final double earnings;
   final String currency;
-  final String pickupDistanceText;
   final String distanceText;
   final String timeText;
   final String parcelGuidance;
   final String minimumVehicle;
   final String weightText;
   final String pickupTiming;
-  final String expiryText;
-  final String irisSummary;
   final List<String> warningChips;
   final Map<String, dynamic> raw;
 
@@ -36,15 +32,12 @@ class RiderJobOffer {
     required this.dropoffAddress,
     required this.earnings,
     required this.currency,
-    required this.pickupDistanceText,
     required this.distanceText,
     required this.timeText,
     required this.parcelGuidance,
     required this.minimumVehicle,
     required this.weightText,
     required this.pickupTiming,
-    required this.expiryText,
-    required this.irisSummary,
     required this.warningChips,
     required this.raw,
   });
@@ -60,13 +53,7 @@ class RiderJobOffer {
     final requestId = '${data['requestId'] ?? data['code'] ?? docId}'.trim();
     final price =
         (data['riderEarning'] ?? data['riderPay'] ?? data['price'] ?? 0);
-    final pickupDistance = data['pickupDistanceText'] ??
-        data['distanceToPickupText'] ??
-        data['riderToPickupDistanceText'] ??
-        data['distanceToPickup'];
-    final distance = data['routeDistanceText'] ??
-        data['deliveryRouteDistanceText'] ??
-        data['distanceText'] ??
+    final distance = data['distanceText'] ??
         data['estimatedDistanceText'] ??
         data['distance'];
     final duration = data['durationText'] ??
@@ -87,23 +74,17 @@ class RiderJobOffer {
       dropoffAddress: _fullAddress(dropoffDetails),
       earnings: price is num ? price.toDouble() : 0,
       currency: '${data['currency'] ?? 'GBP'}',
-      pickupDistanceText: pickupDistance == null ||
-              '$pickupDistance'.trim().isEmpty ||
-              '$pickupDistance'.trim() == 'null'
-          ? 'Pickup distance pending'
-          : '$pickupDistance',
       distanceText: distance == null || '$distance'.trim().isEmpty
-          ? 'Distance pending'
+          ? 'Calculating route'
           : '$distance',
       timeText: duration == null || '$duration'.trim().isEmpty
-          ? 'ETA pending'
+          ? 'Calculating arrival time'
           : '$duration',
       parcelGuidance: '$item',
-      minimumVehicle: RiderDispatchPolicy.vehicleGuidance(data),
+      minimumVehicle:
+          '${data['minimumVehicle'] ?? data['recommendedVehicle'] ?? data['vehicleType'] ?? 'Bike'}',
       weightText: _weightText(data),
       pickupTiming: _pickupTiming(data),
-      expiryText: _expiryText(data),
-      irisSummary: _irisSummary(data),
       warningChips: _warningChips(data),
       raw: data,
     );
@@ -169,10 +150,6 @@ class RiderJobOffer {
     addIf(data['isBusiness'] ?? data['businessDelivery'], 'Business');
     addIf(data['isHeavyDuty'] ?? data['heavyDuty'] ?? data['heavy'], 'Heavy');
     addIf(data['isScheduled'] ?? data['scheduled'], 'Scheduled');
-    addIf(data['isMarketplace'] ?? data['marketplace'], 'Marketplace');
-    addIf(data['isExpress'] ?? data['express'], 'Express');
-    addIf(data['fragile'] ?? data['isFragile'], 'Fragile');
-    addIf(data['highValue'] ?? data['isHighValue'], 'High value');
     if (chips.isEmpty) chips.add('Standard');
     return chips;
   }
@@ -186,45 +163,6 @@ class RiderJobOffer {
     final text = '$value'.trim();
     if (value != null && text.isNotEmpty && text != 'null') return text;
     return 'Weight pending';
-  }
-
-  static String _expiryText(Map<String, dynamic> data) {
-    final expiry =
-        data['expiresAt'] ?? data['expiryAt'] ?? data['offerExpiresAt'];
-    if (expiry == null) return 'Expiry controlled by dispatch';
-    try {
-      final dynamic maybeTimestamp = expiry;
-      final date = maybeTimestamp.toDate();
-      if (date is DateTime) return _relativeExpiry(date);
-    } catch (_) {}
-    final parsed = DateTime.tryParse('$expiry');
-    if (parsed == null) return '$expiry';
-    return _relativeExpiry(parsed);
-  }
-
-  static String _relativeExpiry(DateTime expiry) {
-    final remaining = expiry.toUtc().difference(DateTime.now().toUtc());
-    if (remaining.isNegative) return 'Expired';
-    final minutes = remaining.inMinutes;
-    if (minutes <= 0) return 'Expires soon';
-    if (minutes < 60) return 'Expires in ${minutes}m';
-    return 'Expires ${expiry.toLocal().hour.toString().padLeft(2, '0')}:${expiry.toLocal().minute.toString().padLeft(2, '0')}';
-  }
-
-  static String _irisSummary(Map<String, dynamic> data) {
-    final confidence = data['irisConfidence'] ??
-        data['irisMatchConfidence'] ??
-        data['matchConfidence'];
-    final match = data['irisMatchSummary'] ??
-        data['irisSummary'] ??
-        data['irisGuidance'] ??
-        data['itemMatch'];
-    if (confidence is num) {
-      return 'IRIS ${(confidence * (confidence <= 1 ? 100 : 1)).round()}% match';
-    }
-    final text = '$match'.trim();
-    if (match != null && text.isNotEmpty && text != 'null') return text;
-    return 'IRIS guidance pending';
   }
 
   static String _pickupTiming(Map<String, dynamic> data) {
@@ -341,33 +279,15 @@ class RiderOfferCard extends StatelessWidget {
                       children: [
                         Expanded(
                           child: _InfoTile(
-                            icon: Icons.near_me_rounded,
-                            label: offer.pickupDistanceText,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _InfoTile(
                             icon: Icons.route_rounded,
                             label: offer.distanceText,
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
+                        const SizedBox(width: 10),
                         Expanded(
                           child: _InfoTile(
                             icon: Icons.schedule_rounded,
                             label: offer.timeText,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _InfoTile(
-                            icon: Icons.timer_outlined,
-                            label: offer.expiryText,
                           ),
                         ),
                       ],
@@ -379,7 +299,6 @@ class RiderOfferCard extends StatelessWidget {
                       vehicle: offer.minimumVehicle,
                       weight: offer.weightText,
                       timing: offer.pickupTiming,
-                      iris: offer.irisSummary,
                     ),
                   ],
                 ),
@@ -621,13 +540,11 @@ class _MetadataRow extends StatelessWidget {
   final String vehicle;
   final String weight;
   final String timing;
-  final String iris;
 
   const _MetadataRow({
     required this.vehicle,
     required this.weight,
     required this.timing,
-    required this.iris,
   });
 
   @override
@@ -639,7 +556,6 @@ class _MetadataRow extends StatelessWidget {
         _MetaChip(label: 'Vehicle: $vehicle'),
         _MetaChip(label: 'Weight: $weight'),
         _MetaChip(label: 'Pickup: $timing'),
-        _MetaChip(label: iris),
       ],
     );
   }

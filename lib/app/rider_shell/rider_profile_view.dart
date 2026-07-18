@@ -1,28 +1,22 @@
-import 'dart:ui';
-
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:permission_handler/permission_handler.dart' as permissions;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../account/view/account_details.dart';
 import '../authentication/bloc/auth_bloc.dart';
-import '../founder_access/founder_rider_access.dart';
-import '../history/view/history.dart';
 import '../notifications/rider_notifications_view.dart';
-import '../onboarding/rider_guide_view.dart';
-import '../recognitions/rider_recognitions.dart';
-import '../rider_account/rider_account_state.dart';
+import '../onboarding/rider_application_centre.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
+import '../ratings/rider_appreciation.dart';
 import '../support/view/support.dart';
 import '../verification/view/verification.dart';
+import 'rider_accessibility_settings_view.dart';
+import 'rider_profile_details_view.dart';
 
 class RiderProfileView extends StatefulWidget {
   const RiderProfileView({super.key, required this.onSelectTab});
@@ -43,43 +37,53 @@ class _RiderProfileViewState extends State<RiderProfileView> {
       return const RiderEmptyState(
         icon: Icons.lock_outline,
         title: 'Sign in required',
-        message: 'Sign in to view Rider options.',
+        message: 'Sign in to view your Rider profile.',
       );
     }
+
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      key: ValueKey('rider-options-profile-$_reload'),
+      key: ValueKey('rider-profile-main-$_reload'),
       stream: FirebaseFirestore.instance
           .collection('riderProfiles')
           .doc(user.uid)
           .snapshots(),
       builder: (context, profileSnapshot) {
         return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          key: ValueKey('rider-options-rider-$_reload'),
+          key: ValueKey('rider-profile-rider-$_reload'),
           stream: FirebaseFirestore.instance
               .collection('riders')
               .doc(user.uid)
               .snapshots(),
           builder: (context, riderSnapshot) {
-            if (profileSnapshot.hasError || riderSnapshot.hasError) {
-              return _OptionsError(
-                onRetry: () => setState(() => _reload++),
-              );
-            }
-            if (!profileSnapshot.hasData && !riderSnapshot.hasData) {
-              return const _OptionsLoading();
-            }
-            final rider = riderSnapshot.data?.data() ?? const {};
-            final riderProfile = profileSnapshot.data?.data() ?? const {};
-            final profile = <String, dynamic>{...rider, ...riderProfile};
-            final accountState = RiderAccountStateResolver.resolveRecords(
-              rider: rider,
-              riderProfile: riderProfile,
-            );
-            return _OptionsScreen(
-              user: user,
-              profile: profile,
-              accountState: accountState,
-              onSelectTab: widget.onSelectTab,
+            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              key: ValueKey('rider-profile-earnings-$_reload'),
+              stream: FirebaseFirestore.instance
+                  .collection('riderEarnings')
+                  .doc(user.uid)
+                  .snapshots(),
+              builder: (context, earningsSnapshot) {
+                if (profileSnapshot.hasError ||
+                    riderSnapshot.hasError ||
+                    earningsSnapshot.hasError) {
+                  return _ProfileError(
+                      onRetry: () => setState(() => _reload++));
+                }
+                if (!profileSnapshot.hasData && !riderSnapshot.hasData) {
+                  return const _ProfileLoading();
+                }
+                final profile = <String, dynamic>{
+                  ...?riderSnapshot.data?.data(),
+                  ...?profileSnapshot.data?.data(),
+                };
+                final earnings =
+                    earningsSnapshot.data?.data() ?? const <String, dynamic>{};
+                return _RiderProfileScreen(
+                  user: user,
+                  profile: profile,
+                  earnings: earnings,
+                  onSelectTab: widget.onSelectTab,
+                );
+              },
             );
           },
         );
@@ -88,1438 +92,978 @@ class _RiderProfileViewState extends State<RiderProfileView> {
   }
 }
 
-class _ProfileData {
-  static String name(User user, Map<String, dynamic> profile) {
-    final first = '${profile['firstName'] ?? ''}'.trim();
-    final last = '${profile['lastName'] ?? ''}'.trim();
-    final full = '${profile['name'] ?? profile['fullName'] ?? ''}'.trim();
-    final joined = [first, last].where((part) => part.isNotEmpty).join(' ');
-    return joined.isNotEmpty
-        ? joined
-        : full.isNotEmpty
-            ? full
-            : user.displayName ?? 'Circum Rider';
-  }
-
-  static String initials(String name) {
-    final parts = name.split(' ').where((part) => part.isNotEmpty).take(2);
-    final initials = parts.map((part) => part[0].toUpperCase()).join();
-    return initials.isEmpty ? 'R' : initials;
-  }
-
-  static String accountStatus(RiderAccountState state) {
-    final text = RiderAccountStateResolver.storageValue(state);
-    return _sentence(text);
-  }
-
-  static String verificationStatus(Map<String, dynamic> profile) {
-    final state = documentSummary(profile).toLowerCase();
-    if (state == 'approved') return 'Verified';
-    if (state.contains('review')) return 'Under review';
-    if (state.contains('rejected')) return 'Rejected';
-    if (state.contains('expired')) return 'Expired';
-    if (state.contains('attention') || state.contains('not supplied')) {
-      return 'Action required';
-    }
-    return documentSummary(profile);
-  }
-
-  static String documentSummary(Map<String, dynamic> profile) {
-    final statuses = [
-      _docStatus(profile, 'identityStatus', 'identityVerified'),
-      _docStatus(profile, 'vehicleRegistrationDocumentStatus',
-          'vehicleDocumentsVerified'),
-      _docStatus(profile, 'insuranceStatus', 'insuranceVerified'),
-      _docStatus(profile, 'additionalVerificationStatus', 'documentsVerified'),
-    ];
-    final attention = statuses
-        .where((status) =>
-            status == 'Not supplied' ||
-            status == 'Rejected' ||
-            status == 'Expired')
-        .length;
-    if (attention > 0) return '$attention items need attention';
-    if (statuses.any((status) => status == 'Under review')) {
-      return 'Some items are under review';
-    }
-    if (statuses.every((status) => status == 'Approved')) return 'Approved';
-    return 'Review your documents';
-  }
-
-  static String notificationSummary() => 'Job offers, messages and updates';
-
-  static String _docStatus(Map<String, dynamic> profile, String statusKey,
-      [String? booleanKey]) {
-    if (booleanKey != null && profile[booleanKey] == true) return 'Approved';
-    final text = '${profile[statusKey] ?? ''}'.trim().toLowerCase();
-    return switch (text) {
-      'approved' || 'verified' => 'Approved',
-      'submitted' => 'Submitted',
-      'under_review' || 'pending' || 'reviewing' => 'Under review',
-      'rejected' || 'declined' => 'Rejected',
-      'expired' => 'Expired',
-      _ => 'Not supplied',
-    };
-  }
-
-  static String _sentence(String value) => value
-      .replaceAll('_', ' ')
-      .split(' ')
-      .where((part) => part.isNotEmpty)
-      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-      .join(' ');
-}
-
-class _OptionsScreen extends StatelessWidget {
-  const _OptionsScreen({
+class _RiderProfileScreen extends StatelessWidget {
+  const _RiderProfileScreen({
     required this.user,
     required this.profile,
-    required this.accountState,
+    required this.earnings,
     required this.onSelectTab,
   });
 
   final User user;
   final Map<String, dynamic> profile;
-  final RiderAccountState accountState;
+  final Map<String, dynamic> earnings;
   final ValueChanged<int> onSelectTab;
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthBloc>().state;
-    final name = _ProfileData.name(user, profile);
-    final photo =
-        '${profile['profilePhoto'] ?? auth.profilePhoto ?? user.photoURL ?? ''}'
-            .trim();
-    final rank = RiderRankSnapshot.from(profile);
-    final status = _ProfileData.accountStatus(accountState);
-    final verificationStatus = _ProfileData.verificationStatus(profile);
-    final recognitions = RiderRecognitions.from(profile);
+    final data =
+        _RiderProfileData(user: user, profile: profile, earnings: earnings);
 
     return CustomScrollView(
-      key: const PageStorageKey('rider-options-screen'),
+      key: const PageStorageKey('rider-profile-screen'),
       slivers: [
         SliverSafeArea(
           bottom: false,
           sliver: SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
-            sliver: SliverList.list(
-              children: [
-                const _OptionsTopBar(),
-                const SizedBox(height: 12),
-                const FounderRiderBadge(),
-                const SizedBox(height: 12),
-                _IdentityCard(
-                  name: name,
-                  photo: photo,
-                  initials: _ProfileData.initials(name),
-                  rank: rank?.rank ?? 'Rank updating',
-                  trust: rank == null
-                      ? 'Trust updating'
-                      : '${rank.trustPoints} Trust',
-                  verificationStatus: verificationStatus,
-                  accountStatus: status,
-                  recognitions: recognitions,
-                  onTap: () => _open(context, const AccountDetails()),
-                ),
-                const SizedBox(height: 24),
-                _OptionsSection(
-                  label: 'Account',
-                  children: [
-                    _OptionRow(
-                      icon: Icons.person_outline_rounded,
-                      iconColor: RiderPalette.blue,
-                      title: 'Personal details',
-                      subtitle: _personalDetailsSubtitle(user, profile),
-                      onTap: () => _open(context, const AccountDetails()),
-                    ),
-                    _OptionRow(
-                      icon: Icons.verified_user_outlined,
-                      iconColor: RiderPalette.green,
-                      title: 'Documents & verification',
-                      subtitle: verificationStatus,
-                      onTap: () => _open(context, VerificationView()),
-                    ),
-                    _OptionRow(
-                      icon: Icons.history_rounded,
-                      iconColor: RiderPalette.amber,
-                      title: 'Delivery activity',
-                      subtitle:
-                          'Completed, cancelled and historical deliveries',
-                      onTap: () => _open(context, const HistoryView()),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                _OptionsSection(
-                  label: 'Preferences',
-                  children: [
-                    _PermissionRow(
-                      icon: Icons.notifications_none_rounded,
-                      iconColor: RiderPalette.purple,
-                      title: 'Notifications',
-                      summary: _ProfileData.notificationSummary(),
-                      permission: permissions.Permission.notification,
-                      onTap: () => _open(
-                        context,
-                        RiderNotificationsView(onNavigateTab: onSelectTab),
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 112),
+            sliver: SliverToBoxAdapter(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 920),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _ProfileHero(
+                        data: data,
+                        onEditPhoto: () =>
+                            _open(context, const AccountDetails()),
+                        onEditProfile: () =>
+                            _open(context, const AccountDetails()),
                       ),
-                    ),
-                    _LocationSharingRow(
-                      profile: profile,
-                      user: user,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
-                _OptionsSection(
-                  label: 'Support',
-                  children: [
-                    _OptionRow(
-                      icon: Icons.explore_outlined,
-                      iconColor: RiderPalette.blue,
-                      title: 'Rider Guide',
-                      subtitle: 'Learn how Circum Rider works',
-                      onTap: () => _open(
-                        context,
-                        RiderGuideView(
-                          authenticated: true,
-                          progress: RiderApprovalProgress.fromBackend(
-                            accountExists: true,
-                            firebaseEmailVerified: user.emailVerified,
-                            rider: profile,
+                      const SizedBox(height: 16),
+                      _StatsRow(data: data),
+                      const SizedBox(height: 22),
+                      _ProfileSection(
+                        title: 'Account',
+                        rows: [
+                          _ProfileRow(
+                            icon: Icons.badge_outlined,
+                            title: 'Personal Details',
+                            description: 'Name, username and personal details',
+                            onTap: () => _open(
+                              context,
+                              RiderPersonalDetailsView(user: user),
+                            ),
                           ),
-                        ),
+                          _ProfileRow(
+                            icon: Icons.contact_phone_outlined,
+                            title: 'Contact Information',
+                            description: data.contactSummary,
+                            onTap: () => _open(
+                              context,
+                              RiderPersonalDetailsView(user: user),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                    _OptionRow(
-                      icon: Icons.help_outline_rounded,
-                      iconColor: RiderPalette.blue,
-                      title: 'Support',
-                      subtitle: 'Contact Rider Support',
-                      onTap: () => _open(context, const SupportView()),
-                    ),
-                    _OptionRow(
-                      icon: Icons.gavel_rounded,
-                      iconColor: RiderPalette.muted,
-                      title: 'Legal',
-                      subtitle: 'Terms, privacy, Rider agreement and licences',
-                      onTap: () => _open(context, const RiderLegalView()),
-                    ),
-                  ],
+                      _ProfileSection(
+                        title: 'Work',
+                        rows: [
+                          _ProfileRow(
+                            icon: Icons.two_wheeler_outlined,
+                            title: 'Vehicles',
+                            description: data.vehicleSummary,
+                            onTap: () => _open(
+                              context,
+                              RiderVehicleManagerView(userId: user.uid),
+                            ),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.verified_user_outlined,
+                            title: 'Documents',
+                            description: data.documentSummary,
+                            onTap: () =>
+                                _open(context, const VerificationView()),
+                          ),
+                        ],
+                      ),
+                      _ProfileSection(
+                        title: 'Finance',
+                        rows: [
+                          _ProfileRow(
+                            icon: Icons.account_balance_wallet_outlined,
+                            title: 'Earnings',
+                            description:
+                                'Cash earnings and delivery transactions',
+                            onTap: () => onSelectTab(3),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.diamond_outlined,
+                            title: 'Roth Wallet',
+                            description: data.rothSummary,
+                            onTap: () =>
+                                _open(context, const RiderApplicationCentre()),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.verified_outlined,
+                            title: 'Payout Account',
+                            description: data.stripeStatus,
+                            statusColor: data.stripeStatusColor,
+                            onTap: () => onSelectTab(3),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.savings_outlined,
+                            title: 'Available Balance',
+                            description: data.availableBalance,
+                            onTap: () => onSelectTab(3),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.schedule_outlined,
+                            title: 'Next Estimated Payout',
+                            description: data.nextPayout,
+                            onTap: () => onSelectTab(3),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.receipt_long_outlined,
+                            title: 'Payout History',
+                            description: 'Stripe Connect payout records',
+                            onTap: () => onSelectTab(3),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.list_alt_outlined,
+                            title: 'Transaction History',
+                            description: 'Delivery, tip and adjustment records',
+                            onTap: () => onSelectTab(3),
+                          ),
+                        ],
+                      ),
+                      _ProfileSection(
+                        title: 'Performance',
+                        rows: [
+                          _ProfileRow(
+                            icon: Icons.insights_outlined,
+                            title: 'Rank & Trust',
+                            description: '${data.rank} · ${data.trustProgress}',
+                            onTap: () => _open(
+                              context,
+                              RiderPerformanceView(profile: profile),
+                            ),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.star_outline_rounded,
+                            title: 'Ratings & Tips',
+                            description: 'Reviews and appreciation history',
+                            onTap: () => _open(
+                              context,
+                              RiderRatingsHistoryView(riderId: user.uid),
+                            ),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.workspace_premium_outlined,
+                            title: 'Achievements',
+                            description: data.achievementsSummary,
+                            onTap: () => onSelectTab(0),
+                          ),
+                        ],
+                      ),
+                      _ProfileSection(
+                        title: 'Settings',
+                        rows: [
+                          _ProfileRow(
+                            icon: Icons.notifications_none_rounded,
+                            title: 'Notifications',
+                            description:
+                                'Job offers, messages and Rider updates',
+                            onTap: () => _open(
+                              context,
+                              RiderNotificationsView(
+                                  onNavigateTab: onSelectTab),
+                            ),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.accessibility_new_outlined,
+                            title: 'Accessibility',
+                            description:
+                                'Text, contrast and motion preferences',
+                            onTap: () => _open(
+                              context,
+                              const RiderAccessibilitySettingsView(),
+                            ),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.lock_outline,
+                            title: 'Privacy',
+                            description: 'Your data and account controls',
+                            onTap: () => _open(context,
+                                const RiderLegalView(initial: 'Privacy')),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.assignment_outlined,
+                            title: 'Rider Agreement',
+                            description: 'Your Rider operating agreement',
+                            onTap: () => _open(
+                                context,
+                                const RiderLegalView(
+                                    initial: 'Rider Agreement')),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.help_outline_rounded,
+                            title: 'Support',
+                            description: 'Get help from Circum Support',
+                            onTap: () => _open(context, const SupportView()),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.shield_outlined,
+                            title: 'Application Centre',
+                            description:
+                                'Documents, vehicles and review status',
+                            onTap: () =>
+                                _open(context, const RiderApplicationCentre()),
+                          ),
+                        ],
+                      ),
+                      _ProfileSection(
+                        title: 'Account Actions',
+                        rows: [
+                          _ProfileRow(
+                            icon: Icons.logout_rounded,
+                            title: 'Sign Out',
+                            description: 'Leave this device securely',
+                            tone: _ProfileRowTone.danger,
+                            onTap: () => _confirmSignOut(context),
+                          ),
+                          _ProfileRow(
+                            icon: Icons.delete_forever_outlined,
+                            title: 'Close Account',
+                            description:
+                                'Permanently delete your Circum account and personal data.',
+                            tone: _ProfileRowTone.danger,
+                            onTap: () => _confirmCloseAccount(context),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 24),
-                _CloseAccountButton(
-                  onTap: () => _confirmCloseAccount(context),
-                ),
-                const SizedBox(height: 12),
-                _SignOutButton(onTap: () => _confirmSignOut(context)),
-                const SizedBox(height: 16),
-                const _FooterMeta(),
-              ],
+              ),
             ),
           ),
         ),
       ],
     );
   }
+}
 
-  String _personalDetailsSubtitle(User user, Map<String, dynamic> profile) {
-    final phone = '${profile['phoneNumber'] ?? user.phoneNumber ?? ''}'.trim();
-    final address =
-        '${profile['homeAddress'] ?? profile['address'] ?? ''}'.trim();
-    if (phone.isNotEmpty && address.isNotEmpty) return 'Phone and home address';
-    if (phone.isNotEmpty) return 'Phone saved · Add home address';
-    if (address.isNotEmpty) return 'Home address saved · Add phone';
-    return 'Name, phone, home address and account details';
+class _RiderProfileData {
+  _RiderProfileData({
+    required this.user,
+    required this.profile,
+    required this.earnings,
+  })  : rankSnapshot = RiderRankSnapshot.from(profile),
+        earningsSummary = RiderEarningsSummary.from(earnings);
+
+  final User user;
+  final Map<String, dynamic> profile;
+  final Map<String, dynamic> earnings;
+  final RiderRankSnapshot? rankSnapshot;
+  final RiderEarningsSummary? earningsSummary;
+
+  String get name {
+    final first = text('firstName');
+    final last = text('lastName');
+    final joined = [first, last].where((part) => part.isNotEmpty).join(' ');
+    if (joined.isNotEmpty) return joined;
+    final full = text('name', fallback: text('fullName'));
+    if (full.isNotEmpty) return full;
+    return user.displayName ?? 'Rider profile';
+  }
+
+  String get handle {
+    final raw = text('handle',
+        fallback: text('riderHandle', fallback: text('username')));
+    if (raw.isNotEmpty) return raw.startsWith('@') ? raw : '@$raw';
+    return '—';
+  }
+
+  String get initials {
+    final parts = name.split(' ').where((part) => part.isNotEmpty).take(2);
+    final value = parts.map((part) => part[0].toUpperCase()).join();
+    return value.isEmpty ? 'R' : value;
+  }
+
+  String get photoUrl => text('profilePhotoUrl',
+      fallback: text('profilePhoto',
+          fallback: text('photoURL',
+              fallback: text('photoUrl', fallback: user.photoURL ?? ''))));
+
+  String get verifiedLabel {
+    final value = text('verificationStatus',
+            fallback: text('approvalStatus', fallback: text('accountStatus')))
+        .toLowerCase();
+    if (profile['documentsVerified'] == true ||
+        profile['identityVerified'] == true ||
+        value == 'verified' ||
+        value == 'approved') {
+      return 'Verified';
+    }
+    if (value.contains('review') || value.contains('pending')) {
+      return 'Under review';
+    }
+    if (value.contains('reject')) return 'Needs attention';
+    if (value.contains('suspend')) return 'Suspended';
+    return 'Verification pending';
+  }
+
+  String get rank => rankSnapshot?.rank ?? '—';
+  bool get hasTrustPoints =>
+      rankSnapshot != null ||
+      profile.containsKey('trustPoints') ||
+      profile.containsKey('trust');
+
+  int get trustPoints =>
+      rankSnapshot?.trustPoints ??
+      number('trustPoints', fallback: number('trust')).round();
+
+  String get trustPointsLabel => hasTrustPoints ? '$trustPoints' : '—';
+
+  String get memberSince {
+    final created = timestamp('createdAt') ??
+        timestamp('submittedAt') ??
+        user.metadata.creationTime;
+    if (created == null) return 'Member since —';
+    return 'Member since ${_monthYear(created)}';
+  }
+
+  String get deliveriesCompleted => whole('completedDeliveries',
+      fallback: whole('deliveriesCompleted',
+          fallback: whole('completedJobs', fallback: '—')));
+
+  String get customerRating {
+    final rating = number('rating', fallback: number('customerRating'));
+    return rating <= 0 ? '—' : rating.toStringAsFixed(1);
+  }
+
+  String get acceptanceRate => percent('acceptanceRate');
+  String get onTimeRate =>
+      percent('onTimeRate', fallbackKey: 'onTimeDeliveryRate');
+
+  String get contactSummary {
+    final phone = text('phoneNumber',
+        fallback: text('phone', fallback: user.phoneNumber ?? ''));
+    final email = text('email', fallback: user.email ?? '');
+    if (phone.isNotEmpty && email.isNotEmpty) return 'Phone and email saved';
+    if (phone.isNotEmpty) return 'Phone saved';
+    if (email.isNotEmpty) return 'Email saved';
+    return 'Add phone and email';
+  }
+
+  String get vehicleSummary {
+    final vehicles = profile['vehicles'];
+    if (vehicles is List && vehicles.isNotEmpty) {
+      return '${vehicles.length} vehicle${vehicles.length == 1 ? '' : 's'} saved';
+    }
+    final type = text('vehicleType', fallback: text('typeOfVehicle'));
+    return type.isEmpty ? 'Add vehicle details' : type;
+  }
+
+  String get documentSummary {
+    if (profile['documentsVerified'] == true) return 'Fully verified';
+    final status = text('documentStatus',
+        fallback: text('verificationStatus', fallback: text('identityStatus')));
+    final normalised = status.toLowerCase();
+    if (normalised.contains('review') || normalised.contains('pending')) {
+      return 'Verification in progress';
+    }
+    if (normalised.contains('reject') ||
+        normalised.contains('expired') ||
+        normalised.contains('required') ||
+        normalised.contains('attention')) {
+      return 'Verification required';
+    }
+    final checklist = profile['documentChecklist'];
+    if (checklist is Map && checklist.isNotEmpty) return 'Partially verified';
+    if (status.isEmpty) return 'Verification required';
+    if (normalised.contains('verified') || normalised.contains('approved')) {
+      return 'Fully verified';
+    }
+    return 'Partially verified';
+  }
+
+  String get rothSummary {
+    final status = text('rothOnboardingStatus',
+        fallback: profile['rothWalletId'] == null ? '' : 'connected');
+    if (status.isEmpty) return 'Separate from cash earnings';
+    return '${_prettyStatus(status)} · separate from payouts';
+  }
+
+  String get stripeStatus {
+    final status = text('stripeConnectStatus',
+        fallback:
+            text('payoutStatus', fallback: text('stripeVerificationStatus')));
+    final normalised = status.toLowerCase();
+    if (normalised.isEmpty || normalised == 'disconnected') {
+      return 'Disconnected';
+    }
+    if (normalised.contains('restrict')) return 'Restricted';
+    if (normalised.contains('action') || normalised.contains('pending')) {
+      return 'Needs Verification';
+    }
+    if (normalised.contains('verified') ||
+        normalised.contains('active') ||
+        normalised.contains('connected')) {
+      return 'Connected';
+    }
+    return 'Needs Verification';
+  }
+
+  Color get stripeStatusColor {
+    final value = stripeStatus.toLowerCase();
+    if (value.contains('connected') ||
+        value.contains('verified') ||
+        value.contains('active')) {
+      return RiderPalette.green;
+    }
+    if (value.contains('action') || value.contains('required')) {
+      return RiderPalette.red;
+    }
+    return RiderPalette.amber;
+  }
+
+  String get availableBalance =>
+      _money(earningsSummary?.available ?? moneyValue('availableBalance'));
+
+  String get nextPayout {
+    final value = timestampFromAny(earnings['nextEstimatedPayoutAt'] ??
+        earnings['nextPayoutAt'] ??
+        profile['nextEstimatedPayoutAt']);
+    if (value == null) return 'Estimated by Stripe Connect';
+    return _shortDate(value);
+  }
+
+  String get rankProgress {
+    if (rankSnapshot == null) return 'Build trust to unlock rank progress';
+    final current = rankSnapshot!.trustPoints;
+    const thresholds = RiderRankSnapshot.thresholds;
+    const ranks = RiderRankSnapshot.ranks;
+    final index = ranks.indexOf(rankSnapshot!.rank);
+    if (index < 0 || index >= ranks.length - 1) return 'Highest rank achieved';
+    final next = thresholds[index + 1];
+    return '${(next - current).clamp(0, next)} trust points to ${ranks[index + 1]}';
+  }
+
+  String get trustProgress =>
+      hasTrustPoints ? '$trustPoints trust points' : 'Trust points unavailable';
+
+  String get achievementsSummary {
+    final recognitions = profile['recognitions'];
+    if (recognitions is List && recognitions.isNotEmpty) {
+      return '${recognitions.length} achievement${recognitions.length == 1 ? '' : 's'} unlocked';
+    }
+    return 'Achievements unlock as you deliver';
+  }
+
+  String text(String key, {String fallback = ''}) {
+    final value = '${profile[key] ?? fallback}'.trim();
+    return value == 'null' ? '' : value;
+  }
+
+  double number(String key, {double fallback = 0}) {
+    final value = profile[key];
+    return value is num ? value.toDouble() : fallback;
+  }
+
+  String whole(String key, {String fallback = '0'}) {
+    final value = profile[key] ?? earnings[key];
+    if (value is num) return value.toInt().toString();
+    final text = '$value'.trim();
+    return text.isEmpty || text == 'null' ? fallback : text;
+  }
+
+  String percent(String key, {String? fallbackKey}) {
+    final value =
+        profile[key] ?? (fallbackKey == null ? null : profile[fallbackKey]);
+    if (value is num) {
+      final normalized = value <= 1 ? value * 100 : value;
+      return '${normalized.round()}%';
+    }
+    return '—';
+  }
+
+  double moneyValue(String key) {
+    final value = earnings[key] ?? profile[key];
+    return value is num ? value.toDouble() : 0;
+  }
+
+  DateTime? timestamp(String key) => timestampFromAny(profile[key]);
+}
+
+class _ProfileHero extends StatelessWidget {
+  const _ProfileHero({
+    required this.data,
+    required this.onEditPhoto,
+    required this.onEditProfile,
+  });
+
+  final _RiderProfileData data;
+  final VoidCallback onEditPhoto;
+  final VoidCallback onEditProfile;
+
+  @override
+  Widget build(BuildContext context) {
+    return RiderGlassSurface(
+      radius: 30,
+      padding: const EdgeInsets.all(22),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 680;
+          final photo = _ProfilePhoto(
+            imageUrl: data.photoUrl,
+            initials: data.initials,
+            onTap: onEditPhoto,
+          );
+          final text = _HeroText(data: data, onEditProfile: onEditProfile);
+          if (wide) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                photo,
+                const SizedBox(width: 22),
+                Expanded(child: text),
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              photo,
+              const SizedBox(height: 18),
+              text,
+            ],
+          );
+        },
+      ),
+    );
   }
 }
 
-class _OptionsTopBar extends StatelessWidget {
-  const _OptionsTopBar();
-
-  @override
-  Widget build(BuildContext context) => Row(
-        children: [
-          Semantics(
-            label: 'Back',
-            button: true,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: () {
-                if (Navigator.canPop(context)) Navigator.pop(context);
-              },
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .045),
-                  shape: BoxShape.circle,
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: .09)),
-                ),
-                child: const Icon(Icons.chevron_left_rounded,
-                    color: RiderPalette.paper),
-              ),
-            ),
-          ),
-          const SizedBox(width: 14),
-          const Text(
-            'Options',
-            style: TextStyle(
-              color: RiderPalette.paper,
-              fontFamily: RiderTypography.heading,
-              fontSize: 30,
-            ),
-          ),
-        ],
-      );
-}
-
-class _IdentityCard extends StatelessWidget {
-  const _IdentityCard({
-    required this.name,
-    required this.photo,
+class _ProfilePhoto extends StatelessWidget {
+  const _ProfilePhoto({
+    required this.imageUrl,
     required this.initials,
-    required this.rank,
-    required this.trust,
-    required this.verificationStatus,
-    required this.accountStatus,
-    required this.recognitions,
     required this.onTap,
   });
 
-  final String name;
-  final String photo;
+  final String imageUrl;
   final String initials;
-  final String rank;
-  final String trust;
-  final String verificationStatus;
-  final String accountStatus;
-  final RiderRecognitions recognitions;
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        label: 'Open Rider profile for $name',
-        child: _OptionsGlass(
-          onTap: onTap,
-          borderRadius: 22,
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [RiderPalette.blue, Color(0xFF2563EB)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: RiderPalette.blue.withValues(alpha: .28),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Edit profile photo',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onTap,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 132,
+              height: 132,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: const LinearGradient(
+                  colors: [RiderPalette.blue, Color(0xFF7C3AED)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: photo.isEmpty
-                    ? Center(
-                        child: Text(
-                          initials,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 20,
+                boxShadow: [
+                  BoxShadow(
+                    color: RiderPalette.blue.withValues(alpha: .22),
+                    blurRadius: 34,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(3),
+              child: ClipOval(
+                child: imageUrl.isEmpty
+                    ? ColoredBox(
+                        color: const Color(0xFF111827),
+                        child: Center(
+                          child: Text(
+                            initials,
+                            style: const TextStyle(
+                              color: RiderPalette.paper,
+                              fontSize: 38,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
                       )
                     : CachedNetworkImage(
-                        imageUrl: photo,
+                        imageUrl: imageUrl,
                         fit: BoxFit.cover,
                         errorWidget: (_, __, ___) => Center(
                           child: Text(
                             initials,
                             style: const TextStyle(
-                              color: Colors.white,
+                              color: RiderPalette.paper,
+                              fontSize: 38,
                               fontWeight: FontWeight.w900,
-                              fontSize: 20,
                             ),
                           ),
                         ),
                       ),
               ),
-              const SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: RiderPalette.paper,
-                        fontFamily: RiderTypography.heading,
-                        fontSize: 22,
-                      ),
-                    ),
-                    const SizedBox(height: 7),
-                    Text(
-                      verificationStatus,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _statusColor(verificationStatus),
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '$rank · $trust · $accountStatus',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: RiderPalette.muted,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                    ),
-                    if (recognitions.hasAny) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        children: [
-                          if (recognitions.foundingRider.awarded)
-                            _RecognitionText(
-                              label:
-                                  'Founding Rider ${recognitions.foundingRider.numberLabel(4)}',
-                            ),
-                          if (recognitions.legend.awarded)
-                            _RecognitionText(
-                              label:
-                                  'Legend ${recognitions.legend.numberLabel(4)}',
-                            ),
-                        ],
-                      ),
-                    ],
-                  ],
+            ),
+            Positioned(
+              right: 4,
+              bottom: 4,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: RiderPalette.blue,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: RiderPalette.background, width: 3),
                 ),
+                child: const Icon(Icons.edit_rounded,
+                    color: RiderPalette.paper, size: 18),
               ),
-              const Icon(Icons.chevron_right_rounded,
-                  color: RiderPalette.muted),
-            ],
-          ),
+            ),
+          ],
         ),
-      );
-
-  Color _statusColor(String status) {
-    final value = status.toLowerCase();
-    if (value.contains('verified') || value.contains('approved')) {
-      return RiderPalette.green;
-    }
-    if (value.contains('review')) return RiderPalette.amber;
-    if (value.contains('rejected') ||
-        value.contains('expired') ||
-        value.contains('required')) {
-      return RiderPalette.red;
-    }
-    return RiderPalette.muted;
+      ),
+    );
   }
 }
 
-class _RecognitionText extends StatelessWidget {
-  const _RecognitionText({required this.label});
+class _HeroText extends StatelessWidget {
+  const _HeroText({required this.data, required this.onEditProfile});
 
-  final String label;
+  final _RiderProfileData data;
+  final VoidCallback onEditProfile;
 
   @override
-  Widget build(BuildContext context) => Text(
-        label.trim(),
-        style: const TextStyle(
-          color: RiderPalette.blue,
-          fontSize: 11.5,
-          fontWeight: FontWeight.w900,
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          data.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: RiderPalette.paper,
+            fontFamily: RiderTypography.heading,
+            fontSize: 34,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          data.handle,
+          style: const TextStyle(
+            color: RiderPalette.muted,
+            fontFamily: RiderTypography.mono,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _HeroPill(
+              icon: Icons.verified_rounded,
+              label: data.verifiedLabel,
+              color: data.verifiedLabel == 'Verified'
+                  ? RiderPalette.green
+                  : RiderPalette.amber,
+            ),
+            _HeroPill(
+              icon: Icons.military_tech_rounded,
+              label: data.rank,
+              color: RiderPalette.blue,
+            ),
+            _HeroPill(
+              icon: Icons.auto_awesome_rounded,
+              label:
+                  data.hasTrustPoints ? '${data.trustPoints} trust' : '— trust',
+              color: RiderPalette.purple,
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(
+          data.memberSince,
+          style: const TextStyle(color: RiderPalette.muted, fontSize: 13),
+        ),
+        const SizedBox(height: 18),
+        FilledButton.icon(
+          onPressed: onEditProfile,
+          icon: const Icon(Icons.edit_note_rounded),
+          label: const Text('Edit Profile'),
+          style: FilledButton.styleFrom(
+            backgroundColor: RiderPalette.blue,
+            foregroundColor: RiderPalette.paper,
+            minimumSize: const Size(150, 48),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HeroPill extends StatelessWidget {
+  const _HeroPill({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: .13),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: .28)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: color, size: 15),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
         ),
       );
 }
 
-class _OptionsSection extends StatelessWidget {
-  const _OptionsSection({required this.label, required this.children});
+class _StatsRow extends StatelessWidget {
+  const _StatsRow({required this.data});
 
-  final String label;
-  final List<Widget> children;
+  final _RiderProfileData data;
 
   @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 8),
-            child: Text(
-              label.toUpperCase(),
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: .38),
-                fontSize: 11,
+  Widget build(BuildContext context) {
+    final stats = [
+      ('Deliveries Completed', data.deliveriesCompleted),
+      ('Customer Rating', data.customerRating),
+      ('Acceptance Rate', data.acceptanceRate),
+      ('On-Time Rate', data.onTimeRate),
+      ('Trust Points', data.trustPointsLabel),
+    ];
+    return RiderGlassSurface(
+      radius: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      child: LayoutBuilder(
+        builder: (context, constraints) => Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final stat in stats)
+              SizedBox(
+                width: constraints.maxWidth >= 760
+                    ? (constraints.maxWidth - 32) / 5
+                    : constraints.maxWidth >= 520
+                        ? (constraints.maxWidth - 16) / 3
+                        : (constraints.maxWidth - 8) / 2,
+                child: _StatTile(label: stat.$1, value: stat.$2),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatTile extends StatelessWidget {
+  const _StatTile({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        constraints: const BoxConstraints(minHeight: 82),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .035),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: .07)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: RiderPalette.paper,
+                fontFamily: RiderTypography.mono,
+                fontSize: 18,
                 fontWeight: FontWeight.w900,
-                letterSpacing: 1,
               ),
             ),
-          ),
-          _OptionsGlass(
-            padding: EdgeInsets.zero,
-            borderRadius: 20,
-            child: Column(
-              children: [
-                for (var i = 0; i < children.length; i++) ...[
-                  children[i],
-                  if (i != children.length - 1) const _HairlineDivider(),
-                ],
-              ],
+            const SizedBox(height: 5),
+            Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: RiderPalette.muted,
+                fontSize: 11.5,
+                height: 1.2,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       );
 }
 
-class _OptionRow extends StatelessWidget {
-  const _OptionRow({
+class _ProfileSection extends StatelessWidget {
+  const _ProfileSection({required this.title, required this.rows});
+
+  final String title;
+  final List<_ProfileRow> rows;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 10),
+              child: Text(
+                title.toUpperCase(),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: .42),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1,
+                ),
+              ),
+            ),
+            RiderGlassSurface(
+              radius: 24,
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  for (var i = 0; i < rows.length; i++) ...[
+                    rows[i],
+                    if (i != rows.length - 1) const _ProfileDivider(),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+enum _ProfileRowTone { normal, danger }
+
+class _ProfileRow extends StatelessWidget {
+  const _ProfileRow({
     required this.icon,
-    required this.iconColor,
     required this.title,
-    required this.subtitle,
+    required this.description,
     required this.onTap,
+    this.statusColor,
+    this.tone = _ProfileRowTone.normal,
   });
 
   final IconData icon;
-  final Color iconColor;
   final String title;
-  final String subtitle;
+  final String description;
   final VoidCallback onTap;
+  final Color? statusColor;
+  final _ProfileRowTone tone;
 
   @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        label: '$title. $subtitle',
-        child: InkWell(
-          onTap: onTap,
+  Widget build(BuildContext context) {
+    final color = tone == _ProfileRowTone.danger
+        ? RiderPalette.red
+        : statusColor ?? RiderPalette.blue;
+    return Semantics(
+      button: true,
+      label: '$title. $description',
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 78),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
             child: Row(
               children: [
-                _IconChip(icon: icon, color: iconColor),
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: .13),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: color.withValues(alpha: .18)),
+                  ),
+                  child: Icon(icon, color: color, size: 21),
+                ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
-                          color: RiderPalette.paper,
-                          fontSize: 14.5,
-                          fontWeight: FontWeight.w800,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: tone == _ProfileRowTone.danger
+                              ? RiderPalette.red
+                              : RiderPalette.paper,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 3),
                       Text(
-                        subtitle,
+                        description,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: RiderPalette.muted,
                           fontSize: 12,
-                          height: 1.3,
+                          height: 1.25,
                         ),
                       ),
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded,
-                    color: RiderPalette.muted),
+                const SizedBox(width: 10),
+                Icon(Icons.chevron_right_rounded,
+                    color: Colors.white.withValues(alpha: .42), size: 24),
               ],
             ),
           ),
         ),
-      );
-}
-
-class _PermissionRow extends StatelessWidget {
-  const _PermissionRow({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.summary,
-    required this.permission,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String summary;
-  final permissions.Permission permission;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) =>
-      FutureBuilder<permissions.PermissionStatus>(
-        future: permission.status,
-        builder: (context, snapshot) {
-          final status = snapshot.hasData
-              ? _permissionLabel(snapshot.data!)
-              : 'Checking permission';
-          return _OptionRow(
-            icon: icon,
-            iconColor: iconColor,
-            title: title,
-            subtitle: '$summary · $status',
-            onTap: onTap,
-          );
-        },
-      );
-}
-
-class _LocationSharingRow extends StatelessWidget {
-  const _LocationSharingRow({
-    required this.profile,
-    required this.user,
-  });
-
-  final Map<String, dynamic> profile;
-  final User user;
-
-  @override
-  Widget build(BuildContext context) => FutureBuilder<bool>(
-        future: Geolocator.isLocationServiceEnabled(),
-        builder: (context, snapshot) {
-          final service = snapshot.hasData
-              ? snapshot.data!
-                  ? 'On'
-                  : 'Off'
-              : 'Checking';
-          return _OptionRow(
-            icon: Icons.location_searching_rounded,
-            iconColor: RiderPalette.blue,
-            title: 'Location & GPS',
-            subtitle:
-                'Used while online and during active deliveries · GPS Services: $service',
-            onTap: () => _open(
-              context,
-              RiderLocationGpsView(profile: profile, user: user),
-            ),
-          );
-        },
-      );
-}
-
-class RiderLocationGpsView extends StatefulWidget {
-  const RiderLocationGpsView({
-    super.key,
-    required this.profile,
-    required this.user,
-  });
-
-  final Map<String, dynamic> profile;
-  final User user;
-
-  @override
-  State<RiderLocationGpsView> createState() => _RiderLocationGpsViewState();
-}
-
-class _RiderLocationGpsViewState extends State<RiderLocationGpsView> {
-  late Future<_LocationGpsSnapshot> _snapshot;
-  String? _gpsTestResult;
-  bool _testing = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _snapshot = _LocationGpsSnapshot.load(widget.user.uid, widget.profile);
-  }
-
-  void _refresh() {
-    setState(() {
-      _snapshot = _LocationGpsSnapshot.load(widget.user.uid, widget.profile);
-    });
-  }
-
-  Future<void> _runGpsTest() async {
-    setState(() {
-      _testing = true;
-      _gpsTestResult = null;
-    });
-    try {
-      final servicesEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!servicesEnabled) {
-        setState(() {
-          _gpsTestResult =
-              'Location services are off. Turn on GPS in device settings and try again.';
-        });
-        return;
-      }
-
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied) {
-        setState(() {
-          _gpsTestResult =
-              'Location permission is denied. Allow location for Circum Rider to enable live tracking.';
-        });
-        return;
-      }
-      if (permission == LocationPermission.deniedForever) {
-        setState(() {
-          _gpsTestResult =
-              'Location permission is permanently denied. Open device settings and allow location access.';
-        });
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.bestForNavigation,
-        timeLimit: const Duration(seconds: 12),
-      );
-      if (position.accuracy > 80) {
-        setState(() {
-          _gpsTestResult =
-              'GPS is available, but accuracy is reduced. Move near a window or outdoors and try again.';
-        });
-        return;
-      }
-
-      setState(() {
-        _gpsTestResult = '✓ GPS working correctly';
-      });
-      _refresh();
-    } catch (_) {
-      setState(() {
-        _gpsTestResult =
-            'GPS test could not complete. Check signal, permissions and device location settings, then retry.';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _testing = false;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: RiderPalette.background,
-      body: SafeArea(
-        child: FutureBuilder<_LocationGpsSnapshot>(
-          future: _snapshot,
-          builder: (context, snapshot) {
-            final data = snapshot.data;
-            return ListView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-              children: [
-                Row(
-                  children: [
-                    _RoundIconButton(
-                      icon: Icons.arrow_back_rounded,
-                      label: 'Back',
-                      onTap: () => Navigator.of(context).maybePop(),
-                    ),
-                    const SizedBox(width: 14),
-                    const Expanded(
-                      child: Text(
-                        'Location & GPS',
-                        style: TextStyle(
-                          color: RiderPalette.paper,
-                          fontFamily: RiderTypography.heading,
-                          fontSize: 28,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  "Used while you're online, travelling to pickup, navigating to deliveries and completing active deliveries. GPS enables accurate live tracking, ETAs and delivery verification. Location tracking stops automatically when you go offline or complete your final active delivery.",
-                  style: TextStyle(
-                    color: RiderPalette.muted,
-                    fontSize: 13,
-                    height: 1.45,
-                  ),
-                ),
-                const SizedBox(height: 18),
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    data == null)
-                  const _OptionsGlass(
-                    child: Text(
-                      'Checking GPS status...',
-                      style: TextStyle(color: RiderPalette.muted),
-                    ),
-                  )
-                else if (snapshot.hasError)
-                  _OptionsGlass(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'GPS status unavailable',
-                          style: TextStyle(
-                            color: RiderPalette.paper,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Check your connection and try again.',
-                          style: TextStyle(color: RiderPalette.muted),
-                        ),
-                        const SizedBox(height: 14),
-                        _PrimaryGpsButton(
-                          label: 'Retry',
-                          onTap: _refresh,
-                        ),
-                      ],
-                    ),
-                  )
-                else ...[
-                  _LocationStatusPanel(snapshot: data!),
-                  const SizedBox(height: 14),
-                  _GpsTestPanel(
-                    testing: _testing,
-                    result: _gpsTestResult,
-                    onRun: _runGpsTest,
-                  ),
-                  const SizedBox(height: 14),
-                  const _PrivacyPanel(),
-                ],
-              ],
-            );
-          },
-        ),
       ),
     );
   }
 }
 
-class _LocationGpsSnapshot {
-  const _LocationGpsSnapshot({
-    required this.servicesEnabled,
-    required this.permission,
-    required this.backgroundEnabled,
-    required this.liveTrackingActive,
-    required this.accuracyLabel,
-    required this.lastUpdateLabel,
-  });
-
-  final bool servicesEnabled;
-  final LocationPermission permission;
-  final bool backgroundEnabled;
-  final bool liveTrackingActive;
-  final String accuracyLabel;
-  final String lastUpdateLabel;
-
-  static Future<_LocationGpsSnapshot> load(
-    String riderId,
-    Map<String, dynamic> profile,
-  ) async {
-    final servicesEnabled = await Geolocator.isLocationServiceEnabled();
-    final permission = await Geolocator.checkPermission();
-    Position? lastPosition;
-    if (servicesEnabled &&
-        permission != LocationPermission.denied &&
-        permission != LocationPermission.deniedForever) {
-      lastPosition = await Geolocator.getLastKnownPosition();
-    }
-    final activeDelivery = await _activeDeliveryFor(riderId, profile);
-    final online = _isOnline(profile);
-    final liveTrackingActive = online && activeDelivery;
-
-    return _LocationGpsSnapshot(
-      servicesEnabled: servicesEnabled,
-      permission: permission,
-      backgroundEnabled: !kIsWeb && permission == LocationPermission.always,
-      liveTrackingActive: liveTrackingActive,
-      accuracyLabel: _accuracyLabel(lastPosition),
-      lastUpdateLabel: _lastUpdateLabel(lastPosition?.timestamp),
-    );
-  }
-
-  static bool _isOnline(Map<String, dynamic> profile) {
-    final raw = '${profile['availability'] ?? profile['status'] ?? ''}'
-        .toLowerCase()
-        .trim();
-    return raw == 'online' ||
-        raw == 'available' ||
-        profile['isOnline'] == true ||
-        profile['online'] == true;
-  }
-
-  static Future<bool> _activeDeliveryFor(
-    String riderId,
-    Map<String, dynamic> profile,
-  ) async {
-    final activeDeliveryId =
-        '${profile['activeDelivery'] ?? profile['activeDeliveryId'] ?? ''}'
-            .trim();
-    if (activeDeliveryId.isNotEmpty && activeDeliveryId != 'null') {
-      final doc = await FirebaseFirestore.instance
-          .collection('deliveryRequests')
-          .doc(activeDeliveryId)
-          .get();
-      return _isActiveDelivery(doc.data());
-    }
-
-    final query = await FirebaseFirestore.instance
-        .collection('deliveryRequests')
-        .where('riderId', isEqualTo: riderId)
-        .limit(5)
-        .get();
-    return query.docs.any((doc) => _isActiveDelivery(doc.data()));
-  }
-
-  static bool _isActiveDelivery(Map<String, dynamic>? data) {
-    if (data == null) return false;
-    final status =
-        '${data['deliveryStage'] ?? data['deliveryStatus'] ?? data['status'] ?? ''}'
-            .toLowerCase()
-            .trim();
-    return {
-      'accepted',
-      'navigating_to_pickup',
-      'travelling_to_pickup',
-      'approaching_pickup',
-      'arrived_at_pickup',
-      'waiting_at_pickup',
-      'pickup_verification',
-      'pickup_verified',
-      'collected',
-      'in_transit',
-      'navigating_to_dropoff',
-      'travelling_to_dropoff',
-      'approaching_dropoff',
-      'arrived_at_dropoff',
-      'pin_required',
-      'awaiting_pin',
-    }.contains(status);
-  }
-}
-
-class _LocationStatusPanel extends StatelessWidget {
-  const _LocationStatusPanel({required this.snapshot});
-
-  final _LocationGpsSnapshot snapshot;
-
-  @override
-  Widget build(BuildContext context) {
-    final gpsLabel = snapshot.servicesEnabled ? 'On' : 'Off';
-    final gpsColor =
-        snapshot.servicesEnabled ? RiderPalette.green : RiderPalette.red;
-    return _OptionsGlass(
-      child: Column(
-        children: [
-          _StatusLine(
-            title: 'GPS Services',
-            value: gpsLabel,
-            color: gpsColor,
-            action: const _PrimaryGpsButton(
-              label: 'Open Device Settings',
-              onTap: Geolocator.openLocationSettings,
-            ),
-          ),
-          const _HairlineDivider(),
-          _StatusLine(
-            title: 'Location Permission',
-            value: _locationPermissionDetail(snapshot.permission),
-            color: _permissionColor(snapshot.permission),
-            action: _permissionAction(snapshot.permission),
-          ),
-          const _HairlineDivider(),
-          _StatusLine(
-            title: 'Background Location',
-            value: snapshot.backgroundEnabled ? 'Enabled' : 'Disabled',
-            color: snapshot.backgroundEnabled
-                ? RiderPalette.green
-                : RiderPalette.amber,
-            description:
-                'Required to continue live tracking during active deliveries while the app is running in the background.',
-          ),
-          const _HairlineDivider(),
-          _StatusLine(
-            title: 'Live Tracking',
-            value: snapshot.liveTrackingActive ? 'Active' : 'Inactive',
-            color: snapshot.liveTrackingActive
-                ? RiderPalette.green
-                : RiderPalette.muted,
-          ),
-          const _HairlineDivider(),
-          _StatusLine(
-            title: 'GPS Accuracy',
-            value: snapshot.accuracyLabel,
-            color: _accuracyColor(snapshot.accuracyLabel),
-          ),
-          const _HairlineDivider(),
-          _StatusLine(
-            title: 'Last GPS Update',
-            value: snapshot.lastUpdateLabel,
-            color: RiderPalette.blue,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusLine extends StatelessWidget {
-  const _StatusLine({
-    required this.title,
-    required this.value,
-    required this.color,
-    this.description,
-    this.action,
-  });
-
-  final String title;
-  final String value;
-  final Color color;
-  final String? description;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: '$title. $value${description == null ? '' : '. $description'}',
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      color: RiderPalette.paper,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-                Text(
-                  value,
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-            if (description != null) ...[
-              const SizedBox(height: 6),
-              Text(
-                description!,
-                style: const TextStyle(
-                  color: RiderPalette.muted,
-                  fontSize: 12,
-                  height: 1.35,
-                ),
-              ),
-            ],
-            if (action != null) ...[
-              const SizedBox(height: 12),
-              action!,
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _GpsTestPanel extends StatelessWidget {
-  const _GpsTestPanel({
-    required this.testing,
-    required this.result,
-    required this.onRun,
-  });
-
-  final bool testing;
-  final String? result;
-  final VoidCallback onRun;
-
-  @override
-  Widget build(BuildContext context) {
-    return _OptionsGlass(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Run GPS Test',
-            style: TextStyle(
-              color: RiderPalette.paper,
-              fontWeight: FontWeight.w900,
-              fontSize: 16,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Checks GPS availability, permission and accuracy for live delivery tracking.',
-            style: TextStyle(color: RiderPalette.muted, height: 1.35),
-          ),
-          const SizedBox(height: 14),
-          _PrimaryGpsButton(
-            label: testing ? 'Testing GPS...' : 'Run GPS Test',
-            onTap: testing ? null : onRun,
-          ),
-          if (result != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              result!,
-              style: TextStyle(
-                color: result!.startsWith('✓')
-                    ? RiderPalette.green
-                    : RiderPalette.amber,
-                fontWeight: FontWeight.w800,
-                height: 1.35,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _PrivacyPanel extends StatelessWidget {
-  const _PrivacyPanel();
-
-  @override
-  Widget build(BuildContext context) {
-    const bullets = [
-      'Circum only tracks your location while you\'re online or completing an active delivery.',
-      'Tracking automatically stops when you go offline.',
-      'Background tracking is only used to maintain accurate delivery progress.',
-      'Your live location is never shared publicly.',
-      'Only authorised delivery participants and Circum operations can view active delivery locations.',
-    ];
-    return _OptionsGlass(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Your Privacy',
-            style: TextStyle(
-              color: RiderPalette.paper,
-              fontWeight: FontWeight.w900,
-              fontSize: 16,
-            ),
-          ),
-          const SizedBox(height: 10),
-          for (final item in bullets)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                '• $item',
-                style: const TextStyle(
-                  color: RiderPalette.muted,
-                  height: 1.35,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PrimaryGpsButton extends StatelessWidget {
-  const _PrimaryGpsButton({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      enabled: onTap != null,
-      label: label,
-      child: SizedBox(
-        height: 48,
-        child: ElevatedButton(
-          onPressed: onTap,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: RiderPalette.blue,
-            disabledBackgroundColor: RiderPalette.muted.withValues(alpha: .18),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-          ),
-          child: Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.w900),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label: label,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(19),
-          child: Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: .045),
-              border: Border.all(color: Colors.white.withValues(alpha: .09)),
-            ),
-            child: Icon(icon, color: RiderPalette.paper, size: 20),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _IconChip extends StatelessWidget {
-  const _IconChip({required this.icon, required this.color});
-
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: .14),
-          borderRadius: BorderRadius.circular(11),
-        ),
-        child: Icon(icon, color: color, size: 19),
-      );
-}
-
-class _OptionsGlass extends StatelessWidget {
-  const _OptionsGlass({
-    required this.child,
-    this.onTap,
-    this.padding = const EdgeInsets.all(16),
-    this.borderRadius = 20,
-  });
-
-  final Widget child;
-  final VoidCallback? onTap;
-  final EdgeInsetsGeometry padding;
-  final double borderRadius;
-
-  @override
-  Widget build(BuildContext context) {
-    final content = ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: const Color(0xFF0D111C).withValues(alpha: .78),
-            borderRadius: BorderRadius.circular(borderRadius),
-            border: Border.all(color: Colors.white.withValues(alpha: .09)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: .28),
-                blurRadius: 26,
-                offset: const Offset(0, 10),
-              ),
-              BoxShadow(
-                color: RiderPalette.blue.withValues(alpha: .06),
-                blurRadius: 24,
-                offset: const Offset(0, -2),
-              ),
-            ],
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withValues(alpha: .045),
-                Colors.white.withValues(alpha: .012),
-              ],
-            ),
-          ),
-          child: Padding(padding: padding, child: child),
-        ),
-      ),
-    );
-
-    if (onTap == null) return content;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(borderRadius),
-        onTap: onTap,
-        child: content,
-      ),
-    );
-  }
-}
-
-class _SignOutButton extends StatelessWidget {
-  const _SignOutButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        label: 'Sign out',
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: onTap,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: RiderPalette.red.withValues(alpha: .08),
-              borderRadius: BorderRadius.circular(18),
-              border:
-                  Border.all(color: RiderPalette.red.withValues(alpha: .28)),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.logout_rounded, color: RiderPalette.red, size: 18),
-                SizedBox(width: 10),
-                Text(
-                  'Sign out',
-                  style: TextStyle(
-                    color: RiderPalette.red,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 14.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-}
-
-class _CloseAccountButton extends StatelessWidget {
-  const _CloseAccountButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-        button: true,
-        label: 'Close Account',
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: onTap,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: RiderPalette.red.withValues(alpha: .08),
-              borderRadius: BorderRadius.circular(18),
-              border:
-                  Border.all(color: RiderPalette.red.withValues(alpha: .28)),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.delete_forever_outlined,
-                    color: RiderPalette.red, size: 22),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Close Account',
-                        style: TextStyle(
-                          color: RiderPalette.red,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 14.5,
-                        ),
-                      ),
-                      SizedBox(height: 3),
-                      Text(
-                        'Permanently delete your Circum account and personal data.',
-                        style: TextStyle(
-                          color: RiderPalette.muted,
-                          fontSize: 12,
-                          height: 1.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-}
-
-class _FooterMeta extends StatelessWidget {
-  const _FooterMeta();
-
-  @override
-  Widget build(BuildContext context) => const Column(
-        children: [
-          Text(
-            'CIRCUM RIDER',
-            style: TextStyle(
-              color: RiderPalette.muted,
-              fontFamily: RiderTypography.mono,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          SizedBox(height: 4),
-          Text(
-            'circumuk.com',
-            style: TextStyle(
-              color: RiderPalette.muted,
-              fontFamily: RiderTypography.mono,
-              fontSize: 11,
-            ),
-          ),
-        ],
-      );
-}
-
-class _HairlineDivider extends StatelessWidget {
-  const _HairlineDivider();
+class _ProfileDivider extends StatelessWidget {
+  const _ProfileDivider();
 
   @override
   Widget build(BuildContext context) => Divider(
@@ -1531,8 +1075,8 @@ class _HairlineDivider extends StatelessWidget {
       );
 }
 
-class _OptionsLoading extends StatelessWidget {
-  const _OptionsLoading();
+class _ProfileLoading extends StatelessWidget {
+  const _ProfileLoading();
 
   @override
   Widget build(BuildContext context) => const Center(
@@ -1540,72 +1084,63 @@ class _OptionsLoading extends StatelessWidget {
       );
 }
 
-class _OptionsError extends StatelessWidget {
-  const _OptionsError({required this.onRetry});
+class _ProfileError extends StatelessWidget {
+  const _ProfileError({required this.onRetry});
 
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) => RiderEmptyState(
         icon: Icons.error_outline_rounded,
-        title: 'Options unavailable',
-        message: 'We could not load your Rider account details.',
+        title: 'Profile unavailable',
+        message: 'We could not load your Rider profile.',
         actionLabel: 'Retry',
         onAction: onRetry,
       );
 }
 
 class RiderLegalView extends StatelessWidget {
-  const RiderLegalView({super.key});
+  const RiderLegalView({super.key, this.initial});
+
+  final String? initial;
 
   @override
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: RiderPalette.background,
         appBar: AppBar(
-          title: const Text('Legal'),
+          title: Text(initial ?? 'Legal'),
           backgroundColor: RiderPalette.background,
           foregroundColor: RiderPalette.paper,
         ),
         body: SafeArea(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
             children: [
-              _OptionsSection(
-                label: 'Legal',
-                children: [
-                  _OptionRow(
+              _ProfileSection(
+                title: 'Legal',
+                rows: [
+                  _ProfileRow(
                     icon: Icons.description_outlined,
-                    iconColor: RiderPalette.blue,
                     title: 'Terms',
-                    subtitle: 'Circum terms of service',
+                    description: 'Circum terms of service',
                     onTap: () =>
                         launchUrl(Uri.parse('https://circumuk.com/terms')),
                   ),
-                  _OptionRow(
+                  _ProfileRow(
                     icon: Icons.privacy_tip_outlined,
-                    iconColor: RiderPalette.green,
                     title: 'Privacy',
-                    subtitle: 'Privacy policy and data controls',
+                    description: 'Privacy policy and data controls',
+                    statusColor: RiderPalette.green,
                     onTap: () =>
                         launchUrl(Uri.parse('https://circumuk.com/privacy')),
                   ),
-                  _OptionRow(
+                  _ProfileRow(
                     icon: Icons.assignment_outlined,
-                    iconColor: RiderPalette.amber,
-                    title: 'Rider agreement',
-                    subtitle: 'Rider operating agreement',
+                    title: 'Rider Agreement',
+                    description: 'Rider operating agreement',
+                    statusColor: RiderPalette.amber,
                     onTap: () =>
                         launchUrl(Uri.parse('https://circumuk.com/terms')),
-                  ),
-                  _OptionRow(
-                    icon: Icons.info_outline_rounded,
-                    iconColor: RiderPalette.muted,
-                    title: 'Licences and notices',
-                    subtitle: 'Third-party licences and app notices',
-                    onTap: () => showLicensePage(
-                      context: context,
-                      applicationName: 'Circum Rider',
-                    ),
                   ),
                 ],
               ),
@@ -1615,73 +1150,6 @@ class RiderLegalView extends StatelessWidget {
       );
 }
 
-String _permissionLabel(permissions.PermissionStatus status) {
-  if (status.isGranted) return 'Allowed';
-  if (status.isLimited) return 'Limited';
-  if (status.isPermanentlyDenied) return 'Open settings';
-  if (status.isDenied) return 'Denied';
-  if (status.isRestricted) return 'Restricted';
-  return 'Not requested';
-}
-
-String _locationPermissionDetail(LocationPermission permission) {
-  return switch (permission) {
-    LocationPermission.always => 'Always Allowed',
-    LocationPermission.whileInUse => 'While Using App',
-    LocationPermission.denied => 'Denied',
-    LocationPermission.deniedForever => 'Denied',
-    LocationPermission.unableToDetermine => 'Restricted',
-  };
-}
-
-Color _permissionColor(LocationPermission permission) {
-  return switch (permission) {
-    LocationPermission.always => RiderPalette.green,
-    LocationPermission.whileInUse => RiderPalette.amber,
-    LocationPermission.denied ||
-    LocationPermission.deniedForever =>
-      RiderPalette.red,
-    LocationPermission.unableToDetermine => RiderPalette.amber,
-  };
-}
-
-Widget? _permissionAction(LocationPermission permission) {
-  if (permission == LocationPermission.always ||
-      permission == LocationPermission.whileInUse) {
-    return null;
-  }
-  return const _PrimaryGpsButton(
-    label: 'Open Device Settings',
-    onTap: Geolocator.openAppSettings,
-  );
-}
-
-String _accuracyLabel(Position? position) {
-  if (position == null) return 'Reduced';
-  if (position.accuracy <= 25) return 'High';
-  if (position.accuracy <= 80) return 'Medium';
-  return 'Reduced';
-}
-
-Color _accuracyColor(String label) {
-  return switch (label) {
-    'High' => RiderPalette.green,
-    'Medium' => RiderPalette.amber,
-    _ => RiderPalette.red,
-  };
-}
-
-String _lastUpdateLabel(DateTime? timestamp) {
-  if (timestamp == null) return 'Unavailable';
-  final elapsed = DateTime.now().difference(timestamp).abs();
-  if (elapsed.inSeconds < 10) return 'Just now';
-  if (elapsed.inMinutes < 1) return '${elapsed.inSeconds} seconds ago';
-  if (elapsed.inMinutes == 1) return '1 minute ago';
-  if (elapsed.inMinutes < 60) return '${elapsed.inMinutes} minutes ago';
-  if (elapsed.inHours == 1) return '1 hour ago';
-  return '${elapsed.inHours} hours ago';
-}
-
 Future<void> _confirmSignOut(BuildContext context) async {
   final confirmed = await showModalBottomSheet<bool>(
     context: context,
@@ -1689,8 +1157,8 @@ Future<void> _confirmSignOut(BuildContext context) async {
     builder: (context) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(18),
-        child: _OptionsGlass(
-          borderRadius: 24,
+        child: RiderGlassSurface(
+          radius: 24,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1715,7 +1183,7 @@ Future<void> _confirmSignOut(BuildContext context) async {
                   backgroundColor: RiderPalette.red,
                   minimumSize: const Size.fromHeight(48),
                 ),
-                child: const Text('Sign out'),
+                child: const Text('Sign Out'),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -1743,8 +1211,8 @@ Future<void> _confirmCloseAccount(BuildContext context) async {
     builder: (context) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(18),
-        child: _OptionsGlass(
-          borderRadius: 24,
+        child: RiderGlassSurface(
+          radius: 24,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1804,25 +1272,31 @@ Future<void> _confirmCloseAccount(BuildContext context) async {
   } on FirebaseFunctionsException catch (error) {
     if (context.mounted) {
       _showClosureError(
-          context,
-          error.message ??
-              'Your account could not be closed. Please try again.');
+        context,
+        error.message ?? 'Your account could not be closed. Please try again.',
+      );
     }
   } on FirebaseAuthException catch (error) {
     if (context.mounted) {
-      _showClosureError(context,
-          error.message ?? 'Please sign in again before closing your account.');
+      _showClosureError(
+        context,
+        error.message ?? 'Please sign in again before closing your account.',
+      );
     }
   } catch (_) {
     if (context.mounted) {
       _showClosureError(
-          context, 'Your account could not be closed. Please try again.');
+        context,
+        'Your account could not be closed. Please try again.',
+      );
     }
   }
 }
 
 Future<void> _reauthenticateRiderForClosure(
-    BuildContext context, User user) async {
+  BuildContext context,
+  User user,
+) async {
   final providers = user.providerData.map((info) => info.providerId).toSet();
   if (providers.contains('password')) {
     final password = await _showRiderPasswordReauth(context);
@@ -1916,11 +1390,65 @@ Future<bool?> _showRiderDeleteConfirmation(BuildContext context) async {
 }
 
 void _showClosureError(BuildContext context, String message) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text(message)),
-  );
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
 
 void _open(BuildContext context, Widget page) {
   Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+}
+
+DateTime? timestampFromAny(Object? value) {
+  if (value is Timestamp) return value.toDate();
+  if (value is DateTime) return value;
+  if (value is String) return DateTime.tryParse(value);
+  return null;
+}
+
+String _money(double value) => '£${value.toStringAsFixed(2)}';
+
+String _prettyStatus(String value) {
+  final text = value.trim().replaceAll('_', ' ').replaceAll('-', ' ');
+  if (text.isEmpty) return '';
+  return text
+      .split(' ')
+      .where((part) => part.isNotEmpty)
+      .map((part) =>
+          '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}')
+      .join(' ');
+}
+
+String _monthYear(DateTime value) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec'
+  ];
+  return '${months[value.month - 1]} ${value.year}';
+}
+
+String _shortDate(DateTime value) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec'
+  ];
+  return '${value.day} ${months[value.month - 1]} ${value.year}';
 }

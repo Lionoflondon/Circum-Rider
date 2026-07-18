@@ -1,5 +1,6 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../rider_design/rider_ui.dart';
 import 'rider_communication_service.dart';
@@ -25,8 +26,10 @@ class RiderConversationView extends StatefulWidget {
 class _RiderConversationViewState extends State<RiderConversationView> {
   late final RiderCommunicationService _service;
   late final RiderTypingController _typing;
+  late Stream<RiderConversationSnapshot> _conversation;
   final _input = TextEditingController();
   final _scroll = ScrollController();
+  Future<void> _draftWrites = Future<void>.value();
   var _sending = false;
   var _readMarked = false;
   String? _error;
@@ -36,6 +39,8 @@ class _RiderConversationViewState extends State<RiderConversationView> {
     super.initState();
     _service = widget.service ?? RiderCommunicationService();
     _typing = RiderTypingController(chatId: widget.chatId, service: _service);
+    _conversation = _service.watchConversation(widget.chatId);
+    _restoreDraft();
   }
 
   @override
@@ -56,6 +61,7 @@ class _RiderConversationViewState extends State<RiderConversationView> {
     try {
       await _service.sendText(chatId: widget.chatId, message: text);
       _input.clear();
+      await _clearDraft();
       _typing.clear();
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToEnd());
     } catch (error) {
@@ -63,6 +69,49 @@ class _RiderConversationViewState extends State<RiderConversationView> {
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  String get _draftKey => 'rider_conversation_draft_${widget.chatId}';
+
+  Future<void> _restoreDraft() async {
+    final preferences = await SharedPreferences.getInstance();
+    final draft = preferences.getString(_draftKey)?.trim() ?? '';
+    if (!mounted || draft.isEmpty || _input.text.isNotEmpty) return;
+    _input.value = TextEditingValue(
+      text: draft,
+      selection: TextSelection.collapsed(offset: draft.length),
+    );
+    setState(() {});
+  }
+
+  void _saveDraft(String value) {
+    _draftWrites = _draftWrites.then((_) async {
+      final preferences = await SharedPreferences.getInstance();
+      final draft = value.trim();
+      if (draft.isEmpty) {
+        await preferences.remove(_draftKey);
+      } else {
+        await preferences.setString(_draftKey, value);
+      }
+    });
+  }
+
+  Future<void> _clearDraft() async {
+    await _draftWrites;
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.remove(_draftKey);
+  }
+
+  void _onDraftChanged(String value) {
+    _typing.textChanged(value);
+    _saveDraft(value);
+  }
+
+  void _retryConversation() {
+    setState(() {
+      _conversation = _service.watchConversation(widget.chatId);
+      _readMarked = false;
+    });
   }
 
   void _markReadOnce() {
@@ -94,22 +143,16 @@ class _RiderConversationViewState extends State<RiderConversationView> {
             ),
             Expanded(
               child: StreamBuilder<RiderConversationSnapshot>(
-                stream: _service.watchConversation(widget.chatId),
+                stream: _conversation,
                 builder: (context, snapshot) {
                   if (snapshot.hasData) _markReadOnce();
                   if (snapshot.hasError) {
-                    return const Padding(
-                      padding: EdgeInsets.all(18),
-                      child: RiderEmptyState(
-                        icon: Icons.chat_bubble_outline_rounded,
-                        title: 'Conversation unavailable',
-                        message:
-                            'We could not open this conversation. Try again shortly.',
-                      ),
+                    return _ConversationLoadError(
+                      onRetry: _retryConversation,
                     );
                   }
                   if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const _ConversationLoading();
                   }
                   final conversation = snapshot.data!;
                   WidgetsBinding.instance
@@ -159,15 +202,29 @@ class _RiderConversationViewState extends State<RiderConversationView> {
                       if (_error != null)
                         Padding(
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                          child: Text(_error!,
-                              style: const TextStyle(
-                                  color: RiderPalette.red, fontSize: 12)),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _error!,
+                                  style: const TextStyle(
+                                    color: RiderPalette.red,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: _sending ? null : _send,
+                                child: const Text('Retry'),
+                              ),
+                            ],
+                          ),
                         ),
                       _Composer(
                         readOnly: conversation.readOnly,
                         controller: _input,
                         sending: _sending,
-                        onChanged: _typing.textChanged,
+                        onChanged: _onDraftChanged,
                         onSend: _send,
                       ),
                     ],
@@ -194,6 +251,57 @@ class _RiderConversationViewState extends State<RiderConversationView> {
     }
     return 'Message failed. Check your connection and retry.';
   }
+}
+
+class _ConversationLoading extends StatelessWidget {
+  const _ConversationLoading();
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Semantics(
+          label: 'Loading support conversation',
+          liveRegion: true,
+          child: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 14),
+              Text(
+                'Loading conversation...',
+                style: TextStyle(color: RiderPalette.muted),
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
+class _ConversationLoadError extends StatelessWidget {
+  const _ConversationLoadError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const RiderEmptyState(
+              icon: Icons.chat_bubble_outline_rounded,
+              title: 'Conversation unavailable',
+              message:
+                  'We could not load this conversation. Check your connection and try again.',
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
 }
 
 class _ConversationHeader extends StatelessWidget {

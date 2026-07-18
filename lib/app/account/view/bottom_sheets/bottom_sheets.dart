@@ -33,7 +33,6 @@ class ButtSheetState extends State<ButtSheet> {
 
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
     _textFieldController.text = widget.val ?? '';
   }
@@ -76,7 +75,6 @@ class ButtSheetState extends State<ButtSheet> {
                       if (_textFieldController.text.trim() != '') {
                         Navigator.pop(context, _textFieldController.text);
                       }
-                      // print(_textFieldController.text);
                     })
               ],
             )));

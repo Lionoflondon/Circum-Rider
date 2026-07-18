@@ -10,7 +10,6 @@ class PositionData {
   });
 
   factory PositionData.fromJson(dynamic json) {
-    // print(json);
     final GeoPoint geoPoint = json['geopoint'].runtimeType == GeoPoint
         ? json['geopoint']
         : GeoPoint(

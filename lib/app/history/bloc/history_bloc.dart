@@ -11,10 +11,6 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
   HistoryBloc() : super(HistoryState()) {
     FirebaseAuth auth = FirebaseAuth.instance;
     FirebaseFirestore db = FirebaseFirestore.instance;
-    on<HistoryEvent>((event, emit) {
-      // TODO: implement event handler
-    });
-
     on<FetchHistory>(((event, emit) async {
       try {
         User? user = auth.currentUser;
@@ -35,7 +31,9 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
         }
 
         emit(state.copyWith(ridesHistory: ridesHistory));
-      } catch (_) {}
+      } catch (_) {
+        emit(state.copyWith(ridesHistory: const []));
+      }
     }));
   }
 }

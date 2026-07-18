@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -172,7 +173,6 @@ class RiderLiveTrackingPolicy {
       'accepted',
       'navigating_to_pickup',
       'travelling_to_pickup',
-      'approaching_pickup',
       'arrived_at_pickup',
       'waiting_at_pickup',
       'waiting',
@@ -182,8 +182,6 @@ class RiderLiveTrackingPolicy {
       'in_transit',
       'navigating_to_dropoff',
       'travelling_to_dropoff',
-      'approaching_dropoff',
-      'approaching_destination',
       'arrived_at_dropoff',
       'pin_required',
       'awaiting_pin',
@@ -242,6 +240,12 @@ class RiderLiveTrackingPolicy {
     return position.accuracy <= poorAccuracyMeters;
   }
 
+  static String signalQuality(Position position) {
+    if (position.accuracy <= 25) return 'high';
+    if (position.accuracy <= poorAccuracyMeters) return 'medium';
+    return 'reduced';
+  }
+
   static bool isStalePosition(Position position, {DateTime? now}) {
     final timestamp = position.timestamp;
     final current = now ?? DateTime.now();
@@ -288,9 +292,13 @@ class RiderLiveTrackingPolicy {
 class RiderLiveTrackingController {
   RiderLiveTrackingController({
     FirebaseFirestore? firestore,
-  }) : _firestore = firestore ?? FirebaseFirestore.instance;
+    FirebaseFunctions? functions,
+  })  : _firestore = firestore ?? FirebaseFirestore.instance,
+        _functions =
+            functions ?? FirebaseFunctions.instanceFor(region: 'us-central1');
 
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
   final _states = StreamController<RiderLiveTrackingSnapshot>.broadcast();
   final Queue<_QueuedLocationUpdate> _queue = Queue<_QueuedLocationUpdate>();
   final Queue<DateTime> _pickupArrivalHits = Queue<DateTime>();
@@ -710,87 +718,33 @@ class RiderLiveTrackingController {
     required _QueuedLocationUpdate update,
   }) async {
     final position = update.position;
-    final payload = <String, dynamic>{
-      'riderId': riderId,
-      'activeDeliveryId': deliveryId,
+    final gpsSignalQuality = RiderLiveTrackingPolicy.signalQuality(position);
+    final gpsStatus = RiderLiveTrackingPolicy.isUsableAccuracy(position)
+        ? 'active'
+        : 'poorAccuracy';
+    await _functions.httpsCallable('updateDeliveryLiveLocation').call({
       'deliveryId': deliveryId,
-      'latitude': position.latitude,
-      'longitude': position.longitude,
-      'accuracy': position.accuracy,
-      'heading': position.heading,
-      'speed': position.speed,
       'status': update.trackingStatus,
-      'trackingStatus': 'live',
-      'deliveryState': update.trackingStatus,
-      'freshness': 'fresh',
-      'clientRecordedAt': Timestamp.fromDate(update.createdAt),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'freshnessUpdatedAt': FieldValue.serverTimestamp(),
-      'riderLiveLocation': {
-        'geopoint': GeoPoint(position.latitude, position.longitude),
+      'location': {
         'latitude': position.latitude,
         'longitude': position.longitude,
-        'accuracy': position.accuracy,
+        'accuracyMeters': position.accuracy,
         'heading': position.heading,
         'speed': position.speed,
-        'freshness': 'fresh',
-        'deliveryState': update.trackingStatus,
-        'updatedAt': FieldValue.serverTimestamp(),
+        'clientRecordedAt': update.createdAt.millisecondsSinceEpoch,
+        'gpsStatus': gpsStatus,
+        'gpsSignalQuality': gpsSignalQuality,
+        'backgroundCapable': !kIsWeb,
+        'queueDepth': _queue.length,
       },
-    };
-    final trackingRef = _firestore
-        .collection('deliveryRequests')
-        .doc(deliveryId)
-        .collection('tracking')
-        .doc('liveLocation');
-    final activeRef = _firestore.collection('activeDeliveries').doc(deliveryId);
-    final batch = _firestore.batch();
-    batch.set(trackingRef, payload, SetOptions(merge: true));
-    batch.set(
-      activeRef,
-      {
-        'deliveryId': deliveryId,
-        'riderId': riderId,
-        'status': update.trackingStatus,
-        'deliveryState': update.trackingStatus,
-        'trackingStatus': 'live',
-        'freshness': 'fresh',
-        'riderLiveLocation': payload['riderLiveLocation'],
-        'updatedAt': FieldValue.serverTimestamp(),
-        'freshnessUpdatedAt': FieldValue.serverTimestamp(),
-      },
-      SetOptions(merge: true),
-    );
-    await batch.commit();
+    });
   }
 
   Future<void> _writeStop({
     required String deliveryId,
     required String riderId,
     required String status,
-  }) async {
-    final payload = {
-      'riderId': riderId,
-      'activeDeliveryId': deliveryId,
-      'deliveryId': deliveryId,
-      'trackingStatus': 'stopped',
-      'status': status,
-      'deliveryState': status,
-      'freshness': 'stopped',
-      'updatedAt': FieldValue.serverTimestamp(),
-      'freshnessUpdatedAt': FieldValue.serverTimestamp(),
-    };
-    final trackingRef = _firestore
-        .collection('deliveryRequests')
-        .doc(deliveryId)
-        .collection('tracking')
-        .doc('liveLocation');
-    final activeRef = _firestore.collection('activeDeliveries').doc(deliveryId);
-    final batch = _firestore.batch();
-    batch.set(trackingRef, payload, SetOptions(merge: true));
-    batch.set(activeRef, payload, SetOptions(merge: true));
-    await batch.commit();
-  }
+  }) async {}
 
   void _emit(RiderLiveTrackingSnapshot next) {
     _snapshot = next;

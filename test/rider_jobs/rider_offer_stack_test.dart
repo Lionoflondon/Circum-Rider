@@ -1,10 +1,67 @@
 import 'package:circum_rider/app/rider_jobs/rider_job_offer_screen.dart';
+import 'package:circum_rider/app/rider_jobs/rider_delivery_controller.dart';
 import 'package:circum_rider/app/rider_jobs/rider_offer_card.dart';
 import 'package:circum_rider/app/rider_jobs/rider_offer_stack.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'dart:io';
+
+class _BackendStageController implements RiderDeliveryController {
+  _BackendStageController(this.results);
+
+  final List<String> results;
+  final List<String> actions = [];
+  int irisConfirmationCalls = 0;
+
+  @override
+  Future<RiderDeliveryTransitionResult> transition({
+    required String deliveryId,
+    required String action,
+    String? pin,
+    Map<String, dynamic>? evidence,
+    Map<String, dynamic>? issue,
+  }) async {
+    actions.add(action);
+    final status = results.isEmpty ? 'accepted' : results.removeAt(0);
+    return RiderDeliveryTransitionResult(status);
+  }
+
+  @override
+  Future<Map<String, dynamic>> markNoShow({required String deliveryId}) async =>
+      {'success': true};
+
+  @override
+  Future<Map<String, dynamic>> reportDiscrepancy({
+    required String deliveryId,
+    required String reason,
+    required List<String> evidencePhotos,
+    double? observedWeightKg,
+    String? notes,
+  }) async =>
+      {'success': true};
+
+  @override
+  Future<Map<String, dynamic>> reportWaitingContext({
+    required String deliveryId,
+    required String type,
+    String? note,
+  }) async =>
+      {'success': true};
+
+  @override
+  Future<Map<String, dynamic>> confirmIrisAssessment({
+    required String deliveryId,
+  }) async {
+    irisConfirmationCalls += 1;
+    return {
+      'success': true,
+      'acknowledgement': {
+        'deliveryId': deliveryId,
+        'acknowledgementStatus': 'confirmed',
+      },
+    };
+  }
+}
 
 void main() {
   test('offer earnings presentation has no bonus reward system', () {
@@ -13,6 +70,20 @@ void main() {
     expect(source.toLowerCase(), isNot(contains('bonus')));
     expect(source, contains('Estimated earnings'));
     expect(source, contains('Trust Points'));
+  });
+
+  test('offer fallbacks use customer-facing route and parcel language', () {
+    final source =
+        File('lib/app/rider_jobs/rider_offer_card.dart').readAsStringSync();
+    final deliverySource = File(
+      'lib/app/rider_jobs/rider_job_offer_screen.dart',
+    ).readAsStringSync();
+    expect(source, contains('Calculating route'));
+    expect(source, contains('Calculating arrival time'));
+    expect(deliverySource, contains('Awaiting parcel check'));
+    expect(source, isNot(contains('Distance pending')));
+    expect(source, isNot(contains('ETA pending')));
+    expect(deliverySource, isNot(contains('Backend pending')));
   });
 
   group('RiderOfferStack', () {
@@ -151,12 +222,13 @@ void main() {
       expect(find.text('Pickup Verification'), findsOneWidget);
       expect(find.text('Photo verification'), findsOneWidget);
       expect(find.text('Verification'), findsOneWidget);
-      expect(find.text('Call Sender'), findsOneWidget);
+      expect(find.text('Call'), findsOneWidget);
       expect(find.text('Message'), findsOneWidget);
       expect(find.textContaining('Vanguard Priority'), findsOneWidget);
     });
 
-    testWidgets('standard pickup stays lightweight', (tester) async {
+    testWidgets('gift pickup shows required verification from backend data',
+        (tester) async {
       await tester.pumpWidget(MaterialApp(
         home: RiderAcceptedJobScreen(offer: _offers.last),
       ));
@@ -165,22 +237,134 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Pickup Workflow'), findsOneWidget);
-      expect(find.text('Confirm parcel matches booking'), findsOneWidget);
-      expect(find.text('Pickup Verification'), findsNothing);
+      expect(find.text('IRIS Recommendation'), findsOneWidget);
+      expect(find.text('Confirm'), findsOneWidget);
+      expect(find.text('Report Difference'), findsOneWidget);
+      expect(
+          find.text(
+              'Gift verification: photo required. Requirements are read from backend state.'),
+          findsOneWidget);
       expect(find.textContaining('Vanguard Protection'), findsNothing);
     });
 
-    testWidgets('pickup CTA progresses sequentially', (tester) async {
+    testWidgets('IRIS confirmation acknowledges without advancing delivery',
+        (tester) async {
+      final controller = _BackendStageController([]);
+      final base = _offers.last;
+      final offer = RiderJobOffer(
+        id: base.id,
+        requestId: base.requestId,
+        pickupArea: base.pickupArea,
+        dropoffArea: base.dropoffArea,
+        pickupAddress: base.pickupAddress,
+        dropoffAddress: base.dropoffAddress,
+        earnings: base.earnings,
+        currency: base.currency,
+        distanceText: base.distanceText,
+        timeText: base.timeText,
+        parcelGuidance: base.parcelGuidance,
+        minimumVehicle: base.minimumVehicle,
+        weightText: base.weightText,
+        pickupTiming: base.pickupTiming,
+        warningChips: base.warningChips,
+        raw: {...base.raw, 'deliveryStage': 'arrived_at_pickup'},
+      );
       await tester.pumpWidget(MaterialApp(
-        home: RiderAcceptedJobScreen(offer: _offers.first),
+        home: RiderAcceptedJobScreen(
+          offer: offer,
+          deliveryController: controller,
+        ),
       ));
 
-      expect(find.text('Navigate to Pickup'), findsWidgets);
-      expect(find.text('I\'ve Arrived'), findsNothing);
-
-      await tester
-          .tap(find.widgetWithText(ElevatedButton, 'Navigate to Pickup'));
+      await tester.tap(find.byKey(const Key('accepted_panel_toggle')));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Confirm'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Confirm'));
+      await tester.pumpAndSettle();
+
+      expect(controller.irisConfirmationCalls, 1);
+      expect(controller.actions, isEmpty);
+      expect(find.text('Confirmed'), findsOneWidget);
+      expect(find.text('Report Difference'), findsOneWidget);
+
+      await tester.tap(find.text('Confirmed'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(controller.irisConfirmationCalls, 1);
+    });
+
+    testWidgets('IRIS confirmation restores from backend delivery state',
+        (tester) async {
+      final base = _offers.last;
+      final offer = RiderJobOffer(
+        id: base.id,
+        requestId: base.requestId,
+        pickupArea: base.pickupArea,
+        dropoffArea: base.dropoffArea,
+        pickupAddress: base.pickupAddress,
+        dropoffAddress: base.dropoffAddress,
+        earnings: base.earnings,
+        currency: base.currency,
+        distanceText: base.distanceText,
+        timeText: base.timeText,
+        parcelGuidance: base.parcelGuidance,
+        minimumVehicle: base.minimumVehicle,
+        weightText: base.weightText,
+        pickupTiming: base.pickupTiming,
+        warningChips: base.warningChips,
+        raw: {
+          ...base.raw,
+          'deliveryStage': 'arrived_at_pickup',
+          'riderIrisAcknowledgement': {
+            'riderId': 'preview-rider',
+            'acknowledgementStatus': 'confirmed',
+          },
+        },
+      );
+      await tester.pumpWidget(MaterialApp(
+        home: RiderAcceptedJobScreen(offer: offer),
+      ));
+
+      await tester.tap(find.byKey(const Key('accepted_panel_toggle')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Confirmed'), findsOneWidget);
+      expect(find.text('Confirm'), findsNothing);
+    });
+
+    testWidgets('pickup CTA renders backend-returned delivery stage',
+        (tester) async {
+      final controller = _BackendStageController([
+        'arrived_at_pickup',
+      ]);
+      final offer = RiderJobOffer(
+        id: _offers.first.id,
+        requestId: _offers.first.requestId,
+        pickupArea: _offers.first.pickupArea,
+        dropoffArea: _offers.first.dropoffArea,
+        pickupAddress: _offers.first.pickupAddress,
+        dropoffAddress: _offers.first.dropoffAddress,
+        earnings: _offers.first.earnings,
+        currency: _offers.first.currency,
+        distanceText: _offers.first.distanceText,
+        timeText: _offers.first.timeText,
+        parcelGuidance: _offers.first.parcelGuidance,
+        minimumVehicle: _offers.first.minimumVehicle,
+        weightText: _offers.first.weightText,
+        pickupTiming: _offers.first.pickupTiming,
+        warningChips: _offers.first.warningChips,
+        raw: {
+          ..._offers.first.raw,
+          'deliveryStage': 'navigating_to_pickup',
+        },
+      );
+
+      await tester.pumpWidget(MaterialApp(
+        home: RiderAcceptedJobScreen(
+          offer: offer,
+          deliveryController: controller,
+        ),
+      ));
 
       expect(find.text('I\'ve Arrived'), findsWidgets);
       expect(find.text('Navigate to Drop-off'), findsNothing);
@@ -190,178 +374,35 @@ void main() {
 
       expect(find.text('Verify Parcel'), findsWidgets);
       expect(find.text('Navigate to Drop-off'), findsNothing);
+      expect(controller.actions, ['arrived_at_pickup']);
     });
 
-    test('stage policy blocks invalid and unassigned transitions', () {
-      final delivery = {'riderId': 'rider-one'};
-      expect(
-        RiderDeliveryStagePolicy.canAdvance(
-          riderId: 'rider-one',
-          delivery: delivery,
-          current: RiderDeliveryStage.accepted,
-          target: RiderDeliveryStage.navigatingToPickup,
-          verificationRequired: true,
-          pinRequired: true,
-        ),
-        isTrue,
-      );
-      expect(
-        RiderDeliveryStagePolicy.canAdvance(
-          riderId: 'rider-one',
-          delivery: delivery,
-          current: RiderDeliveryStage.accepted,
-          target: RiderDeliveryStage.navigatingToDropoff,
-          verificationRequired: true,
-          pinRequired: true,
-        ),
-        isFalse,
-      );
-      expect(
-        RiderDeliveryStagePolicy.canAdvance(
-          riderId: 'other-rider',
-          delivery: delivery,
-          current: RiderDeliveryStage.accepted,
-          target: RiderDeliveryStage.navigatingToPickup,
-          verificationRequired: true,
-          pinRequired: true,
-        ),
-        isFalse,
-      );
-      expect(
-        RiderDeliveryStagePolicy.nextStage(
-          RiderDeliveryStage.approachingPickup,
-          verificationRequired: true,
-          pinRequired: true,
-        ),
-        RiderDeliveryStage.arrivedAtPickup,
-      );
-      expect(
-        RiderDeliveryStagePolicy.nextStage(
-          RiderDeliveryStage.arrivedAtPickup,
-          verificationRequired: true,
-          pinRequired: true,
-        ),
-        RiderDeliveryStage.pickupVerification,
-      );
-      expect(
-        RiderDeliveryStagePolicy.nextStage(
-          RiderDeliveryStage.approachingDropoff,
-          verificationRequired: true,
-          pinRequired: true,
-        ),
-        RiderDeliveryStage.arrivedAtDropoff,
-      );
-      expect(
-        RiderDeliveryStagePolicy.nextStage(
-          RiderDeliveryStage.arrivedAtDropoff,
-          verificationRequired: true,
-          pinRequired: true,
-        ),
-        RiderDeliveryStage.waiting,
-      );
-      expect(
-        RiderDeliveryStagePolicy.nextStage(
-          RiderDeliveryStage.waiting,
-          verificationRequired: true,
-          pinRequired: true,
-        ),
-        RiderDeliveryStage.pinRequired,
-      );
-    });
-
-    test('arrival backend patch starts wait timer and notification', () {
-      final now = DateTime.utc(2026, 7, 4, 12);
-      final patch = RiderDeliveryStagePolicy.transitionPatch(
-        deliveryId: 'delivery-1',
-        riderId: 'rider-one',
-        from: RiderDeliveryStage.navigatingToPickup,
-        to: RiderDeliveryStage.arrivedAtPickup,
-        now: now,
-        arrivalLocation: const {'lat': 51.5, 'lng': -0.1},
-      );
-
-      expect(patch['state'], 'arrived_at_pickup');
-      expect(patch['updatedBy'], 'rider-one');
-      expect(patch['arrivalLocation'], {'lat': 51.5, 'lng': -0.1});
-      expect(patch['pickupArrivedAt'], isA<Timestamp>());
-      expect(patch['waiting']['active'], isTrue);
-      expect(patch['waiting']['freeWaitMinutes'], 3);
-      expect(patch['waiting']['freeWaitEndsAt'], isA<Timestamp>());
-      expect(patch['pendingNotification']['recipient'], 'sender');
-      expect(
-        patch['pendingNotification']['message'],
-        'Your rider is outside.',
-      );
-      expect(patch['history'], isA<FieldValue>());
-    });
-
-    test('dropoff arrival notifies receiver and starts backend wait', () {
-      final now = DateTime.utc(2026, 7, 4, 12);
-      final patch = RiderDeliveryStagePolicy.transitionPatch(
-        deliveryId: 'delivery-1',
-        riderId: 'rider-one',
-        from: RiderDeliveryStage.navigatingToDropoff,
-        to: RiderDeliveryStage.arrivedAtDropoff,
-        now: now,
-      );
-
-      expect(patch['state'], 'arrived_at_dropoff');
-      expect(patch['dropoffArrivedAt'], isA<Timestamp>());
-      expect(patch['waiting']['phase'], 'dropoff');
-      expect(patch['pendingNotification']['recipient'], 'receiver');
-      expect(
-        patch['pendingNotification']['message'],
-        'Your rider is outside.',
-      );
-    });
-
-    test('no-show and waiting charge only unlock after free wait', () {
-      final arrived = DateTime.utc(2026, 7, 4, 12);
-      final before = arrived.add(const Duration(minutes: 2, seconds: 59));
-      final after = arrived.add(const Duration(minutes: 4));
-
-      expect(RiderDeliveryStagePolicy.noShowAvailable(arrived, before), false);
-      expect(RiderDeliveryStagePolicy.noShowAvailable(arrived, after), true);
-      expect(
-        RiderDeliveryStagePolicy.waitingChargeRecord(
-          deliveryId: 'delivery-1',
-          riderId: 'rider-one',
-          arrivedAt: arrived,
-          now: before,
-          amountPennies: 150,
-        ),
-        isNull,
-      );
-
-      final charge = RiderDeliveryStagePolicy.waitingChargeRecord(
-        deliveryId: 'delivery-1',
-        riderId: 'rider-one',
-        arrivedAt: arrived,
-        now: after,
-        amountPennies: 150,
-      );
-      expect(charge, isNotNull);
-      expect(charge!['chargeType'], 'waiting');
-      expect(charge['amount'], 150);
-      expect(charge['auditEvent']['state'], 'waiting_charge_recorded');
-    });
-
-    test('accepted delivery source includes complete operational safeguards',
-        () {
+    test('rider screen does not own delivery lifecycle or waiting policy', () {
       final source = File('lib/app/rider_jobs/rider_job_offer_screen.dart')
           .readAsStringSync();
-      expect(source, contains('approaching_pickup'));
-      expect(source, contains('approaching_dropoff'));
-      expect(source, contains('Sender PIN'));
-      expect(source, contains('Recipient PIN'));
-      expect(source, contains('Never show recipient PIN here'));
-      expect(source, contains('IRIS Brief'));
-      expect(source, contains('Building access'));
-      expect(source, contains('Safe parking'));
-      expect(source, contains('Emergency'));
-      expect(source, contains('Delivery chat is now read-only'));
-      expect(source, contains('Current Roth balance'));
-      expect(source, isNot(contains('£\${roth')));
+      final controller =
+          File('lib/app/rider_jobs/rider_delivery_controller.dart')
+              .readAsStringSync();
+      final legacyHome =
+          File('lib/app/home/bloc/home_bloc.dart').readAsStringSync();
+      final legacyEvents =
+          File('lib/app/home/bloc/home_event.dart').readAsStringSync();
+
+      expect(source, isNot(contains('transitionPatch')));
+      expect(source, isNot(contains('waitingChargeRecord')));
+      expect(source, isNot(contains('noShowAvailable(DateTime')));
+      expect(source, isNot(contains('FieldValue.arrayUnion')));
+      expect(source, contains('CallableRiderDeliveryController'));
+      expect(controller, contains("httpsCallable('recordRiderArrival')"));
+      expect(controller,
+          contains("httpsCallable('updateDeliveryTrackingStatus')"));
+      expect(controller, contains("httpsCallable('markRiderNoShow')"));
+      expect(
+          controller, contains("httpsCallable('confirmRiderIrisAssessment')"));
+      expect(legacyHome, isNot(contains("'status': 'outForDelivery'")));
+      expect(legacyHome, isNot(contains('HomeRepo().endTrip')));
+      expect(legacyEvents, isNot(contains('class StartDelivery')));
+      expect(legacyEvents, isNot(contains('class RideCompleted')));
     });
   });
 }
@@ -376,15 +417,12 @@ const _offers = [
     dropoffAddress: '41 King\'s Road, Chelsea, London SW3 4NB',
     earnings: 12,
     currency: 'GBP',
-    pickupDistanceText: '1.2 mi to pickup',
     distanceText: '3.4 mi',
     timeText: '22 min',
     parcelGuidance: 'Prescription box',
     minimumVehicle: 'Bike',
     weightText: '0.2kg',
     pickupTiming: 'Scheduled',
-    expiryText: 'Expires in 8m',
-    irisSummary: 'IRIS 96% match',
     warningChips: ['Health+', 'Vanguard', 'Scheduled'],
     raw: {'isHealthPlus': true, 'requiresVanguard': true, 'isScheduled': true},
   ),
@@ -397,15 +435,12 @@ const _offers = [
     dropoffAddress: '7 Prince of Wales Drive, Battersea, London SW11 4FA',
     earnings: 15,
     currency: 'GBP',
-    pickupDistanceText: '0.8 mi to pickup',
     distanceText: '4.1 mi',
     timeText: '24 min',
     parcelGuidance: 'Gift parcel',
     minimumVehicle: 'Car',
     weightText: '1.4kg',
     pickupTiming: 'ASAP',
-    expiryText: 'Expires in 5m',
-    irisSummary: 'IRIS gift match',
     warningChips: ['Gift'],
     raw: {'isGift': true},
   ),

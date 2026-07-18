@@ -60,6 +60,26 @@ void main() {
           contains('Message failed. Check your connection and retry.'));
     });
 
+    test('support conversation exposes recoverable load and send failures', () {
+      expect(conversationSource, contains('_ConversationLoading'));
+      expect(conversationSource, contains('_ConversationLoadError'));
+      expect(conversationSource, contains('_retryConversation'));
+      expect(
+          conversationSource, contains('We could not load this conversation.'));
+      expect(conversationSource, contains("const Text('Retry')"));
+      expect(
+          conversationSource, contains('onPressed: _sending ? null : _send'));
+      expect(conversationSource, contains('_input.clear();'));
+      expect(conversationSource, contains('SharedPreferences.getInstance()'));
+      expect(conversationSource, contains('_restoreDraft()'));
+      expect(conversationSource, contains('_saveDraft(value)'));
+      expect(conversationSource, contains('await _clearDraft();'));
+      expect(
+        conversationSource.indexOf('_input.clear();'),
+        greaterThan(conversationSource.indexOf('await _service.sendText')),
+      );
+    });
+
     test('typing and read receipts are controlled and not high-frequency', () {
       expect(serviceSource, contains('class RiderTypingController'));
       expect(serviceSource,

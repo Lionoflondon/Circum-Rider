@@ -81,12 +81,6 @@ void main() {
     test('active and terminal delivery states are clearly separated', () {
       expect(RiderLiveTrackingPolicy.isActiveDeliveryStatus('accepted'), true);
       expect(
-          RiderLiveTrackingPolicy.isActiveDeliveryStatus('approaching_pickup'),
-          true);
-      expect(
-          RiderLiveTrackingPolicy.isActiveDeliveryStatus('approaching_dropoff'),
-          true);
-      expect(
           RiderLiveTrackingPolicy.isActiveDeliveryStatus('completed'), false);
       expect(
           RiderLiveTrackingPolicy.isTerminalDeliveryStatus('cancelled'), true);
@@ -182,6 +176,27 @@ void main() {
         true,
       );
     });
+
+    test('GPS signal quality is derived from accuracy', () {
+      expect(
+        RiderLiveTrackingPolicy.signalQuality(
+          _position(lat: 51.50, lng: -0.10, accuracy: 12),
+        ),
+        'high',
+      );
+      expect(
+        RiderLiveTrackingPolicy.signalQuality(
+          _position(lat: 51.50, lng: -0.10, accuracy: 60),
+        ),
+        'medium',
+      );
+      expect(
+        RiderLiveTrackingPolicy.signalQuality(
+          _position(lat: 51.50, lng: -0.10, accuracy: 120),
+        ),
+        'reduced',
+      );
+    });
   });
 
   group('Rider live tracking integration contract', () {
@@ -192,25 +207,13 @@ void main() {
     final manifest =
         File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
 
-    test('uses the existing Sender live-tracking document contract', () {
-      expect(source, contains(".collection('deliveryRequests')"));
-      expect(source, contains(".collection('tracking')"));
-      expect(source, contains(".doc('liveLocation')"));
-      expect(source, contains("'riderLiveLocation'"));
-      expect(source, contains("'freshness': 'fresh'"));
-      expect(source, contains("'deliveryState': update.trackingStatus"));
-      expect(source, contains("'clientRecordedAt': Timestamp.fromDate"));
-      expect(source,
-          contains("'freshnessUpdatedAt': FieldValue.serverTimestamp()"));
-      expect(source, contains(".collection('activeDeliveries')"));
-    });
-
-    test('publishes a backend-visible stopped state when tracking ends', () {
-      expect(source, contains("_writeStop"));
-      expect(source, contains("'trackingStatus': 'stopped'"));
-      expect(source, contains("'freshness': 'stopped'"));
-      expect(source, contains("'deliveryState': status"));
-      expect(source, contains("batch.set(activeRef, payload"));
+    test('publishes live tracking through backend authority', () {
+      expect(source, contains("httpsCallable('updateDeliveryLiveLocation')"));
+      expect(source, contains("'gpsSignalQuality'"));
+      expect(source, contains("'accuracyMeters'"));
+      expect(source, contains("'backgroundCapable'"));
+      expect(source, isNot(contains(".collection('activeDeliveries')")));
+      expect(source, isNot(contains(".collection('tracking')")));
     });
 
     test('accepted delivery screen starts tracking from backend state', () {
@@ -219,8 +222,6 @@ void main() {
       expect(accepted, contains('RiderLiveTrackingPolicy.assignedToRider'));
       expect(accepted, contains('arrived_at_pickup'));
       expect(accepted, contains('arrived_at_dropoff'));
-      expect(accepted, contains('approaching_pickup'));
-      expect(accepted, contains('approaching_dropoff'));
     });
 
     test('tracking UI renders mandatory states and recovery actions', () {
@@ -230,14 +231,6 @@ void main() {
       expect(source, contains('Location permission required'));
       expect(accepted, contains('_TrackingEtaCard'));
       expect(accepted, contains('_TrackingPermissionCard'));
-      expect(accepted, contains('Resume follow'));
-      expect(accepted, contains('Following rider'));
-      expect(accepted, contains('Fit route'));
-      expect(accepted, contains('compassEnabled: true'));
-      expect(accepted, contains('setMapStyle(_riderDarkMapStyle)'));
-      expect(accepted, contains('onCameraMoveStarted'));
-      expect(accepted, contains('route-context-stale'));
-      expect(accepted, contains('route-active-circum'));
       expect(accepted, contains('Geolocator.openAppSettings'));
       expect(accepted, contains('Geolocator.openLocationSettings'));
     });

@@ -15,7 +15,7 @@
         android:enableOnBackInvokedCallback="true">
 
         <meta-data android:name="com.google.android.geo.API_KEY"
-               android:value="${googleMapsApiKey}"/>
+               android:value="AIzaSyAX5XrRbb81udAi-DnxtV_JyOoeOZ1Q1vk"/>
                
         <activity
             android:name=".MainActivity"

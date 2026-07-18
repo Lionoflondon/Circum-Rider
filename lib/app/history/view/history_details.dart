@@ -163,7 +163,6 @@ class _HistoryDetailsViewState extends State<HistoryDetailsView> {
                               const EdgeInsets.symmetric(horizontal: 4.0),
                           onRatingUpdate: (rating) {
                             // Navigator.pop(context);
-                            // print(rating);
                           },
                         ),
                       ],

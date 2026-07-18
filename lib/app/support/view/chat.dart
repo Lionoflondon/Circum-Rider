@@ -100,7 +100,6 @@ class _ChatPageViewState extends State<ChatPageView> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20)
               .copyWith(bottom: 40),
           itemBuilder: (_, i) {
-            // print(state.chatRoomMessages[i]);
             if (auth.currentUser?.uid != state.chatMessages[i].senderId) {
               return Container(
                   child: Align(
