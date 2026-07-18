@@ -32,6 +32,9 @@ import '../repo/home_repo.dart';
 part 'home_event.dart';
 part 'home_state.dart';
 
+const _riderMapsDirectionsApiKey =
+    String.fromEnvironment('RIDER_GOOGLE_MAPS_DIRECTIONS_API_KEY');
+
 class HomeBloc extends Bloc<HomeEvent, HomeState> {
   FirebaseAuth auth = FirebaseAuth.instance;
   // Init firestore and geoFlutterFire
@@ -303,9 +306,16 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       PolylinePoints points = PolylinePoints();
 
+      if (_riderMapsDirectionsApiKey.isEmpty) {
+        if (kDebugMode) {
+          debugPrint('Rider route preview key is not configured.');
+        }
+        return;
+      }
+
       PolylineResult startingPolylineResult =
           await points.getRouteBetweenCoordinates(
-              googleApiKey: 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
+              googleApiKey: _riderMapsDirectionsApiKey,
               request: PolylineRequest(
                 origin: PointLatLng(riderLat, riderLng),
                 destination: PointLatLng(
@@ -315,7 +325,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       PolylineResult endingPolylineResult =
           await points.getRouteBetweenCoordinates(
-              googleApiKey: 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
+              googleApiKey: _riderMapsDirectionsApiKey,
               request: PolylineRequest(
                 origin: PointLatLng(
                     userPickupCoordinates.lat, userPickupCoordinates.lng),

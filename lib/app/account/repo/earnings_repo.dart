@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/earnings.m.dart';
 
@@ -29,7 +30,9 @@ class EarningsRepo {
 
       return EarningsModel.fromJson(response.data);
     } catch (e) {
-      print(e);
+      if (kDebugMode) {
+        debugPrint('Failed to fetch Rider earnings: $e');
+      }
       throw Exception("Something went wrong");
     }
   }

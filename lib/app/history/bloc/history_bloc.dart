@@ -1,6 +1,5 @@
 import 'package:bloc/bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../home/models/dispatch_request.m..dart';
@@ -36,9 +35,7 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
         }
 
         emit(state.copyWith(ridesHistory: ridesHistory));
-      } catch (e) {
-        print(e);
-      }
+      } catch (_) {}
     }));
   }
 }

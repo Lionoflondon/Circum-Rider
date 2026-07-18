@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -79,7 +80,9 @@ class _MapsViewState extends State<MapsView> {
       }
       if (context.read<AuthBloc>().state.appLocationStatus ==
           AppLocationStatus.available) {
-        print('here');
+        if (kDebugMode) {
+          debugPrint('Rider map device location available.');
+        }
       }
 
       if (state.activeRequest != null &&
@@ -97,8 +100,11 @@ class _MapsViewState extends State<MapsView> {
         initialCameraPosition: _initialCameraPosition,
         cameraTargetBounds: CameraTargetBounds.unbounded,
         onMapCreated: (GoogleMapController controller) async {
-          print('initializing map');
-          print('controller completed: ${_controller.isCompleted}');
+          if (kDebugMode) {
+            debugPrint('Initializing Rider map.');
+            debugPrint('Rider map controller completed: '
+                '${_controller.isCompleted}');
+          }
           _controller.complete(controller);
         },
         markers: Set<Marker>.of(state.markers.values),

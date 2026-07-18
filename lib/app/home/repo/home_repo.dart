@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 class HomeRepo {
   Future<String> endTrip({
@@ -41,7 +42,9 @@ class HomeRepo {
 
       return response.data["historyId"];
     } catch (e) {
-      print(e);
+      if (kDebugMode) {
+        debugPrint('Failed to end Rider trip: $e');
+      }
       throw Exception("Something went wrong");
     }
   }
