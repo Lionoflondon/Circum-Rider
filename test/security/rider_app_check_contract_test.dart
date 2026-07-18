@@ -25,6 +25,21 @@ void main() {
   });
 
   test('Rider web App Check requires an explicit Enterprise site key', () {
+    final appCheckSource =
+        File('lib/app/security/rider_app_check.dart').readAsStringSync();
+
+    expect(
+      appCheckSource,
+      contains('CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY'),
+    );
+    expect(
+      appCheckSource,
+      isNot(contains('RIDER_RECAPTCHA_ENTERPRISE_SITE_KEY')),
+    );
+    expect(
+      appCheckSource,
+      isNot(contains('CIRCUM_RECAPTCHA_ENTERPRISE_SITE_KEY')),
+    );
     expect(
       riderWebAppCheckProvider(isWeb: true, siteKey: ''),
       isNull,

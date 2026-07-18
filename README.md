@@ -23,6 +23,17 @@ flutter pub get
 flutter run
 ```
 
+## Web App Check
+
+Rider Web uses the shared Circum web Firebase App Check reCAPTCHA Enterprise
+site key. Provide it at build time only:
+
+```sh
+flutter build web --dart-define=CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<site-key>
+```
+
+Do not hardcode the key, log it, or create Rider-specific web App Check keys.
+
 ## Backend
 
 Deploy Cloud Functions from the Circum customer app repository:

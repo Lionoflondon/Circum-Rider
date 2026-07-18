@@ -1,8 +1,8 @@
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
 
-const riderRecaptchaEnterpriseSiteKey =
-    String.fromEnvironment('RIDER_RECAPTCHA_ENTERPRISE_SITE_KEY');
+const riderWebRecaptchaEnterpriseSiteKey =
+    String.fromEnvironment('CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY');
 
 class RiderAppCheckStartup {
   const RiderAppCheckStartup._({
@@ -54,7 +54,7 @@ Future<RiderAppCheckStartup> initializeRiderAppCheck({
   FirebaseAppCheck? appCheck,
   bool isWeb = kIsWeb,
   bool debug = kDebugMode,
-  String webSiteKey = riderRecaptchaEnterpriseSiteKey,
+  String webSiteKey = riderWebRecaptchaEnterpriseSiteKey,
 }) async {
   final webProvider = riderWebAppCheckProvider(
     isWeb: isWeb,
