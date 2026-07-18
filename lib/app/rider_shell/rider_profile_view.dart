@@ -686,28 +686,19 @@ class _ProfilePhoto extends StatelessWidget {
                     ? ColoredBox(
                         color: const Color(0xFF111827),
                         child: Center(
-                          child: Text(
-                            initials,
-                            style: const TextStyle(
-                              color: RiderPalette.paper,
-                              fontSize: 38,
-                              fontWeight: FontWeight.w900,
-                            ),
+                          child: Icon(
+                            Icons.person_rounded,
+                            color: RiderPalette.muted,
+                            size: initials.isEmpty ? 54 : 56,
                           ),
                         ),
                       )
                     : CachedNetworkImage(
                         imageUrl: imageUrl,
                         fit: BoxFit.cover,
-                        errorWidget: (_, __, ___) => Center(
-                          child: Text(
-                            initials,
-                            style: const TextStyle(
-                              color: RiderPalette.paper,
-                              fontSize: 38,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
+                        errorWidget: (_, __, ___) => const Center(
+                          child: Icon(Icons.person_rounded,
+                              color: RiderPalette.muted, size: 56),
                         ),
                       ),
               ),

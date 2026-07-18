@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../account/view/bottom_sheets/image_bs.dart';
 import '../authentication/bloc/auth_bloc.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
@@ -114,7 +113,7 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
 
   Future<void> _pickProfilePhoto() async {
     final picker = ImagePicker();
-    final imageSource = await showImageBottomSheet(context);
+    final imageSource = await _showRiderPhotoSourceSheet(context);
     XFile? image;
     if (imageSource == 'library') {
       image = await picker.pickImage(
@@ -140,6 +139,20 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
         ));
   }
 
+  String _profilePhotoUrl(Map<String, dynamic> data) {
+    for (final key in [
+      'profileThumbnailUrl',
+      'profilePhotoUrl',
+      'profilePhoto',
+      'photoURL',
+      'photoUrl',
+    ]) {
+      final value = '${data[key] ?? ''}'.trim();
+      if (value.isNotEmpty && value != 'null') return value;
+    }
+    return widget.user.photoURL ?? '';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -151,86 +164,119 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
       ),
       body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
-            .collection('riderProfiles')
+            .collection('riders')
             .doc(widget.user.uid)
             .snapshots(),
-        builder: (context, snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(
-                child: CircularProgressIndicator(color: RiderPalette.blue));
-          }
-          _hydrate(snapshot.data!.data() ?? const {});
-          return Form(
-            key: _formKey,
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 36),
-              children: [
-                RiderGlassSurface(
-                  radius: 24,
-                  child: Column(
+        builder: (context, riderSnapshot) {
+          return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('riderProfiles')
+                  .doc(widget.user.uid)
+                  .snapshots(),
+              builder: (context, profileSnapshot) {
+                if (!riderSnapshot.hasData && !profileSnapshot.hasData) {
+                  return const Center(
+                      child:
+                          CircularProgressIndicator(color: RiderPalette.blue));
+                }
+                final data = <String, dynamic>{
+                  ...?riderSnapshot.data?.data(),
+                  ...?profileSnapshot.data?.data(),
+                };
+                _hydrate(data);
+                final profilePhotoUrl = _profilePhotoUrl(data);
+                return Form(
+                  key: _formKey,
+                  child: ListView(
+                    padding: const EdgeInsets.fromLTRB(18, 12, 18, 36),
                     children: [
-                      const Icon(Icons.account_circle_outlined,
-                          color: RiderPalette.blue, size: 54),
-                      const SizedBox(height: 10),
-                      OutlinedButton.icon(
-                        onPressed: _pickProfilePhoto,
-                        icon: const Icon(Icons.photo_camera_outlined),
-                        label: const Text('Change profile photo'),
+                      RiderGlassSurface(
+                        radius: 24,
+                        child: Column(
+                          children: [
+                            _EditableProfilePhoto(
+                              imageUrl: profilePhotoUrl,
+                              onTap: _pickProfilePhoto,
+                            ),
+                            const SizedBox(height: 14),
+                            OutlinedButton.icon(
+                              onPressed: _pickProfilePhoto,
+                              icon: const Icon(Icons.photo_camera_outlined),
+                              label: const Text('Change profile photo'),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'This is the photo senders see during deliveries.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                  color: RiderPalette.muted, height: 1.35),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      RiderGlassSurface(
+                        radius: 24,
+                        child: Column(
+                          children: [
+                            _field(_name, 'Full name', required: true),
+                            _field(_username, 'Username',
+                                prefix: '@', required: true),
+                            const Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                'Your Rider username is saved to your backend profile.',
+                                style: TextStyle(
+                                    color: RiderPalette.muted, height: 1.35),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            _field(_dob, 'Date of birth'),
+                            _field(_gender, 'Gender (optional)'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      RiderGlassSurface(
+                        radius: 24,
+                        child: Column(
+                          children: [
+                            _field(_phone, 'Phone',
+                                keyboard: TextInputType.phone, readOnly: true),
+                            _field(_email, 'Email',
+                                keyboard: TextInputType.emailAddress,
+                                readOnly: true),
+                            _field(_address, 'Home address', lines: 2),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      RiderGlassSurface(
+                        radius: 20,
+                        child: ListTile(
+                          leading: const Icon(Icons.fingerprint_rounded,
+                              color: RiderPalette.muted),
+                          title: const Text('Identity',
+                              style: TextStyle(
+                                  color: RiderPalette.paper,
+                                  fontWeight: FontWeight.w800)),
+                          subtitle: Text('Rider ID ${widget.user.uid}',
+                              style:
+                                  const TextStyle(color: RiderPalette.muted)),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      FilledButton(
+                        onPressed: _saving ? null : _save,
+                        style: FilledButton.styleFrom(
+                            minimumSize: const Size.fromHeight(52),
+                            backgroundColor: RiderPalette.blue),
+                        child: Text(_saving ? 'Saving…' : 'Save changes'),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 16),
-                RiderGlassSurface(
-                  radius: 24,
-                  child: Column(
-                    children: [
-                      _field(_name, 'Full name', required: true),
-                      _field(_username, 'Username',
-                          prefix: '@', required: true),
-                      _field(_dob, 'Date of birth'),
-                      _field(_gender, 'Gender (optional)'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                RiderGlassSurface(
-                  radius: 24,
-                  child: Column(
-                    children: [
-                      _field(_phone, 'Phone',
-                          keyboard: TextInputType.phone, readOnly: true),
-                      _field(_email, 'Email',
-                          keyboard: TextInputType.emailAddress, readOnly: true),
-                      _field(_address, 'Home address', lines: 2),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                RiderGlassSurface(
-                  radius: 20,
-                  child: ListTile(
-                    leading: const Icon(Icons.fingerprint_rounded,
-                        color: RiderPalette.muted),
-                    title: const Text('Identity',
-                        style: TextStyle(
-                            color: RiderPalette.paper,
-                            fontWeight: FontWeight.w800)),
-                    subtitle: Text('Rider ID ${widget.user.uid}',
-                        style: const TextStyle(color: RiderPalette.muted)),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                FilledButton(
-                  onPressed: _saving ? null : _save,
-                  style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                      backgroundColor: RiderPalette.blue),
-                  child: Text(_saving ? 'Saving…' : 'Save changes'),
-                ),
-              ],
-            ),
-          );
+                );
+              });
         },
       ),
     );
@@ -259,6 +305,215 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
           labelText: label,
           prefixText: prefix,
           suffixIcon: readOnly ? const Icon(Icons.lock_outline_rounded) : null,
+        ),
+      ),
+    );
+  }
+}
+
+class _EditableProfilePhoto extends StatelessWidget {
+  const _EditableProfilePhoto({
+    required this.imageUrl,
+    required this.onTap,
+  });
+
+  final String imageUrl;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasPhoto = imageUrl.trim().isNotEmpty && imageUrl.trim() != 'null';
+    return Semantics(
+      button: true,
+      label: 'Change Rider profile photo',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: 112,
+              height: 112,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF111827),
+                border: Border.all(
+                  color: RiderPalette.blue.withValues(alpha: .42),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: .24),
+                    blurRadius: 28,
+                    offset: const Offset(0, 14),
+                  ),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: hasPhoto
+                  ? Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) =>
+                          const _NeutralProfilePhotoFallback(),
+                    )
+                  : const _NeutralProfilePhotoFallback(),
+            ),
+            Positioned(
+              right: 0,
+              bottom: 2,
+              child: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: RiderPalette.blue,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: RiderPalette.background, width: 3),
+                ),
+                child: const Icon(Icons.photo_camera_outlined,
+                    color: RiderPalette.paper, size: 17),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NeutralProfilePhotoFallback extends StatelessWidget {
+  const _NeutralProfilePhotoFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(
+      color: Color(0xFF111827),
+      child: Center(
+        child: Icon(
+          Icons.person_rounded,
+          color: RiderPalette.muted,
+          size: 54,
+        ),
+      ),
+    );
+  }
+}
+
+Future<String?> _showRiderPhotoSourceSheet(BuildContext context) {
+  return showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: RiderPalette.panel,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (context) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              alignment: Alignment.center,
+              child: Container(
+                width: 44,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: RiderPalette.muted.withValues(alpha: .35),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            const Text(
+              'Update Rider profile photo',
+              style: TextStyle(
+                color: RiderPalette.paper,
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Choose the photo senders and operations see during deliveries.',
+              style: TextStyle(color: RiderPalette.muted, height: 1.35),
+            ),
+            const SizedBox(height: 18),
+            _PhotoSourceTile(
+              icon: Icons.photo_camera_outlined,
+              title: 'Take photo',
+              subtitle: 'Use your camera',
+              onTap: () => Navigator.pop(context, 'camera'),
+            ),
+            const SizedBox(height: 10),
+            _PhotoSourceTile(
+              icon: Icons.photo_library_outlined,
+              title: 'Choose from library',
+              subtitle: 'Upload an existing photo',
+              onTap: () => Navigator.pop(context, 'library'),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _PhotoSourceTile extends StatelessWidget {
+  const _PhotoSourceTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: RiderPalette.background.withValues(alpha: .72),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: RiderPalette.blue.withValues(alpha: .14),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: RiderPalette.blue),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            color: RiderPalette.paper,
+                            fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 2),
+                    Text(subtitle,
+                        style: const TextStyle(color: RiderPalette.muted)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  color: RiderPalette.muted),
+            ],
+          ),
         ),
       ),
     );

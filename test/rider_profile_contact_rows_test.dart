@@ -50,4 +50,60 @@ void main() {
     expect(verification, contains('RiderPersonalDetailsView'));
     expect(verification, isNot(contains('AccountDetails')));
   });
+
+  test('Rider profile photo reads backend identity and avoids legacy picker UI',
+      () {
+    final details = File('lib/app/rider_shell/rider_profile_details_view.dart')
+        .readAsStringSync();
+    final profile =
+        File('lib/app/rider_shell/rider_profile_view.dart').readAsStringSync();
+
+    expect(details, contains("collection('riders')"));
+    expect(details, contains("collection('riderProfiles')"));
+    expect(details, contains("'profileThumbnailUrl'"));
+    expect(details, contains("'profilePhotoUrl'"));
+    expect(details, contains("'photoURL'"));
+    expect(details, contains('UpdateUserProfilePhoto'));
+    expect(
+        details, contains('This is the photo senders see during deliveries.'));
+    expect(details, contains('_showRiderPhotoSourceSheet'));
+    expect(details, isNot(contains('showImageBottomSheet')));
+    expect(details, isNot(contains("account/view/bottom_sheets/image_bs")));
+    expect(profile, contains('Icons.person_rounded'));
+    expect(profile,
+        isNot(contains('Text(\\n                            initials')));
+  });
+
+  test('Rider photo upload persists to Sender-visible delivery identity fields',
+      () {
+    final authBloc =
+        File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
+    final homeBloc =
+        File('lib/app/home/bloc/home_bloc.dart').readAsStringSync();
+
+    expect(authBloc, contains("'profileThumbnailUrl': thumbnailUrl"));
+    expect(authBloc, contains("'profilePhotoUrl': downloadUrl"));
+    expect(authBloc, contains(".collection('riders')"));
+    expect(authBloc, contains(".collection('riderProfiles')"));
+    expect(homeBloc.indexOf('profileThumbnailUrl'),
+        lessThan(homeBloc.indexOf('profilePhotoUrl')));
+    expect(homeBloc, contains(r"'photoURL': '$riderPhoto'"));
+  });
+
+  test('Rider username is editable and persisted to backend profile documents',
+      () {
+    final details = File('lib/app/rider_shell/rider_profile_details_view.dart')
+        .readAsStringSync();
+    final profile =
+        File('lib/app/rider_shell/rider_profile_view.dart').readAsStringSync();
+
+    expect(details, contains("_username.text"));
+    expect(details, contains("'handle': handle"));
+    expect(details, contains("'username': handle"));
+    expect(details, contains("collection('riders')"));
+    expect(details, contains("collection('riderProfiles')"));
+    expect(details, contains('Your Rider username is saved'));
+    expect(profile, contains("text('handle'"));
+    expect(profile, contains("text('username'"));
+  });
 }
