@@ -18,7 +18,7 @@ class RiderAppCheckStartup {
 
 Future<RiderAppCheckStartup> initializeRiderAppCheck() async {
   const siteKey =
-      String.fromEnvironment('CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY');
+      String.fromEnvironment('RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY');
   if (kIsWeb && siteKey.trim().isEmpty) {
     return const RiderAppCheckStartup.blocked(
       'Rider security could not start. App Check is missing for this build.',

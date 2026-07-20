@@ -1,0 +1,25 @@
+name: Deploy Rider Web
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-rider-web:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: flutter pub get
+      - run: flutter test test/canonical_rider_entry_point_test.dart test/security/rider_app_check_contract_test.dart
+      - run: node --test test/rider_deployment_manifest_test.js
+      - run: RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_rider_web.sh
+      - run: node scripts/rider_deployment_manifest.js verify
+      - run: firebase deploy --only hosting:rider --project circum-2797c
