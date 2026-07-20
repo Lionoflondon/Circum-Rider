@@ -50,21 +50,31 @@ test('wrong Hosting site blocks Rider deployment', () => {
 });
 
 test('Rider build identity is exact', () => {
-  assert.equal(validateIdentity('CIRCUM_BUILD_ID=rider-app\n'), true);
+  assert.equal(validateIdentity('CIRCUM_BUILD_ID=circum-rider-web\n'), true);
   assert.throws(() => validateIdentity('CIRCUM_BUILD_ID=sender-app'), /identity/);
 });
 
-test('Rider bundle markers must be present', () => {
+test('Rider Web bundle markers must be present', () => {
   assert.equal(
     validateBundle(
-      'const title = "Circum Rider";',
+      'const title = "Circum Rider"; const ref = "RDR-WEB-START-001";',
       "window.CIRCUM_RIDER_BUILD = 'rider-web-cache-v2';",
     ),
     true,
   );
   assert.throws(
-    () => validateBundle('const title = "Circum Rider";', 'window.OTHER_BUILD = true;'),
+    () => validateBundle(
+      'const title = "Circum Rider"; const ref = "RDR-WEB-START-001";',
+      'window.OTHER_BUILD = true;',
+    ),
     /bootstrap marker/,
+  );
+  assert.throws(
+    () => validateBundle(
+      'const title = "Circum Rider";',
+      "window.CIRCUM_RIDER_BUILD = 'rider-web-cache-v2';",
+    ),
+    /Rider Web entrypoint marker/,
   );
 });
 
@@ -74,9 +84,11 @@ test('manifest must match Rider target and remain fresh', () => {
     product: CONFIG.product,
     buildIdentity: CONFIG.buildIdentity,
     gitCommit: 'abc123',
+    gitCommitTimestamp: '2026-07-13T09:55:00.000Z',
     branch: 'main',
     firebaseProject: CONFIG.firebaseProject,
     hostingSiteId: CONFIG.hostingSiteId,
+    entrypoint: CONFIG.entrypoint,
     outputDirectory: CONFIG.outputDirectory,
   };
   assert.equal(

@@ -1,9 +1,58 @@
 {
   "products": {
     "rider-app": {
-      "description": "Independent Circum Rider application.",
+      "description": "Independent native Circum Rider application.",
+      "identity": "circum-rider-mobile",
+      "surface": "rider-mobile",
+      "hostingTarget": "native-mobile",
+      "buildDirectory": "android-ios-native-builds",
       "entrypoints": [
         "lib/main.dart"
+      ],
+      "output": "android-ios-native-builds",
+      "ownedPrefixes": [
+        ".github/",
+        "android/",
+        "assets/",
+        "docs/",
+        "ios/",
+        "lib/",
+        "linux/",
+        "macos/",
+        "pubspec.lock",
+        "pubspec.yaml",
+        "test/",
+        "windows/"
+      ],
+      "forbiddenImportFragments": [
+        "package:circum/",
+        "sender_mobile",
+        "web_sender",
+        "sender_app",
+        "lib/website",
+        "website/",
+        "public_web",
+        "admin_root",
+        "main_admin_web",
+        "main_public_web"
+      ],
+      "forbiddenContentFragments": [
+        "CIRCUM_BUILD_ID=sender-app",
+        "CIRCUM_BUILD_ID=circum-web",
+        "CIRCUM_ADMIN_PORTAL_CANONICAL_V1",
+        "sender-root",
+        "admin-root"
+      ]
+    },
+    "rider-web": {
+      "description": "Independent Circum Rider Web application.",
+      "identity": "circum-rider-web",
+      "surface": "rider-web",
+      "hostingTarget": "circum-rider-2797c",
+      "buildDirectory": "build/web",
+      "appCheckSecret": "RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY",
+      "entrypoints": [
+        "lib/main_rider_web.dart"
       ],
       "ownedPrefixes": [
         ".firebaserc",
@@ -48,7 +97,6 @@
         "sender-root",
         "admin-root"
       ],
-      "hostingTarget": "rider",
       "output": "build/web"
     }
   },

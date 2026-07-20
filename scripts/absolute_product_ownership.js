@@ -6,8 +6,20 @@ const cp = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'deploy-manifest.json'), 'utf8'));
-const productName = 'rider-app';
-const product = manifest.products[productName];
+const products = manifest.products || {};
+const productNames = Object.keys(products);
+const requiredProductFields = [
+  'description',
+  'identity',
+  'surface',
+  'hostingTarget',
+  'buildDirectory',
+  'entrypoints',
+  'ownedPrefixes',
+  'forbiddenImportFragments',
+  'forbiddenContentFragments',
+  'output',
+];
 
 function git(args) {
   return cp.execFileSync('git', args, {
@@ -58,7 +70,7 @@ function dartImports(file) {
   return imports;
 }
 
-function dependencyGraph() {
+function dependencyGraph(product) {
   const pending = [...(product.entrypoints || [])];
   const seen = new Set();
   while (pending.length > 0) {
@@ -87,13 +99,29 @@ function category(file) {
 }
 
 const files = listFiles();
-const unowned = files.filter((file) => !startsWithAny(file, product.ownedPrefixes));
+const ownedPrefixes = productNames.flatMap((name) => products[name].ownedPrefixes || []);
+const forbiddenImportFragments = [
+  ...new Set(productNames.flatMap((name) => products[name].forbiddenImportFragments || [])),
+];
+const forbiddenContentFragments = [
+  ...new Set(productNames.flatMap((name) => products[name].forbiddenContentFragments || [])),
+];
+const unowned = files.filter((file) => !startsWithAny(file, ownedPrefixes));
 const forbiddenImports = [];
 const forbiddenContent = [];
+const missingProductFields = [];
+
+for (const [name, product] of Object.entries(products)) {
+  for (const field of requiredProductFields) {
+    if (!(field in product) || product[field] == null || product[field] === '') {
+      missingProductFields.push(`${name}.${field}`);
+    }
+  }
+}
 
 for (const file of files.filter((candidate) => candidate.endsWith('.dart'))) {
   for (const imported of dartImports(file)) {
-    if (product.forbiddenImportFragments.some((fragment) => imported.specifier.includes(fragment))) {
+    if (forbiddenImportFragments.some((fragment) => imported.specifier.includes(fragment))) {
       forbiddenImports.push(`${file} imports ${imported.specifier}`);
     }
   }
@@ -108,12 +136,13 @@ for (const file of files.filter((candidate) =>
 )) {
   if (!fs.statSync(path.join(root, file)).isFile()) continue;
   const source = read(file);
-  for (const fragment of product.forbiddenContentFragments) {
+  for (const fragment of forbiddenContentFragments) {
     if (source.includes(fragment)) forbiddenContent.push(`${file} contains ${fragment}`);
   }
 }
 
-const graph = dependencyGraph();
+const graphs = {};
+for (const name of productNames) graphs[name] = [...dependencyGraph(products[name])].sort();
 const sharedByCategory = {
   projectFiles: 0,
   assets: 0,
@@ -131,11 +160,10 @@ const report = {
   ok: (manifest.sharedFiles || []).length === 0 &&
     unowned.length === 0 &&
     forbiddenImports.length === 0 &&
-    forbiddenContent.length === 0,
-  products: [productName],
-  dependencyGraph: {
-    [productName]: [...graph].sort(),
-  },
+    forbiddenContent.length === 0 &&
+    missingProductFields.length === 0,
+  products: productNames,
+  dependencyGraph: graphs,
   intersectionCount: 0,
   sharedFileCount: (manifest.sharedFiles || []).length,
   sharedByCategory,
@@ -146,6 +174,7 @@ const report = {
   },
   forbiddenImports,
   forbiddenContent,
+  missingProductFields,
 };
 
 console.log(JSON.stringify(report, null, 2));

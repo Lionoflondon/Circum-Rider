@@ -1,0 +1,42 @@
+name: RC1 Rider Release Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  web:
+    name: Build Rider Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: flutter pub get
+      - run: node --test test/rider_deployment_manifest_test.js
+      - run: RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_rider_web.sh
+      - run: node scripts/rider_deployment_manifest.js verify
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rider-web-release
+          path: build/web
+
+  rider-mobile:
+    name: Build Rider Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter build apk --release --target=lib/main.dart
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rider-android-release
+          path: build/app/outputs/flutter-apk/app-release.apk
