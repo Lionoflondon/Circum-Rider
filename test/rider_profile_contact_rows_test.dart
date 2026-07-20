@@ -74,17 +74,17 @@ void main() {
         isNot(contains('Text(\\n                            initials')));
   });
 
-  test('Rider photo upload persists to Sender-visible delivery identity fields',
-      () {
+  test('Rider photo upload uses backend-authoritative identity callable', () {
     final authBloc =
         File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
     final homeBloc =
         File('lib/app/home/bloc/home_bloc.dart').readAsStringSync();
 
-    expect(authBloc, contains("'profileThumbnailUrl': thumbnailUrl"));
-    expect(authBloc, contains("'profilePhotoUrl': downloadUrl"));
-    expect(authBloc, contains(".collection('riders')"));
-    expect(authBloc, contains(".collection('riderProfiles')"));
+    expect(authBloc, contains("httpsCallable('submitRiderDocument')"));
+    expect(authBloc, contains("'documentType': 'profile_photo'"));
+    expect(authBloc, contains("'fileBase64': base64Encode(processed.full)"));
+    expect(authBloc, contains("data['fileUrl']"));
+    expect(authBloc, isNot(contains('FirebaseStorage')));
     expect(homeBloc.indexOf('profileThumbnailUrl'),
         lessThan(homeBloc.indexOf('profilePhotoUrl')));
     expect(homeBloc, contains(r"'photoURL': '$riderPhoto'"));

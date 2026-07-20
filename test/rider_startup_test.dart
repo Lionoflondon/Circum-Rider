@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:circum_rider/main.dart';
+import 'package:circum_rider/main_rider_web.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'dart:io';
@@ -10,7 +10,7 @@ void main() {
       (tester) async {
     final completer = Completer<void>();
 
-    await tester.pumpWidget(RiderStartupApp(
+    await tester.pumpWidget(RiderWebStartupApp(
       initializer: () => completer.future,
       appBuilder: (_) => const MaterialApp(home: Text('Rider ready')),
     ));
@@ -28,7 +28,7 @@ void main() {
       (tester) async {
     var attempts = 0;
 
-    await tester.pumpWidget(RiderStartupApp(
+    await tester.pumpWidget(RiderWebStartupApp(
       timeout: const Duration(milliseconds: 10),
       initializer: () async {
         attempts += 1;
@@ -39,7 +39,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Something went wrong.'), findsOneWidget);
-    expect(find.text('Reference: RDR-START-001'), findsOneWidget);
+    expect(find.text('Reference: RDR-WEB-START-001'), findsOneWidget);
     final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
     expect(scaffold.backgroundColor, const Color(0xFF07090F));
 

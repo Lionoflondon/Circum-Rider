@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -80,20 +81,10 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
         'dateOfBirth': _dob.text.trim(),
         'gender': _gender.text.trim(),
         'homeAddress': _address.text.trim(),
-        'updatedAt': FieldValue.serverTimestamp(),
       };
-      final batch = FirebaseFirestore.instance.batch();
-      batch.set(
-          FirebaseFirestore.instance.collection('riders').doc(widget.user.uid),
-          patch,
-          SetOptions(merge: true));
-      batch.set(
-          FirebaseFirestore.instance
-              .collection('riderProfiles')
-              .doc(widget.user.uid),
-          patch,
-          SetOptions(merge: true));
-      await batch.commit();
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('updateRiderProfile')
+          .call(patch);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated.')),
@@ -690,16 +681,10 @@ class RiderVehicleManagerView extends StatelessWidget {
       if (active != null) 'vehicle': active,
       if (active != null) 'vehicleType': active['type'],
       if (active != null) 'vehicleRegistration': active['registration'],
-      'updatedAt': FieldValue.serverTimestamp(),
     };
-    final batch = FirebaseFirestore.instance.batch();
-    batch.set(FirebaseFirestore.instance.collection('riders').doc(userId),
-        patch, SetOptions(merge: true));
-    batch.set(
-        FirebaseFirestore.instance.collection('riderProfiles').doc(userId),
-        patch,
-        SetOptions(merge: true));
-    await batch.commit();
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('updateRiderProfile')
+        .call(patch);
   }
 
   Future<void> _setActive(

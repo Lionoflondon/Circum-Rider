@@ -240,38 +240,31 @@ class RiderCommunicationService {
   }
 
   Future<void> markNotificationRead(String id) =>
-      firestore.collection('notifications').doc(id).set({
-        'read': true,
-        'isRead': true,
-        'readAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      functions.httpsCallable('updateRiderNotificationState').call({
+        'notificationId': id,
+        'action': 'mark_read',
+      });
 
   Future<void> markAllNotificationsRead(Iterable<String> ids) async {
-    final batch = firestore.batch();
-    for (final id in ids) {
-      batch.set(
-        firestore.collection('notifications').doc(id),
-        {
-          'read': true,
-          'isRead': true,
-          'readAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-    }
-    await batch.commit();
+    final notificationIds = ids.where((id) => id.trim().isNotEmpty).toList();
+    if (notificationIds.isEmpty) return;
+    await functions.httpsCallable('updateRiderNotificationState').call({
+      'notificationIds': notificationIds,
+      'action': 'mark_read',
+    });
   }
 
   Future<void> archiveNotification(String id) =>
-      firestore.collection('notifications').doc(id).set({
-        'archived': true,
-        'archivedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      functions.httpsCallable('updateRiderNotificationState').call({
+        'notificationId': id,
+        'action': 'archive',
+      });
 
   Future<void> deleteNotification(String id) =>
-      firestore.collection('notifications').doc(id).set({
-        'deletedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      functions.httpsCallable('updateRiderNotificationState').call({
+        'notificationId': id,
+        'action': 'delete',
+      });
 }
 
 class RiderTypingController {

@@ -1,8 +1,8 @@
-import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -77,8 +77,8 @@ class RiderApplicationCentre extends StatefulWidget {
 
 class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
   final _db = FirebaseFirestore.instance;
+  final _functions = FirebaseFunctions.instanceFor(region: 'us-central1');
   final _auth = FirebaseAuth.instance;
-  final _storage = FirebaseStorage.instance;
   final _roth = const RiderRothOnboarding();
 
   String? _message;
@@ -482,16 +482,9 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     await _runGuard(() async {
       final data = {
         ...patch,
-        'updatedAt': FieldValue.serverTimestamp(),
+        'section': section,
       };
-      await _db
-          .collection('riders')
-          .doc(uid)
-          .set(data, SetOptions(merge: true));
-      await _db
-          .collection('riderProfiles')
-          .doc(uid)
-          .set(data, SetOptions(merge: true));
+      await _functions.httpsCallable('updateRiderProfile').call(data);
       await _saveSectionStatus(
         uid,
         section,
@@ -510,14 +503,13 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
         (vehicle) => vehicle['primary'] == true,
         orElse: () => capped.isEmpty ? const {} : capped.first,
       );
-      await _db.collection('riders').doc(uid).set({
+      await _functions.httpsCallable('updateRiderProfile').call({
         'vehicles': capped,
         if (primary.isNotEmpty) 'vehicle': primary,
         if (primary['type'] != null) 'vehicleType': primary['type'],
         if (primary['registration'] != null)
           'vehicleRegistration': primary['registration'],
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      });
       await _saveSectionStatus(
         uid,
         'vehicle_details',
@@ -545,103 +537,30 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
       }
       final bytes = await file.readAsBytes();
       final safeType = _normalise(documentType);
-      final documentId = '${uid}_$safeType';
-      final storagePath =
-          '${RiderApplicationCentre.storageRoot}/$uid/documents/$safeType/${DateTime.now().millisecondsSinceEpoch}_$name';
-      final metadata = SettableMetadata(
-        contentType: extension == 'pdf'
-            ? 'application/pdf'
-            : 'image/${extension == 'jpg' ? 'jpeg' : extension}',
-        customMetadata: {
-          'riderId': uid,
-          'section': section,
-          'documentType': safeType,
-          'source': 'rider_application_centre',
-        },
-      );
-      await _storage
-          .ref(storagePath)
-          .putData(Uint8List.fromList(bytes), metadata);
-      final documentRef = _db
-          .collection(RiderApplicationCentre.documentsCollection)
-          .doc(documentId);
-      final existing = await documentRef.get();
-      final existingData = existing.data();
-      await documentRef.set({
-        'riderId': uid,
-        'uid': uid,
+      await _functions.httpsCallable('submitRiderDocument').call({
         'section': section,
         'documentType': safeType,
         'displayName': _documentLabel(safeType),
-        'filename': name,
-        'storagePath': storagePath,
-        'status': 'under_review',
-        'verificationStatus': 'under_review',
-        'active': true,
-        'uploadedAt': FieldValue.serverTimestamp(),
-        'submittedAt': FieldValue.serverTimestamp(),
-        'reviewedAt': null,
-        'reviewedBy': null,
-        'rejectionReason': null,
-        'statusHistory': FieldValue.arrayUnion([
-          {
-            'status': 'under_review',
-            'actor': uid,
-            'note': 'Document uploaded by rider.',
-            'timestamp': Timestamp.now(),
-          }
-        ]),
-        if (existingData != null)
-          'archivedVersions': FieldValue.arrayUnion([
-            {
-              'storagePath': existingData['storagePath'],
-              'filename': existingData['filename'],
-              'status': existingData['status'],
-              'reviewedAt': existingData['reviewedAt'],
-              'reviewedBy': existingData['reviewedBy'],
-              'rejectionReason': existingData['rejectionReason'],
-              'archivedAt': Timestamp.now(),
-            }
-          ]),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+        'fileName': name,
+        'contentType': extension == 'pdf'
+            ? 'application/pdf'
+            : 'image/${extension == 'jpg' ? 'jpeg' : extension}',
+        'fileBase64': base64Encode(bytes),
+      });
       await _saveSectionStatus(
         uid,
         section,
         RiderApplicationSectionStatus.submitted,
       );
-      await _db.collection('riders').doc(uid).set({
-        'documentChecklist.$safeType': 'under_review',
-        if (section == 'vehicle_documents')
-          'vehicleRegistrationDocumentStatus': 'under_review',
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
     }, success: 'Document uploaded for Admin review.');
   }
 
   Future<void> _submitApplication(String uid) async {
     await _runGuard(() async {
-      await _db
-          .collection(RiderApplicationCentre.applicationCollection)
-          .doc(uid)
-          .set({
-        'riderId': uid,
-        'status': 'submitted',
-        'onboardingStatus': 'application_submitted',
-        'submittedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      await _db.collection('riders').doc(uid).set({
-        'onboardingStatus': 'application_submitted',
-        'applicationSubmittedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      await _db.collection(RiderApplicationCentre.auditCollection).add({
-        'riderId': uid,
-        'actor': uid,
-        'actorRole': 'rider',
-        'action': 'application_submitted',
-        'timestamp': FieldValue.serverTimestamp(),
+      await _functions.httpsCallable('submitRiderApplication').call({
+        'rightToWorkConfirmed': true,
+        'sealedPackageConsent': true,
+        'idempotencyKey': 'rider-application:$uid',
       });
     }, success: 'Application submitted for Admin review.');
   }
@@ -651,21 +570,9 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     String section,
     RiderApplicationSectionStatus status,
   ) async {
-    await _db
-        .collection(RiderApplicationCentre.applicationCollection)
-        .doc(uid)
-        .set({
-      'riderId': uid,
-      'sectionStatus.$section': status.storageValue,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await _db.collection(RiderApplicationCentre.auditCollection).add({
-      'riderId': uid,
-      'actor': uid,
-      'actorRole': 'rider',
-      'action': 'section_${status.storageValue}',
+    await _functions.httpsCallable('updateRiderApplicationSection').call({
       'section': section,
-      'timestamp': FieldValue.serverTimestamp(),
+      'status': status.storageValue,
     });
   }
 
