@@ -6,8 +6,9 @@ const path = require('path');
 const childProcess = require('child_process');
 
 const CONFIG = Object.freeze({
-  product: 'Circum Rider App',
-  buildIdentity: 'CIRCUM_BUILD_ID=rider-app',
+  product: 'Circum Rider Web',
+  buildIdentity: 'CIRCUM_BUILD_ID=circum-rider-web',
+  entrypoint: 'lib/main_rider_web.dart',
   firebaseProject: 'circum-2797c',
   hostingSiteId: 'circum-rider-2797c',
   targetAlias: 'rider',
@@ -67,6 +68,9 @@ function validateBundle(bundleSource, bootstrapSource) {
   if (!bootstrapSource.includes("window.CIRCUM_RIDER_BUILD = 'rider-web-cache-v2'")) {
     fail('Rider bootstrap marker is missing');
   }
+  if (!bundleSource.includes('RDR-WEB-START-001')) {
+    fail('Rider Web entrypoint marker is missing from the compiled bundle');
+  }
   if (!bundleSource.includes('Circum Rider')) {
     fail('Rider app marker is missing from the compiled bundle');
   }
@@ -98,7 +102,9 @@ function expectedManifest(root = process.cwd()) {
   return {
     product: CONFIG.product,
     buildIdentity: CONFIG.buildIdentity,
+    entrypoint: CONFIG.entrypoint,
     gitCommit: gitValue(['rev-parse', 'HEAD']),
+    gitCommitTimestamp: gitValue(['show', '-s', '--format=%cI', 'HEAD']),
     branch: gitValue(['branch', '--show-current']),
     firebaseProject: CONFIG.firebaseProject,
     hostingSiteId: CONFIG.hostingSiteId,

@@ -1882,7 +1882,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
           return _StateScaffold(
               title: terminal.replaceAll('_', ' '),
               message:
-                  'This delivery can no longer progress. The latest backend state has been restored.');
+                  'This delivery can no longer progress. The latest delivery state has been restored.');
         }
         scheduleMicrotask(() => _syncLiveTracking(live, restored));
         return _buildExperience(context, live);
@@ -1948,7 +1948,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _transitionError =
-          "Arrival detected, but backend confirmation failed. Tap I've Arrived to retry.");
+          "Arrival detected, but confirmation failed. Tap I've Arrived to retry.");
     } finally {
       if (mounted) setState(() => _arrivalTransitioning = false);
     }
@@ -2499,7 +2499,7 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
                           letterSpacing: .8)),
                   const SizedBox(height: 4),
                   Text(
-                    'Waiting timer is server-side - this screen mirrors the backend clock and won\'t drift if you background the app.',
+                    'Waiting timer is managed by Circum and stays accurate if you background the app.',
                     style: TextStyle(
                         color: Colors.white.withValues(alpha: 0.70),
                         fontSize: 12,
@@ -2519,7 +2519,7 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
                       _WaitingChargeLine(
                         label: noShowRecorded
                             ? 'Rider compensation recorded'
-                            : 'Rider compensation if backend approves',
+                            : 'Rider compensation if approved',
                         amount: riderCompensation,
                         currency: currency,
                         muted: !noShowRecorded,
@@ -2648,7 +2648,7 @@ class _WaitingCountdownRing extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 noShowRecorded
-                    ? 'backend recorded'
+                    ? 'recorded'
                     : noShowReady
                         ? 'no-show available'
                         : 'free wait remaining',
@@ -3663,7 +3663,7 @@ class _AcceptedBottomPanel extends StatelessWidget {
             : gift
                 ? 'Gift'
                 : 'Standard';
-    return '$service verification: ${methods.join(', ')}. Requirements are read from backend state.';
+    return '$service verification: ${methods.join(', ')}. Requirements are read from the delivery record.';
   }
 }
 

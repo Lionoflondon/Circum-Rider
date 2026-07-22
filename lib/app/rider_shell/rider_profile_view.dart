@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../authentication/bloc/auth_bloc.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../onboarding/rider_application_centre.dart';
+import '../onboarding/rider_stripe_payout_onboarding.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
 import '../ratings/rider_appreciation.dart';
@@ -28,6 +29,22 @@ class RiderProfileView extends StatefulWidget {
 
 class _RiderProfileViewState extends State<RiderProfileView> {
   int _reload = 0;
+  final _stripePayouts = const RiderStripePayoutOnboarding();
+  bool _openingPayoutSetup = false;
+
+  Future<void> _openPayoutSetup(Map<String, dynamic> profile) async {
+    final readiness = riderPayoutReadinessFrom(profile);
+    if (!riderPayoutCanContinue(readiness)) return;
+    setState(() => _openingPayoutSetup = true);
+    try {
+      await _stripePayouts.openPayoutSetup(
+        resume: readiness != RiderPayoutReadiness.setupRequired,
+      );
+      if (mounted) setState(() => _reload++);
+    } finally {
+      if (mounted) setState(() => _openingPayoutSetup = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -81,6 +98,8 @@ class _RiderProfileViewState extends State<RiderProfileView> {
                   profile: profile,
                   earnings: earnings,
                   onSelectTab: widget.onSelectTab,
+                  openingPayoutSetup: _openingPayoutSetup,
+                  onOpenPayoutSetup: () => _openPayoutSetup(profile),
                 );
               },
             );
@@ -97,12 +116,16 @@ class _RiderProfileScreen extends StatelessWidget {
     required this.profile,
     required this.earnings,
     required this.onSelectTab,
+    required this.openingPayoutSetup,
+    required this.onOpenPayoutSetup,
   });
 
   final User user;
   final Map<String, dynamic> profile;
   final Map<String, dynamic> earnings;
   final ValueChanged<int> onSelectTab;
+  final bool openingPayoutSetup;
+  final VoidCallback onOpenPayoutSetup;
 
   @override
   Widget build(BuildContext context) {
@@ -203,8 +226,21 @@ class _RiderProfileScreen extends StatelessWidget {
                             title: 'Payout Account',
                             description: data.stripeStatus,
                             statusColor: data.stripeStatusColor,
-                            onTap: () => onSelectTab(3),
+                            onTap: data.payoutsEnabled
+                                ? () => onSelectTab(3)
+                                : onOpenPayoutSetup,
                           ),
+                          if (!data.payoutsEnabled)
+                            _ProfileRow(
+                              icon: openingPayoutSetup
+                                  ? Icons.sync_rounded
+                                  : Icons.open_in_new_rounded,
+                              title: 'Complete payout setup',
+                              description:
+                                  'Secure setup with Stripe before payouts can be received',
+                              onTap:
+                                  openingPayoutSetup ? null : onOpenPayoutSetup,
+                            ),
                           _ProfileRow(
                             icon: Icons.savings_outlined,
                             title: 'Available Balance',
@@ -493,37 +529,23 @@ class _RiderProfileData {
   }
 
   String get stripeStatus {
-    final status = text('stripeConnectStatus',
-        fallback:
-            text('payoutStatus', fallback: text('stripeVerificationStatus')));
-    final normalised = status.toLowerCase();
-    if (normalised.isEmpty || normalised == 'disconnected') {
-      return 'Disconnected';
-    }
-    if (normalised.contains('restrict')) return 'Restricted';
-    if (normalised.contains('action') || normalised.contains('pending')) {
-      return 'Needs Verification';
-    }
-    if (normalised.contains('verified') ||
-        normalised.contains('active') ||
-        normalised.contains('connected')) {
-      return 'Connected';
-    }
-    return 'Needs Verification';
+    return riderPayoutReadinessLabel(riderPayoutReadinessFrom(profile));
   }
 
   Color get stripeStatusColor {
-    final value = stripeStatus.toLowerCase();
-    if (value.contains('connected') ||
-        value.contains('verified') ||
-        value.contains('active')) {
+    final readiness = riderPayoutReadinessFrom(profile);
+    if (readiness == RiderPayoutReadiness.payoutsEnabled) {
       return RiderPalette.green;
     }
-    if (value.contains('action') || value.contains('required')) {
+    if (readiness == RiderPayoutReadiness.actionRequired ||
+        readiness == RiderPayoutReadiness.restricted) {
       return RiderPalette.red;
     }
     return RiderPalette.amber;
   }
+
+  bool get payoutsEnabled =>
+      riderPayoutReadinessFrom(profile) == RiderPayoutReadiness.payoutsEnabled;
 
   String get availableBalance =>
       _money(earningsSummary?.available ?? moneyValue('availableBalance'));
@@ -659,7 +681,7 @@ class _ProfilePhoto extends StatelessWidget {
 
   final String imageUrl;
   final String initials;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -984,7 +1006,7 @@ class _ProfileRow extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.description,
-    required this.onTap,
+    this.onTap,
     this.statusColor,
     this.tone = _ProfileRowTone.normal,
   });
@@ -992,7 +1014,7 @@ class _ProfileRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String description;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final Color? statusColor;
   final _ProfileRowTone tone;
 
@@ -1003,6 +1025,7 @@ class _ProfileRow extends StatelessWidget {
         : statusColor ?? RiderPalette.blue;
     return Semantics(
       button: true,
+      enabled: onTap != null,
       label: '$title. $description',
       child: InkWell(
         onTap: onTap,

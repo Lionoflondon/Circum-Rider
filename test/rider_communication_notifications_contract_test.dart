@@ -97,6 +97,18 @@ void main() {
       expect(normalizeNotificationCategory('scheduled_pickup'), 'schedule');
       expect(normalizeNotificationCategory('new_delivery'), 'jobs');
     });
+
+    test('Rider push payload parsing is recoverable and diagnostic', () {
+      final messaging = File('lib/messaging.dart').readAsStringSync();
+
+      expect(messaging, contains('_decodeRiderCommunicationPayload'));
+      expect(messaging, contains('_logRecoverableRiderPushPayload'));
+      expect(messaging, contains('Recoverable Rider push payload discarded'));
+      expect(
+          messaging,
+          isNot(contains(
+              "Map<String, dynamic> msg = jsonDecode(message.data['data'])")));
+    });
   });
 
   group('Rider Notification Centre contract', () {

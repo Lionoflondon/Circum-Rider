@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:circum_rider/app/account/bloc/account_bloc.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -16,12 +16,12 @@ import 'app/authentication/bloc/auth_bloc.dart';
 import 'app/bottom_nav/bloc/navbar_bloc.dart';
 import 'app/home/bloc/home_bloc.dart';
 import 'app/history/bloc/history_bloc.dart';
+import 'app/onboarding/rider_stripe_return_view.dart';
 import 'app/rider_jobs/rider_job_offer_screen.dart';
 import 'app/security/rider_app_check.dart';
 import 'app/support/bloc/support_bloc.dart';
 import 'app/verification/bloc/verification_bloc.dart';
 import 'helper/notifications_helper.dart';
-import 'firebase_options.dart';
 import 'utils/nav/nav_key.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:bot_toast/bot_toast.dart';
@@ -41,9 +41,9 @@ void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
 
   if (kIsWeb) {
-    runApp(RiderStartupApp(
-      initializer: _initializeRiderWeb,
-      appBuilder: (_) => const CircumRider(),
+    runApp(const RiderStartupBlocked(
+      message:
+          'Open Rider in the supported Rider Web experience, or continue on Android or iOS.',
     ));
     return;
   }
@@ -110,18 +110,6 @@ void main() async {
   });
 }
 
-Future<void> _initializeRiderWeb() async {
-  try {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
-  } on FirebaseException catch (error) {
-    if (error.code != 'duplicate-app') rethrow;
-  }
-  final appCheckStartup = await initializeRiderAppCheck();
-  if (appCheckStartup.blockStartup) {
-    throw StateError(appCheckStartup.message);
-  }
-}
-
 class RiderStartupBlocked extends StatelessWidget {
   const RiderStartupBlocked({super.key, required this.message});
 
@@ -149,142 +137,6 @@ class RiderStartupBlocked extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class RiderStartupApp extends StatefulWidget {
-  const RiderStartupApp({
-    super.key,
-    required this.initializer,
-    required this.appBuilder,
-    this.timeout = const Duration(seconds: 20),
-  });
-
-  final Future<void> Function() initializer;
-  final WidgetBuilder appBuilder;
-  final Duration timeout;
-
-  @override
-  State<RiderStartupApp> createState() => _RiderStartupAppState();
-}
-
-class _RiderStartupAppState extends State<RiderStartupApp> {
-  Object? _error;
-  bool _ready = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _start();
-  }
-
-  Future<void> _start() async {
-    setState(() {
-      _error = null;
-      _ready = false;
-    });
-    try {
-      await widget.initializer().timeout(widget.timeout);
-      if (!mounted) return;
-      setState(() => _ready = true);
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _error = error);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_ready) return widget.appBuilder(context);
-    if (_error == null) return const _RiderStartupHold();
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(useMaterial3: true),
-      home: Scaffold(
-        backgroundColor: const Color(0xFF07090F),
-        body: SafeArea(
-          child: Center(
-            child: Semantics(
-              liveRegion: true,
-              label: _error == null
-                  ? 'Starting Circum Rider'
-                  : 'Circum Rider could not start',
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.error_outline_rounded,
-                        color: Color(0xFFF87171),
-                        size: 34,
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Something went wrong.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Color(0xFFF5F7FB),
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'We could not start Rider. Check your connection and try again.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Color(0xFF9CA8B8),
-                          height: 1.45,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Reference: RDR-START-001',
-                        style: TextStyle(
-                          color: Color(0xFF6B7280),
-                          fontSize: 12,
-                          fontFamily: 'monospace',
-                        ),
-                      ),
-                      const SizedBox(height: 22),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: FilledButton.icon(
-                          onPressed: _start,
-                          icon: const Icon(Icons.refresh_rounded),
-                          label: const Text('Retry'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: const Color(0xFF3B82F6),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RiderStartupHold extends StatelessWidget {
-  const _RiderStartupHold();
-
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: Color(0xFF131313),
       ),
     );
   }
@@ -331,34 +183,63 @@ class CircumRider extends StatelessWidget {
               routes: {
                 RiderJobOfferScreen.routeName: (_) =>
                     const RiderJobOfferScreen(),
+                '/rider/stripe/return': (routeContext) => RiderStripeReturnView(
+                      onContinue: () =>
+                          Navigator.of(routeContext).pushAndRemoveUntil(
+                        MaterialPageRoute(
+                            builder: (context) => const _RiderAppHome()),
+                        (route) => false,
+                      ),
+                    ),
+                '/rider/stripe/refresh': (routeContext) =>
+                    RiderStripeReturnView(
+                      refreshExpiredSession: true,
+                      onContinue: () =>
+                          Navigator.of(routeContext).pushAndRemoveUntil(
+                        MaterialPageRoute(
+                            builder: (context) => const _RiderAppHome()),
+                        (route) => false,
+                      ),
+                    ),
               },
-              home: WillPopScope(
-                onWillPop: () async =>
-                    !await NavKey.navKey.currentState!.maybePop(),
-                child: MultiBlocProvider(providers: [
-                  BlocProvider<AuthBloc>(
-                    create: (BuildContext context) =>
-                        AuthBloc()..add(SortSessionState()),
-                  ),
-                  BlocProvider(
-                    create: (context) => NavbarBloc(),
-                  ),
-                  BlocProvider(
-                    create: (context) => VerificationBloc(),
-                  ),
-                  BlocProvider<HomeBloc>.value(value: homeBloc),
-                  BlocProvider<HistoryBloc>(
-                    create: (BuildContext context) => HistoryBloc(),
-                  ),
-                  BlocProvider<SupportBloc>(
-                    create: (BuildContext context) => SupportBloc(),
-                  ),
-                  BlocProvider<AccountBloc>(
-                    create: (BuildContext context) => AccountBloc(),
-                  ),
-                ], child: const App()),
-              ));
+              home: const _RiderAppHome());
         });
+  }
+}
+
+class _RiderAppHome extends StatelessWidget {
+  const _RiderAppHome();
+
+  @override
+  Widget build(BuildContext context) {
+    return WillPopScope(
+      onWillPop: () async => !await NavKey.navKey.currentState!.maybePop(),
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider<AuthBloc>(
+            create: (BuildContext context) =>
+                AuthBloc()..add(SortSessionState()),
+          ),
+          BlocProvider(
+            create: (context) => NavbarBloc(),
+          ),
+          BlocProvider(
+            create: (context) => VerificationBloc(),
+          ),
+          BlocProvider<HomeBloc>.value(value: homeBloc),
+          BlocProvider<HistoryBloc>(
+            create: (BuildContext context) => HistoryBloc(),
+          ),
+          BlocProvider<SupportBloc>(
+            create: (BuildContext context) => SupportBloc(),
+          ),
+          BlocProvider<AccountBloc>(
+            create: (BuildContext context) => AccountBloc(),
+          ),
+        ],
+        child: const App(),
+      ),
+    );
   }
 }
 

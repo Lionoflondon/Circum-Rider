@@ -1,18 +1,18 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:circum_rider/extension/email_validation.dart';
 import 'package:circum_rider/helper/location_helper.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:circum_rider/utils/app_state/app_state.dart';
 // import 'package:geoflutterfire2/geoflutterfire2.dart';
-import 'package:geoflutterfire_plus/geoflutterfire_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image/image.dart' as image_lib;
@@ -21,7 +21,6 @@ import 'package:permission_handler/permission_handler.dart'
     as permission_handler;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../onboarding/rider_roth_onboarding.dart';
 import '../../rider_account/rider_account_state.dart';
@@ -33,13 +32,14 @@ part 'auth_state.dart';
 part 'signup_event.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
-  AuthBloc() : super(AuthState()) {
+  AuthBloc() : super(const AuthState()) {
     FirebaseAuth auth = FirebaseAuth.instance;
     // Init firestore and geoFlutterFire
     // final geo = GeoFlutterFire();
     LocationHelper locationHelper = LocationHelper();
 
     FirebaseFirestore db = FirebaseFirestore.instance;
+    final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
     const rothOnboarding = RiderRothOnboarding();
 
     void logRiderAuthError({
@@ -53,12 +53,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       required User user,
       required Map<String, dynamic> data,
     }) async {
-      await db.collection('riders').doc(user.uid).set({
-        'uid': user.uid,
+      await functions.httpsCallable('updateRiderProfile').call({
         'email': user.email,
-        'updatedAt': FieldValue.serverTimestamp(),
         ...data,
-      }, SetOptions(merge: true));
+      });
     }
 
     Future<String?> vehicleRegistrationDocumentStatus(String uid) async {
@@ -79,7 +77,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<AuthEvent>((event, emit) async {
       if (event is SortSessionState) {
-        final storage = FlutterSecureStorage();
+        const storage = FlutterSecureStorage();
         User? user = auth.currentUser;
 
         if (user != null) {
@@ -332,7 +330,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await upsertRiderOnboarding(user: user, data: {
             'phone': state.phoneNumber,
             'phoneVerified': true,
-            'phoneVerifiedAt': FieldValue.serverTimestamp(),
             'onboardingStatus': 'phone_verified',
           });
           await user.sendEmailVerification();
@@ -474,8 +471,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
         var completer = Completer<bool>();
 
-        String? _verificationId;
-        int? _resendToken;
+        String? verificationIdValue;
+        int? resendTokenValue;
 
         try {
           emit(state.copyWith(status: Status.loading));
@@ -484,16 +481,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             verificationCompleted: (_) {},
             verificationFailed: (_) {},
             codeSent: (String verificationId, int? resendToken) async {
-              _verificationId = verificationId;
-              _resendToken = resendToken;
+              verificationIdValue = verificationId;
+              resendTokenValue = resendToken;
               completer.complete(true);
             },
             codeAutoRetrievalTimeout: (_) {},
           );
           await completer.future;
           emit(state.copyWith(
-              verificationId: _verificationId,
-              resendToken: _resendToken,
+              verificationId: verificationIdValue,
+              resendToken: resendTokenValue,
               status: Status.success));
         } catch (e) {
           emit(state.copyWith(
@@ -512,10 +509,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             await auth.currentUser?.linkWithCredential(credential);
           } else {
             // Sign the user in (or link) with the credential
-            final UserCredential _userCredential =
+            final UserCredential userCredential =
                 await auth.signInWithCredential(credential);
 
-            if (_userCredential.user?.displayName == null) {
+            if (userCredential.user?.displayName == null) {
               if (state.oAuthFirstName == null) {
                 emit(state.copyWith(
                     authenticatedStatus: AuthenticatedStatus.incompleteData,
@@ -529,16 +526,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                     username: "${state.oAuthFirstName} ${state.oAuthLastName}",
                     profilePhoto: state.oAuthPhotoURL,
                     email: state.oAuthEmail,
-                    phoneNumber: _userCredential.user?.phoneNumber,
+                    phoneNumber: userCredential.user?.phoneNumber,
                     currentState: AppState.authenticated));
               }
             } else {
               emit(state.copyWith(
                   status: Status.success,
-                  username: _userCredential.user?.displayName,
-                  profilePhoto: _userCredential.user?.photoURL,
-                  email: _userCredential.user?.email,
-                  phoneNumber: _userCredential.user?.phoneNumber,
+                  username: userCredential.user?.displayName,
+                  profilePhoto: userCredential.user?.photoURL,
+                  email: userCredential.user?.email,
+                  phoneNumber: userCredential.user?.phoneNumber,
                   currentState: AppState.authenticated));
             }
           }
@@ -570,63 +567,32 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           //   await user!.updatePhotoURL(state.oAuthPhotoURL!);
           // }
 
-          final documentReference = db.collection('riders').doc(user.uid);
           final SharedPreferences prefs = await SharedPreferences.getInstance();
 
           await prefs.setString('riderId', user.uid);
 
-          // Get the document snapshot
-          final documentSnapshot = await documentReference.get();
-
-          if (documentSnapshot.exists) {
-            // Document exists
-            await db.collection("riders").doc(user.uid).update({
-              'name': event.username,
-              'phone': user.phoneNumber ?? state.phoneNumber,
-              'phoneVerified': state.isPhoneVerified,
-              if (state.isPhoneVerified)
-                'phoneVerifiedAt': FieldValue.serverTimestamp(),
-              'status': 'offline',
-              'profileCompletionStatus': 'complete',
-              'onboardingStatus': 'profile_complete',
-              'vehicle': {
-                'type': state.vehicleType?.trim(),
-                'makeModel': state.vehicleMakeModel?.trim(),
-                'colour': state.vehicleColour?.trim(),
-                'plateNumber': state.vehicleRegistration?.trim(),
-              },
-              'vehicleType': state.vehicleType?.trim(),
-              'vehicleMakeModel': state.vehicleMakeModel?.trim(),
-              'vehicleColour': state.vehicleColour?.trim(),
-              'vehicleRegistration': state.vehicleRegistration?.trim(),
+          await upsertRiderOnboarding(user: user, data: {
+            'fullName': event.username,
+            'name': event.username,
+            'phoneNumber': user.phoneNumber ?? state.phoneNumber,
+            'phone': user.phoneNumber ?? state.phoneNumber,
+            'phoneVerified': state.isPhoneVerified,
+            'status': 'offline',
+            'profileCompletionStatus': 'complete',
+            'onboardingStatus': 'profile_complete',
+            'vehicle': {
+              'type': state.vehicleType?.trim(),
+              'makeModel': state.vehicleMakeModel?.trim(),
+              'colour': state.vehicleColour?.trim(),
               'plateNumber': state.vehicleRegistration?.trim(),
-              'typeOfVehicle': state.vehicleType?.trim(),
-            });
-          } else {
-            // Document does not exist
-            await db.collection("riders").doc(user.uid).set({
-              'name': event.username,
-              'phone': user.phoneNumber ?? state.phoneNumber,
-              'phoneVerified': state.isPhoneVerified,
-              if (state.isPhoneVerified)
-                'phoneVerifiedAt': FieldValue.serverTimestamp(),
-              'status': 'offline',
-              'profileCompletionStatus': 'complete',
-              'onboardingStatus': 'profile_complete',
-              'vehicle': {
-                'type': state.vehicleType?.trim(),
-                'makeModel': state.vehicleMakeModel?.trim(),
-                'colour': state.vehicleColour?.trim(),
-                'plateNumber': state.vehicleRegistration?.trim(),
-              },
-              'vehicleType': state.vehicleType?.trim(),
-              'vehicleMakeModel': state.vehicleMakeModel?.trim(),
-              'vehicleColour': state.vehicleColour?.trim(),
-              'vehicleRegistration': state.vehicleRegistration?.trim(),
-              'plateNumber': state.vehicleRegistration?.trim(),
-              'typeOfVehicle': state.vehicleType?.trim(),
-            });
-          }
+            },
+            'vehicleType': state.vehicleType?.trim(),
+            'vehicleMakeModel': state.vehicleMakeModel?.trim(),
+            'vehicleColour': state.vehicleColour?.trim(),
+            'vehicleRegistration': state.vehicleRegistration?.trim(),
+            'plateNumber': state.vehicleRegistration?.trim(),
+            'typeOfVehicle': state.vehicleType?.trim(),
+          });
 
           await rothOnboarding.ensureWalletForRider(
             riderId: user.uid,
@@ -721,25 +687,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'timestamp', locationData.timestamp.toIso8601String());
           await prefs.setDouble('altitude', locationData.altitude);
 
-          GeoFirePoint myLocation = GeoFirePoint(
-              GeoPoint(locationData.latitude, locationData.longitude));
           emit(state.copyWith(
             locationData: locationData,
             hasLocationPermission: true,
             isLocationEnabled: true,
           ));
-          await db.collection("riders").doc(user?.uid).update({
-            'position': myLocation.data,
+          await functions.httpsCallable('updateRiderPresence').call({
+            'location': {
+              'latitude': locationData.latitude,
+              'longitude': locationData.longitude,
+              'accuracy': locationData.accuracy,
+              'timestamp': locationData.timestamp.toIso8601String(),
+            },
+            'locationEnabled': true,
+          });
+          await upsertRiderOnboarding(user: user, data: {
             'locationEnabled': true,
             'profileCompletionStatus': 'complete',
             'onboardingStatus': 'profile_complete',
-            'submittedAt': FieldValue.serverTimestamp(),
-          });
-          await db.collection('riderOnboardingEvents').add({
-            'riderId': user.uid,
-            'eventType': 'profile_complete',
-            'timestamp': FieldValue.serverTimestamp(),
-            'statusAfterEvent': 'profile_complete',
           });
           await rothOnboarding.ensureWalletForRider(
             riderId: user.uid,
@@ -756,20 +721,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       if (event is OpenSettingsApp) {
         try {
-          final User? user = auth.currentUser;
           Position locationData = await locationHelper.enableLocation();
 
-          GeoFirePoint myLocation = GeoFirePoint(
-              GeoPoint(locationData.latitude, locationData.longitude));
           emit(state.copyWith(
               locationData: locationData,
               hasLocationPermission: true,
               isLocationEnabled: true,
               status: Status.locationRequested));
-          await db
-              .collection("riders")
-              .doc(user?.uid)
-              .update({'position': myLocation.data});
+          await functions.httpsCallable('updateRiderPresence').call({
+            'location': {
+              'latitude': locationData.latitude,
+              'longitude': locationData.longitude,
+              'accuracy': locationData.accuracy,
+              'timestamp': locationData.timestamp.toIso8601String(),
+            },
+          });
         } catch (e) {
           if (e == 'Location permissions are permanently denied') {
             await Geolocator.openLocationSettings();
@@ -789,13 +755,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             'locationEnabled': event.locationEnabled,
             'profileCompletionStatus': 'complete',
             'onboardingStatus': 'profile_complete',
-            'submittedAt': FieldValue.serverTimestamp(),
-          });
-          await db.collection('riderOnboardingEvents').add({
-            'riderId': user.uid,
-            'eventType': 'profile_complete',
-            'timestamp': FieldValue.serverTimestamp(),
-            'statusAfterEvent': 'profile_complete',
           });
           await rothOnboarding.ensureWalletForRider(
             riderId: user.uid,
@@ -858,11 +817,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         case 'drivers license':
           return 'driving_licence';
         case 'international passport':
-          return 'identity_document';
+          return 'identity';
         case 'work permit':
           return 'right_to_work';
         case 'vehicle registration':
-          return 'vehicle_registration';
+          return 'vehicle_insurance';
         default:
           return idType.trim().toLowerCase().replaceAll(' ', '_');
       }
@@ -883,88 +842,30 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
     }
 
-    String riderStatusFieldForDocumentKey(String key) {
-      switch (key) {
-        case 'driving_licence':
-          return 'drivingLicenceStatus';
-        case 'identity_document':
-          return 'identityDocumentStatus';
-        case 'right_to_work':
-          return 'rightToWorkStatus';
-        case 'vehicle_registration':
-          return 'vehicleRegistrationDocumentStatus';
-        default:
-          return '${key}Status';
-      }
+    String contentTypeForPath(String path) {
+      final extension = path.split('.').last.toLowerCase();
+      if (extension == 'pdf') return 'application/pdf';
+      if (extension == 'png') return 'image/png';
+      if (extension == 'webp') return 'image/webp';
+      return 'image/jpeg';
     }
 
-    Future<void> writeRiderDocumentRecord({
+    Future<void> submitRiderDocumentFile({
       required String uid,
       required String idType,
-      String? frontImageURL,
-      String? backImageURL,
-      String? imageURL,
+      required String imagePath,
+      String? side,
     }) async {
       final key = documentKeyForIdType(idType);
-      final documentRef = db.collection('riderDocuments').doc('${uid}_$key');
-      final existing = await documentRef.get();
-      final existingData = existing.data();
-      final archivedVersion = existingData == null
-          ? null
-          : {
-              'frontImageURL': existingData['frontImageURL'],
-              'backImageURL': existingData['backImageURL'],
-              'downloadUrl': existingData['downloadUrl'],
-              'imageURL': existingData['imageURL'],
-              'status': existingData['status'],
-              'verificationStatus': existingData['verificationStatus'],
-              'uploadedAt': existingData['uploadedAt'],
-              'reviewedAt': existingData['reviewedAt'],
-              'reviewedBy': existingData['reviewedBy'],
-              'reviewer': existingData['reviewer'],
-              'rejectionReason': existingData['rejectionReason'],
-              'expiryDate': existingData['expiryDate'],
-              'archivedAt': Timestamp.now(),
-            };
       final displayName = documentDisplayName(idType);
-      final statusEntry = {
-        'status': 'under_review',
-        'timestamp': Timestamp.now(),
-        'actor': uid,
-        'note': '$displayName uploaded by rider.',
-      };
-      await documentRef.set({
-        'riderId': uid,
-        'uid': uid,
+      final bytes = await File(imagePath).readAsBytes();
+      await functions.httpsCallable('submitRiderDocument').call({
         'documentType': key,
-        'type': displayName,
-        'displayName': displayName,
-        if (frontImageURL != null) 'frontImageURL': frontImageURL,
-        if (backImageURL != null) 'backImageURL': backImageURL,
-        if (imageURL != null) 'downloadUrl': imageURL,
-        if (imageURL != null) 'imageURL': imageURL,
-        'status': 'under_review',
-        'verificationStatus': 'under_review',
-        'active': true,
-        'uploadedAt': FieldValue.serverTimestamp(),
-        'uploadTimestamp': FieldValue.serverTimestamp(),
-        'reviewedAt': null,
-        'reviewTimestamp': null,
-        'reviewedBy': null,
-        'reviewer': null,
-        'rejectionReason': null,
-        'expiryDate': null,
-        'statusHistory': FieldValue.arrayUnion([statusEntry]),
-        if (archivedVersion != null)
-          'archivedVersions': FieldValue.arrayUnion([archivedVersion]),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      final statusField = riderStatusFieldForDocumentKey(key);
-      await db.collection('riders').doc(uid).set({
-        statusField: 'under_review',
-        'documentChecklist.$key': 'under_review',
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+        'displayName': side == null ? displayName : '$displayName $side',
+        'fileName': imagePath.split(Platform.pathSeparator).last,
+        'contentType': contentTypeForPath(imagePath),
+        'fileBase64': base64Encode(bytes),
+      });
     }
 
     on<SubmitVerificationDocuments>(
@@ -976,28 +877,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           try {
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.loading));
-            final frontImageURL =
-                await uploadImage(imagePath: event.frontImagePath!);
-            final backImageURL =
-                await uploadImage(imagePath: event.backImagePath!);
-
-            final verificationData = {
-              'frontImageURL': frontImageURL,
-              'backImageURL': backImageURL,
-              'idType': event.idType,
-              'updateAt': DateTime.now()
-            };
-
-            await db.collection("riders").doc(user?.uid).update({
-              'verificationData': verificationData,
-            });
             final uid = user?.uid;
             if (uid != null) {
-              await writeRiderDocumentRecord(
+              await submitRiderDocumentFile(
                 uid: uid,
                 idType: event.idType!,
-                frontImageURL: frontImageURL,
-                backImageURL: backImageURL,
+                imagePath: event.frontImagePath!,
+                side: 'front',
+              );
+              await submitRiderDocumentFile(
+                uid: uid,
+                idType: event.idType!,
+                imagePath: event.backImagePath!,
+                side: 'back',
               );
             }
 
@@ -1013,24 +905,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           try {
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.loading));
-            final imageURL =
-                await uploadImage(imagePath: event.workPermitPath!);
-
-            final verificationData = {
-              'imageURL': imageURL,
-              'idType': event.idType,
-              'updateAt': DateTime.now()
-            };
-
-            await db.collection("riders").doc(user?.uid).update({
-              'verificationData': verificationData,
-            });
             final uid = user?.uid;
             if (uid != null) {
-              await writeRiderDocumentRecord(
+              await submitRiderDocumentFile(
                 uid: uid,
                 idType: event.idType!,
-                imageURL: imageURL,
+                imagePath: event.workPermitPath!,
               );
             }
             emit(state.copyWith(
@@ -1045,76 +925,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           try {
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.loading));
-            final imageURL =
-                await uploadImage(imagePath: event.workPermitPath!);
             final uid = user?.uid;
             if (uid == null) {
               emit(state.copyWith(
                   verificationUploadStatus: VerificationUploadStatus.failure));
               return;
             }
-            final documentRef = db
-                .collection('riderDocuments')
-                .doc('${uid}_vehicle_registration');
-            final existing = await documentRef.get();
-            final existingData = existing.data();
-            final archivedVersion = existingData == null
-                ? null
-                : {
-                    'downloadUrl': existingData['downloadUrl'],
-                    'imageURL': existingData['imageURL'],
-                    'status': existingData['status'],
-                    'verificationStatus': existingData['verificationStatus'],
-                    'uploadedAt': existingData['uploadedAt'],
-                    'reviewedAt': existingData['reviewedAt'],
-                    'reviewedBy': existingData['reviewedBy'],
-                    'reviewer': existingData['reviewer'],
-                    'rejectionReason': existingData['rejectionReason'],
-                    'expiryDate': existingData['expiryDate'],
-                    'archivedAt': Timestamp.now(),
-                  };
-            final statusEntry = {
-              'status': 'under_review',
-              'timestamp': Timestamp.now(),
-              'actor': uid,
-              'note': 'Vehicle registration document uploaded by rider.',
-            };
-            final data = {
-              'riderId': uid,
-              'uid': uid,
-              'documentType': 'vehicle_registration',
-              'type': 'Vehicle Registration (V5C/MOT)',
-              'displayName': 'Vehicle Registration (V5C/MOT)',
-              'downloadUrl': imageURL,
-              'imageURL': imageURL,
-              'status': 'under_review',
-              'verificationStatus': 'under_review',
-              'active': true,
-              'uploadedAt': FieldValue.serverTimestamp(),
-              'uploadTimestamp': FieldValue.serverTimestamp(),
-              'reviewedAt': null,
-              'reviewTimestamp': null,
-              'reviewedBy': null,
-              'reviewer': null,
-              'rejectionReason': null,
-              'expiryDate': null,
-              'statusHistory': FieldValue.arrayUnion([statusEntry]),
-              if (archivedVersion != null)
-                'archivedVersions': FieldValue.arrayUnion([archivedVersion]),
-              'updatedAt': FieldValue.serverTimestamp(),
-            };
-            await documentRef.set(data, SetOptions(merge: true));
-            await db.collection('riders').doc(uid).set({
-              'vehicleRegistrationDocument': {
-                'documentId': documentRef.id,
-                'downloadUrl': imageURL,
-                'status': 'under_review',
-                'uploadedAt': FieldValue.serverTimestamp(),
-              },
-              'vehicleRegistrationDocumentStatus': 'under_review',
-              'documentChecklist.vehicle_registration': 'under_review',
-              'updatedAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
+            await submitRiderDocumentFile(
+              uid: uid,
+              idType: event.idType!,
+              imagePath: event.workPermitPath!,
+            );
             emit(state.copyWith(
                 vehicleRegistrationDocumentStatus: 'under_review',
                 verificationUploadStatus: VerificationUploadStatus.uploaded));
@@ -1147,65 +968,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 errorMessage: 'Choose a JPG, PNG or HEIC profile photo.'));
             return;
           }
-
-          final storageRef = FirebaseStorage.instance;
-          final profilePath = 'rider-profiles/${user.uid}/profile.jpg';
-          final thumbnailPath = 'rider-profiles/${user.uid}/thumbnail.jpg';
-          final current =
-              await db.collection('riderProfiles').doc(user.uid).get();
-          final previousVersion =
-              (current.data()?['profilePhotoVersion'] as num?)?.toInt() ?? 0;
-          final version = previousVersion + 1;
-          final metadata = SettableMetadata(
-            contentType: 'image/jpeg',
-            cacheControl: 'public,max-age=300',
-            customMetadata: {
-              'riderId': user.uid,
-              'source': 'rider_profile_photo',
-              'version': '$version',
-            },
-          );
-          final profileRef = storageRef.ref(profilePath);
-          final thumbnailRef = storageRef.ref(thumbnailPath);
-          await profileRef.putData(processed.full, metadata);
-          await thumbnailRef.putData(processed.thumbnail, metadata);
-          final downloadUrl = await profileRef.getDownloadURL();
-          final thumbnailUrl = await thumbnailRef.getDownloadURL();
-
-          await user.updatePhotoURL(downloadUrl);
-          final patch = {
-            'photoURL': downloadUrl,
-            'photoUrl': downloadUrl,
-            'profilePhoto': downloadUrl,
-            'profilePhotoUrl': downloadUrl,
-            'profileThumbnailUrl': thumbnailUrl,
-            'profilePhotoPath': profilePath,
-            'profileThumbnailPath': thumbnailPath,
-            'profilePhotoVersion': version,
-            'profilePhotoMetadata': {
-              'contentType': 'image/jpeg',
-              'fullBytes': processed.full.length,
-              'thumbnailBytes': processed.thumbnail.length,
-              'fullWidth': processed.fullSize,
-              'thumbnailWidth': processed.thumbnailSize,
-              'sourceMimeType': event.mimeType ?? '',
-            },
-            'photoPath': profilePath,
-            'photoUpdatedAt': FieldValue.serverTimestamp(),
-            'profilePhotoUpdatedAt': FieldValue.serverTimestamp(),
-            'profilePhotoUploadedAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          };
-          await db
-              .collection('riders')
-              .doc(user.uid)
-              .set(patch, SetOptions(merge: true));
-          await db
-              .collection('riderProfiles')
-              .doc(user.uid)
-              .set(patch, SetOptions(merge: true));
+          final result =
+              await functions.httpsCallable('submitRiderDocument').call({
+            'documentType': 'profile_photo',
+            'displayName': 'Rider profile photo',
+            'fileName': 'profile.jpg',
+            'contentType': 'image/jpeg',
+            'fileBase64': base64Encode(processed.full),
+          });
+          final fileUrl = '${result.data['fileUrl'] ?? ''}'.trim();
+          if (fileUrl.isNotEmpty) {
+            await user.updatePhotoURL(fileUrl);
+          }
           emit(state.copyWith(
-              profilePhoto: thumbnailUrl,
+              profilePhoto: fileUrl.isEmpty ? state.profilePhoto : fileUrl,
               errorMessage: 'Profile photo updated.'));
         } catch (_) {
           emit(state.copyWith(
@@ -1219,43 +995,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         try {
           final user = auth.currentUser;
           if (user == null) return;
-          const empty = '';
-          final profilePath = 'rider-profiles/${user.uid}/profile.jpg';
-          final thumbnailPath = 'rider-profiles/${user.uid}/thumbnail.jpg';
-          await FirebaseStorage.instance
-              .ref(profilePath)
-              .delete()
-              .catchError((_) {});
-          await FirebaseStorage.instance
-              .ref(thumbnailPath)
-              .delete()
-              .catchError((_) {});
+          await functions.httpsCallable('removeRiderProfilePhoto').call();
           await user.updatePhotoURL(null);
-          final patch = {
-            'photoURL': FieldValue.delete(),
-            'photoUrl': FieldValue.delete(),
-            'photoPath': FieldValue.delete(),
-            'profilePhotoUrl': FieldValue.delete(),
-            'profileThumbnailUrl': FieldValue.delete(),
-            'profilePhotoPath': FieldValue.delete(),
-            'profileThumbnailPath': FieldValue.delete(),
-            'profilePhotoMetadata': FieldValue.delete(),
-            'profilePhoto': FieldValue.delete(),
-            'profilePhotoVersion': FieldValue.increment(1),
-            'photoUpdatedAt': FieldValue.serverTimestamp(),
-            'profilePhotoUpdatedAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          };
-          await db
-              .collection('riders')
-              .doc(user.uid)
-              .set(patch, SetOptions(merge: true));
-          await db
-              .collection('riderProfiles')
-              .doc(user.uid)
-              .set(patch, SetOptions(merge: true));
           emit(state.copyWith(
-              profilePhoto: empty, errorMessage: 'Profile photo removed.'));
+              profilePhoto: '', errorMessage: 'Profile photo removed.'));
         } catch (e) {
           emit(state.copyWith(
               errorMessage: 'Profile photo could not be removed.'));
@@ -1394,13 +1137,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'vehicleRegistration': vehicleRegistration,
               'plateNumber': vehicleRegistration,
               'typeOfVehicle': state.vehicleType?.trim(),
-              'createdAt': FieldValue.serverTimestamp(),
-            });
-            await db.collection('riderOnboardingEvents').add({
-              'riderId': user.uid,
-              'eventType': 'account_created',
-              'timestamp': FieldValue.serverTimestamp(),
-              'statusAfterEvent': 'account_created',
             });
             await rothOnboarding.ensureWalletForRider(
               riderId: user.uid,
@@ -1444,20 +1180,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       (event, emit) async {
         try {
           User? user = auth.currentUser;
+          if (user == null) return;
           FlutterSecureStorage storage = const FlutterSecureStorage();
-          final documentReference = db.collection('riders').doc(user?.uid);
-          // Get the document snapshot
-          final documentSnapshot = await documentReference.get();
-
-          if (documentSnapshot.exists) {
-            await db.collection("riders").doc(user!.uid).update({
-              'phone': event.value,
-            });
-
-            await storage.write(key: 'phone', value: event.value);
-
-            emit(state.copyWith(phoneNumber: event.value));
-          }
+          await upsertRiderOnboarding(user: user, data: {
+            'phone': event.value,
+            'phoneNumber': event.value,
+          });
+          await storage.write(key: 'phone', value: event.value);
+          emit(state.copyWith(phoneNumber: event.value));
         } catch (_) {
           // Profile update failures are surfaced by the next account refresh.
         }
@@ -1472,7 +1202,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await upsertRiderOnboarding(user: user, data: {
             'onboardingStatus': 'email_verified',
             'emailVerified': true,
-            'emailVerifiedAt': FieldValue.serverTimestamp(),
           });
         }
         if (user != null &&
@@ -1600,23 +1329,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       fullSize: full.width,
       thumbnailSize: thumbnail.width,
     );
-  }
-
-  Future<String> uploadImage({required String imagePath}) async {
-    try {
-      final fileName = Uuid();
-      File imageFile = File(imagePath);
-
-      final storageRef = FirebaseStorage.instance;
-      await storageRef.ref('verification-photos/$fileName').putFile(imageFile);
-      final downloadUrl = await storageRef
-          .ref('verification-photos/$fileName')
-          .getDownloadURL();
-
-      return downloadUrl;
-    } catch (_) {
-      throw 'Something went wrong uploading image';
-    }
   }
 }
 

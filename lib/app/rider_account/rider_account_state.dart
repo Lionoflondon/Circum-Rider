@@ -248,7 +248,7 @@ class RiderApprovalProgress {
             .contains(_normalised(rider['rothOnboardingStatus']));
     final payoutSetup = rider['payoutSetupComplete'] == true ||
         rider['stripeConnectReady'] == true ||
-        const {'ready', 'verified', 'active'}
+        const {'ready', 'verified', 'active', 'payouts_enabled'}
             .contains(_normalised(rider['stripeConnectStatus']));
 
     return RiderApprovalProgress(

@@ -126,13 +126,16 @@ void main() {
       expect(applicationCentre, contains('Approved'));
     });
 
-    test('Application Centre stores documents securely for Admin review', () {
-      expect(applicationCentre, contains("storageRoot = 'rider-applications'"));
-      expect(applicationCentre, contains('storagePath'));
+    test('Application Centre submits documents through backend authority', () {
+      expect(
+          applicationCentre, contains("httpsCallable('submitRiderDocument')"));
+      expect(applicationCentre, contains("'fileBase64': base64Encode(bytes)"));
+      expect(applicationCentre,
+          contains("httpsCallable('updateRiderApplicationSection')"));
       expect(applicationCentre, contains('riderDocuments'));
-      expect(applicationCentre, contains('statusHistory'));
-      expect(applicationCentre, contains('archivedVersions'));
       expect(applicationCentre, contains('under_review'));
+      expect(applicationCentre, isNot(contains('FirebaseStorage')));
+      expect(applicationCentre, isNot(contains('storagePath')));
       expect(applicationCentre, isNot(contains('publicDownloadUrl')));
     });
 
@@ -150,8 +153,10 @@ void main() {
       expect(
           applicationCentre, isNot(contains("'approvalStatus': 'approved'")));
       expect(applicationCentre, isNot(contains("'approvedAt'")));
-      expect(applicationCentre, contains('application_submitted'));
-      expect(applicationCentre, contains('riderApplicationAudit'));
+      expect(applicationCentre,
+          contains("httpsCallable('submitRiderApplication')"));
+      expect(applicationCentre,
+          contains("httpsCallable('updateRiderApplicationSection')"));
     });
   });
 }

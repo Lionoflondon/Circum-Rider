@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../rider_design/rider_ui.dart';
+import '../../onboarding/rider_stripe_payout_onboarding.dart';
 import '../bloc/account_bloc.dart';
 
 class EarningsView extends StatefulWidget {
@@ -20,6 +21,8 @@ class EarningsView extends StatefulWidget {
 
 class _EarningsViewState extends State<EarningsView> {
   late Future<Map<String, dynamic>> _summary;
+  final _stripePayouts = const RiderStripePayoutOnboarding();
+  bool _openingPayoutSetup = false;
 
   @override
   void initState() {
@@ -35,6 +38,16 @@ class _EarningsViewState extends State<EarningsView> {
         .httpsCallable('getRiderEarningsSummary')
         .call();
     return Map<String, dynamic>.from(result.data as Map);
+  }
+
+  Future<void> _openPayoutSetup({required bool resume}) async {
+    setState(() => _openingPayoutSetup = true);
+    try {
+      await _stripePayouts.openPayoutSetup(resume: resume);
+      if (mounted) setState(() => _summary = _loadSummary());
+    } finally {
+      if (mounted) setState(() => _openingPayoutSetup = false);
+    }
   }
 
   @override
@@ -108,6 +121,8 @@ class _EarningsViewState extends State<EarningsView> {
                       transactions: transactions,
                       onRefresh: () =>
                           setState(() => _summary = _loadSummary()),
+                      openingPayoutSetup: _openingPayoutSetup,
+                      onOpenPayoutSetup: _openPayoutSetup,
                     );
                   },
                 );
@@ -135,6 +150,8 @@ class _EarningsContent extends StatelessWidget {
     required this.payouts,
     required this.transactions,
     required this.onRefresh,
+    required this.openingPayoutSetup,
+    required this.onOpenPayoutSetup,
   });
 
   final Map<String, dynamic> summary;
@@ -142,6 +159,8 @@ class _EarningsContent extends StatelessWidget {
   final List<Map<String, dynamic>> payouts;
   final List<Map<String, dynamic>> transactions;
   final VoidCallback onRefresh;
+  final bool openingPayoutSetup;
+  final Future<void> Function({required bool resume}) onOpenPayoutSetup;
 
   @override
   Widget build(BuildContext context) {
@@ -162,6 +181,9 @@ class _EarningsContent extends StatelessWidget {
     final unexplained = _number(summary['unexplained']);
     final reconciled = summary['reconciled'] == true;
     final readiness = '${summary['connectReadiness'] ?? 'setup_required'}';
+    final payoutReadiness = riderPayoutReadinessFrom(summary);
+    final payoutsEnabled =
+        payoutReadiness == RiderPayoutReadiness.payoutsEnabled;
     final activityCount = summary['activityCount'] is num
         ? (summary['activityCount'] as num).toInt()
         : transactions.length;
@@ -193,6 +215,19 @@ class _EarningsContent extends StatelessWidget {
           children: [
             const _TopBar(),
             const SizedBox(height: 18),
+            if (!payoutsEnabled) ...[
+              _PayoutSetupBanner(
+                readiness: payoutReadiness,
+                busy: openingPayoutSetup,
+                onPressed: riderPayoutCanContinue(payoutReadiness)
+                    ? () => onOpenPayoutSetup(
+                          resume: payoutReadiness !=
+                              RiderPayoutReadiness.setupRequired,
+                        )
+                    : null,
+              ),
+              const SizedBox(height: 18),
+            ],
             if (!hasEarnings) ...[
               const _NoEarningsState(),
             ] else ...[
@@ -340,6 +375,52 @@ class _EarningsContent extends StatelessWidget {
           saveAccountDetails: false,
         ));
   }
+}
+
+class _PayoutSetupBanner extends StatelessWidget {
+  const _PayoutSetupBanner({
+    required this.readiness,
+    required this.busy,
+    required this.onPressed,
+  });
+
+  final RiderPayoutReadiness readiness;
+  final bool busy;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => _EarningsGlass(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              riderPayoutReadinessLabel(readiness),
+              style: const TextStyle(
+                color: RiderPalette.paper,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              riderPayoutReadinessBody(readiness),
+              style: const TextStyle(
+                color: RiderPalette.muted,
+                height: 1.45,
+              ),
+            ),
+            if (onPressed != null) ...[
+              const SizedBox(height: 14),
+              RiderPrimaryButton(
+                label: riderPayoutReadinessActionLabel(readiness),
+                icon: Icons.open_in_new_rounded,
+                busy: busy,
+                onPressed: onPressed,
+              ),
+            ],
+          ],
+        ),
+      );
 }
 
 class _TopBar extends StatelessWidget {

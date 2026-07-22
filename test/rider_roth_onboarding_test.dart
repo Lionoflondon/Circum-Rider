@@ -17,10 +17,10 @@ void main() {
         () {
       expect(RiderRothOnboarding.walletCollection, 'riderRothWallets');
       expect(RiderRothOnboarding.ledgerCollection, 'riderRothLedger');
-      expect(service, contains("doc(riderId)"));
-      expect(service, contains('runTransaction'));
-      expect(service, contains('wallet.exists'));
-      expect(service, contains('rothWalletConnectedAt'));
+      expect(service, contains("httpsCallable('ensureRiderRothWallet')"));
+      expect(service, contains("'riderId': riderId"));
+      expect(service, isNot(contains('runTransaction')));
+      expect(service, isNot(contains("collection('riderRothWallets')")));
       expect(service, isNot(contains('FieldValue.increment')));
     });
 

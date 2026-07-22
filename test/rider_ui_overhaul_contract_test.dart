@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('canonical Rider presentation replacement', () {
     final mainSource = File('lib/main.dart').readAsStringSync();
+    final webMainSource = File('lib/main_rider_web.dart').readAsStringSync();
     final webIndex = File('web/index.html').readAsStringSync();
     final nav = File('lib/app/bottom_nav/view/app_nav.dart').readAsStringSync();
     final dashboard = File('lib/app/rider_shell/rider_dashboard_view.dart')
@@ -73,7 +74,8 @@ void main() {
     });
 
     test('startup uses one branded splash without rotating boot copy', () {
-      expect(mainSource, contains('_RiderStartupHold'));
+      expect(webMainSource, contains('_RiderWebStartupHold'));
+      expect(mainSource, isNot(contains('_RiderWebStartupHold')));
       expect(mainSource,
           isNot(contains("AssetImage('assets/images/splash.png')")));
       expect(mainSource, isNot(contains('Starting Rider')));
@@ -114,12 +116,13 @@ void main() {
     });
 
     test('rider profile photos use the canonical identity contract', () {
-      expect(authBloc, contains("rider-profiles/\${user.uid}/profile.jpg"));
-      expect(authBloc, contains("rider-profiles/\${user.uid}/thumbnail.jpg"));
+      expect(authBloc, contains("httpsCallable('submitRiderDocument')"));
+      expect(authBloc, contains("'documentType': 'profile_photo'"));
+      expect(authBloc, contains("'fileBase64': base64Encode(processed.full)"));
+      expect(authBloc, contains("data['fileUrl']"));
       expect(authBloc, contains('image_lib.copyCrop'));
       expect(authBloc, contains('image_lib.encodeJpg'));
-      expect(authBloc, contains("'profilePhotoVersion'"));
-      expect(authBloc, contains("'profileThumbnailUrl'"));
+      expect(authBloc, isNot(contains('FirebaseStorage')));
       expect(accountDetails, contains('image.readAsBytes()'));
       expect(accountDetails, contains('_ProfilePhotoCropDialog'));
       expect(accountDetails, contains('InteractiveViewer'));

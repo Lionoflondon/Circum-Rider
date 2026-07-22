@@ -40,6 +40,7 @@ class RiderAccountStatusView extends StatelessWidget {
                     : 6,
             title: content.$1,
             subtitle: content.$2,
+            showBackButton: false,
             child: RiderGlassCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -83,7 +84,6 @@ class RiderAccountStatusView extends StatelessWidget {
                 ],
               ),
             ),
-            showBackButton: false,
           );
         },
       ),
@@ -110,14 +110,14 @@ class RiderAccountStatusView extends StatelessWidget {
         ),
       RiderAccountState.suspended => (
           'Account suspended',
-          'Operational Rider features are temporarily unavailable.',
+          'Your Rider account is paused by Circum Support.',
           Icons.pause_circle_outline,
           const Color(0xFFFBBF24),
           'You cannot go online or accept work while your account is suspended.'
         ),
       RiderAccountState.frozen => (
           'Account frozen',
-          'Operational Rider features are temporarily unavailable.',
+          'Your Rider account is under review.',
           Icons.lock_outline,
           const Color(0xFF60A5FA),
           'Please contact Circum Support for the next steps.'
