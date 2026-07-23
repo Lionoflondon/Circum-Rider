@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -44,7 +45,9 @@ class DirectionsService {
   DirectionsService() : _dio = Dio();
 
   Future<List<DirectionStep>> getDetailedDirections(
-      LatLng origin, LatLng destination) async {
+    LatLng origin,
+    LatLng destination,
+  ) async {
     final String url = 'https://maps.googleapis.com/maps/api/directions/json';
 
     try {
@@ -54,7 +57,7 @@ class DirectionsService {
           'origin': '${origin.latitude},${origin.longitude}',
           'destination': '${destination.latitude},${destination.longitude}',
           if (_mapsApiKey.isNotEmpty) 'key': _mapsApiKey,
-          'polyline': 'true'
+          'polyline': 'true',
         },
       );
 
@@ -67,8 +70,9 @@ class DirectionsService {
             final List<dynamic> steps = legs[0]['steps'];
             return steps.map((step) {
               // Decode the polyline for each step
-              List<LatLng> decodedPolyline =
-                  decodePolyline(step['polyline']['points']);
+              List<LatLng> decodedPolyline = decodePolyline(
+                step['polyline']['points'],
+              );
               return DirectionStep(
                 startLocation: LatLng(
                   step['start_location']['lat'],
@@ -86,7 +90,10 @@ class DirectionsService {
           }
         }
       }
-    } catch (_) {}
+    } catch (error, stack) {
+      debugPrint('Rider directions could not be loaded: $error');
+      debugPrint('$stack');
+    }
 
     return [];
   }
