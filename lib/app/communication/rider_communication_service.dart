@@ -154,18 +154,22 @@ class RiderCommunicationService {
 
   Stream<RiderConversationSnapshot> watchConversation(String chatId) {
     final chat = firestore.collection('chats').doc(chatId);
-    return chat.snapshots().asyncMap((chatSnapshot) async {
+    final controller = StreamController<RiderConversationSnapshot>();
+    DocumentSnapshot<Map<String, dynamic>>? latestChat;
+    QuerySnapshot<Map<String, dynamic>>? latestMessages;
+    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? chatSub;
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? messageSub;
+
+    void emitIfReady() {
+      final chatSnapshot = latestChat;
+      final messageSnapshot = latestMessages;
+      if (chatSnapshot == null || messageSnapshot == null) return;
       final data = chatSnapshot.data() ?? const <String, dynamic>{};
-      final messageSnapshot = await chat
-          .collection('messages')
-          .orderBy('createdAt', descending: false)
-          .limit(80)
-          .get();
       final now = DateTime.now().millisecondsSinceEpoch;
       final typing = data['typing'] is Map
           ? Map<String, dynamic>.from(data['typing'] as Map)
           : const <String, dynamic>{};
-      return RiderConversationSnapshot(
+      controller.add(RiderConversationSnapshot(
         chatId: chatId,
         readOnly: data['readOnly'] == true,
         messages: messageSnapshot.docs
@@ -181,8 +185,29 @@ class RiderCommunicationService {
             ? List<String>.from(
                 (data['unreadBy'] as Iterable).map((item) => '$item'))
             : const [],
-      );
-    });
+      ));
+    }
+
+    controller.onListen = () {
+      chatSub = chat.snapshots().listen((snapshot) {
+        latestChat = snapshot;
+        emitIfReady();
+      }, onError: controller.addError);
+      messageSub = chat
+          .collection('messages')
+          .orderBy('createdAt', descending: false)
+          .limit(80)
+          .snapshots()
+          .listen((snapshot) {
+        latestMessages = snapshot;
+        emitIfReady();
+      }, onError: controller.addError);
+    };
+    controller.onCancel = () async {
+      await chatSub?.cancel();
+      await messageSub?.cancel();
+    };
+    return controller.stream;
   }
 
   Future<void> sendText({
@@ -220,6 +245,7 @@ class RiderCommunicationService {
     return firestore
         .collection('notifications')
         .where('recipientId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
         .limit(100)
         .snapshots()
         .map((snapshot) {
@@ -227,8 +253,6 @@ class RiderCommunicationService {
           .map(RiderNotificationRecord.fromDocument)
           .where((record) => !record.archived && !record.deleted)
           .toList();
-      records.sort((a, b) => (b.createdAt ?? DateTime(1970))
-          .compareTo(a.createdAt ?? DateTime(1970)));
       return records;
     });
   }
