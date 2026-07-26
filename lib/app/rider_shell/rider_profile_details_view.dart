@@ -22,7 +22,6 @@ class RiderPersonalDetailsView extends StatefulWidget {
 class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
-  final _username = TextEditingController();
   final _dob = TextEditingController();
   final _gender = TextEditingController();
   final _phone = TextEditingController();
@@ -35,7 +34,6 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
   void dispose() {
     for (final controller in [
       _name,
-      _username,
       _dob,
       _gender,
       _phone,
@@ -53,9 +51,6 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
     final first = '${data['firstName'] ?? ''}'.trim();
     final last = '${data['lastName'] ?? ''}'.trim();
     _name.text = '${data['fullName'] ?? data['name'] ?? '$first $last'}'.trim();
-    _username.text = '${data['handle'] ?? data['username'] ?? ''}'
-        .trim()
-        .replaceFirst('@', '');
     _dob.text = '${data['dateOfBirth'] ?? data['dob'] ?? ''}'.trim();
     _gender.text = '${data['gender'] ?? ''}'.trim();
     _phone.text =
@@ -70,14 +65,11 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
     setState(() => _saving = true);
     try {
       final parts = _name.text.trim().split(RegExp(r'\s+'));
-      final handle = _username.text.trim().replaceFirst('@', '');
       final patch = <String, dynamic>{
         'fullName': _name.text.trim(),
         'name': _name.text.trim(),
         'firstName': parts.first,
         'lastName': parts.length > 1 ? parts.sublist(1).join(' ') : '',
-        'handle': handle,
-        'username': handle,
         'dateOfBirth': _dob.text.trim(),
         'gender': _gender.text.trim(),
         'homeAddress': _address.text.trim(),
@@ -192,6 +184,18 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
     return data;
   }
 
+  String _assignedUsername({
+    required Map<String, dynamic> rider,
+    required Map<String, dynamic> profile,
+  }) {
+    final username = _profileText(
+      rider,
+      profile,
+      ['handle', 'riderHandle', 'username'],
+    ).trim().replaceFirst('@', '');
+    return username.isEmpty || username == 'null' ? '' : '@$username';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -223,6 +227,8 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
                 final data = _profileData(rider, profile);
                 _hydrate(data);
                 final profilePhotoUrl = _profilePhotoUrl(rider, profile);
+                final riderUsername =
+                    _assignedUsername(rider: rider, profile: profile);
                 return Form(
                   key: _formKey,
                   child: ListView(
@@ -258,12 +264,12 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
                         child: Column(
                           children: [
                             _field(_name, 'Full name', required: true),
-                            _field(_username, 'Username',
-                                prefix: '@', required: true),
+                            _AssignedUsernameTile(username: riderUsername),
+                            const SizedBox(height: 12),
                             const Align(
                               alignment: Alignment.centerLeft,
                               child: Text(
-                                'Your Rider username is saved to your profile.',
+                                'Rider usernames are assigned by Circum operations and cannot be changed in the app.',
                                 style: TextStyle(
                                     color: RiderPalette.muted, height: 1.35),
                               ),
@@ -349,6 +355,60 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
   }
 }
 
+class _AssignedUsernameTile extends StatelessWidget {
+  const _AssignedUsernameTile({required this.username});
+
+  final String username;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = username.isEmpty ? 'Awaiting assignment' : username;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .045),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: .08)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.alternate_email_rounded,
+              color: RiderPalette.blue, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Rider username',
+                  style: TextStyle(
+                    color: RiderPalette.muted,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: RiderPalette.paper,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.lock_outline_rounded,
+              color: RiderPalette.muted, size: 18),
+        ],
+      ),
+    );
+  }
+}
+
 class _EditableProfilePhoto extends StatelessWidget {
   const _EditableProfilePhoto({
     required this.imageUrl,
@@ -363,7 +423,7 @@ class _EditableProfilePhoto extends StatelessWidget {
     final hasPhoto = imageUrl.trim().isNotEmpty && imageUrl.trim() != 'null';
     return Semantics(
       button: true,
-      label: 'Change Rider profile photo',
+      label: 'Change Circum Rider profile photo',
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
@@ -466,7 +526,7 @@ Future<String?> _showRiderPhotoSourceSheet(BuildContext context) {
             ),
             const SizedBox(height: 18),
             const Text(
-              'Update Rider profile photo',
+              'Update Circum Rider profile photo',
               style: TextStyle(
                 color: RiderPalette.paper,
                 fontSize: 20,
@@ -704,7 +764,7 @@ class RiderVehicleManagerView extends StatelessWidget {
               title: const Text('Delete vehicle?',
                   style: TextStyle(color: RiderPalette.paper)),
               content: const Text(
-                  'This removes the vehicle from your Rider profile. Existing delivery records are unchanged.',
+                  'This removes the vehicle from your Circum Rider profile. Existing delivery records are unchanged.',
                   style: TextStyle(color: RiderPalette.muted)),
               actions: [
                 TextButton(

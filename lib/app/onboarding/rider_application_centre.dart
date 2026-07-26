@@ -98,7 +98,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
           child: RiderEmptyState(
             icon: Icons.lock_outline_rounded,
             title: 'Sign in required',
-            message: 'Sign in to continue your Rider application.',
+            message: 'Sign in to continue your Circum Rider application.',
           ),
         ),
       );
@@ -1230,7 +1230,7 @@ class _DocumentUploadSectionState extends State<_DocumentUploadSection> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'Accepted formats: JPG, PNG, WEBP or PDF up to 10MB. Documents are uploaded to your secure Rider application path for Admin review.',
+            'Accepted formats: JPG, PNG, WEBP or PDF up to 10MB. Documents are uploaded to your secure Circum Rider application path for Admin review.',
             style: TextStyle(color: RiderPalette.muted, height: 1.45),
           ),
           const SizedBox(height: 14),

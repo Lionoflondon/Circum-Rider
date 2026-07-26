@@ -69,7 +69,7 @@ void main() {
 
     test('Roth guidance is present and separate from cash', () {
       expect(guide, contains('ROTH WALLET'));
-      expect(guide, contains('Roth is separate from Rider cash'));
+      expect(guide, contains('Roth is separate from Circum Rider cash'));
       expect(guide, contains('Roth cannot be withdrawn to a bank account'));
       expect(guide, contains('Roth is not wages'));
       expect(

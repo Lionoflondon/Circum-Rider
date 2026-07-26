@@ -726,7 +726,7 @@ class _VerificationState {
         subtitle: 'Confirm your legal identity for Rider operations.',
         detailLine: _documentName(identityDoc),
         explanation:
-            'Upload a clear government identity document so Circum can verify your Rider account.',
+            'Upload a clear government identity document so Circum can verify your Circum Rider account.',
         icon: Icons.badge_outlined,
         status: _statusFromDoc(identityDoc),
         document: identityDoc,
@@ -788,7 +788,8 @@ class _VerificationState {
         key: 'profile_photo',
         title: 'Profile Photo',
         summaryLabel: 'Profile Photo',
-        subtitle: 'A clear rider profile photo used across active deliveries.',
+        subtitle:
+            'A clear Circum Rider profile photo used across active deliveries.',
         detailLine: profilePhotoUrl.isEmpty ? '' : 'Photo submitted',
         explanation:
             'Your profile photo helps senders and operations identify you during deliveries.',

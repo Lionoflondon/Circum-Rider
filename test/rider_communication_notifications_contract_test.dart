@@ -41,6 +41,8 @@ void main() {
       expect(homeBloc, isNot(contains('sendRiderUpdate')));
       expect(serviceSource, contains("collection('chats')"));
       expect(serviceSource, contains(".collection('messages')"));
+      expect(serviceSource, isNot(contains('.asyncMap(')));
+      expect(serviceSource, isNot(contains(".limit(80)\n          .get()")));
     });
 
     test('delivery and support entries open canonical conversation view', () {
@@ -108,6 +110,19 @@ void main() {
           messaging,
           isNot(contains(
               "Map<String, dynamic> msg = jsonDecode(message.data['data'])")));
+    });
+
+    test('Rider notification stream uses server ordering before limits', () {
+      final recipient =
+          serviceSource.indexOf(".where('recipientId', isEqualTo: uid)");
+      final order =
+          serviceSource.indexOf(".orderBy('createdAt', descending: true)");
+      final limit = serviceSource.indexOf('.limit(100)');
+
+      expect(recipient, isNonNegative);
+      expect(order, greaterThan(recipient));
+      expect(limit, greaterThan(order));
+      expect(serviceSource, isNot(contains('records.sort(')));
     });
   });
 

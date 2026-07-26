@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -79,7 +80,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   }
 
   Future<List<String>> _loadRemainingVerificationItems(String? uid) async {
-    if (uid == null || uid.isEmpty) return ['Rider profile'];
+    if (uid == null || uid.isEmpty) return ['Circum Rider profile'];
     final riderDoc = await db.collection('riders').doc(uid).get();
     return _remainingVerificationItems(riderDoc.data());
   }
@@ -119,37 +120,61 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<MessageUser>(_handleMessageUser);
   }
 
-  void _handleCheckForPushToken(CheckForPushToken event, Emitter emit) async {
+  void _handleCheckForPushToken(
+    CheckForPushToken event,
+    Emitter<HomeState> emit,
+  ) async {
     final User? user = auth.currentUser;
     final internalAccess = user == null
         ? false
         : (await user.getIdTokenResult()).claims?['founderRider'] == true;
-    if (!kIsWeb && Platform.isIOS) {
-      await firebaseMessaging.requestPermission();
-    }
-    if (!kIsWeb && Platform.isIOS) {
-      await firebaseMessaging.getAPNSToken();
-    }
-    final fcmToken = await firebaseMessaging.getToken();
-    if (fcmToken != null) {
-      try {
-        final documentReference = db.collection('riders').doc(user?.uid);
+    await _refreshRiderHomeAccess(user, internalAccess, emit);
 
-        // Get the document snapshot
-        final documentSnapshot = await documentReference.get();
-        if (documentSnapshot.exists) {
-          final remaining =
-              _remainingVerificationItems(documentSnapshot.data());
-          emit(state.copyWith(
-              canGoOnline: internalAccess || remaining.isEmpty,
-              verificationChecklist: remaining));
-          await FirebaseFunctions.instanceFor(region: 'us-central1')
-              .httpsCallable('updateRiderPushToken')
-              .call({'fcmToken': fcmToken});
-        }
-      } catch (_) {
-        // Push token updates should not block the Rider home state.
+    String? fcmToken;
+    try {
+      if (!kIsWeb && Platform.isIOS) {
+        await firebaseMessaging.requestPermission();
       }
+      if (!kIsWeb && Platform.isIOS) {
+        await firebaseMessaging.getAPNSToken();
+      }
+      fcmToken = await firebaseMessaging.getToken();
+    } on FirebaseException catch (error) {
+      if (error.code != 'permission-blocked') {
+        debugPrint('Rider push token unavailable: ${error.code}');
+      }
+      return;
+    } catch (_) {
+      return;
+    }
+
+    if (fcmToken == null || user == null) return;
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('updateRiderPushToken')
+          .call({'fcmToken': fcmToken});
+    } catch (_) {
+      // Push token updates should not block the Rider home state.
+    }
+  }
+
+  Future<void> _refreshRiderHomeAccess(
+    User? user,
+    bool internalAccess,
+    Emitter<HomeState> emit,
+  ) async {
+    if (user == null) return;
+    try {
+      final documentSnapshot =
+          await db.collection('riders').doc(user.uid).get();
+      if (!documentSnapshot.exists) return;
+      final remaining = _remainingVerificationItems(documentSnapshot.data());
+      emit(state.copyWith(
+        canGoOnline: internalAccess || remaining.isEmpty,
+        verificationChecklist: remaining,
+      ));
+    } catch (_) {
+      // Verification state refresh should not block the Rider dashboard.
     }
   }
 
@@ -184,7 +209,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         emit(state.copyWith(
           rideStatus: RideStatus.offline,
           canGoOnline: false,
-          message: 'Your Rider account is not approved for operational access.',
+          message:
+              'Your Circum Rider account is not approved for operational access.',
         ));
         return;
       }

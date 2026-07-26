@@ -971,7 +971,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           final result =
               await functions.httpsCallable('submitRiderDocument').call({
             'documentType': 'profile_photo',
-            'displayName': 'Rider profile photo',
+            'displayName': 'Circum Rider profile photo',
             'fileName': 'profile.jpg',
             'contentType': 'image/jpeg',
             'fileBase64': base64Encode(processed.full),

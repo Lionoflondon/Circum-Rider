@@ -10,9 +10,9 @@ class RiderAuthError {
       case 'invalid-credential':
         return 'The email or password is incorrect.';
       case 'user-not-found':
-        return 'No Rider account was found for that email.';
+        return 'No Circum Rider account was found for that email.';
       case 'user-disabled':
-        return 'This Rider account is disabled. Contact Circum Support.';
+        return 'This Circum Rider account is disabled. Contact Circum Support.';
       case 'network-request-failed':
         return 'Check your connection and try again.';
       case 'too-many-requests':

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:circum_rider/main.dart' show CircumRider;
 import 'package:firebase_core/firebase_core.dart';
@@ -9,10 +10,33 @@ import 'firebase_options.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(RiderWebStartupApp(
-    initializer: _initializeRiderWeb,
-    appBuilder: (_) => const CircumRider(),
-  ));
+  _installRiderWebDiagnostics();
+  runZonedGuarded(
+    () => runApp(
+      RiderWebStartupApp(
+        initializer: _initializeRiderWeb,
+        appBuilder: (_) => const CircumRider(),
+      ),
+    ),
+    _reportRiderWebError,
+  );
+}
+
+void _installRiderWebDiagnostics() {
+  FlutterError.onError = (details) {
+    _reportRiderWebError(details.exception, details.stack);
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    _reportRiderWebError(error, stack);
+    return true;
+  };
+}
+
+void _reportRiderWebError(Object error, StackTrace? stack) {
+  debugPrint('[CircumRiderRuntimeError] $error');
+  if (stack != null) {
+    debugPrint('[CircumRiderRuntimeStack] $stack');
+  }
 }
 
 Future<void> _initializeRiderWeb() async {

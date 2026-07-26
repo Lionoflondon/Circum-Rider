@@ -36,8 +36,6 @@ void main() {
         File('lib/app/account/bloc/account_bloc.dart').readAsStringSync();
     final authBloc =
         File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
-    final accountDetails =
-        File('lib/app/account/view/account_details.dart').readAsStringSync();
     final offers = File('lib/app/rider_jobs/rider_job_offer_screen.dart')
         .readAsStringSync();
 
@@ -97,7 +95,7 @@ void main() {
       expect(dashboard, contains('Available deliveries'));
       expect(dashboard, contains('Upcoming schedule'));
       expect(dashboard, contains('Recent activity'));
-      expect(dashboard, contains('CIRCUM RIDER'));
+      expect(dashboard, isNot(contains('CIRCUM RIDER')));
       expect(dashboard, contains('No deliveries available'));
       expect(dashboard, contains('New offers will appear here automatically.'));
       expect(dashboard, contains('No scheduled deliveries'));
@@ -105,14 +103,14 @@ void main() {
       expect(dashboard, isNot(contains('Open the marketplace')));
     });
 
-    test('home exposes internal GPS diagnostics and persistent heartbeat', () {
+    test('home exposes availability status backed by persistent heartbeat', () {
       expect(homeBloc, contains('_presenceHeartbeatInterval'));
       expect(homeBloc, contains('updateRiderPresence'));
       expect(homeBloc, contains("'gpsSignalQuality'"));
       expect(homeBloc, contains("'backgroundTracking'"));
       expect(dashboard, contains('_InternalDiagnosticsCard'));
-      expect(dashboard, contains('Internal dispatch diagnostics'));
-      expect(dashboard, contains('Dispatch eligibility'));
+      expect(dashboard, contains('Availability status'));
+      expect(dashboard, contains('Job readiness'));
     });
 
     test('rider profile photos use the canonical identity contract', () {
@@ -123,10 +121,11 @@ void main() {
       expect(authBloc, contains('image_lib.copyCrop'));
       expect(authBloc, contains('image_lib.encodeJpg'));
       expect(authBloc, isNot(contains('FirebaseStorage')));
-      expect(accountDetails, contains('image.readAsBytes()'));
-      expect(accountDetails, contains('_ProfilePhotoCropDialog'));
-      expect(accountDetails, contains('InteractiveViewer'));
-      expect(accountDetails, contains('RepaintBoundary'));
+      expect(profileDetails, contains('image.readAsBytes()'));
+      expect(profileDetails, contains('UpdateUserProfilePhoto'));
+      expect(profileDetails, contains('_showRiderPhotoSourceSheet'));
+      expect(profileDetails, contains('ImageSource.camera'));
+      expect(profileDetails, contains('ImageSource.gallery'));
       expect(dashboard.indexOf('profileThumbnailUrl'),
           lessThan(dashboard.indexOf('profilePhotoUrl')));
       expect(dashboard, contains('_dashboardProfileData'));

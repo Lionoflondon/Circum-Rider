@@ -11,20 +11,22 @@ class RiderRankSnapshot {
 
   static RiderRankSnapshot? from(Map<String, dynamic> data) {
     final rawTrust = data['trustPoints'] ?? data['riderTrustPoints'];
-    if (rawTrust is! num) return null;
-    final trust = rawTrust.toInt();
-    final calculated = rankForTrust(trust);
     final rawRank = '${data['riderRank'] ?? data['rank'] ?? ''}'.trim();
     final validRank = ranks
         .where((rank) => rank.toLowerCase() == rawRank.toLowerCase())
         .firstOrNull;
     final override = data['rankOverride'] == true ||
-        '${data['rankSource'] ?? ''}'.toLowerCase() == 'manual';
+        '${data['rankSource'] ?? ''}'.toLowerCase() == 'manual' ||
+        '${data['rankUpdatedBy'] ?? ''}'.trim().isNotEmpty ||
+        '${data['rankReason'] ?? ''}'.trim().isNotEmpty;
+    if (rawTrust is! num && !(override && validRank != null)) return null;
+    final trust = rawTrust is num ? rawTrust.toInt() : 0;
+    final calculated = rankForTrust(trust);
     return RiderRankSnapshot(
       rank: override && validRank != null ? validRank : calculated,
       trustPoints: trust,
       overrideReason: override && validRank != null
-          ? '${data['rankOverrideReason'] ?? 'Manual rank override'}'
+          ? '${data['rankOverrideReason'] ?? data['rankReason'] ?? 'Manual rank override'}'
           : null,
     );
   }

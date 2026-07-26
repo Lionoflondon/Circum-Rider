@@ -101,7 +101,7 @@ class RiderAccountStatusView extends StatelessWidget {
     return switch (state) {
       RiderAccountState.rejected => (
           'Application update',
-          'Your Rider application was not approved.',
+          'Your Circum Rider application was not approved.',
           Icons.cancel_outlined,
           const Color(0xFFF87171),
           rejectionReason.isEmpty
@@ -110,21 +110,21 @@ class RiderAccountStatusView extends StatelessWidget {
         ),
       RiderAccountState.suspended => (
           'Account suspended',
-          'Your Rider account is paused by Circum Support.',
+          'Your Circum Rider account is paused by Circum Support.',
           Icons.pause_circle_outline,
           const Color(0xFFFBBF24),
           'You cannot go online or accept work while your account is suspended.'
         ),
       RiderAccountState.frozen => (
           'Account frozen',
-          'Your Rider account is under review.',
+          'Your Circum Rider account is under review.',
           Icons.lock_outline,
           const Color(0xFF60A5FA),
           'Please contact Circum Support for the next steps.'
         ),
       RiderAccountState.closed => (
           'Account closed',
-          'This Rider account is no longer active.',
+          'This Circum Rider account is no longer active.',
           Icons.person_off_outlined,
           const Color(0xFF9CA3AF),
           'Sign out, or contact Circum Support if you believe this is incorrect.'
@@ -140,7 +140,7 @@ class RiderAccountStatusView extends StatelessWidget {
         ),
       _ => (
           'Application status',
-          'Your Rider account is being reviewed.',
+          'Your Circum Rider account is being reviewed.',
           Icons.schedule_outlined,
           const Color(0xFF60A5FA),
           'We will notify you when there is an update.'

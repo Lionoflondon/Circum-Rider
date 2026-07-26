@@ -33,6 +33,7 @@ class _RiderConversationViewState extends State<RiderConversationView> {
   var _sending = false;
   var _readMarked = false;
   String? _error;
+  String? _deliverySenderName;
 
   @override
   void initState() {
@@ -41,6 +42,7 @@ class _RiderConversationViewState extends State<RiderConversationView> {
     _typing = RiderTypingController(chatId: widget.chatId, service: _service);
     _conversation = _service.watchConversation(widget.chatId);
     _restoreDraft();
+    _loadDeliverySenderName();
   }
 
   @override
@@ -112,6 +114,17 @@ class _RiderConversationViewState extends State<RiderConversationView> {
       _conversation = _service.watchConversation(widget.chatId);
       _readMarked = false;
     });
+    _loadDeliverySenderName();
+  }
+
+  Future<void> _loadDeliverySenderName() async {
+    try {
+      final name = await _service.deliverySenderName(widget.chatId);
+      if (!mounted || name == null || name.isEmpty) return;
+      setState(() => _deliverySenderName = name);
+    } catch (_) {
+      // The chat remains usable even if the delivery header cannot be enriched.
+    }
   }
 
   void _markReadOnce() {
@@ -138,7 +151,7 @@ class _RiderConversationViewState extends State<RiderConversationView> {
         child: Column(
           children: [
             _ConversationHeader(
-              title: widget.title,
+              title: _deliverySenderName ?? widget.title,
               subtitle: widget.subtitle ?? widget.chatId,
             ),
             Expanded(

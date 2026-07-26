@@ -34,7 +34,9 @@ function startsWithAny(file, prefixes = []) {
 }
 
 function listFiles() {
-  const tracked = git(['ls-files']).split('\n').filter(Boolean);
+  const tracked = git(['ls-files'])
+    .split('\n')
+    .filter((file) => file && fs.existsSync(path.join(root, file)));
   const untracked = git(['ls-files', '--others', '--exclude-standard'])
     .split('\n')
     .filter(Boolean);

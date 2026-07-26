@@ -10,6 +10,7 @@ import '../authentication/bloc/auth_bloc.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../onboarding/rider_application_centre.dart';
 import '../onboarding/rider_stripe_payout_onboarding.dart';
+import '../recognitions/rider_recognitions.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
 import '../ratings/rider_appreciation.dart';
@@ -53,7 +54,7 @@ class _RiderProfileViewState extends State<RiderProfileView> {
       return const RiderEmptyState(
         icon: Icons.lock_outline,
         title: 'Sign in required',
-        message: 'Sign in to view your Rider profile.',
+        message: 'Sign in to view your Circum Rider profile.',
       );
     }
 
@@ -166,7 +167,8 @@ class _RiderProfileScreen extends StatelessWidget {
                           _ProfileRow(
                             icon: Icons.badge_outlined,
                             title: 'Personal Details',
-                            description: 'Name, username and personal details',
+                            description:
+                                'Name, assigned username and personal details',
                             onTap: () => _open(
                               context,
                               RiderPersonalDetailsView(user: user),
@@ -303,7 +305,7 @@ class _RiderProfileScreen extends StatelessWidget {
                             icon: Icons.notifications_none_rounded,
                             title: 'Notifications',
                             description:
-                                'Job offers, messages and Rider updates',
+                                'Job offers, messages and Circum Rider updates',
                             onTap: () => _open(
                               context,
                               RiderNotificationsView(
@@ -329,12 +331,12 @@ class _RiderProfileScreen extends StatelessWidget {
                           ),
                           _ProfileRow(
                             icon: Icons.assignment_outlined,
-                            title: 'Rider Agreement',
+                            title: 'Circum Rider Agreement',
                             description: 'Your Rider operating agreement',
                             onTap: () => _open(
                                 context,
                                 const RiderLegalView(
-                                    initial: 'Rider Agreement')),
+                                    initial: 'Circum Rider Agreement')),
                           ),
                           _ProfileRow(
                             icon: Icons.help_outline_rounded,
@@ -405,7 +407,7 @@ class _RiderProfileData {
     if (joined.isNotEmpty) return joined;
     final full = text('name', fallback: text('fullName'));
     if (full.isNotEmpty) return full;
-    return user.displayName ?? 'Rider profile';
+    return user.displayName ?? 'Circum Rider profile';
   }
 
   String get handle {
@@ -573,11 +575,20 @@ class _RiderProfileData {
       hasTrustPoints ? '$trustPoints trust points' : 'Trust points unavailable';
 
   String get achievementsSummary {
-    final recognitions = profile['recognitions'];
-    if (recognitions is List && recognitions.isNotEmpty) {
-      return '${recognitions.length} achievement${recognitions.length == 1 ? '' : 's'} unlocked';
+    if (recognitionLabels.isNotEmpty) {
+      return recognitionLabels.join(' · ');
     }
     return 'Achievements unlock as you deliver';
+  }
+
+  List<String> get recognitionLabels {
+    final recognitions = RiderRecognitions.from(profile);
+    return [
+      if (recognitions.foundingRider.awarded)
+        'Founding Rider ${recognitions.foundingRider.numberLabel(4)}'.trim(),
+      if (recognitions.legend.awarded)
+        'Legend ${recognitions.legend.numberLabel(4)}'.trim(),
+    ];
   }
 
   String text(String key, {String fallback = ''}) {
@@ -811,6 +822,12 @@ class _HeroText extends StatelessWidget {
                   data.hasTrustPoints ? '${data.trustPoints} trust' : '— trust',
               color: RiderPalette.purple,
             ),
+            for (final recognition in data.recognitionLabels)
+              _HeroPill(
+                icon: Icons.workspace_premium_rounded,
+                label: recognition,
+                color: RiderPalette.amber,
+              ),
           ],
         ),
         const SizedBox(height: 12),
@@ -1120,7 +1137,7 @@ class _ProfileError extends StatelessWidget {
   Widget build(BuildContext context) => RiderEmptyState(
         icon: Icons.error_outline_rounded,
         title: 'Profile unavailable',
-        message: 'We could not load your Rider profile.',
+        message: 'We could not load your Circum Rider profile.',
         actionLabel: 'Retry',
         onAction: onRetry,
       );
@@ -1163,7 +1180,7 @@ class RiderLegalView extends StatelessWidget {
                   ),
                   _ProfileRow(
                     icon: Icons.assignment_outlined,
-                    title: 'Rider Agreement',
+                    title: 'Circum Rider Agreement',
                     description: 'Rider operating agreement',
                     statusColor: RiderPalette.amber,
                     onTap: () =>
@@ -1200,7 +1217,7 @@ Future<void> _confirmSignOut(BuildContext context) async {
               ),
               const SizedBox(height: 8),
               const Text(
-                'You can sign back in with your Rider account.',
+                'You can sign back in with your Circum Rider account.',
                 style: TextStyle(color: RiderPalette.muted),
               ),
               const SizedBox(height: 18),

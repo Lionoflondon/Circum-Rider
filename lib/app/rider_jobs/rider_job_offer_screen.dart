@@ -78,7 +78,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
         activeIndex: _activeIndex,
         accepting: _accepting,
         accepted: _accepted,
-        riderRank: 'Sentinel',
+        riderRank: 'Agent',
         statusMessage: _statusMessage,
         acceptStatus: _acceptStatus,
         onBackToFeed: _resetTakenState,
@@ -129,7 +129,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                     return _JobsStateScaffold(
                         title: 'Account action required',
                         message: rider.blockedReason ??
-                            'Your Rider account cannot receive jobs right now.');
+                            'Your Circum Rider account cannot receive jobs right now.');
                   if (!online)
                     return _JobsStateScaffold(
                         title: "You're offline",
@@ -196,7 +196,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                         activeIndex: safeIndex,
                         accepting: _accepting,
                         accepted: _accepted,
-                        riderRank: rider.riderRank ?? 'Sentinel',
+                        riderRank: rider.riderRank ?? 'Agent',
                         statusMessage: _statusMessage,
                         acceptStatus: _acceptStatus,
                         onBackToFeed: _resetTakenState,
@@ -1319,7 +1319,7 @@ class RiderAcceptedJobScreen extends StatefulWidget {
   const RiderAcceptedJobScreen({
     super.key,
     required this.offer,
-    this.riderRank = 'Sentinel',
+    this.riderRank = 'Agent',
     this.riderId = 'preview-rider',
     this.firestore,
     this.deliveryController,
@@ -1624,7 +1624,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                   'road_closure': 'Road closure',
                   'medical_emergency': 'Medical emergency',
                   'customer_change_request': 'Customer requests change',
-                  'sender_unavailable': 'Sender unavailable',
+                  'sender_unavailable': 'Circum unavailable',
                   'recipient_unavailable': 'Recipient unavailable',
                   'access_problem': 'Unable to access property',
                   'address_problem': 'Address problem',
@@ -2315,10 +2315,10 @@ class _DeliveryCompleteView extends StatelessWidget {
                                         ScaffoldMessenger.of(context)
                                             .showSnackBar(const SnackBar(
                                           content: Text(
-                                              'Sender rating is not available for this delivery yet.'),
+                                              'Circum rating is not available for this delivery yet.'),
                                         ));
                                       },
-                                      child: const Text('Rate Sender'))),
+                                      child: const Text('Rate Circum'))),
                               TextButton(
                                   onPressed: onReportIssue,
                                   child: const Text('Report Delivery Issue')),
@@ -2490,7 +2490,7 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  const Text('Sender notified on arrival',
+                  const Text('Circum notified on arrival',
                       style: TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -2538,7 +2538,7 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
                     children: [
                       Expanded(
                         child: _WaitingActionButton(
-                          label: 'Contact sender',
+                          label: 'Contact Circum',
                           icon: Icons.chat_bubble_outline_rounded,
                           onTap: () => widget.controller.reportWaitingContext(
                             deliveryId: widget.deliveryId,
@@ -3713,8 +3713,7 @@ _RiderDiscrepancyReviewState _riderDiscrepancyReviewState({
   if (senderDecision == 'approved_and_paid') {
     return _RiderDiscrepancyReviewState(
       status: 'Approved',
-      explanation:
-          'The adjustment was approved and the Sender completed payment.',
+      explanation: 'The adjustment was approved and Circum completed payment.',
       nextAction: 'Continue with the updated delivery instructions.',
       timestamp: reviewedAt,
     );
@@ -3723,8 +3722,8 @@ _RiderDiscrepancyReviewState _riderDiscrepancyReviewState({
     return _RiderDiscrepancyReviewState(
       status: 'Approved - awaiting sender payment',
       explanation:
-          'Admin approved the report. The Sender must complete payment before collection continues.',
-      nextAction: 'Wait for Sender payment confirmation.',
+          'Admin approved the report. Circum must complete payment before collection continues.',
+      nextAction: 'Wait for Circum payment confirmation.',
       timestamp: reviewedAt,
     );
   }
@@ -3948,7 +3947,7 @@ class _PickupWorkflowPanel extends StatelessWidget {
             'Parcel condition',
             'Photo verification',
             'Weight verification where enabled',
-            'Sender PIN where required',
+            'Circum PIN where required',
             'Package seal confirmation',
           ]
         : const [

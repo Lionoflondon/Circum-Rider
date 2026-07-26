@@ -196,7 +196,7 @@ void main() {
       expect(find.text('Navigate to Drop-off'), findsNothing);
       expect(find.text(_offers.first.dropoffAddress), findsNothing);
       expect(find.text('£12.00'), findsOneWidget);
-      expect(find.text('Sentinel'), findsOneWidget);
+      expect(find.text('Agent'), findsOneWidget);
       expect(find.text('+6 Trust'), findsOneWidget);
       expect(find.text('Marylebone → Chelsea'), findsOneWidget);
       expect(find.textContaining('Reject'), findsNothing);
@@ -343,7 +343,7 @@ void main() {
       expect(
           source,
           contains(
-              'The adjustment was approved and the Sender completed payment.'));
+              'The adjustment was approved and Circum completed payment.'));
       expect(source,
           contains('Hold collection until Circum reviews the evidence.'));
       expect(source,

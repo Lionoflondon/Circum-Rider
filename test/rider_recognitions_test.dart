@@ -49,4 +49,27 @@ void main() {
     expect(rank?.trustPoints, 0);
     expect(recognitions.foundingRider.awarded, isTrue);
   });
+
+  test('Rider rank honours admin-assigned rank metadata', () {
+    final rank = RiderRankSnapshot.from({
+      'trustPoints': 0,
+      'riderRank': 'veteran',
+      'rankUpdatedBy': 'admin-1',
+      'rankReason': 'Operations correction',
+    });
+
+    expect(rank?.rank, 'Veteran');
+    expect(rank?.trustPoints, 0);
+    expect(rank?.overrideReason, 'Operations correction');
+  });
+
+  test('Founding Rider can be read from founderRider authority fields', () {
+    final recognitions = RiderRecognitions.from({
+      'founderRider': true,
+      'founderRiderNumber': 7,
+    });
+
+    expect(recognitions.foundingRider.awarded, isTrue);
+    expect(recognitions.foundingRider.numberLabel(4), '#0007');
+  });
 }

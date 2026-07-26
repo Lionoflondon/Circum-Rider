@@ -37,13 +37,13 @@ class RiderOnboardingPolicy {
 
   static String blockedReason(Map<String, dynamic> rider) {
     if (rider['isFrozen'] == true || rider['frozen'] == true) {
-      return 'Your rider account is frozen. Contact support.';
+      return 'Your Circum Rider account is frozen. Contact support.';
     }
     if (rider['isSuspended'] == true || rider['suspended'] == true) {
       return 'Your account is suspended.';
     }
     if (rider['isClosed'] == true || rider['closed'] == true) {
-      return 'Your rider account is closed.';
+      return 'Your Circum Rider account is closed.';
     }
     return 'Complete your rider approval before accepting deliveries.';
   }

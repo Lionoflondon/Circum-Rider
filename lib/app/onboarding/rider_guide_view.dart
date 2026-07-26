@@ -274,7 +274,7 @@ class RiderGuideEntryCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Rider Guide',
+                  'Circum Rider Guide',
                   style: TextStyle(
                     color: RiderPalette.paper,
                     fontWeight: FontWeight.w900,
@@ -408,7 +408,7 @@ class _GuideTopBar extends StatelessWidget {
             if (authenticated || Navigator.canPop(context))
               _RoundButton(
                 icon: Icons.close_rounded,
-                label: 'Close Rider Guide',
+                label: 'Close Circum Rider Guide',
                 onTap: onClose,
               )
             else
@@ -711,7 +711,7 @@ const _slides = [
   ),
   _GuideSlideData(
     eyebrow: 'ROTH WALLET',
-    title: 'Roth is separate from Rider cash.',
+    title: 'Roth is separate from Circum Rider cash.',
     body:
         'A Rider Roth wallet is created or connected during onboarding for supported Circum rewards and services.',
     color: RiderPalette.amber,
