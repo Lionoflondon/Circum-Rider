@@ -1037,16 +1037,26 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               ));
               return;
             }
-            final documentReference = db.collection('riders').doc(user.uid);
-            // Get the document snapshot
-            final documentSnapshot = await documentReference.get();
+            final records = await Future.wait([
+              db.collection('riders').doc(user.uid).get(),
+              db.collection('riderProfiles').doc(user.uid).get(),
+            ]);
+            final riderRecord = records[0];
+            final riderProfile = records[1];
             String? riderPhone = userCredential.user?.phoneNumber;
             var authenticatedStatus = AuthenticatedStatus.authenticated;
+            var riderAccountState = RiderAccountState.onboardingNotStarted;
 
-            if (documentSnapshot.exists) {
-              final doc = documentSnapshot.data();
-              riderPhone = doc?['phone'] as String? ?? riderPhone;
-              final riderAccountState = RiderAccountStateResolver.resolve(doc);
+            if (riderRecord.exists || riderProfile.exists) {
+              final riderData = <String, dynamic>{
+                ...?riderProfile.data(),
+                ...?riderRecord.data(),
+              };
+              riderPhone = riderData['phone'] as String? ?? riderPhone;
+              riderAccountState = RiderAccountStateResolver.resolveRecords(
+                rider: riderRecord.data(),
+                riderProfile: riderProfile.data(),
+              );
               if (!RiderAccountStateResolver.canOperate(riderAccountState)) {
                 authenticatedStatus = riderAccountState ==
                             RiderAccountState.onboardingNotStarted ||
@@ -1064,9 +1074,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             emit(state.copyWith(
                 status: Status.success,
                 authenticatedStatus: authenticatedStatus,
-                riderAccountState: documentSnapshot.exists
-                    ? RiderAccountStateResolver.resolve(documentSnapshot.data())
-                    : RiderAccountState.onboardingNotStarted,
+                riderAccountState: riderAccountState,
                 username: user.displayName,
                 profilePhoto: user.photoURL,
                 email: user.email,
