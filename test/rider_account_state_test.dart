@@ -93,6 +93,24 @@ void main() {
       );
     });
 
+    test('canonical Rider approval wins over stale profile review fields', () {
+      expect(
+        RiderAccountStateResolver.resolveRecords(
+          rider: const {
+            'approvalStatus': 'approved',
+            'riderStatus': 'active',
+            'onboardingComplete': true,
+          },
+          riderProfile: const {
+            'approvalStatus': 'pending',
+            'verificationStatus': 'verification_pending',
+            'onboardingStatus': 'application_submitted',
+          },
+        ),
+        RiderAccountState.approved,
+      );
+    });
+
     test('does not invent vehicle defaults', () {
       final record = <String, dynamic>{'onboardingStatus': 'profile_started'};
       expect(record.containsKey('vehicle'), isFalse);

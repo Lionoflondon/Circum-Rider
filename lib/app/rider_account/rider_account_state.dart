@@ -33,7 +33,10 @@ class RiderAccountStateResolver {
     };
     for (final field in adminReviewFields) {
       final value = riderProfile?[field];
-      if (value != null) reconciled[field] = value;
+      final canonicalValue = reconciled[field];
+      final hasCanonicalValue =
+          canonicalValue != null && '$canonicalValue'.trim().isNotEmpty;
+      if (!hasCanonicalValue && value != null) reconciled[field] = value;
     }
     final profileValues = riderProfile ?? const <String, dynamic>{};
     final profileApproved = [

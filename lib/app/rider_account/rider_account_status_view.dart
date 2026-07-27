@@ -34,12 +34,10 @@ class RiderAccountStatusView extends StatelessWidget {
           };
           final content = _content(accountState, data);
           return RiderOnboardingShell(
-            currentStep:
-                accountState == RiderAccountState.moreInformationRequired
-                    ? 5
-                    : 6,
+            currentStep: 4,
             title: content.$1,
             subtitle: content.$2,
+            showStepProgress: false,
             showBackButton: false,
             child: RiderGlassCard(
               child: Column(
