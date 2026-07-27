@@ -63,7 +63,10 @@ void main() {
           contains(
               'Available deliveries, scheduled work, active deliveries and activity.'));
       expect(offers, contains('Scheduled deliveries'));
-      expect(offers, contains('Active delivery'));
+      expect(offers, contains('Active deliveries'));
+      expect(offers, contains('Going Online...'));
+      expect(offers, contains('Unavailable until you go online.'));
+      expect(offers, contains('Go online first to use'));
       expect(offers, contains('Activity'));
       expect(offers, contains('_JobsStateScaffold'));
       expect(offers, contains('RiderAcceptStatus.alreadyTaken'));

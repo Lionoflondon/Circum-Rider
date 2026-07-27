@@ -1018,96 +1018,113 @@ class _JobsStateScaffold extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 18),
-                    RiderGlassSurface(
-                      padding: const EdgeInsets.all(18),
-                      radius: 22,
-                      opacity: .64,
-                      edgeColor: error
-                          ? RiderPalette.red
-                          : offline
-                              ? RiderPalette.amber
-                              : RiderPalette.blue,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                width: 42,
-                                height: 42,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: (error
-                                          ? RiderPalette.red
-                                          : offline
-                                              ? RiderPalette.amber
-                                              : RiderPalette.blue)
-                                      .withValues(alpha: .14),
-                                ),
-                                child: loading
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(11),
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: RiderPalette.blue,
-                                        ),
-                                      )
-                                    : Icon(
-                                        error
-                                            ? Icons.cloud_off_rounded
-                                            : offline
-                                                ? Icons
-                                                    .power_settings_new_rounded
-                                                : Icons.radar_rounded,
-                                        color: error
+                    TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: offline ? 1 : 0),
+                      duration: const Duration(milliseconds: 1100),
+                      curve: Curves.easeInOut,
+                      builder: (context, value, child) => DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: offline
+                              ? [
+                                  BoxShadow(
+                                    color: RiderPalette.amber
+                                        .withValues(alpha: .10 + value * .10),
+                                    blurRadius: 30 + value * 16,
+                                    spreadRadius: 1,
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: child,
+                      ),
+                      child: RiderGlassSurface(
+                        padding: const EdgeInsets.all(20),
+                        radius: 22,
+                        opacity: .66,
+                        edgeColor: error
+                            ? RiderPalette.red
+                            : offline
+                                ? RiderPalette.amber
+                                : RiderPalette.blue,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  width: 46,
+                                  height: 46,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: (error
                                             ? RiderPalette.red
                                             : offline
                                                 ? RiderPalette.amber
-                                                : RiderPalette.blue,
-                                      ),
-                              ),
-                              const SizedBox(width: 13),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      title,
-                                      style: const TextStyle(
-                                        color: RiderPalette.paper,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 18,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 3),
-                                    Text(
-                                      message,
-                                      style: const TextStyle(
-                                        color: RiderPalette.muted,
-                                        fontSize: 12.5,
-                                        height: 1.35,
-                                      ),
-                                    ),
-                                  ],
+                                                : RiderPalette.blue)
+                                        .withValues(alpha: .14),
+                                  ),
+                                  child: loading
+                                      ? const Padding(
+                                          padding: EdgeInsets.all(12),
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.2,
+                                            color: RiderPalette.blue,
+                                          ),
+                                        )
+                                      : Icon(
+                                          error
+                                              ? Icons.cloud_off_rounded
+                                              : offline
+                                                  ? Icons
+                                                      .power_settings_new_rounded
+                                                  : Icons.radar_rounded,
+                                          color: error
+                                              ? RiderPalette.red
+                                              : offline
+                                                  ? RiderPalette.amber
+                                                  : RiderPalette.blue,
+                                        ),
                                 ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title,
+                                        style: const TextStyle(
+                                          color: RiderPalette.paper,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 21,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        offline
+                                            ? '$message Going online makes you visible for eligible delivery, campaign and scheduled work.'
+                                            : message,
+                                        style: const TextStyle(
+                                          color: RiderPalette.muted,
+                                          fontSize: 13,
+                                          height: 1.42,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            if (actionLabel != null) ...[
+                              const SizedBox(height: 18),
+                              _GoOnlineActionButton(
+                                label: actionLabel!,
+                                onPressed: onAction,
                               ),
                             ],
-                          ),
-                          if (actionLabel != null) ...[
-                            const SizedBox(height: 16),
-                            FilledButton(
-                              onPressed: onAction,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: RiderPalette.blue,
-                                minimumSize: const Size.fromHeight(48),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(15),
-                                ),
-                              ),
-                              child: Text(actionLabel!),
-                            ),
                           ],
-                        ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -1117,6 +1134,53 @@ class _JobsStateScaffold extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GoOnlineActionButton extends StatefulWidget {
+  const _GoOnlineActionButton({
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  State<_GoOnlineActionButton> createState() => _GoOnlineActionButtonState();
+}
+
+class _GoOnlineActionButtonState extends State<_GoOnlineActionButton> {
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: widget.onPressed == null || _busy
+          ? null
+          : () {
+              setState(() => _busy = true);
+              widget.onPressed!();
+            },
+      icon: _busy
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: RiderPalette.paper,
+              ),
+            )
+          : const Icon(Icons.power_settings_new_rounded),
+      label: Text(_busy ? 'Going Online...' : widget.label),
+      style: FilledButton.styleFrom(
+        backgroundColor: RiderPalette.blue,
+        minimumSize: const Size.fromHeight(56),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(17),
         ),
       ),
     );
@@ -1139,28 +1203,32 @@ class _JobsInfoGrid extends StatelessWidget {
               ? 'Go online from Home to receive new offers.'
               : 'New offers will appear here automatically.',
           accent: offline ? RiderPalette.amber : RiderPalette.green,
+          offline: offline,
         ),
         const SizedBox(height: 10),
-        const _JobsInfoTile(
+        _JobsInfoTile(
           icon: Icons.calendar_month_outlined,
           title: 'Scheduled deliveries',
           subtitle: 'Scheduled deliveries stay in Schedule until ready.',
           accent: RiderPalette.purple,
+          offline: offline,
         ),
         const SizedBox(height: 10),
-        const _JobsInfoTile(
+        _JobsInfoTile(
           icon: Icons.near_me_outlined,
-          title: 'Active delivery',
+          title: 'Active deliveries',
           subtitle: 'Accepted jobs restore into the live delivery flow.',
           accent: RiderPalette.blue,
+          offline: offline,
         ),
         const SizedBox(height: 10),
-        const _JobsInfoTile(
+        _JobsInfoTile(
           icon: Icons.history_rounded,
           title: 'Activity',
           subtitle:
               'Completed deliveries remain available in activity and earnings.',
           accent: RiderPalette.green,
+          offline: offline,
         ),
       ],
     );
@@ -1173,57 +1241,80 @@ class _JobsInfoTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.accent,
+    required this.offline,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final Color accent;
+  final bool offline;
 
   @override
   Widget build(BuildContext context) {
-    return RiderGlassSurface(
-      padding: const EdgeInsets.all(15),
-      radius: 18,
-      opacity: .58,
-      blur: 12,
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: .13),
-              borderRadius: BorderRadius.circular(11),
+    return Semantics(
+      button: true,
+      enabled: !offline,
+      label: '$title. ${offline ? 'Unavailable while offline.' : subtitle}',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(offline
+                  ? 'Go online first to use $title.'
+                  : '$title will open when matching work is available.'),
             ),
-            child: Icon(icon, color: accent, size: 19),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          );
+        },
+        child: AnimatedOpacity(
+          opacity: offline ? .62 : 1,
+          duration: const Duration(milliseconds: 180),
+          child: RiderGlassSurface(
+            padding: const EdgeInsets.all(15),
+            radius: 18,
+            opacity: .58,
+            blur: 12,
+            child: Row(
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: RiderPalette.paper,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13.5,
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: .13),
+                    borderRadius: BorderRadius.circular(11),
                   ),
+                  child: Icon(icon, color: accent, size: 19),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: RiderPalette.muted,
-                    fontSize: 11.5,
-                    height: 1.3,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          color: RiderPalette.paper,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        offline ? 'Unavailable until you go online.' : subtitle,
+                        style: const TextStyle(
+                          color: RiderPalette.muted,
+                          fontSize: 11.5,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

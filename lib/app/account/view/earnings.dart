@@ -5,6 +5,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/services.dart';
 
 import '../../rider_design/rider_ui.dart';
 import '../../onboarding/rider_stripe_payout_onboarding.dart';
@@ -172,6 +173,13 @@ class _EarningsContent extends StatelessWidget {
     final pending = _number(summary['pending'] ??
         summary['pendingBalance'] ??
         storedEarnings['pendingBalance']);
+    final processing = _number(summary['processing'] ??
+        summary['processingBalance'] ??
+        summary['processingPayouts']);
+    final lifetime = _number(summary['lifetimeEarnings'] ??
+        summary['totalLifetimeEarnings'] ??
+        storedEarnings['lifetimeEarnings'] ??
+        storedEarnings['totalAmountEarned']);
     final delivery = _number(totals['delivery_earning']);
     final tips = _number(totals['tip']);
     final waiting =
@@ -184,12 +192,13 @@ class _EarningsContent extends StatelessWidget {
     final payoutReadiness = riderPayoutReadinessFrom(summary);
     final payoutsEnabled =
         payoutReadiness == RiderPayoutReadiness.payoutsEnabled;
-    final activityCount = summary['activityCount'] is num
-        ? (summary['activityCount'] as num).toInt()
-        : transactions.length;
-
     final sortedPayouts = [...payouts]
       ..sort((a, b) => _millis(b).compareTo(_millis(a)));
+    final withdrawn = sortedPayouts
+        .where(_isPaidPayout)
+        .fold<double>(0, (total, item) => total + _payoutAmount(item));
+    final explained = delivery + tips + waiting + adjustments;
+    final settlement = available - explained;
     final activePayout = _firstWhereOrNull(sortedPayouts, _isActivePayout);
     final pendingPayout = activePayout != null;
     final sortedTransactions = [...transactions]
@@ -233,8 +242,6 @@ class _EarningsContent extends StatelessWidget {
             ] else ...[
               _BalanceHero(
                 available: available,
-                pending: pending,
-                activityCount: activityCount,
                 readiness: readiness,
                 reconciled: reconciled,
                 unexplained: unexplained,
@@ -252,12 +259,29 @@ class _EarningsContent extends StatelessWidget {
                     _reviewMessage(summary, activePayout, unexplained),
               ),
               const SizedBox(height: 24),
+              _SummaryMetricGrid(
+                available: available,
+                pending: pending,
+                processing: processing,
+                lifetime: lifetime,
+              ),
+              const SizedBox(height: 24),
               _BreakdownGrid(
                 delivery: delivery,
                 tips: tips,
                 waiting: waiting,
                 adjustments: adjustments,
+                withdrawn: withdrawn,
+                settlement: settlement,
               ),
+              const SizedBox(height: 24),
+              _PerformanceSection(
+                summary: summary,
+                storedEarnings: storedEarnings,
+                transactions: sortedTransactions,
+              ),
+              const SizedBox(height: 24),
+              _AnalyticsSection(transactions: sortedTransactions),
               const SizedBox(height: 24),
               _HistorySection(
                 title: 'Payout history',
@@ -268,7 +292,8 @@ class _EarningsContent extends StatelessWidget {
                   message:
                       'Requested and completed Stripe payouts will appear here.',
                 ),
-                rows: sortedPayouts.take(6).map(_PayoutRow.new).toList(),
+                rows:
+                    sortedPayouts.take(6).map(_PayoutTimelineRow.new).toList(),
               ),
               const SizedBox(height: 24),
               _HistorySection(
@@ -282,7 +307,7 @@ class _EarningsContent extends StatelessWidget {
                 ),
                 rows: sortedTransactions
                     .take(12)
-                    .map(_TransactionRow.new)
+                    .map(_ExpandableTransactionRow.new)
                     .toList(),
               ),
             ],
@@ -467,8 +492,6 @@ class _TopBar extends StatelessWidget {
 class _BalanceHero extends StatelessWidget {
   const _BalanceHero({
     required this.available,
-    required this.pending,
-    required this.activityCount,
     required this.readiness,
     required this.reconciled,
     required this.unexplained,
@@ -481,8 +504,6 @@ class _BalanceHero extends StatelessWidget {
   });
 
   final double available;
-  final double pending;
-  final int activityCount;
   final String readiness;
   final bool reconciled;
   final double unexplained;
@@ -511,22 +532,6 @@ class _BalanceHero extends StatelessWidget {
             const Text(
               'Available balance',
               style: TextStyle(color: RiderPalette.muted, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                if (pending > 0) ...[
-                  Expanded(
-                    child:
-                        _MiniMetric(value: _money(pending), label: 'PENDING'),
-                  ),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(
-                  child: _MiniMetric(
-                      value: '$activityCount', label: 'TRANSACTIONS'),
-                ),
-              ],
             ),
             const SizedBox(height: 16),
             RiderPrimaryButton(
@@ -578,54 +583,197 @@ class _BreakdownGrid extends StatelessWidget {
     required this.tips,
     required this.waiting,
     required this.adjustments,
+    required this.withdrawn,
+    required this.settlement,
   });
 
   final double delivery;
   final double tips;
   final double waiting;
   final double adjustments;
+  final double withdrawn;
+  final double settlement;
 
   @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) {
+    final extraTiles = <Widget>[
+      if (withdrawn.abs() > 0.009)
+        _BreakdownTile(
+          icon: Icons.account_balance_outlined,
+          color: RiderPalette.green,
+          value: _money(withdrawn),
+          label: 'Withdrawn',
+        ),
+      if (settlement.abs() > 0.009)
+        _BreakdownTile(
+          icon: Icons.sync_alt_rounded,
+          color: RiderPalette.blue,
+          value: _signedMoney(settlement),
+          label: settlement > 0 ? 'Pending Settlement' : 'Settlement Offset',
+        ),
+    ];
+    final tiles = <Widget>[
+      _BreakdownTile(
+        icon: Icons.north_east_rounded,
+        color: RiderPalette.blue,
+        value: _money(delivery),
+        label: 'Deliveries',
+      ),
+      _BreakdownTile(
+        icon: Icons.payments_outlined,
+        color: RiderPalette.purple,
+        value: _money(tips),
+        label: 'Tips',
+      ),
+      _BreakdownTile(
+        icon: Icons.schedule_rounded,
+        color: RiderPalette.amber,
+        value: _money(waiting),
+        label: 'Waiting & No-show',
+      ),
+      _BreakdownTile(
+        icon: Icons.format_align_left_rounded,
+        color: RiderPalette.muted,
+        value: _money(adjustments),
+        label: 'Adjustments',
+      ),
+      ...extraTiles,
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionLabel('Breakdown'),
+        const SizedBox(height: 8),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+          childAspectRatio: 1.52,
+          children: tiles,
+        ),
+      ],
+    );
+  }
+}
+
+class _SummaryMetricGrid extends StatelessWidget {
+  const _SummaryMetricGrid({
+    required this.available,
+    required this.pending,
+    required this.processing,
+    required this.lifetime,
+  });
+
+  final double available;
+  final double pending;
+  final double processing;
+  final double lifetime;
+
+  @override
+  Widget build(BuildContext context) => GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 1.75,
         children: [
-          const _SectionLabel('Breakdown'),
-          const SizedBox(height: 8),
-          GridView.count(
-            crossAxisCount: 2,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-            childAspectRatio: 1.52,
+          _SummaryMetricTile(
+            icon: Icons.account_balance_wallet_outlined,
+            color: RiderPalette.green,
+            value: _money(available),
+            label: 'Available Balance',
+          ),
+          _SummaryMetricTile(
+            icon: Icons.pending_actions_rounded,
+            color: RiderPalette.amber,
+            value: _money(pending),
+            label: 'Pending Payout',
+          ),
+          _SummaryMetricTile(
+            icon: Icons.sync_rounded,
+            color: RiderPalette.blue,
+            value: _money(processing),
+            label: 'Processing',
+          ),
+          _SummaryMetricTile(
+            icon: Icons.trending_up_rounded,
+            color: RiderPalette.purple,
+            value: _money(lifetime),
+            label: 'Lifetime Earnings',
+          ),
+        ],
+      );
+}
+
+class _SummaryMetricTile extends StatelessWidget {
+  const _SummaryMetricTile({
+    required this.icon,
+    required this.color,
+    required this.value,
+    required this.label,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        label: '$label $value',
+        child: _EarningsGlass(
+          radius: 18,
+          blur: 12,
+          padding: const EdgeInsets.all(15),
+          child: Row(
             children: [
-              _BreakdownTile(
-                icon: Icons.north_east_rounded,
-                color: RiderPalette.blue,
-                value: _money(delivery),
-                label: 'Deliveries',
-              ),
-              _BreakdownTile(
-                icon: Icons.payments_outlined,
-                color: RiderPalette.purple,
-                value: _money(tips),
-                label: 'Tips',
-              ),
-              _BreakdownTile(
-                icon: Icons.schedule_rounded,
-                color: RiderPalette.amber,
-                value: _money(waiting),
-                label: 'Waiting & No-show',
-              ),
-              _BreakdownTile(
-                icon: Icons.format_align_left_rounded,
-                color: RiderPalette.muted,
-                value: _money(adjustments),
-                label: 'Adjustments',
+              _IconBox(icon: icon, color: color, size: 36),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TweenAnimationBuilder<double>(
+                      duration: const Duration(milliseconds: 420),
+                      tween: Tween(begin: 0, end: 1),
+                      builder: (context, value, child) => Opacity(
+                        opacity: value,
+                        child: child,
+                      ),
+                      child: Text(
+                        value,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: RiderPalette.paper,
+                          fontFamily: RiderTypography.mono,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      label,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: RiderPalette.muted,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: .2,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-        ],
+        ),
       );
 }
 
@@ -675,6 +823,313 @@ class _BreakdownTile extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ],
+        ),
+      );
+}
+
+class _PerformanceSection extends StatelessWidget {
+  const _PerformanceSection({
+    required this.summary,
+    required this.storedEarnings,
+    required this.transactions,
+  });
+
+  final Map<String, dynamic> summary;
+  final Map<String, dynamic> storedEarnings;
+  final List<Map<String, dynamic>> transactions;
+
+  @override
+  Widget build(BuildContext context) {
+    final completed = _intValue(summary['completedDeliveries'] ??
+        summary['completedJobs'] ??
+        storedEarnings['completedDeliveries']);
+    final weekly = _periodTotal(transactions, const Duration(days: 7));
+    final monthly = _periodTotal(transactions, const Duration(days: 30));
+    final trust = _number(summary['trustScore'] ??
+        summary['trustPoints'] ??
+        storedEarnings['trustScore'] ??
+        storedEarnings['trustPoints']);
+    final rank =
+        '${summary['currentRank'] ?? summary['riderRank'] ?? storedEarnings['riderRank'] ?? 'Agent'}';
+    final acceptance = _percentage(summary['acceptanceRate'] ??
+        summary['acceptance'] ??
+        storedEarnings['acceptanceRate']);
+    final completion = _percentage(summary['completionRate'] ??
+        summary['completion'] ??
+        storedEarnings['completionRate']);
+    final rating = _rating(summary['averageRating'] ??
+        summary['rating'] ??
+        storedEarnings['averageRating']);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionLabel('Rider performance'),
+        const SizedBox(height: 8),
+        _EarningsGlass(
+          padding: const EdgeInsets.all(16),
+          child: Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _PerformancePill(
+                label: 'Trust Score',
+                value: trust.toStringAsFixed(trust % 1 == 0 ? 0 : 1),
+                icon: Icons.verified_user_outlined,
+                color: RiderPalette.blue,
+              ),
+              _PerformancePill(
+                label: 'Current Rank',
+                value: _title(rank),
+                icon: Icons.workspace_premium_outlined,
+                color: RiderPalette.purple,
+              ),
+              _PerformancePill(
+                label: 'Completed Deliveries',
+                value: '$completed',
+                icon: Icons.check_circle_outline_rounded,
+                color: RiderPalette.green,
+              ),
+              _PerformancePill(
+                label: 'Acceptance Rate',
+                value: acceptance,
+                icon: Icons.touch_app_outlined,
+                color: RiderPalette.amber,
+              ),
+              _PerformancePill(
+                label: 'Completion Rate',
+                value: completion,
+                icon: Icons.flag_outlined,
+                color: RiderPalette.green,
+              ),
+              _PerformancePill(
+                label: 'Weekly Earnings',
+                value: _money(weekly),
+                icon: Icons.calendar_view_week_outlined,
+                color: RiderPalette.blue,
+              ),
+              _PerformancePill(
+                label: 'Monthly Earnings',
+                value: _money(monthly),
+                icon: Icons.calendar_month_outlined,
+                color: RiderPalette.purple,
+              ),
+              _PerformancePill(
+                label: 'Average Rating',
+                value: rating,
+                icon: Icons.star_border_rounded,
+                color: RiderPalette.amber,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PerformancePill extends StatelessWidget {
+  const _PerformancePill({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        label: '$label $value',
+        child: Container(
+          width: 154,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: .035),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withValues(alpha: .075)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: color, size: 18),
+              const SizedBox(height: 9),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: RiderPalette.paper,
+                  fontFamily: RiderTypography.mono,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: RiderPalette.muted,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w800,
+                  height: 1.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
+class _AnalyticsSection extends StatelessWidget {
+  const _AnalyticsSection({required this.transactions});
+
+  final List<Map<String, dynamic>> transactions;
+
+  @override
+  Widget build(BuildContext context) {
+    final week = _periodTotal(transactions, const Duration(days: 7));
+    final month = _periodTotal(transactions, const Duration(days: 30));
+    final average = transactions.isEmpty
+        ? 0.0
+        : transactions
+                .map((item) => _number(item['amount']))
+                .where((amount) => amount > 0)
+                .fold<double>(0, (total, amount) => total + amount) /
+            transactions
+                .where((item) => _number(item['amount']) > 0)
+                .length
+                .clamp(1, transactions.length);
+    final topDay = _topEarningDay(transactions);
+    final peakHour = _peakWorkingHour(transactions);
+    final trend = month >= week ? 'Building' : 'Cooling';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionLabel('Analytics'),
+        const SizedBox(height: 8),
+        _EarningsGlass(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _AnalyticsCard(
+                      label: 'This Week',
+                      value: _money(week),
+                      color: RiderPalette.green,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _AnalyticsCard(
+                      label: 'Last 30 Days',
+                      value: _money(month),
+                      color: RiderPalette.blue,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _AnalyticsCard(
+                      label: 'Monthly trend',
+                      value: trend,
+                      color: RiderPalette.purple,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _AnalyticsCard(
+                      label: 'Average job value',
+                      value: _money(average.isFinite ? average : 0),
+                      color: RiderPalette.amber,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _AnalyticsCard(
+                      label: 'Top earning days',
+                      value: topDay,
+                      color: RiderPalette.green,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _AnalyticsCard(
+                      label: 'Peak working hours',
+                      value: peakHour,
+                      color: RiderPalette.blue,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AnalyticsCard extends StatelessWidget {
+  const _AnalyticsCard({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: .07),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: color.withValues(alpha: .16)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: RiderPalette.paper,
+                fontFamily: RiderTypography.mono,
+                fontWeight: FontWeight.w900,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ],
         ),
@@ -741,8 +1196,8 @@ class _HistorySection extends StatelessWidget {
       );
 }
 
-class _PayoutRow extends StatelessWidget {
-  const _PayoutRow(this.item);
+class _PayoutTimelineRow extends StatelessWidget {
+  const _PayoutTimelineRow(this.item);
 
   final Map<String, dynamic> item;
 
@@ -761,32 +1216,130 @@ class _PayoutRow extends StatelessWidget {
       if (reason.isNotEmpty) reason,
     ].join(' · ');
 
-    return _LedgerRow(
-      icon: failed
-          ? Icons.error_outline_rounded
-          : paid
-              ? Icons.check_rounded
-              : Icons.account_balance_wallet_outlined,
-      iconColor: failed
-          ? RiderPalette.red
-          : paid
-              ? RiderPalette.green
-              : RiderPalette.blue,
-      title: _title(status).isEmpty ? 'Processing' : _title(status),
-      subtitle: subtitle,
-      amount: _money(amount),
-      status: _title(status).toUpperCase(),
-      statusColor: failed
-          ? RiderPalette.red
-          : paid
-              ? RiderPalette.green
-              : RiderPalette.blue,
+    final statusColor = failed
+        ? RiderPalette.red
+        : paid
+            ? RiderPalette.green
+            : RiderPalette.blue;
+    final label = _title(status).isEmpty ? 'Processing' : _title(status);
+    final reference =
+        '${item['stripePayoutId'] ?? item['payoutId'] ?? item['id'] ?? ''}'
+            .trim();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _PayoutStepper(status: status.toLowerCase(), color: statusColor),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          color: RiderPalette.paper,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      _money(amount),
+                      style: const TextStyle(
+                        color: RiderPalette.paper,
+                        fontFamily: RiderTypography.mono,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: RiderPalette.muted,
+                    fontSize: 11.5,
+                  ),
+                ),
+                const SizedBox(height: 7),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _TinyPill(label: label.toUpperCase(), color: statusColor),
+                    if (_estimatedArrival(item) != null)
+                      _TinyPill(
+                        label: 'ETA ${_estimatedArrival(item)!}',
+                        color: RiderPalette.blue,
+                      ),
+                    if (reference.isNotEmpty)
+                      _TinyPill(
+                        label: 'REF ${_shortRef(reference)}',
+                        color: RiderPalette.muted,
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _TransactionRow extends StatelessWidget {
-  const _TransactionRow(this.item);
+class _PayoutStepper extends StatelessWidget {
+  const _PayoutStepper({required this.status, required this.color});
+
+  final String status;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final stages = ['Available', 'Requested', 'Processing', 'Paid'];
+    final index = status.contains('paid') || status.contains('complete')
+        ? 3
+        : status.contains('process')
+            ? 2
+            : status.contains('request') || status.contains('pending')
+                ? 1
+                : 0;
+    return Column(
+      children: [
+        for (var i = 0; i < stages.length; i++) ...[
+          Tooltip(
+            message: stages[i],
+            child: Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: i <= index ? color : Colors.white.withValues(alpha: .16),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          if (i != stages.length - 1)
+            Container(
+              width: 2,
+              height: 12,
+              color: i < index
+                  ? color.withValues(alpha: .55)
+                  : Colors.white.withValues(alpha: .12),
+            ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ExpandableTransactionRow extends StatelessWidget {
+  const _ExpandableTransactionRow(this.item);
 
   final Map<String, dynamic> item;
 
@@ -799,15 +1352,64 @@ class _TransactionRow extends StatelessWidget {
         type.toLowerCase().contains('debit') ||
         type.toLowerCase().contains('payout') ||
         type.toLowerCase().contains('reversal');
-    return _LedgerRow(
-      icon: _transactionIcon(type, isDebit),
-      iconColor: isDebit ? RiderPalette.red : RiderPalette.green,
-      title: _transactionTitle(type),
-      subtitle: _date(item),
-      amount: _signedMoney(amount),
-      status: status,
-      statusColor: _statusColor(status),
-      amountMuted: isDebit,
+    final reference =
+        '${item['paymentReference'] ?? item['paymentIntentId'] ?? item['deliveryId'] ?? item['id'] ?? ''}'
+            .trim();
+    return Theme(
+      data: Theme.of(context).copyWith(
+        dividerColor: Colors.transparent,
+        splashColor: Colors.white.withValues(alpha: .04),
+        highlightColor: Colors.white.withValues(alpha: .03),
+      ),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        iconColor: RiderPalette.blue,
+        collapsedIconColor: RiderPalette.muted,
+        leading: _IconBox(
+          icon: _transactionIcon(type, isDebit),
+          color: isDebit ? RiderPalette.red : RiderPalette.green,
+          size: 36,
+        ),
+        title: Text(
+          _transactionTitle(type),
+          style: const TextStyle(
+            color: RiderPalette.paper,
+            fontWeight: FontWeight.w800,
+            fontSize: 14,
+          ),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                _date(item),
+                style: const TextStyle(
+                  color: RiderPalette.muted,
+                  fontSize: 11.5,
+                ),
+              ),
+              _TinyPill(label: status, color: _statusColor(status)),
+            ],
+          ),
+        ),
+        trailing: Text(
+          _signedMoney(amount),
+          style: TextStyle(
+            color: isDebit ? RiderPalette.muted : RiderPalette.paper,
+            fontFamily: RiderTypography.mono,
+            fontWeight: FontWeight.w900,
+            fontSize: 14,
+          ),
+        ),
+        children: [
+          _TransactionDetailGrid(item: item, reference: reference),
+        ],
+      ),
     );
   }
 
@@ -836,6 +1438,104 @@ class _TransactionRow extends StatelessWidget {
     }
     return _title(type);
   }
+}
+
+class _TransactionDetailGrid extends StatelessWidget {
+  const _TransactionDetailGrid({
+    required this.item,
+    required this.reference,
+  });
+
+  final Map<String, dynamic> item;
+  final String reference;
+
+  @override
+  Widget build(BuildContext context) {
+    final fields = <MapEntry<String, String>>[
+      MapEntry('Delivery ID', _clean(item['deliveryId'] ?? item['jobId'])),
+      MapEntry('Customer', _clean(item['customerName'] ?? item['senderName'])),
+      MapEntry('Distance', _clean(item['distanceLabel'] ?? item['distance'])),
+      MapEntry('Vehicle', _clean(item['vehicle'] ?? item['vehicleLabel'])),
+      MapEntry('Tip', _money(_number(item['tip']))),
+      MapEntry('Fees', _money(_number(item['fees'] ?? item['fee']))),
+      MapEntry(
+          'Roth earned', _clean(item['rothEarned'] ?? item['roth'] ?? '0')),
+      MapEntry('Date', _date(item)),
+      MapEntry('Time', _time(item)),
+      MapEntry('Status', _transactionStatus(item)),
+      MapEntry(
+          'Payment reference', reference.isEmpty ? 'Not available' : reference),
+    ];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .03),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: .07)),
+      ),
+      child: Column(
+        children: [
+          for (final field in fields) ...[
+            _DetailLine(label: field.key, value: field.value),
+            if (field.key != fields.last.key) const SizedBox(height: 8),
+          ],
+          if (reference.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: reference));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Reference copied.')),
+                  );
+                },
+                icon: const Icon(Icons.copy_rounded, size: 16),
+                label: const Text('Copy reference'),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailLine extends StatelessWidget {
+  const _DetailLine({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 118,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: RiderPalette.muted,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: RiderPalette.paper,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      );
 }
 
 class _PayoutStatusCard extends StatelessWidget {
@@ -932,78 +1632,6 @@ class _NoEarningsState extends StatelessWidget {
       );
 }
 
-class _LedgerRow extends StatelessWidget {
-  const _LedgerRow({
-    required this.icon,
-    required this.iconColor,
-    required this.title,
-    required this.subtitle,
-    required this.amount,
-    this.status,
-    this.statusColor,
-    this.amountMuted = false,
-  });
-
-  final IconData icon;
-  final Color iconColor;
-  final String title;
-  final String subtitle;
-  final String amount;
-  final String? status;
-  final Color? statusColor;
-  final bool amountMuted;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            _IconBox(icon: icon, color: iconColor, size: 36),
-            const SizedBox(width: 13),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: RiderPalette.paper,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: RiderPalette.muted,
-                      fontSize: 11.5,
-                    ),
-                  ),
-                  if (status != null) ...[
-                    const SizedBox(height: 4),
-                    _TinyPill(label: status!, color: statusColor!),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              amount,
-              style: TextStyle(
-                color: amountMuted ? RiderPalette.muted : RiderPalette.paper,
-                fontFamily: RiderTypography.mono,
-                fontWeight: FontWeight.w900,
-                fontSize: 14,
-              ),
-            ),
-          ],
-        ),
-      );
-}
-
 class _StatusBanner extends StatelessWidget {
   const _StatusBanner({
     required this.title,
@@ -1074,47 +1702,6 @@ class _StatusBanner extends StatelessWidget {
       ),
     );
   }
-}
-
-class _MiniMetric extends StatelessWidget {
-  const _MiniMetric({required this.value, required this.label});
-
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .035),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withValues(alpha: .075)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              value,
-              style: const TextStyle(
-                color: RiderPalette.paper,
-                fontFamily: RiderTypography.mono,
-                fontWeight: FontWeight.w900,
-                fontSize: 17,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: const TextStyle(
-                color: RiderPalette.muted,
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                letterSpacing: .4,
-              ),
-            ),
-          ],
-        ),
-      );
 }
 
 class _TinyPill extends StatelessWidget {
@@ -1281,11 +1868,24 @@ Map<String, dynamic> _map(Object? value) =>
 
 double _number(Object? value) => value is num ? value.toDouble() : 0;
 
+int _intValue(Object? value) => value is num ? value.toInt() : 0;
+
 bool _isActivePayout(Map<String, dynamic> item) {
   final status =
       '${item['status'] ?? item['payoutStatus'] ?? ''}'.toLowerCase();
   return {'requested', 'pending', 'approved', 'processing'}.contains(status);
 }
+
+bool _isPaidPayout(Map<String, dynamic> item) {
+  final status =
+      '${item['status'] ?? item['payoutStatus'] ?? ''}'.toLowerCase();
+  return status.contains('paid') ||
+      status.contains('complete') ||
+      status.contains('settled');
+}
+
+double _payoutAmount(Map<String, dynamic> item) =>
+    _number(item['amount'] ?? item['riderGrossShare']);
 
 bool _requiresPayoutReview(
     Map<String, dynamic> summary, Map<String, dynamic>? activePayout) {
@@ -1410,9 +2010,69 @@ String _signedMoney(double value) {
   return _money(value);
 }
 
+String _percentage(Object? value) {
+  final number = _number(value);
+  if (number <= 0) return '0%';
+  final percent = number <= 1 ? number * 100 : number;
+  return '${percent.toStringAsFixed(percent % 1 == 0 ? 0 : 1)}%';
+}
+
+String _rating(Object? value) {
+  final number = _number(value);
+  if (number <= 0) return '0.0';
+  return number.toStringAsFixed(1);
+}
+
+double _periodTotal(List<Map<String, dynamic>> items, Duration period) {
+  final cutoff = DateTime.now().subtract(period).millisecondsSinceEpoch;
+  return items
+      .where((item) => _millis(item) >= cutoff)
+      .map((item) => _number(item['amount']))
+      .where((amount) => amount > 0)
+      .fold<double>(0, (total, amount) => total + amount);
+}
+
+String _topEarningDay(List<Map<String, dynamic>> items) {
+  final totals = <int, double>{};
+  for (final item in items) {
+    final timestamp = _timestamp(item);
+    if (timestamp == null) continue;
+    final day = DateTime(timestamp.year, timestamp.month, timestamp.day)
+        .millisecondsSinceEpoch;
+    totals[day] = (totals[day] ?? 0) + _number(item['amount']);
+  }
+  if (totals.isEmpty) return 'No data yet';
+  final top = totals.entries.reduce(
+    (a, b) => a.value >= b.value ? a : b,
+  );
+  final date = DateTime.fromMillisecondsSinceEpoch(top.key);
+  return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}';
+}
+
+String _peakWorkingHour(List<Map<String, dynamic>> items) {
+  final totals = <int, int>{};
+  for (final item in items) {
+    final timestamp = _timestamp(item);
+    if (timestamp == null) continue;
+    totals[timestamp.hour] = (totals[timestamp.hour] ?? 0) + 1;
+  }
+  if (totals.isEmpty) return 'No data yet';
+  final top = totals.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
+  final end = (top + 1) % 24;
+  return '${top.toString().padLeft(2, '0')}:00-${end.toString().padLeft(2, '0')}:00';
+}
+
 int _millis(Map<String, dynamic> item) {
-  final value = item['createdAt'] ?? item['updatedAt'] ?? item['paidAt'];
-  return value is Timestamp ? value.millisecondsSinceEpoch : 0;
+  return _timestamp(item)?.millisecondsSinceEpoch ?? 0;
+}
+
+DateTime? _timestamp(Map<String, dynamic> item) {
+  final value = item['createdAt'] ??
+      item['updatedAt'] ??
+      item['paidAt'] ??
+      item['completedAt'] ??
+      item['availableAt'];
+  return value is Timestamp ? value.toDate().toLocal() : null;
 }
 
 String _title(String value) => value
@@ -1423,13 +2083,35 @@ String _title(String value) => value
     .join(' ');
 
 String _date(Map<String, dynamic> item) {
-  final value = item['createdAt'] ?? item['updatedAt'] ?? item['paidAt'];
-  if (value is! Timestamp) return 'Status pending';
-  return _formatDateTime(value);
+  final value = _timestamp(item);
+  if (value == null) return 'Status pending';
+  return _formatDate(value);
+}
+
+String _time(Map<String, dynamic> item) {
+  final value = _timestamp(item);
+  if (value == null) return 'Pending';
+  final hour = value.hour.toString().padLeft(2, '0');
+  final minute = value.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
+}
+
+String _clean(Object? value) {
+  final text = '$value'.trim();
+  if (text.isEmpty || text == 'null') return 'Not available';
+  return text;
+}
+
+String _shortRef(String value) {
+  if (value.length <= 10) return value;
+  return '${value.substring(0, 6)}…${value.substring(value.length - 4)}';
 }
 
 String _formatDateTime(Timestamp value) {
-  final date = value.toDate().toLocal();
+  return _formatDate(value.toDate().toLocal());
+}
+
+String _formatDate(DateTime date) {
   final day = date.day.toString().padLeft(2, '0');
   final month = date.month.toString().padLeft(2, '0');
   final hour = date.hour.toString().padLeft(2, '0');
