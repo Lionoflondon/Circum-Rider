@@ -149,7 +149,7 @@ void main() {
         expect(notificationSource, contains("'$label'"));
       }
       expect(notificationSource, contains('markAllNotificationsRead'));
-      expect(notificationSource, contains('archiveNotification'));
+      expect(notificationSource, isNot(contains('Archive notification')));
       expect(notificationSource, contains('deleteNotification'));
       expect(notificationSource, contains('markNotificationRead'));
     });

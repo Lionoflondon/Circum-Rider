@@ -151,8 +151,6 @@ class _RiderNotificationsViewState extends State<RiderNotificationsView> {
                                   _NotificationCard(
                                     record: record,
                                     onOpen: () => _openNotification(record),
-                                    onArchive: () => _guard(() => _service
-                                        .archiveNotification(record.id)),
                                     onDelete: () => _guard(() =>
                                         _service.deleteNotification(record.id)),
                                   ),
@@ -363,13 +361,11 @@ class _NotificationCard extends StatelessWidget {
   const _NotificationCard({
     required this.record,
     required this.onOpen,
-    required this.onArchive,
     required this.onDelete,
   });
 
   final RiderNotificationRecord record;
   final VoidCallback onOpen;
-  final VoidCallback onArchive;
   final VoidCallback onDelete;
 
   @override
@@ -471,12 +467,6 @@ class _NotificationCard extends StatelessWidget {
                                   ),
                                 ),
                                 const Spacer(),
-                                _ActionIcon(
-                                  label: 'Archive notification',
-                                  icon: Icons.archive_outlined,
-                                  color: RiderPalette.muted,
-                                  onPressed: onArchive,
-                                ),
                                 _ActionIcon(
                                   label: 'Delete notification',
                                   icon: Icons.delete_outline_rounded,
