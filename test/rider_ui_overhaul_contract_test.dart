@@ -392,4 +392,12 @@ void main() {
     expect(find.text('420 trust points'), findsOneWidget);
     expect(find.textContaining('Knight'), findsOneWidget);
   });
+
+  test('dashboard rank progress follows displayed backend rank', () {
+    final source = File('lib/app/rider_shell/rider_dashboard_view.dart')
+        .readAsStringSync();
+    expect(source,
+        contains('_RankProgressData.forRank(rank.rank, rank.trustPoints)'));
+    expect(source, contains('static _RankProgressData forRank'));
+  });
 }

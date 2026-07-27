@@ -160,4 +160,14 @@ void main() {
     expect(source, contains('MaterialPage(child: AppNavView())'));
     expect(source, contains('RiderAccountStatusView'));
   });
+
+  test('authenticated Rider states cannot render an empty navigator', () {
+    final source = File('lib/app.dart').readAsStringSync();
+    expect(source, contains('showAuthenticatedFallback'));
+    expect(
+      source,
+      contains(
+          'render a recoverable account screen instead of an empty Navigator'),
+    );
+  });
 }

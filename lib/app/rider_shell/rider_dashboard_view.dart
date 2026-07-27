@@ -869,7 +869,7 @@ class _RankCard extends StatelessWidget {
       );
     }
 
-    final progress = _RankProgressData.forTrust(rank.trustPoints);
+    final progress = _RankProgressData.forRank(rank.rank, rank.trustPoints);
     final isTopRank = progress.nextRank == null;
     final note = progress.nextRank == null
         ? 'Highest Rider rank achieved'
@@ -1680,9 +1680,19 @@ class _RankProgressData {
   final String? nextRank;
 
   static _RankProgressData forTrust(int trustPoints) {
+    return forRank(null, trustPoints);
+  }
+
+  static _RankProgressData forRank(String? rank, int trustPoints) {
     var index = 0;
-    for (var i = 0; i < RiderRankSnapshot.thresholds.length; i++) {
-      if (trustPoints >= RiderRankSnapshot.thresholds[i]) index = i;
+    final rankIndex = RiderRankSnapshot.ranks
+        .indexWhere((item) => item.toLowerCase() == rank?.toLowerCase());
+    if (rankIndex >= 0) {
+      index = rankIndex;
+    } else {
+      for (var i = 0; i < RiderRankSnapshot.thresholds.length; i++) {
+        if (trustPoints >= RiderRankSnapshot.thresholds[i]) index = i;
+      }
     }
     if (index == RiderRankSnapshot.ranks.length - 1) {
       return const _RankProgressData(progress: 1, remaining: 0, nextRank: null);
