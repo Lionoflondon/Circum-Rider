@@ -389,7 +389,7 @@ void main() {
       ),
     ));
     expect(find.text('WARDEN'), findsOneWidget);
-    expect(find.text('420 TRUST'), findsOneWidget);
+    expect(find.text('420 trust points'), findsOneWidget);
     expect(find.textContaining('Knight'), findsOneWidget);
   });
 }

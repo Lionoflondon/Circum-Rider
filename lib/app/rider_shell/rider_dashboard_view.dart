@@ -870,6 +870,7 @@ class _RankCard extends StatelessWidget {
     }
 
     final progress = _RankProgressData.forTrust(rank.trustPoints);
+    final isTopRank = progress.nextRank == null;
     final note = progress.nextRank == null
         ? 'Highest Rider rank achieved'
         : '${progress.remaining} points to ${progress.nextRank}';
@@ -895,10 +896,9 @@ class _RankCard extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                '${rank.trustPoints} TRUST',
+                '${rank.trustPoints} trust points',
                 style: const TextStyle(
                   color: RiderPalette.paper,
-                  fontFamily: RiderTypography.mono,
                   fontWeight: FontWeight.w700,
                   fontSize: 12,
                 ),
@@ -906,17 +906,48 @@ class _RankCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(99),
-            child: LinearProgressIndicator(
-              value: progress.progress,
-              minHeight: 5,
-              backgroundColor: Colors.white.withValues(alpha: .07),
-              valueColor: const AlwaysStoppedAnimation<Color>(
-                RiderPalette.green,
+          if (isTopRank)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: RiderPalette.green.withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(99),
+                border: Border.all(
+                  color: RiderPalette.green.withValues(alpha: .32),
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.workspace_premium_rounded,
+                    color: RiderPalette.green,
+                    size: 15,
+                  ),
+                  SizedBox(width: 6),
+                  Text(
+                    'Top rank',
+                    style: TextStyle(
+                      color: RiderPalette.paper,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(
+                value: progress.progress,
+                minHeight: 5,
+                backgroundColor: Colors.white.withValues(alpha: .07),
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  RiderPalette.green,
+                ),
               ),
             ),
-          ),
           const SizedBox(height: 7),
           Text(
             note,
