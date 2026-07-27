@@ -176,10 +176,50 @@ class _RiderWebStartupHold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
       home: Scaffold(
-        backgroundColor: Color(0xFF131313),
+        backgroundColor: const Color(0xFF07090F),
+        body: SafeArea(
+          child: Center(
+            child: Semantics(
+              liveRegion: true,
+              label: 'Circum Rider is starting',
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 34,
+                    height: 34,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      color: Color(0xFF60A5FA),
+                    ),
+                  ),
+                  SizedBox(height: 18),
+                  Text(
+                    'Starting Circum Rider',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFFF5F7FB),
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Preparing your Rider workspace.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Color(0xFF9CA8B8),
+                      height: 1.45,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

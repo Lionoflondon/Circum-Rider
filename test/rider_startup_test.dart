@@ -16,8 +16,10 @@ void main() {
     ));
 
     final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
-    expect(scaffold.backgroundColor, const Color(0xFF131313));
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(scaffold.backgroundColor, const Color(0xFF07090F));
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.text('Starting Circum Rider'), findsOneWidget);
+    expect(find.text('Preparing your Rider workspace.'), findsOneWidget);
 
     completer.complete();
     await tester.pumpAndSettle();
