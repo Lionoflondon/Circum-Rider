@@ -8,11 +8,11 @@ const riderNotificationFilters = [
   'All',
   'Jobs',
   'Deliveries',
+  'Campaigns',
   'Messages',
   'Schedule',
   'Earnings',
   'Account',
-  'System',
 ];
 
 class RiderNotificationsView extends StatefulWidget {
@@ -175,6 +175,7 @@ class _RiderNotificationsViewState extends State<RiderNotificationsView> {
     return switch (label) {
       'Jobs' => 'jobs',
       'Deliveries' => 'deliveries',
+      'Campaigns' => 'campaigns',
       'Messages' => 'messages',
       'Schedule' => 'schedule',
       'Earnings' => 'earnings',
@@ -187,11 +188,9 @@ class _RiderNotificationsViewState extends State<RiderNotificationsView> {
     await _guard(() => _service.markNotificationRead(record.id));
     if (!mounted) return;
     final destination = record.destination;
-    final route = '${destination['route'] ?? ''}'.toLowerCase();
-    final chatId =
-        '${destination['chatId'] ?? destination['bookingId'] ?? ''}'.trim();
-    if ((route == 'conversation' || record.category == 'messages') &&
-        chatId.isNotEmpty) {
+    final route = _routeFor(record);
+    final chatId = _chatIdFor(record);
+    if (_isConversationRoute(route, record) && chatId.isNotEmpty) {
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -216,19 +215,53 @@ class _RiderNotificationsViewState extends State<RiderNotificationsView> {
   }
 
   int? _tabFor(RiderNotificationRecord record) {
-    final route = '${record.destination['route'] ?? ''}'.toLowerCase();
+    final route = _routeFor(record);
     final category = record.category;
-    if (route == 'conversation') return null;
+    final campaignId = '${record.destination['campaignId'] ?? ''}'.trim();
+    if (_isConversationRoute(route, record)) return null;
     if (route == 'tracking' ||
         route == 'delivery' ||
         category == 'deliveries') {
       return 1;
     }
-    if (route == 'jobs' || category == 'jobs') return 1;
+    if (route == 'jobs' ||
+        route == 'job' ||
+        route == 'campaign' ||
+        route == 'campaigns' ||
+        campaignId.isNotEmpty ||
+        category == 'jobs' ||
+        category == 'campaigns') {
+      return 1;
+    }
     if (route == 'schedule' || category == 'schedule') return 2;
     if (route == 'wallet' || category == 'earnings') return 3;
-    if (route == 'account' || category == 'account') return 4;
+    if (route == 'account' ||
+        route == 'profile' ||
+        route == 'settings' ||
+        category == 'account') {
+      return 4;
+    }
     return null;
+  }
+
+  String _routeFor(RiderNotificationRecord record) {
+    final destination = record.destination;
+    return '${destination['route'] ?? destination['screen'] ?? destination['target'] ?? destination['page'] ?? record.type}'
+        .trim()
+        .toLowerCase();
+  }
+
+  String _chatIdFor(RiderNotificationRecord record) {
+    final destination = record.destination;
+    return '${destination['chatId'] ?? destination['conversationId'] ?? destination['conversationID'] ?? destination['threadId'] ?? destination['bookingId'] ?? destination['deliveryId'] ?? destination['requestId'] ?? ''}'
+        .trim();
+  }
+
+  bool _isConversationRoute(String route, RiderNotificationRecord record) {
+    return route == 'conversation' ||
+        route == 'chat' ||
+        route == 'messages' ||
+        record.category == 'messages';
   }
 
   Future<void> _guard(Future<void> Function() action) async {
@@ -511,7 +544,7 @@ class _NotificationCard extends StatelessWidget {
         'schedule' => 'Schedule',
         'earnings' => 'Earnings',
         'account' => 'Account',
-        _ => 'System',
+        _ => 'Update',
       };
 
   static IconData _icon(String category) => switch (category) {

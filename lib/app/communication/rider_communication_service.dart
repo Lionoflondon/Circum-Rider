@@ -74,6 +74,7 @@ class RiderNotificationRecord {
     required this.createdAt,
     required this.destination,
     required this.type,
+    required this.roleScope,
   });
 
   final String id;
@@ -86,16 +87,19 @@ class RiderNotificationRecord {
   final DateTime? createdAt;
   final Map<String, dynamic> destination;
   final String type;
+  final String roleScope;
 
   factory RiderNotificationRecord.fromDocument(
     DocumentSnapshot<Map<String, dynamic>> document,
   ) {
     final data = document.data() ?? const <String, dynamic>{};
+    final payload = data['data'] is Map
+        ? Map<String, dynamic>.from(data['data'] as Map)
+        : const <String, dynamic>{};
     final destination = data['destination'] is Map
         ? Map<String, dynamic>.from(data['destination'] as Map)
-        : data['data'] is Map && (data['data'] as Map)['destination'] is Map
-            ? Map<String, dynamic>.from(
-                (data['data'] as Map)['destination'] as Map)
+        : payload['destination'] is Map
+            ? Map<String, dynamic>.from(payload['destination'] as Map)
             : const <String, dynamic>{};
     final created = data['createdAt'] ?? data['timestamp'];
     return RiderNotificationRecord(
@@ -111,12 +115,14 @@ class RiderNotificationRecord {
       createdAt: created is Timestamp ? created.toDate() : null,
       destination: destination,
       type: '${data['type'] ?? ''}'.trim(),
+      roleScope: normalizeNotificationRoleScope(data, payload),
     );
   }
 }
 
 String normalizeNotificationCategory(String raw) {
   final value = raw.trim().toLowerCase();
+  if (value.contains('campaign')) return 'campaigns';
   if (value.contains('job') || value == 'new_delivery') return 'jobs';
   if (value.contains('message') || value.contains('chat')) return 'messages';
   if (value.contains('schedule')) return 'schedule';
@@ -136,6 +142,41 @@ String normalizeNotificationCategory(String raw) {
     return 'deliveries';
   }
   return 'system';
+}
+
+String normalizeNotificationRoleScope(
+  Map<String, dynamic> data,
+  Map<String, dynamic> payload,
+) {
+  final values = [
+    data['recipientRole'],
+    data['role'],
+    data['audience'],
+    data['app'],
+    data['surface'],
+    data['product'],
+    payload['recipientRole'],
+    payload['role'],
+    payload['audience'],
+    payload['app'],
+    payload['surface'],
+    payload['product'],
+  ].map((value) => '${value ?? ''}'.trim().toLowerCase()).join(' ');
+
+  if (values.contains('sender') ||
+      values.contains('customer') ||
+      values.contains('circum app') ||
+      values.contains('sender_app') ||
+      values.contains('sender-web')) {
+    return 'sender';
+  }
+  if (values.contains('rider') ||
+      values.contains('driver') ||
+      values.contains('courier') ||
+      values.contains('circum rider')) {
+    return 'rider';
+  }
+  return 'unknown';
 }
 
 class RiderCommunicationService {
@@ -296,6 +337,7 @@ class RiderCommunicationService {
         .map((snapshot) {
       final records = snapshot.docs
           .map(RiderNotificationRecord.fromDocument)
+          .where((record) => record.roleScope != 'sender')
           .where((record) => !record.archived && !record.deleted)
           .toList();
       return records;

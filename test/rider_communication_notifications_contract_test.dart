@@ -98,6 +98,32 @@ void main() {
       expect(normalizeNotificationCategory('document_required'), 'account');
       expect(normalizeNotificationCategory('scheduled_pickup'), 'schedule');
       expect(normalizeNotificationCategory('new_delivery'), 'jobs');
+      expect(normalizeNotificationCategory('campaign_joined'), 'campaigns');
+    });
+
+    test('notification role scope separates Rider from Sender updates', () {
+      expect(
+        normalizeNotificationRoleScope(
+          const {'recipientRole': 'rider'},
+          const {},
+        ),
+        'rider',
+      );
+      expect(
+        normalizeNotificationRoleScope(
+          const {'surface': 'sender-web'},
+          const {},
+        ),
+        'sender',
+      );
+      expect(
+        normalizeNotificationRoleScope(
+          const {},
+          const {'app': 'circum rider'},
+        ),
+        'rider',
+      );
+      expect(normalizeNotificationRoleScope(const {}, const {}), 'unknown');
     });
 
     test('Rider push payload parsing is recoverable and diagnostic', () {
@@ -140,14 +166,15 @@ void main() {
         'All',
         'Jobs',
         'Deliveries',
+        'Campaigns',
         'Messages',
         'Schedule',
         'Earnings',
         'Account',
-        'System',
       ]) {
         expect(notificationSource, contains("'$label'"));
       }
+      expect(notificationSource, isNot(contains("'System'")));
       expect(notificationSource, contains('markAllNotificationsRead'));
       expect(notificationSource, isNot(contains('Archive notification')));
       expect(notificationSource, contains('deleteNotification'));
@@ -156,6 +183,8 @@ void main() {
 
     test('Notification Centre routes to Rider destinations', () {
       expect(notificationSource, contains('RiderConversationView'));
+      expect(notificationSource, contains("destination['conversationId']"));
+      expect(notificationSource, contains("destination['campaignId']"));
       expect(notificationSource, contains("return 1"));
       expect(notificationSource, contains("return 2"));
       expect(notificationSource, contains("return 3"));
