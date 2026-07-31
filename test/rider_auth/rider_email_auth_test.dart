@@ -118,4 +118,17 @@ void main() {
     expect(handler, isNot(contains('.set(')));
     expect(handler, isNot(contains('createUserWithEmailAndPassword')));
   });
+
+  test('session restore never signs out existing riders by account age', () {
+    final bloc =
+        File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
+    final handler = bloc.substring(
+      bloc.indexOf('if (event is SortSessionState)'),
+      bloc.indexOf('if (event is ResetStatus)'),
+    );
+
+    expect(handler, isNot(contains('metadata.creationTime')));
+    expect(handler, isNot(contains('authChangeDate')));
+    expect(handler, isNot(contains('add(SignOut())')));
+  });
 }
