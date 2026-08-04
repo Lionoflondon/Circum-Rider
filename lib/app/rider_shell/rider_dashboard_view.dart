@@ -211,7 +211,9 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
       item['assignedRiderId'],
       item['assignedDriverId'],
       item['courierId'],
-    ].map((value) => '$value'.trim()).where((value) => value.isNotEmpty);
+    ]
+        .map((value) => value == null ? '' : '$value'.trim())
+        .where((value) => value.isNotEmpty);
     if (assigned.any((value) => value != riderId)) return false;
     final payment = '${item['paymentStatus'] ?? item['paymentState'] ?? ''}'
         .trim()

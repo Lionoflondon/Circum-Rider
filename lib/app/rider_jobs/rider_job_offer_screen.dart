@@ -314,7 +314,9 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       data['assignedRiderId'],
       data['assignedDriverId'],
       data['courierId'],
-    ].map((value) => '$value'.trim()).where((value) => value.isNotEmpty);
+    ]
+        .map((value) => value == null ? '' : '$value'.trim())
+        .where((value) => value.isNotEmpty);
     return assigned.any((value) => value != riderId);
   }
 

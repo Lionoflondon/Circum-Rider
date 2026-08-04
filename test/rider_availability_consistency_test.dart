@@ -42,6 +42,14 @@ void main() {
     );
   });
 
+  test('missing assignment fields remain visible as unassigned offers', () {
+    final dashboardSource = dashboard.readAsStringSync();
+    final jobsSource = jobs.readAsStringSync();
+    const nullSafeAssignment = "value == null ? '' : '\u0024value'.trim()";
+    expect(dashboardSource, contains(nullSafeAssignment));
+    expect(jobsSource, contains(nullSafeAssignment));
+  });
+
   test('fresh presence is online and dispatch eligible', () {
     final now = DateTime.utc(2026, 8, 4, 12);
     final availability = RiderAvailability.fromPresence({
