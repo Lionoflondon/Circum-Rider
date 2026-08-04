@@ -5,9 +5,15 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 WEB_RECAPTCHA_SITE_KEY="${RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY:-}"
+WEB_GOOGLE_MAPS_API_KEY="${RIDER_WEB_GOOGLE_MAPS_API_KEY:-}"
 
 if [[ -z "$WEB_RECAPTCHA_SITE_KEY" ]]; then
   echo "Missing RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY for Rider Web App Check." >&2
+  exit 1
+fi
+
+if [[ -z "$WEB_GOOGLE_MAPS_API_KEY" ]]; then
+  echo "Missing RIDER_WEB_GOOGLE_MAPS_API_KEY for Rider Web Google Maps." >&2
   exit 1
 fi
 
@@ -24,4 +30,16 @@ flutter build web \
   --dart-define=RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="$WEB_RECAPTCHA_SITE_KEY" \
   --target=lib/main_rider_web.dart \
   --output="$ROOT_DIR/build/web"
+
+node - "$ROOT_DIR/build/web/index.html" "$WEB_GOOGLE_MAPS_API_KEY" <<'NODE'
+const fs = require('fs');
+const [indexPath, apiKey] = process.argv.slice(2);
+let html = fs.readFileSync(indexPath, 'utf8');
+const mapsScript = `<script src="https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}"></script>`;
+if (!html.includes('maps.googleapis.com/maps/api/js')) {
+  html = html.replace('</head>', `  ${mapsScript}\n</head>`);
+}
+fs.writeFileSync(indexPath, html);
+NODE
+
 node "$ROOT_DIR/scripts/rider_deployment_manifest.js" prepare

@@ -78,6 +78,21 @@ test('Rider Web bundle markers must be present', () => {
   );
 });
 
+test('Rider Web build injects the Maps JavaScript loader', () => {
+  const buildScript = fs.readFileSync(
+    path.join(__dirname, '..', 'scripts', 'build_rider_web.sh'),
+    'utf8',
+  );
+  const workflow = fs.readFileSync(
+    path.join(__dirname, '..', '.github', 'workflows', 'deploy_rider_web.yml'),
+    'utf8',
+  );
+
+  assert.match(buildScript, /RIDER_WEB_GOOGLE_MAPS_API_KEY/);
+  assert.match(buildScript, /maps\.googleapis\.com\/maps\/api\/js/);
+  assert.match(workflow, /secrets\.RIDER_WEB_GOOGLE_MAPS_API_KEY/);
+});
+
 test('manifest must match Rider target and remain fresh', () => {
   const now = new Date('2026-07-13T10:00:00.000Z');
   const expected = {
