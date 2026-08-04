@@ -27,6 +27,7 @@ void main() {
   test('production dashboard does not render internal diagnostics', () {
     final source = dashboard.readAsStringSync();
     expect('_InternalDiagnosticsCard('.allMatches(source), hasLength(1));
+    expect(source, isNot(contains('rank.overrideReason')));
   });
 
   test('navigation and jobs use canonical availability only', () {

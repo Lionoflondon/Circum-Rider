@@ -1047,13 +1047,6 @@ class _RankCard extends StatelessWidget {
             note,
             style: const TextStyle(color: RiderPalette.muted, fontSize: 11),
           ),
-          if (rank.overrideReason != null) ...[
-            const SizedBox(height: 7),
-            Text(
-              rank.overrideReason!,
-              style: const TextStyle(color: RiderPalette.amber, fontSize: 11),
-            ),
-          ],
           if (recognitions.hasAny) ...[
             const SizedBox(height: 10),
             Wrap(
