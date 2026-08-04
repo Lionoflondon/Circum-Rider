@@ -1928,9 +1928,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       case RiderDeliveryStage.navigatingToPickup:
         return 'arrived_at_pickup';
       case RiderDeliveryStage.arrivedAtPickup:
-        return _verificationRequired
-            ? 'verify_collection_pin'
-            : 'confirm_collected';
+        return 'verify_collection_pin';
       case RiderDeliveryStage.pickupVerification:
         return 'verify_collection_pin';
       case RiderDeliveryStage.pickupVerified:

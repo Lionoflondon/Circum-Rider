@@ -398,6 +398,43 @@ void main() {
       expect(controller.actions, ['arrived_at_pickup']);
     });
 
+    testWidgets('ordinary pickup verifies collection before collected',
+        (tester) async {
+      final controller = _BackendStageController(['pickup_verified']);
+      final base = _offers.last;
+      final offer = RiderJobOffer(
+        id: base.id,
+        requestId: base.requestId,
+        pickupArea: base.pickupArea,
+        dropoffArea: base.dropoffArea,
+        pickupAddress: base.pickupAddress,
+        dropoffAddress: base.dropoffAddress,
+        earnings: base.earnings,
+        currency: base.currency,
+        distanceText: base.distanceText,
+        timeText: base.timeText,
+        parcelGuidance: base.parcelGuidance,
+        minimumVehicle: base.minimumVehicle,
+        weightText: base.weightText,
+        pickupTiming: base.pickupTiming,
+        warningChips: const [],
+        raw: const {'deliveryStage': 'arrived_at_pickup'},
+      );
+
+      await tester.pumpWidget(MaterialApp(
+        home: RiderAcceptedJobScreen(
+          offer: offer,
+          deliveryController: controller,
+        ),
+      ));
+
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Confirm Pickup'));
+      await tester.pumpAndSettle();
+
+      expect(controller.actions, ['verify_collection_pin']);
+      expect(find.text('Confirm Pickup'), findsWidgets);
+    });
+
     test('rider screen does not own delivery lifecycle or waiting policy', () {
       final source = File('lib/app/rider_jobs/rider_job_offer_screen.dart')
           .readAsStringSync();
