@@ -85,6 +85,10 @@ void main() {
       expect(
           RiderLiveTrackingPolicy.isTerminalDeliveryStatus('cancelled'), true);
       expect(
+          RiderLiveTrackingPolicy.isTerminalDeliveryStatus(
+              'cancelled_by_sender'),
+          true);
+      expect(
           RiderLiveTrackingPolicy.isTerminalDeliveryStatus('delivered'), true);
     });
 
