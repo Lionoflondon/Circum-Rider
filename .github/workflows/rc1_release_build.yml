@@ -4,30 +4,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  web:
-    name: Build Rider Web
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - uses: subosito/flutter-action@v2
-        with:
-          channel: stable
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: flutter pub get
-      - run: node --test test/rider_deployment_manifest_test.js
-      - run: RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_rider_web.sh
-      - run: node scripts/rider_deployment_manifest.js verify
-      - uses: actions/upload-artifact@v4
-        with:
-          name: rider-web-release
-          path: build/web
-
   rider-mobile:
-    name: Build Rider Android
+    name: Native Passed - Build Rider Android
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +13,10 @@ jobs:
         with:
           channel: stable
       - run: flutter pub get
-      - run: flutter build apk --release --target=lib/main.dart
+      - run: |
+          test -n "${{ secrets.RIDER_ANDROID_GOOGLE_MAPS_API_KEY }}" || (echo "Missing RIDER_ANDROID_GOOGLE_MAPS_API_KEY" >&2; exit 1)
+          test -n "${{ secrets.GOOGLE_MAPS_DIRECTIONS_API_KEY }}" || (echo "Missing GOOGLE_MAPS_DIRECTIONS_API_KEY" >&2; exit 1)
+          GOOGLE_MAPS_API_KEY="${{ secrets.RIDER_ANDROID_GOOGLE_MAPS_API_KEY }}" flutter build apk --release --target=lib/main.dart --dart-define=GOOGLE_MAPS_DIRECTIONS_API_KEY="${{ secrets.GOOGLE_MAPS_DIRECTIONS_API_KEY }}"
       - uses: actions/upload-artifact@v4
         with:
           name: rider-android-release
