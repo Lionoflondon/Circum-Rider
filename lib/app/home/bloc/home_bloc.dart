@@ -867,7 +867,34 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
     final docResponse = await documentReference.get();
     // final doc = docResponse.docs.firstOrNull;
 
-    for (final doc in docResponse.docs) {
+    final activeDocs = docResponse.docs.where((doc) {
+      final status = '${doc.data()['status'] ?? ''}'.trim().toLowerCase();
+      return const {
+        'accepted',
+        'navigating_to_pickup',
+        'travelling_to_pickup',
+        'arrived_at_pickup',
+        'waiting_at_pickup',
+        'pickup_verification',
+        'pickup_verified',
+        'collected',
+        'outfordelivery',
+        'out_for_delivery',
+        'in_transit',
+        'navigating_to_dropoff',
+        'arrived_at_dropoff',
+        'recipient_verification',
+      }.contains(status);
+    }).toList()
+      ..sort((a, b) {
+        final aCreated = a.data()['createdAt'];
+        final bCreated = b.data()['createdAt'];
+        final aMillis = aCreated is Timestamp ? aCreated.millisecondsSinceEpoch : 0;
+        final bMillis = bCreated is Timestamp ? bCreated.millisecondsSinceEpoch : 0;
+        return bMillis.compareTo(aMillis);
+      });
+
+    for (final doc in activeDocs.take(1)) {
       final data = doc.data();
       final activeRequest = DispatchRequest.fromJson(data);
 
@@ -876,13 +903,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
 
       if (data['status'] == 'accepted') {
         status = RideStatus.userConfirmedRide;
-        pickupCoordinates = PlaceCoordinate(lat: riderLat!, lng: riderLng!);
-        desinationCoordinate = PlaceCoordinate(
-            lat: activeRequest.pickupData.position.geopoint.latitude,
-            lng: activeRequest.pickupData.position.geopoint.longitude);
-        add(GetPolylines(
-            desinationCoordinate: desinationCoordinate,
-            pickupCoordinate: pickupCoordinates));
+        if (riderLat != null && riderLng != null) {
+          pickupCoordinates = PlaceCoordinate(lat: riderLat, lng: riderLng);
+          desinationCoordinate = PlaceCoordinate(
+              lat: activeRequest.pickupData.position.geopoint.latitude,
+              lng: activeRequest.pickupData.position.geopoint.longitude);
+          add(GetPolylines(
+              desinationCoordinate: desinationCoordinate,
+              pickupCoordinate: pickupCoordinates));
+        }
         emit(state.copyWith(
             actionButtonStatus: ActionButtonStatus.goingToPickupLocation));
       }
@@ -909,12 +938,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       if (data['status'] != 'confirmed') {
         emit(state.copyWith(
           activeRequest: activeRequest,
+          activeRequestData: data,
         ));
         add(BroadcastLocation());
       }
     }
 
-    if (docResponse.docs.isEmpty) {
+    if (activeDocs.isEmpty) {
       add(CancelRequest());
     }
   }

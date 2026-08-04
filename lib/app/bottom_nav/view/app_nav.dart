@@ -38,14 +38,22 @@ class AppNavView extends StatelessWidget {
           RiderProfileView(onSelectTab: select),
         ];
 
-        return RiderAppreciationListener(
-          child: RiderMobileFrame(
-            child: Scaffold(
-              backgroundColor: RiderPalette.background,
-              body: IndexedStack(index: nav.currentNavIndex, children: screens),
-              bottomNavigationBar: _RiderDashboardNav(
-                currentIndex: nav.currentNavIndex,
-                onSelect: select,
+        return BlocListener<HomeBloc, HomeState>(
+          listenWhen: (previous, current) =>
+              previous.activeRequest?.requestId !=
+                  current.activeRequest?.requestId &&
+              current.activeRequest != null,
+          listener: (context, state) => select(1),
+          child: RiderAppreciationListener(
+            child: RiderMobileFrame(
+              child: Scaffold(
+                backgroundColor: RiderPalette.background,
+                body:
+                    IndexedStack(index: nav.currentNavIndex, children: screens),
+                bottomNavigationBar: _RiderDashboardNav(
+                  currentIndex: nav.currentNavIndex,
+                  onSelect: select,
+                ),
               ),
             ),
           ),

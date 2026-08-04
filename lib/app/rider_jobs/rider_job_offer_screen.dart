@@ -102,6 +102,18 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     }
 
     final home = context.watch<HomeBloc>().state;
+    final activeRequest = home.activeRequest;
+    final activeRequestData = home.activeRequestData;
+    if (activeRequest != null && activeRequestData != null) {
+      final activeRequestId = activeRequest.requestId;
+      return RiderAcceptedJobScreen(
+        offer: RiderJobOffer.fromFirestore(
+          docId: activeRequestId,
+          data: activeRequestData,
+        ),
+      );
+    }
+
     return FutureBuilder<bool>(
         future: RiderInternalAccess.enabled(),
         builder: (context, internalAccessSnapshot) {

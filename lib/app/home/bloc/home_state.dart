@@ -142,6 +142,7 @@ class HomeState {
   final Position? locationData;
   List<DispatchRequest> dispatchRequests;
   DispatchRequest? activeRequest;
+  Map<String, dynamic>? activeRequestData;
   int? selectedRequestIndex;
   Map<MarkerId, Marker> markers;
   List<Polyline> polylines;
@@ -177,6 +178,7 @@ class HomeState {
     this.maxDrawerHeight = 180,
     this.selectedRequestIndex,
     this.activeRequest,
+    this.activeRequestData,
     this.broadcastStatus = BroadcastStatus.initialized,
     this.chatMessages = const [],
     this.chatStatus = ChatStatus.initial,
@@ -204,6 +206,7 @@ class HomeState {
       double? maxDrawerHeight,
       int? selectedRequestIndex,
       DispatchRequest? activeRequest,
+      Map<String, dynamic>? activeRequestData,
       List<Message>? chatMessages,
       ChatStatus? chatStatus,
       String? message,
@@ -229,6 +232,7 @@ class HomeState {
         actionButtonStatus: actionButtonStatus ?? this.actionButtonStatus,
         selectedRequestIndex: selectedRequestIndex ?? this.selectedRequestIndex,
         activeRequest: activeRequest ?? this.activeRequest,
+        activeRequestData: activeRequestData ?? this.activeRequestData,
         chatMessages: chatMessages ?? this.chatMessages,
         chatStatus: chatStatus ?? this.chatStatus,
         message: message ?? this.message,
