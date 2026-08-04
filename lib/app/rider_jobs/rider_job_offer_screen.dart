@@ -1534,6 +1534,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   RiderEvidenceUploader? _evidenceUploader;
   RiderLiveTrackingController? _trackingController;
   StreamSubscription<RiderLiveTrackingSnapshot>? _trackingSub;
+  bool _terminalExitScheduled = false;
   RiderLiveTrackingSnapshot _trackingSnapshot =
       const RiderLiveTrackingSnapshot(status: RiderLiveTrackingStatus.idle);
   Timer? _markerTweenTimer;
@@ -2092,10 +2093,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
             if (mounted) setState(() => _stage = restored);
           });
         final terminal = '$rawStatus'.toLowerCase();
-        if (terminal == 'cancelled' ||
-            terminal == 'failed' ||
-            terminal.contains('no_show') ||
-            terminal == 'disputed') {
+        if (RiderLiveTrackingPolicy.isTerminalDeliveryStatus(terminal)) {
+          _scheduleTerminalExit(terminal);
           return _StateScaffold(
               title: terminal.replaceAll('_', ' '),
               message:
@@ -2105,6 +2104,15 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
         return _buildExperience(context, live);
       },
     );
+  }
+
+  void _scheduleTerminalExit(String status) {
+    if (_terminalExitScheduled) return;
+    _terminalExitScheduled = true;
+    scheduleMicrotask(() async {
+      await _trackingController?.stop(status: status, publishStop: false);
+      if (mounted) Navigator.of(context).pop();
+    });
   }
 
   Future<void> _syncLiveTracking(
