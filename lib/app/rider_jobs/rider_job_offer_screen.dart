@@ -101,7 +101,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       );
     }
 
-    context.watch<HomeBloc>().state;
+    final home = context.watch<HomeBloc>().state;
     return FutureBuilder<bool>(
         future: RiderInternalAccess.enabled(),
         builder: (context, internalAccessSnapshot) {
@@ -121,21 +121,22 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                   };
                   final rider = _riderProfile(user.uid, riderData,
                       internalAccess: internalAccess);
-                  final online = {'online', 'available', 'busy'}.contains(
-                      '${riderData['availabilityStatus'] ?? riderData['status'] ?? ''}'
-                          .toLowerCase());
-
                   if (!rider.canAcceptJobs)
                     return _JobsStateScaffold(
                         title: 'Account action required',
                         message: rider.blockedReason ??
                             'Your Circum Rider account cannot receive jobs right now.');
-                  if (!online)
+                  if (!home.availability.dispatchEligible)
                     return _JobsStateScaffold(
-                        title: "You're offline",
-                        message:
-                            'Go online to receive eligible delivery offers.',
-                        actionLabel: 'Go Online',
+                        title: home.availability.intendsToBeOnline
+                            ? 'Waiting for availability'
+                            : "You're offline",
+                        message: home.availability.intendsToBeOnline
+                            ? 'A fresh location and heartbeat are required before offers can reach you.'
+                            : 'Go online to receive eligible delivery offers.',
+                        actionLabel: home.availability.intendsToBeOnline
+                            ? null
+                            : 'Go Online',
                         onAction: () => context
                             .read<HomeBloc>()
                             .add(SetRideStatus(status: RideStatus.online)));
@@ -144,7 +145,8 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                     stream: _firestore
                         .collection('deliveryRequests')
                         .where('status', isEqualTo: 'requested')
-                        .limit(20)
+                        .where('matchingStatus', isEqualTo: 'available')
+                        .limit(80)
                         .snapshots(),
                     builder: (context, snapshot) {
                       if (snapshot.hasError) {
@@ -253,7 +255,9 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
             internalAccess: internalAccess))
         .map((doc) =>
             RiderJobOffer.fromFirestore(docId: doc.id, data: doc.data()))
-        .toList();
+        .toList()
+      ..sort(
+          (a, b) => _createdAtMillis(b.raw).compareTo(_createdAtMillis(a.raw)));
   }
 
   bool _isVisibleToRider(
@@ -268,11 +272,89 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     if (matchingStatus != 'available' && matchingStatus != 'requested') {
       return false;
     }
+    if (_hasTerminalState(data)) return false;
+    if (_hasAssignedRider(data, riderId)) return false;
+    if (_isExpiredOffer(data)) return false;
+    if (!_hasConfirmedPayment(data)) return false;
 
-    final minimumVehicle =
-        '${data['minimumVehicle'] ?? data['recommendedVehicle'] ?? 'Bike'}';
+    final minimumVehicle = _requiredVehicle(data);
     return internalAccess ||
-        _vehicleMeetsMinimum(riderVehicle ?? 'Bike', minimumVehicle);
+        _vehicleMeetsMinimum(riderVehicle ?? 'motorbike', minimumVehicle);
+  }
+
+  bool _hasTerminalState(Map<String, dynamic> data) {
+    const terminal = {
+      'accepted',
+      'assigned',
+      'collected',
+      'in_transit',
+      'delivered',
+      'completed',
+      'cancelled',
+      'canceled',
+      'expired',
+      'failed',
+      'blocked',
+    };
+    final values = [
+      data['status'],
+      data['deliveryStatus'],
+      data['deliveryStage'],
+      data['matchingStatus'],
+      data['dispatchStatus'],
+    ].map((value) => '$value'.trim().toLowerCase());
+    return values.any(terminal.contains);
+  }
+
+  bool _hasAssignedRider(Map<String, dynamic> data, String riderId) {
+    final assigned = [
+      data['riderId'],
+      data['driverId'],
+      data['assignedRider'],
+      data['assignedRiderId'],
+      data['assignedDriverId'],
+      data['courierId'],
+    ].map((value) => '$value'.trim()).where((value) => value.isNotEmpty);
+    return assigned.any((value) => value != riderId);
+  }
+
+  bool _isExpiredOffer(Map<String, dynamic> data) {
+    final expiry = _timestampMillis(data['offerExpiresAt']) ??
+        _timestampMillis(data['dispatchExpiresAt']) ??
+        _timestampMillis(data['expiresAt']) ??
+        _timestampMillis(data['matchingExpiresAt']);
+    return expiry != null && expiry <= DateTime.now().millisecondsSinceEpoch;
+  }
+
+  bool _hasConfirmedPayment(Map<String, dynamic> data) {
+    final payment = '${data['paymentStatus'] ?? data['paymentState'] ?? ''}'
+        .trim()
+        .toLowerCase();
+    return payment.isEmpty ||
+        {
+          'paid',
+          'succeeded',
+          'payment_confirmed',
+          'confirmed',
+          'roth_paid',
+          'stripe_paid',
+        }.contains(payment);
+  }
+
+  int _createdAtMillis(Map<String, dynamic> data) =>
+      _timestampMillis(data['createdAt']) ??
+      _timestampMillis(data['created_at']) ??
+      _timestampMillis(data['bookingCreatedAt']) ??
+      _timestampMillis(data['updatedAt']) ??
+      0;
+
+  int? _timestampMillis(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.millisecondsSinceEpoch;
+    if (value is DateTime) return value.millisecondsSinceEpoch;
+    if (value is num) return value.toInt();
+    final parsed = DateTime.tryParse('$value');
+    return parsed?.millisecondsSinceEpoch;
   }
 
   List<String> _stringList(dynamic value) {
@@ -294,6 +376,30 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     }
 
     return rank(riderVehicle) >= rank(minimumVehicle);
+  }
+
+  String _requiredVehicle(Map<String, dynamic> data) {
+    final iris = data['iris'] is Map ? data['iris'] as Map : const {};
+    final candidates = [
+      data['vehicleRequirement'],
+      data['requiredVehicle'],
+      data['minimumVehicleClass'],
+      data['minimumVehicle'],
+      data['irisRecommendedVehicle'],
+      data['selectedVehicle'],
+      data['vehicleType'],
+      data['recommendedVehicle'],
+      iris['vehicleRequirement'],
+      iris['requiredVehicle'],
+      iris['minimumVehicleClass'],
+      iris['recommendedVehicle'],
+      iris['vehicleType'],
+    ];
+    for (final candidate in candidates) {
+      final value = '$candidate'.trim();
+      if (value.isNotEmpty && value != 'null') return value;
+    }
+    return 'motorbike';
   }
 
   Future<void> _accept(
@@ -1924,6 +2030,18 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   (double?, double?) _locationPayload(Object? value) {
     if (value is! Map) return (null, null);
     final data = Map<String, dynamic>.from(value);
+    final position = data['position'];
+    if (position is Map) {
+      final geo = position['geopoint'] ?? position['geoPoint'];
+      if (geo is GeoPoint) return (geo.latitude, geo.longitude);
+      final lat = position['lat'] ?? position['latitude'];
+      final lng = position['lng'] ?? position['longitude'];
+      if (lat is num && lng is num) {
+        return (lat.toDouble(), lng.toDouble());
+      }
+    }
+    final geo = data['geopoint'] ?? data['geoPoint'];
+    if (geo is GeoPoint) return (geo.latitude, geo.longitude);
     final lat = data['lat'] ?? data['latitude'];
     final lng = data['lng'] ?? data['longitude'];
     return (

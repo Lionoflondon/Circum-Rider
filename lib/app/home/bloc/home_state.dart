@@ -25,6 +25,107 @@ enum BroadcastStatus { initialized, broadcasting }
 
 enum RequestStatus { initial, loading, success, failure }
 
+enum RiderAvailabilityStatus {
+  offline,
+  goingOnline,
+  waitingForLocation,
+  online,
+  temporarilyUnavailable,
+  goingOffline,
+  error,
+}
+
+class RiderAvailability {
+  const RiderAvailability({
+    this.status = RiderAvailabilityStatus.offline,
+    this.lastFix,
+    this.lastHeartbeat,
+    this.dispatchEligible = false,
+  });
+
+  final RiderAvailabilityStatus status;
+  final DateTime? lastFix;
+  final DateTime? lastHeartbeat;
+  final bool dispatchEligible;
+
+  bool get isOnline => status == RiderAvailabilityStatus.online;
+
+  bool get intendsToBeOnline => switch (status) {
+        RiderAvailabilityStatus.goingOnline ||
+        RiderAvailabilityStatus.waitingForLocation ||
+        RiderAvailabilityStatus.online ||
+        RiderAvailabilityStatus.temporarilyUnavailable ||
+        RiderAvailabilityStatus.goingOffline =>
+          true,
+        RiderAvailabilityStatus.offline ||
+        RiderAvailabilityStatus.error =>
+          false,
+      };
+
+  RiderAvailability copyWith({
+    RiderAvailabilityStatus? status,
+    DateTime? lastFix,
+    DateTime? lastHeartbeat,
+    bool? dispatchEligible,
+  }) {
+    return RiderAvailability(
+      status: status ?? this.status,
+      lastFix: lastFix ?? this.lastFix,
+      lastHeartbeat: lastHeartbeat ?? this.lastHeartbeat,
+      dispatchEligible: dispatchEligible ?? this.dispatchEligible,
+    );
+  }
+
+  factory RiderAvailability.fromPresence(
+    Map<String, dynamic> presence, {
+    DateTime? now,
+  }) {
+    final evaluatedAt = now ?? DateTime.now();
+    final location = presence['currentLocation'];
+    final locationMap = location is Map ? location : const {};
+    final lastFix = _time(
+      locationMap['updatedAt'] ?? presence['lastLocationAt'],
+    );
+    final heartbeat = _time(presence['lastHeartbeatAt']);
+    final locationFresh = lastFix != null &&
+        evaluatedAt.difference(lastFix) <= const Duration(minutes: 2);
+    final heartbeatFresh = heartbeat != null &&
+        evaluatedAt.difference(heartbeat) <= const Duration(minutes: 2);
+    final rawStatus =
+        '${presence['availabilityStatus'] ?? presence['status'] ?? ''}'
+            .trim()
+            .toLowerCase();
+    final explicitlyOnline = presence['isOnline'] == true ||
+        rawStatus == 'online' ||
+        rawStatus == 'available' ||
+        rawStatus == 'busy' ||
+        rawStatus == 'going_online' ||
+        rawStatus == 'connection_lost';
+    final eligible =
+        presence['dispatchEligible'] == true && locationFresh && heartbeatFresh;
+    final status = !explicitlyOnline || rawStatus == 'offline'
+        ? RiderAvailabilityStatus.offline
+        : !locationFresh
+            ? RiderAvailabilityStatus.waitingForLocation
+            : eligible
+                ? RiderAvailabilityStatus.online
+                : RiderAvailabilityStatus.temporarilyUnavailable;
+    return RiderAvailability(
+      status: status,
+      lastFix: lastFix,
+      lastHeartbeat: heartbeat,
+      dispatchEligible: eligible,
+    );
+  }
+
+  static DateTime? _time(Object? value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is num) return DateTime.fromMillisecondsSinceEpoch(value.toInt());
+    return DateTime.tryParse('${value ?? ''}');
+  }
+}
+
 enum ChatStatus { initial, newMessage }
 
 enum ActionButtonStatus {
@@ -58,6 +159,7 @@ class HomeState {
   bool canGoOnline;
   List<String> verificationChecklist;
   RequestStatus requestStatus;
+  RiderAvailability availability;
 
   HomeState({
     this.ongoingRequests = const [],
@@ -82,6 +184,7 @@ class HomeState {
     this.canGoOnline = false,
     this.verificationChecklist = const [],
     this.requestStatus = RequestStatus.initial,
+    this.availability = const RiderAvailability(),
   });
 
   HomeState copyWith(
@@ -106,7 +209,8 @@ class HomeState {
       String? message,
       bool? canGoOnline,
       List<String>? verificationChecklist,
-      RequestStatus? requestStatus}) {
+      RequestStatus? requestStatus,
+      RiderAvailability? availability}) {
     return HomeState(
         ongoingRequests: ongoingRequests ?? this.ongoingRequests,
         rideStatus: rideStatus ?? this.rideStatus,
@@ -131,6 +235,7 @@ class HomeState {
         canGoOnline: canGoOnline ?? this.canGoOnline,
         verificationChecklist:
             verificationChecklist ?? this.verificationChecklist,
-        requestStatus: requestStatus ?? this.requestStatus);
+        requestStatus: requestStatus ?? this.requestStatus,
+        availability: availability ?? this.availability);
   }
 }

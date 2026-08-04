@@ -52,7 +52,7 @@ void main() {
     );
     expect(
       File('.github/workflows/rc1_release_build.yml').readAsStringSync(),
-      contains('SENDER_ANDROID_GOOGLE_MAPS_API_KEY'),
+      contains('RIDER_ANDROID_GOOGLE_MAPS_API_KEY'),
     );
     expect(
       File('.github/workflows/rc1_release_build.yml').readAsStringSync(),

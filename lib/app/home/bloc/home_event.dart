@@ -10,6 +10,13 @@ class SetRideStatus extends HomeEvent {
   SetRideStatus({required this.status});
 }
 
+class SyncPresenceSnapshot extends HomeEvent {
+  SyncPresenceSnapshot(this.presence, {this.riderId});
+
+  final Map<String, dynamic> presence;
+  final String? riderId;
+}
+
 class GetAvailableRequests extends HomeEvent {}
 
 class SetHomeLocationData extends HomeEvent {

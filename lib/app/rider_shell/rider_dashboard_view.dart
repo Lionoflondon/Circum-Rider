@@ -83,17 +83,22 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                           stream: FirebaseFirestore.instance
                               .collection('deliveryRequests')
                               .where('status', isEqualTo: 'requested')
-                              .limit(8)
+                              .where('matchingStatus', isEqualTo: 'available')
+                              .limit(80)
                               .snapshots(),
                           builder: (context, offersSnapshot) {
                             final assigned = _docs(assignedSnapshot);
+                            final offers = _docs(offersSnapshot)
+                                .where((item) => _isLiveOffer(item, uid))
+                                .toList()
+                              ..sort((a, b) => _time(b).compareTo(_time(a)));
                             final data = _DashboardData(
                               profile: profile,
                               earnings:
                                   earningsSnapshot.data?.data() ?? const {},
                               presence:
                                   presenceSnapshot.data?.data() ?? const {},
-                              eligibleOffers: _docs(offersSnapshot),
+                              eligibleOffers: offers.take(8).toList(),
                               scheduled: assigned
                                   .where(
                                     (item) =>
@@ -120,24 +125,21 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                             );
                             return BlocBuilder<HomeBloc, HomeState>(
                               builder: (context, homeState) {
-                                final online = data.isOnline;
-                                final mergedHome = homeState.copyWith(
-                                  rideStatus: online
-                                      ? RideStatus.online
-                                      : RideStatus.offline,
-                                );
                                 return _DashboardSurface(
                                   data: data,
-                                  home: mergedHome,
+                                  home: homeState,
                                   onSelectTab: widget.onSelectTab,
-                                  onToggleAvailability: () =>
-                                      context.read<HomeBloc>().add(
-                                            SetRideStatus(
-                                              status: online
-                                                  ? RideStatus.offline
-                                                  : RideStatus.online,
-                                            ),
+                                  onToggleAvailability: () {
+                                    final intendsOnline = homeState
+                                        .availability.intendsToBeOnline;
+                                    context.read<HomeBloc>().add(
+                                          SetRideStatus(
+                                            status: intendsOnline
+                                                ? RideStatus.offline
+                                                : RideStatus.online,
                                           ),
+                                        );
+                                  },
                                 );
                               },
                             );
@@ -174,6 +176,64 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
       }.contains(
           '${item['deliveryState'] ?? item['status'] ?? ''}'.toLowerCase());
 
+  static bool _isLiveOffer(Map<String, dynamic> item, String riderId) {
+    final values = [
+      item['status'],
+      item['deliveryStatus'],
+      item['deliveryStage'],
+      item['matchingStatus'],
+      item['dispatchStatus'],
+    ].map((value) => '$value'.trim().toLowerCase());
+    const terminal = {
+      'accepted',
+      'assigned',
+      'collected',
+      'in_transit',
+      'delivered',
+      'completed',
+      'cancelled',
+      'canceled',
+      'expired',
+      'failed',
+      'blocked',
+    };
+    if (values.any(terminal.contains)) return false;
+    final matching = '${item['matchingStatus'] ?? ''}'.trim().toLowerCase();
+    if (matching.isNotEmpty &&
+        matching != 'available' &&
+        matching != 'requested') {
+      return false;
+    }
+    final assigned = [
+      item['riderId'],
+      item['driverId'],
+      item['assignedRider'],
+      item['assignedRiderId'],
+      item['assignedDriverId'],
+      item['courierId'],
+    ].map((value) => '$value'.trim()).where((value) => value.isNotEmpty);
+    if (assigned.any((value) => value != riderId)) return false;
+    final payment = '${item['paymentStatus'] ?? item['paymentState'] ?? ''}'
+        .trim()
+        .toLowerCase();
+    if (payment.isNotEmpty &&
+        !{
+          'paid',
+          'succeeded',
+          'payment_confirmed',
+          'confirmed',
+          'roth_paid',
+          'stripe_paid',
+        }.contains(payment)) {
+      return false;
+    }
+    final expiry = _timestampMillis(item['offerExpiresAt']) ??
+        _timestampMillis(item['dispatchExpiresAt']) ??
+        _timestampMillis(item['expiresAt']) ??
+        _timestampMillis(item['matchingExpiresAt']);
+    return expiry == null || expiry > DateTime.now().millisecondsSinceEpoch;
+  }
+
   static int _time(Map<String, dynamic> item) {
     final value = item['scheduledAt'] ??
         item['collectionStart'] ??
@@ -181,6 +241,14 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
         item['updatedAt'] ??
         item['createdAt'];
     return value is Timestamp ? value.millisecondsSinceEpoch : 0;
+  }
+
+  static int? _timestampMillis(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.millisecondsSinceEpoch;
+    if (value is DateTime) return value.millisecondsSinceEpoch;
+    if (value is num) return value.toInt();
+    return DateTime.tryParse('$value')?.millisecondsSinceEpoch;
   }
 }
 
@@ -248,10 +316,6 @@ class _DashboardData {
   final bool loading;
   final bool hasDataError;
   final bool notificationsUnavailable;
-
-  bool get isOnline =>
-      presence['isOnline'] == true &&
-      '${presence['availabilityStatus'] ?? ''}'.toLowerCase() != 'offline';
 }
 
 class _DashboardSurface extends StatelessWidget {
@@ -308,22 +372,7 @@ class _DashboardSurface extends StatelessWidget {
                   const SizedBox(height: 18),
                   _AvailabilityCard(
                     home: home,
-                    online: data.isOnline,
                     onToggle: onToggleAvailability,
-                  ),
-                  FutureBuilder<bool>(
-                    future: RiderInternalAccess.enabled(),
-                    builder: (context, snapshot) {
-                      if (snapshot.data != true) {
-                        return const SizedBox.shrink();
-                      }
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 14),
-                        child: _InternalDiagnosticsCard(
-                          presence: data.presence,
-                        ),
-                      );
-                    },
                   ),
                   const SizedBox(height: 14),
                   _DashboardGuideEntry(profile: data.profile),
@@ -339,7 +388,7 @@ class _DashboardSurface extends StatelessWidget {
                   ),
                   const SizedBox(height: 10),
                   _PriorityJobsCard(
-                    online: data.isOnline,
+                    online: home.availability.isOnline,
                     offers: data.eligibleOffers,
                     onTap: () => onSelectTab(1),
                   ),
@@ -545,16 +594,17 @@ class _NotificationButton extends StatelessWidget {
 class _AvailabilityCard extends StatelessWidget {
   const _AvailabilityCard({
     required this.home,
-    required this.online,
     required this.onToggle,
   });
 
   final HomeState home;
-  final bool online;
   final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
+    final availability = home.availability;
+    final online = availability.isOnline;
+    final intendsOnline = availability.intendsToBeOnline;
     return RiderGlassSurface(
       opacity: .66,
       edgeColor: online ? RiderPalette.green : RiderPalette.red,
@@ -582,7 +632,7 @@ class _AvailabilityCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  online ? 'Online and available' : 'You are currently offline',
+                  _title(availability),
                   style: const TextStyle(
                     color: RiderPalette.paper,
                     fontWeight: FontWeight.w700,
@@ -594,9 +644,7 @@ class _AvailabilityCard extends StatelessWidget {
           ),
           const SizedBox(height: 9),
           Text(
-            online
-                ? 'Circum is checking eligible delivery opportunities near you.'
-                : 'Go online when you are ready to receive eligible jobs.',
+            _description(availability),
             style: const TextStyle(
               color: RiderPalette.muted,
               fontFamily: RiderTypography.body,
@@ -604,7 +652,7 @@ class _AvailabilityCard extends StatelessWidget {
               height: 1.48,
             ),
           ),
-          if (home.message != null) ...[
+          if (!online && home.message != null) ...[
             const SizedBox(height: 10),
             Text(
               home.message!,
@@ -615,20 +663,21 @@ class _AvailabilityCard extends StatelessWidget {
           FutureBuilder<bool>(
             future: RiderInternalAccess.enabled(),
             builder: (context, internalAccess) {
-              final allowed =
-                  internalAccess.data == true || home.canGoOnline || online;
+              final allowed = internalAccess.data == true ||
+                  home.canGoOnline ||
+                  intendsOnline;
               return SizedBox(
                 height: 52,
                 width: double.infinity,
                 child: FilledButton.icon(
                   onPressed: allowed ? onToggle : null,
                   icon: Icon(
-                    online
+                    intendsOnline
                         ? Icons.pause_rounded
                         : Icons.power_settings_new_rounded,
                     size: 18,
                   ),
-                  label: Text(online ? 'Go offline' : 'Go online'),
+                  label: Text(intendsOnline ? 'Go offline' : 'Go online'),
                   style: FilledButton.styleFrom(
                     backgroundColor: online
                         ? Colors.white.withValues(alpha: .06)
@@ -660,6 +709,36 @@ class _AvailabilityCard extends StatelessWidget {
       ),
     );
   }
+
+  String _title(RiderAvailability availability) =>
+      switch (availability.status) {
+        RiderAvailabilityStatus.goingOnline => 'Going online',
+        RiderAvailabilityStatus.waitingForLocation => 'Waiting for location',
+        RiderAvailabilityStatus.online => 'Online and available',
+        RiderAvailabilityStatus.temporarilyUnavailable =>
+          'Temporarily unavailable',
+        RiderAvailabilityStatus.goingOffline => 'Going offline',
+        RiderAvailabilityStatus.error => 'Availability unavailable',
+        RiderAvailabilityStatus.offline => 'You are currently offline',
+      };
+
+  String _description(RiderAvailability availability) =>
+      switch (availability.status) {
+        RiderAvailabilityStatus.online =>
+          'Circum is checking eligible delivery opportunities near you.',
+        RiderAvailabilityStatus.goingOnline =>
+          'Circum is confirming your availability.',
+        RiderAvailabilityStatus.waitingForLocation =>
+          'A fresh location is required before eligible jobs can reach you.',
+        RiderAvailabilityStatus.temporarilyUnavailable =>
+          'Circum is restoring your connection and dispatch readiness.',
+        RiderAvailabilityStatus.goingOffline =>
+          'Circum is closing your availability.',
+        RiderAvailabilityStatus.error =>
+          'Availability could not be confirmed. Try again.',
+        RiderAvailabilityStatus.offline =>
+          'Go online when you are ready to receive eligible jobs.',
+      };
 }
 
 class _InternalDiagnosticsCard extends StatelessWidget {
@@ -671,10 +750,20 @@ class _InternalDiagnosticsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final location = presence['currentLocation'];
     final locationMap = location is Map ? location : const {};
+    final lastFixMillis = _millis(
+      locationMap['updatedAt'] ?? presence['lastLocationAt'],
+    );
+    final locationIsFresh = lastFixMillis != null &&
+        DateTime.now()
+                .difference(DateTime.fromMillisecondsSinceEpoch(lastFixMillis))
+                .inMinutes <
+            5;
+    final rawGpsStatus = _clean(presence['gpsStatus'], fallback: 'Unknown');
+    final displayGpsStatus = locationIsFresh ? rawGpsStatus : 'Stale';
     final rows = <({String label, String value})>[
       (
         label: 'Location status',
-        value: _clean(presence['gpsStatus'], fallback: 'Unknown'),
+        value: displayGpsStatus,
       ),
       (
         label: 'Accuracy',
@@ -684,9 +773,12 @@ class _InternalDiagnosticsCard extends StatelessWidget {
       ),
       (
         label: 'Last fix',
-        value: _age(locationMap['updatedAt'] ?? presence['lastLocationAt']),
+        value: _age(lastFixMillis),
       ),
-      (label: 'Availability check', value: 'Active while online'),
+      (
+        label: 'Availability check',
+        value: locationIsFresh ? 'Ready while online' : 'Needs fresh location',
+      ),
       (
         label: 'Tracking mode',
         value: _clean(presence['backgroundTracking'], fallback: 'Unknown'),
@@ -705,8 +797,10 @@ class _InternalDiagnosticsCard extends StatelessWidget {
       ),
       (
         label: 'Job readiness',
-        value: presence['dispatchEligible'] == true
-            ? 'Eligible'
+        value: locationIsFresh
+            ? presence['dispatchEligible'] == true
+                ? 'Eligible'
+                : 'Awaiting dispatch eligibility'
             : 'Waiting for location update',
       ),
     ];

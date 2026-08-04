@@ -27,8 +27,9 @@ void main() {
         () {
       expect(
           nav,
-          contains(
-              "final semantic = online ? 'Rider online. Go offline' : 'Go online'"));
+          contains('final semantic = _availabilityActionLabel(home.availability)'));
+      expect(nav, contains('home.availability.isOnline'));
+      expect(nav, isNot(contains('home.rideStatus == RideStatus.online')));
       expect(nav, contains('SetRideStatus('));
       expect(nav, contains('RideStatus.online'));
       expect(nav, contains('RideStatus.offline'));
