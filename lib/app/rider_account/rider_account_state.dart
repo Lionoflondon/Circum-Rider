@@ -30,10 +30,24 @@ class RiderAccountStateResolver {
       'onboardingReviewedAt',
       'onboardingComplete',
       'onboardingCompleted',
+      'rank',
+      'riderRank',
+      'rankOverride',
+      'rankUpdatedBy',
+      'rankReason',
+      'rankOverrideReason',
+      'recognitions',
+      'isFoundingRider',
+      'founderRider',
+      'foundingRiderNumber',
+      'founderRiderNumber',
     };
     for (final field in adminReviewFields) {
       final value = riderProfile?[field];
-      if (value != null) reconciled[field] = value;
+      final canonicalValue = reconciled[field];
+      final hasCanonicalValue =
+          canonicalValue != null && '$canonicalValue'.trim().isNotEmpty;
+      if (!hasCanonicalValue && value != null) reconciled[field] = value;
     }
     final profileValues = riderProfile ?? const <String, dynamic>{};
     final profileApproved = [
@@ -54,7 +68,8 @@ class RiderAccountStateResolver {
         _bool(reconciled, 'isFrozen', 'frozen') ||
         _bool(reconciled, 'isSuspended', 'suspended') ||
         _matches(riderOperational, {'closed', 'frozen', 'suspended'});
-    if (!restricted && profileApproved) {
+    if (!restricted &&
+        (profileApproved || _hasLegacyOperationalAuthority(reconciled))) {
       reconciled['riderStatus'] = 'active';
       reconciled['approvalStatus'] = 'approved';
     }
@@ -158,6 +173,25 @@ class RiderAccountStateResolver {
 
   static bool _matches(String value, Set<String> values) =>
       values.contains(value);
+
+  static bool _hasLegacyOperationalAuthority(Map<String, dynamic> rider) {
+    final recognitions = rider['recognitions'];
+    final foundingRider =
+        recognitions is Map ? recognitions['foundingRider'] : null;
+    final foundingAwarded =
+        foundingRider is Map && foundingRider['awarded'] == true;
+    final rankOverride = rider['rankOverride'] == true ||
+        '${rider['rankUpdatedBy'] ?? ''}'.trim().isNotEmpty ||
+        '${rider['rankReason'] ?? rider['rankOverrideReason'] ?? ''}'
+            .trim()
+            .isNotEmpty;
+    return rankOverride ||
+        foundingAwarded ||
+        rider['isFoundingRider'] == true ||
+        rider['founderRider'] == true ||
+        rider['foundingRiderNumber'] != null ||
+        rider['founderRiderNumber'] != null;
+  }
 }
 
 class RiderApprovalProgress {
@@ -248,7 +282,7 @@ class RiderApprovalProgress {
             .contains(_normalised(rider['rothOnboardingStatus']));
     final payoutSetup = rider['payoutSetupComplete'] == true ||
         rider['stripeConnectReady'] == true ||
-        const {'ready', 'verified', 'active'}
+        const {'ready', 'verified', 'active', 'payouts_enabled'}
             .contains(_normalised(rider['stripeConnectStatus']));
 
     return RiderApprovalProgress(

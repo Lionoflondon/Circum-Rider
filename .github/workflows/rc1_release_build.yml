@@ -1,0 +1,23 @@
+name: RC1 Rider Release Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rider-mobile:
+    name: Native Passed - Build Rider Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: |
+          test -n "${{ secrets.RIDER_ANDROID_GOOGLE_MAPS_API_KEY }}" || (echo "Missing RIDER_ANDROID_GOOGLE_MAPS_API_KEY" >&2; exit 1)
+          test -n "${{ secrets.GOOGLE_MAPS_DIRECTIONS_API_KEY }}" || (echo "Missing GOOGLE_MAPS_DIRECTIONS_API_KEY" >&2; exit 1)
+          GOOGLE_MAPS_API_KEY="${{ secrets.RIDER_ANDROID_GOOGLE_MAPS_API_KEY }}" flutter build apk --release --target=lib/main.dart --dart-define=GOOGLE_MAPS_DIRECTIONS_API_KEY="${{ secrets.GOOGLE_MAPS_DIRECTIONS_API_KEY }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rider-android-release
+          path: build/app/outputs/flutter-apk/app-release.apk

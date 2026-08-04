@@ -74,7 +74,8 @@ class SupportView extends StatelessWidget {
                                       chatId:
                                           'admin_rider_${FirebaseAuth.instance.currentUser?.uid ?? 'unknown'}_general',
                                       title: 'Circum Support',
-                                      subtitle: 'Rider support conversation',
+                                      subtitle:
+                                          'Circum Rider support conversation',
                                     )));
                       }),
                 ],

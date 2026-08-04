@@ -61,7 +61,7 @@ class AddDetailsView extends StatelessWidget {
                                 ),
                               ),
                               icon: const Icon(Icons.explore_outlined),
-                              label: const Text('Rider Guide'),
+                              label: const Text('Circum Rider Guide'),
                             ),
                           ),
                         ),

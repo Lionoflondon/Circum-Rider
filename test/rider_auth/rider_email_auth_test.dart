@@ -12,8 +12,8 @@ void main() {
     expect(app, contains('child: OnboardingView()'));
     expect(entry, contains('Deliver with Circum'));
     expect(entry, contains('Get started'));
-    expect(entry, contains('Existing Rider sign in'));
-    expect(entry, contains('Create Rider account'));
+    expect(entry, contains('Existing Circum Rider sign in'));
+    expect(entry, contains('Create Circum Rider account'));
     expect(entry, contains('Full name'));
     expect(entry, contains('UK mobile number'));
     expect(entry, contains('Verify your mobile'));
@@ -80,7 +80,7 @@ void main() {
     expect(source, contains('VerifyPhoneOtp'));
     expect(source, contains('ResendPhoneOtp'));
     expect(source, contains('Change number'));
-    expect(source, contains('Accept the Rider Terms'));
+    expect(source, contains('Accept the Circum Rider Terms'));
     expect(source, contains('Accept the Privacy Policy'));
     expect(source, contains('legally entitled to work in the UK'));
     expect(source, contains('RequestLocationData'));
@@ -96,9 +96,9 @@ void main() {
     expect(RiderAuthError.messageFor('invalid-credential'),
         'The email or password is incorrect.');
     expect(RiderAuthError.messageFor('user-not-found'),
-        'No Rider account was found for that email.');
+        'No Circum Rider account was found for that email.');
     expect(RiderAuthError.messageFor('user-disabled'),
-        'This Rider account is disabled. Contact Circum Support.');
+        'This Circum Rider account is disabled. Contact Circum Support.');
     expect(RiderAuthError.messageFor('network-request-failed'),
         'Check your connection and try again.');
     expect(RiderAuthError.messageFor('too-many-requests'),

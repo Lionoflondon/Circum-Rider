@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('canonical Rider presentation replacement', () {
     final mainSource = File('lib/main.dart').readAsStringSync();
+    final webMainSource = File('lib/main_rider_web.dart').readAsStringSync();
     final webIndex = File('web/index.html').readAsStringSync();
     final nav = File('lib/app/bottom_nav/view/app_nav.dart').readAsStringSync();
     final dashboard = File('lib/app/rider_shell/rider_dashboard_view.dart')
@@ -35,8 +36,6 @@ void main() {
         File('lib/app/account/bloc/account_bloc.dart').readAsStringSync();
     final authBloc =
         File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
-    final accountDetails =
-        File('lib/app/account/view/account_details.dart').readAsStringSync();
     final offers = File('lib/app/rider_jobs/rider_job_offer_screen.dart')
         .readAsStringSync();
 
@@ -73,7 +72,8 @@ void main() {
     });
 
     test('startup uses one branded splash without rotating boot copy', () {
-      expect(mainSource, contains('_RiderStartupHold'));
+      expect(webMainSource, contains('_RiderWebStartupHold'));
+      expect(mainSource, isNot(contains('_RiderWebStartupHold')));
       expect(mainSource,
           isNot(contains("AssetImage('assets/images/splash.png')")));
       expect(mainSource, isNot(contains('Starting Rider')));
@@ -95,7 +95,7 @@ void main() {
       expect(dashboard, contains('Available deliveries'));
       expect(dashboard, contains('Upcoming schedule'));
       expect(dashboard, contains('Recent activity'));
-      expect(dashboard, contains('CIRCUM RIDER'));
+      expect(dashboard, isNot(contains('CIRCUM RIDER')));
       expect(dashboard, contains('No deliveries available'));
       expect(dashboard, contains('New offers will appear here automatically.'));
       expect(dashboard, contains('No scheduled deliveries'));
@@ -103,27 +103,29 @@ void main() {
       expect(dashboard, isNot(contains('Open the marketplace')));
     });
 
-    test('home exposes internal GPS diagnostics and persistent heartbeat', () {
+    test('home exposes availability status backed by persistent heartbeat', () {
       expect(homeBloc, contains('_presenceHeartbeatInterval'));
       expect(homeBloc, contains('updateRiderPresence'));
       expect(homeBloc, contains("'gpsSignalQuality'"));
       expect(homeBloc, contains("'backgroundTracking'"));
       expect(dashboard, contains('_InternalDiagnosticsCard'));
-      expect(dashboard, contains('Internal dispatch diagnostics'));
-      expect(dashboard, contains('Dispatch eligibility'));
+      expect(dashboard, contains('Availability status'));
+      expect(dashboard, contains('Job readiness'));
     });
 
     test('rider profile photos use the canonical identity contract', () {
-      expect(authBloc, contains("rider-profiles/\${user.uid}/profile.jpg"));
-      expect(authBloc, contains("rider-profiles/\${user.uid}/thumbnail.jpg"));
+      expect(authBloc, contains("httpsCallable('submitRiderDocument')"));
+      expect(authBloc, contains("'documentType': 'profile_photo'"));
+      expect(authBloc, contains("'fileBase64': base64Encode(processed.full)"));
+      expect(authBloc, contains("data['fileUrl']"));
       expect(authBloc, contains('image_lib.copyCrop'));
       expect(authBloc, contains('image_lib.encodeJpg'));
-      expect(authBloc, contains("'profilePhotoVersion'"));
-      expect(authBloc, contains("'profileThumbnailUrl'"));
-      expect(accountDetails, contains('image.readAsBytes()'));
-      expect(accountDetails, contains('_ProfilePhotoCropDialog'));
-      expect(accountDetails, contains('InteractiveViewer'));
-      expect(accountDetails, contains('RepaintBoundary'));
+      expect(authBloc, isNot(contains('FirebaseStorage')));
+      expect(profileDetails, contains('image.readAsBytes()'));
+      expect(profileDetails, contains('UpdateUserProfilePhoto'));
+      expect(profileDetails, contains('_showRiderPhotoSourceSheet'));
+      expect(profileDetails, contains('ImageSource.camera'));
+      expect(profileDetails, contains('ImageSource.gallery'));
       expect(dashboard.indexOf('profileThumbnailUrl'),
           lessThan(dashboard.indexOf('profilePhotoUrl')));
       expect(dashboard, contains('_dashboardProfileData'));
@@ -168,13 +170,35 @@ void main() {
       expect(earnings, contains('Roth remains separate'));
       expect(earnings, isNot(contains('CASH EARNINGS')));
       expect(earnings, contains('Available balance'));
+      expect(earnings, contains('Available Balance'));
+      expect(earnings, contains('Pending Payout'));
+      expect(earnings, contains('Processing'));
+      expect(earnings, contains('Lifetime Earnings'));
       expect(earnings, contains('Payout history'));
       expect(earnings, contains('Transactions'));
       expect(earnings, contains('Waiting & No-show'));
       expect(earnings, contains('Adjustment'));
+      expect(earnings, contains('Withdrawn'));
+      expect(earnings, contains('Pending Settlement'));
       expect(earnings, contains('Payout processing'));
       expect(earnings, contains('Payout failed'));
       expect(earnings, contains('Review required'));
+      expect(earnings, contains('Trust Score'));
+      expect(earnings, contains('Current Rank'));
+      expect(earnings, contains('Completed Deliveries'));
+      expect(earnings, contains('Acceptance Rate'));
+      expect(earnings, contains('Completion Rate'));
+      expect(earnings, contains('Weekly Earnings'));
+      expect(earnings, contains('Monthly Earnings'));
+      expect(earnings, contains('Average Rating'));
+      expect(earnings, contains('This Week'));
+      expect(earnings, contains('Last 30 Days'));
+      expect(earnings, contains('Monthly trend'));
+      expect(earnings, contains('Top earning days'));
+      expect(earnings, contains('Peak working hours'));
+      expect(earnings, contains('Average job value'));
+      expect(earnings, contains('Copy reference'));
+      expect(earnings, contains('ExpansionTile'));
       expect(earnings, contains('_requiresPayoutReview'));
       expect(earnings, contains('_NoEarningsState'));
       expect(earnings, isNot(contains('_FooterMeta')));
@@ -387,7 +411,15 @@ void main() {
       ),
     ));
     expect(find.text('WARDEN'), findsOneWidget);
-    expect(find.text('420 TRUST'), findsOneWidget);
+    expect(find.text('420 trust points'), findsOneWidget);
     expect(find.textContaining('Knight'), findsOneWidget);
+  });
+
+  test('dashboard rank progress follows displayed backend rank', () {
+    final source = File('lib/app/rider_shell/rider_dashboard_view.dart')
+        .readAsStringSync();
+    expect(source,
+        contains('_RankProgressData.forRank(rank.rank, rank.trustPoints)'));
+    expect(source, contains('static _RankProgressData forRank'));
   });
 }

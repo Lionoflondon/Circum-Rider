@@ -351,6 +351,7 @@ class RiderRankProgress extends StatelessWidget {
     final current = _thresholds[index];
     final next =
         index == _ranks.length - 1 ? _thresholds.last : _thresholds[index + 1];
+    final isTopRank = index == _ranks.length - 1;
     final progress = index == _ranks.length - 1
         ? 1.0
         : ((trustPoints - current) / (next - current)).clamp(0.0, 1.0);
@@ -359,26 +360,57 @@ class RiderRankProgress extends StatelessWidget {
         RiderStatusBadge(_ranks[index].toUpperCase(),
             color: _rankColor(_ranks[index])),
         const Spacer(),
-        Text('$trustPoints TRUST',
+        Text('$trustPoints trust points',
             style: const TextStyle(
                 color: RiderPalette.paper,
-                fontFamily: RiderTypography.mono,
                 fontSize: 12,
                 fontWeight: FontWeight.w700)),
       ]),
       const SizedBox(height: 11),
-      ClipRRect(
-        borderRadius: BorderRadius.circular(4),
-        child: LinearProgressIndicator(
-          value: progress,
-          minHeight: 5,
-          backgroundColor: Colors.white.withValues(alpha: .07),
-          color: _rankColor(_ranks[index]),
+      if (isTopRank)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          decoration: BoxDecoration(
+            color: _rankColor(_ranks[index]).withValues(alpha: .12),
+            borderRadius: BorderRadius.circular(99),
+            border: Border.all(
+              color: _rankColor(_ranks[index]).withValues(alpha: .32),
+            ),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.workspace_premium_rounded,
+                color: RiderPalette.amber,
+                size: 15,
+              ),
+              SizedBox(width: 6),
+              Text(
+                'Top rank',
+                style: TextStyle(
+                  color: RiderPalette.paper,
+                  fontFamily: RiderTypography.body,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        )
+      else
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 5,
+            backgroundColor: Colors.white.withValues(alpha: .07),
+            color: _rankColor(_ranks[index]),
+          ),
         ),
-      ),
       const SizedBox(height: 7),
       Text(
-        index == _ranks.length - 1
+        isTopRank
             ? 'Highest Rider rank achieved'
             : '${(next - trustPoints).clamp(0, next)} points to ${_ranks[index + 1]}',
         style: const TextStyle(

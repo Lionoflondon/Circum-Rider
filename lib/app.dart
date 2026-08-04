@@ -14,7 +14,7 @@ import '../app/bottom_nav/view/app_nav.dart';
 import 'utils/app_state/index.dart';
 
 class App extends StatelessWidget {
-  const App({Key? key}) : super(key: key);
+  const App({super.key});
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
@@ -29,6 +29,32 @@ class App extends StatelessWidget {
   }
 
   Widget _buildNavigator(AuthState state, bool internalAccess) {
+    final showOnboarding = state.currentState == AppState.authenticated &&
+        !internalAccess &&
+        (state.riderAccountState == RiderAccountState.onboardingNotStarted ||
+            state.riderAccountState == RiderAccountState.onboardingInProgress);
+    final showSubmitted = state.currentState == AppState.authenticated &&
+        !internalAccess &&
+        (state.riderAccountState == RiderAccountState.submitted ||
+            state.riderAccountState == RiderAccountState.pendingReview);
+    final showRestricted = state.currentState == AppState.authenticated &&
+        !internalAccess &&
+        (state.riderAccountState == RiderAccountState.moreInformationRequired ||
+            state.riderAccountState == RiderAccountState.rejected ||
+            state.riderAccountState == RiderAccountState.suspended ||
+            state.riderAccountState == RiderAccountState.frozen ||
+            state.riderAccountState == RiderAccountState.closed);
+    final showOperational = state.currentState == AppState.authenticated &&
+        state.authenticatedStatus == AuthenticatedStatus.authenticated &&
+        (internalAccess ||
+            state.riderAccountState == RiderAccountState.approved);
+    final showAuthenticatedFallback =
+        state.currentState == AppState.authenticated &&
+            !showOnboarding &&
+            !showSubmitted &&
+            !showRestricted &&
+            !showOperational;
+
     return Navigator(
       key: NavKey.navKey,
       pages: [
@@ -42,28 +68,12 @@ class App extends StatelessWidget {
             child: OnboardingView(),
           ),
 
-        if (!internalAccess &&
-            state.currentState == AppState.authenticated &&
-            (state.riderAccountState ==
-                    RiderAccountState.onboardingNotStarted ||
-                state.riderAccountState ==
-                    RiderAccountState.onboardingInProgress))
-          const MaterialPage(child: AddDetailsView()),
+        if (showOnboarding) const MaterialPage(child: AddDetailsView()),
 
-        if (!internalAccess &&
-            state.currentState == AppState.authenticated &&
-            (state.riderAccountState == RiderAccountState.submitted ||
-                state.riderAccountState == RiderAccountState.pendingReview))
+        if (showSubmitted)
           const MaterialPage(child: ApplicationSubmittedView()),
 
-        if (!internalAccess &&
-            state.currentState == AppState.authenticated &&
-            (state.riderAccountState ==
-                    RiderAccountState.moreInformationRequired ||
-                state.riderAccountState == RiderAccountState.rejected ||
-                state.riderAccountState == RiderAccountState.suspended ||
-                state.riderAccountState == RiderAccountState.frozen ||
-                state.riderAccountState == RiderAccountState.closed))
+        if (showRestricted)
           MaterialPage(
             child: RiderAccountStatusView(
               accountState: state.riderAccountState,
@@ -71,11 +81,16 @@ class App extends StatelessWidget {
           ),
 
         // Authenticated app state
-        if (state.currentState == AppState.authenticated &&
-            state.authenticatedStatus == AuthenticatedStatus.authenticated &&
-            (internalAccess ||
-                state.riderAccountState == RiderAccountState.approved))
-          const MaterialPage(child: AppNavView()),
+        if (showOperational) const MaterialPage(child: AppNavView()),
+
+        // Any authenticated state that has not fully reconciled must still
+        // render a recoverable account screen instead of an empty Navigator.
+        if (showAuthenticatedFallback)
+          MaterialPage(
+            child: RiderAccountStatusView(
+              accountState: state.riderAccountState,
+            ),
+          ),
       ],
       onPopPage: (route, result) {
         // route.didPop(result);

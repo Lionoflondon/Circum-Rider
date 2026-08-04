@@ -15,14 +15,21 @@ class RiderRecognitionAward {
     String key, {
     required String flatAwardedKey,
     required String flatNumberKey,
+    String? secondaryAwardedKey,
+    String? secondaryNumberKey,
   }) {
     final recognitions =
         Map<String, dynamic>.from(data['recognitions'] as Map? ?? {});
     final nested = Map<String, dynamic>.from(recognitions[key] as Map? ?? {});
     return RiderRecognitionAward(
-      awarded: nested['awarded'] == true || data[flatAwardedKey] == true,
+      awarded: nested['awarded'] == true ||
+          data[flatAwardedKey] == true ||
+          (secondaryAwardedKey != null && data[secondaryAwardedKey] == true),
       number: (nested['number'] as num?)?.toInt() ??
-          (data[flatNumberKey] as num?)?.toInt(),
+          (data[flatNumberKey] as num?)?.toInt() ??
+          (secondaryNumberKey == null
+              ? null
+              : (data[secondaryNumberKey] as num?)?.toInt()),
     );
   }
 }
@@ -50,6 +57,8 @@ class RiderRecognitions {
           'foundingRider',
           flatAwardedKey: 'isFoundingRider',
           flatNumberKey: 'foundingRiderNumber',
+          secondaryAwardedKey: 'founderRider',
+          secondaryNumberKey: 'founderRiderNumber',
         ),
       );
 }

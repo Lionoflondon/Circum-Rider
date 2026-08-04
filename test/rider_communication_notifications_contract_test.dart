@@ -41,6 +41,8 @@ void main() {
       expect(homeBloc, isNot(contains('sendRiderUpdate')));
       expect(serviceSource, contains("collection('chats')"));
       expect(serviceSource, contains(".collection('messages')"));
+      expect(serviceSource, isNot(contains('.asyncMap(')));
+      expect(serviceSource, isNot(contains(".limit(80)\n          .get()")));
     });
 
     test('delivery and support entries open canonical conversation view', () {
@@ -96,6 +98,57 @@ void main() {
       expect(normalizeNotificationCategory('document_required'), 'account');
       expect(normalizeNotificationCategory('scheduled_pickup'), 'schedule');
       expect(normalizeNotificationCategory('new_delivery'), 'jobs');
+      expect(normalizeNotificationCategory('campaign_joined'), 'campaigns');
+    });
+
+    test('notification role scope separates Rider from Sender updates', () {
+      expect(
+        normalizeNotificationRoleScope(
+          const {'recipientRole': 'rider'},
+          const {},
+        ),
+        'rider',
+      );
+      expect(
+        normalizeNotificationRoleScope(
+          const {'surface': 'sender-web'},
+          const {},
+        ),
+        'sender',
+      );
+      expect(
+        normalizeNotificationRoleScope(
+          const {},
+          const {'app': 'circum rider'},
+        ),
+        'rider',
+      );
+      expect(normalizeNotificationRoleScope(const {}, const {}), 'unknown');
+    });
+
+    test('Rider push payload parsing is recoverable and diagnostic', () {
+      final messaging = File('lib/messaging.dart').readAsStringSync();
+
+      expect(messaging, contains('_decodeRiderCommunicationPayload'));
+      expect(messaging, contains('_logRecoverableRiderPushPayload'));
+      expect(messaging, contains('Recoverable Rider push payload discarded'));
+      expect(
+          messaging,
+          isNot(contains(
+              "Map<String, dynamic> msg = jsonDecode(message.data['data'])")));
+    });
+
+    test('Rider notification stream uses server ordering before limits', () {
+      final recipient =
+          serviceSource.indexOf(".where('recipientId', isEqualTo: uid)");
+      final order =
+          serviceSource.indexOf(".orderBy('createdAt', descending: true)");
+      final limit = serviceSource.indexOf('.limit(100)');
+
+      expect(recipient, isNonNegative);
+      expect(order, greaterThan(recipient));
+      expect(limit, greaterThan(order));
+      expect(serviceSource, isNot(contains('records.sort(')));
     });
   });
 
@@ -113,22 +166,25 @@ void main() {
         'All',
         'Jobs',
         'Deliveries',
+        'Campaigns',
         'Messages',
         'Schedule',
         'Earnings',
         'Account',
-        'System',
       ]) {
         expect(notificationSource, contains("'$label'"));
       }
+      expect(notificationSource, isNot(contains("'System'")));
       expect(notificationSource, contains('markAllNotificationsRead'));
-      expect(notificationSource, contains('archiveNotification'));
+      expect(notificationSource, isNot(contains('Archive notification')));
       expect(notificationSource, contains('deleteNotification'));
       expect(notificationSource, contains('markNotificationRead'));
     });
 
     test('Notification Centre routes to Rider destinations', () {
       expect(notificationSource, contains('RiderConversationView'));
+      expect(notificationSource, contains("destination['conversationId']"));
+      expect(notificationSource, contains("destination['campaignId']"));
       expect(notificationSource, contains("return 1"));
       expect(notificationSource, contains("return 2"));
       expect(notificationSource, contains("return 3"));

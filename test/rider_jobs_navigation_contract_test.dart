@@ -27,8 +27,9 @@ void main() {
         () {
       expect(
           nav,
-          contains(
-              "final semantic = online ? 'Rider online. Go offline' : 'Go online'"));
+          contains('final semantic = _availabilityActionLabel(home.availability)'));
+      expect(nav, contains('home.availability.isOnline'));
+      expect(nav, isNot(contains('home.rideStatus == RideStatus.online')));
       expect(nav, contains('SetRideStatus('));
       expect(nav, contains('RideStatus.online'));
       expect(nav, contains('RideStatus.offline'));
@@ -63,7 +64,10 @@ void main() {
           contains(
               'Available deliveries, scheduled work, active deliveries and activity.'));
       expect(offers, contains('Scheduled deliveries'));
-      expect(offers, contains('Active delivery'));
+      expect(offers, contains('Active deliveries'));
+      expect(offers, contains('Going Online...'));
+      expect(offers, contains('Unavailable until you go online.'));
+      expect(offers, contains('Go online first to use'));
       expect(offers, contains('Activity'));
       expect(offers, contains('_JobsStateScaffold'));
       expect(offers, contains('RiderAcceptStatus.alreadyTaken'));

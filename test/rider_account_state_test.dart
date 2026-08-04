@@ -93,6 +93,52 @@ void main() {
       );
     });
 
+    test('canonical Rider approval wins over stale profile review fields', () {
+      expect(
+        RiderAccountStateResolver.resolveRecords(
+          rider: const {
+            'approvalStatus': 'approved',
+            'riderStatus': 'active',
+            'onboardingComplete': true,
+          },
+          riderProfile: const {
+            'approvalStatus': 'pending',
+            'verificationStatus': 'verification_pending',
+            'onboardingStatus': 'application_submitted',
+          },
+        ),
+        RiderAccountState.approved,
+      );
+    });
+
+    test('admin-issued legacy rank authority unlocks approved riders', () {
+      expect(
+        RiderAccountStateResolver.resolveRecords(
+          rider: const {'approvalStatus': 'pending'},
+          riderProfile: const {
+            'riderRank': 'veteran',
+            'rankUpdatedBy': 'admin-1',
+            'rankReason': 'Founding Rider',
+          },
+        ),
+        RiderAccountState.approved,
+      );
+
+      expect(
+        RiderAccountStateResolver.resolveRecords(
+          rider: const {
+            'approvalStatus': 'pending',
+            'isSuspended': true,
+          },
+          riderProfile: const {
+            'riderRank': 'veteran',
+            'rankUpdatedBy': 'admin-1',
+          },
+        ),
+        RiderAccountState.suspended,
+      );
+    });
+
     test('does not invent vehicle defaults', () {
       final record = <String, dynamic>{'onboardingStatus': 'profile_started'};
       expect(record.containsKey('vehicle'), isFalse);
@@ -159,5 +205,23 @@ void main() {
     expect(source, contains('RiderAccountState.approved'));
     expect(source, contains('MaterialPage(child: AppNavView())'));
     expect(source, contains('RiderAccountStatusView'));
+  });
+
+  test('sign-in reconciliation reads Rider profile authority', () {
+    final source =
+        File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
+    expect(
+        source, contains("db.collection('riderProfiles').doc(user.uid).get()"));
+    expect(source, contains('RiderAccountStateResolver.resolveRecords'));
+  });
+
+  test('authenticated Rider states cannot render an empty navigator', () {
+    final source = File('lib/app.dart').readAsStringSync();
+    expect(source, contains('showAuthenticatedFallback'));
+    expect(
+      source,
+      contains(
+          'render a recoverable account screen instead of an empty Navigator'),
+    );
   });
 }

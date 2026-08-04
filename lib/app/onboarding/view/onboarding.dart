@@ -267,9 +267,9 @@ class _OnboardingViewState extends State<OnboardingView> {
     if (!_email.text.trim().contains('@')) return 'Enter a valid email.';
     if (!_validUkPhone(_phone.text)) return 'Enter a valid UK mobile number.';
     if (_passwordScore(_password.text) < 2) {
-      return 'Use a stronger password to protect your Rider account.';
+      return 'Use a stronger password to protect your Circum Rider account.';
     }
-    if (!_terms) return 'Accept the Rider Terms to continue.';
+    if (!_terms) return 'Accept the Circum Rider Terms to continue.';
     if (!_privacy) return 'Accept the Privacy Policy to continue.';
     if (!_rightToWork) {
       return 'Confirm you are legally entitled to work in the UK.';
@@ -472,7 +472,7 @@ class _WelcomeStep extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Create your Rider account or sign in to continue your application.',
+              'Create your Circum Rider account or sign in to continue your application.',
               style: _AuthText.sub,
             ),
             const SizedBox(height: 28),
@@ -483,7 +483,7 @@ class _WelcomeStep extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _SecondaryAuthButton(
-              label: 'Existing Rider sign in',
+              label: 'Existing Circum Rider sign in',
               icon: Icons.login_rounded,
               onPressed: onSignIn,
             ),
@@ -553,7 +553,7 @@ class _CreateAccountStep extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Create Rider account', style: _AuthText.h1),
+            const Text('Create Circum Rider account', style: _AuthText.h1),
             const Text(
               'Start with your personal details. Vehicle and document checks continue after authentication.',
               style: _AuthText.sub,
@@ -597,7 +597,7 @@ class _CreateAccountStep extends StatelessWidget {
             const SizedBox(height: 12),
             _ConsentTile(
               value: terms,
-              text: 'I agree to the Rider Terms.',
+              text: 'I agree to the Circum Rider Terms.',
               onChanged: onTerms,
             ),
             _ConsentTile(

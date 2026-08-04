@@ -196,6 +196,7 @@ class RiderLiveTrackingPolicy {
       'delivered',
       'cancelled',
       'canceled',
+      'cancelled_by_sender',
       'failed',
       'no_show',
       'disputed',

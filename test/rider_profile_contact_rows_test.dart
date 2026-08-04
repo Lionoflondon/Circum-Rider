@@ -4,25 +4,25 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('Rider profile contact identity rows are read only', () {
-    final source =
-        File('lib/app/account/view/account_details.dart').readAsStringSync();
-    final emailBlock = source.substring(
-      source.indexOf('Widget email()'),
-      source.indexOf('Widget phone()'),
+    final source = File('lib/app/rider_shell/rider_profile_details_view.dart')
+        .readAsStringSync();
+    final phoneField = source.substring(
+      source.indexOf("_field(_phone, 'Phone'"),
+      source.indexOf("_field(_email, 'Email'"),
     );
-    final phoneBlock = source.substring(
-      source.indexOf('Widget phone()'),
-      source.indexOf('Widget _readOnlyContactRow'),
+    final emailField = source.substring(
+      source.indexOf("_field(_email, 'Email'"),
+      source.indexOf("_field(_address, 'Home address'"),
     );
 
-    expect(emailBlock, contains('_readOnlyContactRow'));
-    expect(phoneBlock, contains('_readOnlyContactRow'));
-    expect(emailBlock, isNot(contains('TextButton')));
-    expect(phoneBlock, isNot(contains('TextButton')));
-    expect(emailBlock, isNot(contains('onPressed')));
-    expect(phoneBlock, isNot(contains('onPressed')));
-    expect(emailBlock, isNot(contains('keyboard_arrow_right')));
-    expect(phoneBlock, isNot(contains('keyboard_arrow_right')));
+    expect(phoneField, contains('readOnly: true'));
+    expect(emailField, contains('readOnly: true'));
+    expect(phoneField, isNot(contains('TextButton')));
+    expect(emailField, isNot(contains('TextButton')));
+    expect(phoneField, isNot(contains('onPressed')));
+    expect(emailField, isNot(contains('onPressed')));
+    expect(phoneField, isNot(contains('keyboard_arrow_right')));
+    expect(emailField, isNot(contains('keyboard_arrow_right')));
   });
 
   test('Personal Details does not impersonate authentication updates', () {
@@ -74,37 +74,39 @@ void main() {
         isNot(contains('Text(\\n                            initials')));
   });
 
-  test('Rider photo upload persists to Sender-visible delivery identity fields',
-      () {
+  test('Rider photo upload uses backend-authoritative identity callable', () {
     final authBloc =
         File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
     final homeBloc =
         File('lib/app/home/bloc/home_bloc.dart').readAsStringSync();
 
-    expect(authBloc, contains("'profileThumbnailUrl': thumbnailUrl"));
-    expect(authBloc, contains("'profilePhotoUrl': downloadUrl"));
-    expect(authBloc, contains(".collection('riders')"));
-    expect(authBloc, contains(".collection('riderProfiles')"));
+    expect(authBloc, contains("httpsCallable('submitRiderDocument')"));
+    expect(authBloc, contains("'documentType': 'profile_photo'"));
+    expect(authBloc, contains("'fileBase64': base64Encode(processed.full)"));
+    expect(authBloc, contains("data['fileUrl']"));
+    expect(authBloc, isNot(contains('FirebaseStorage')));
     expect(homeBloc.indexOf('profileThumbnailUrl'),
         lessThan(homeBloc.indexOf('profilePhotoUrl')));
     expect(homeBloc, contains(r"'photoURL': '$riderPhoto'"));
   });
 
-  test('Rider username is editable and persisted to backend profile documents',
-      () {
+  test('Rider username is platform assigned and read only in the app', () {
     final details = File('lib/app/rider_shell/rider_profile_details_view.dart')
         .readAsStringSync();
     final profile =
         File('lib/app/rider_shell/rider_profile_view.dart').readAsStringSync();
 
-    expect(details, contains("_username.text"));
-    expect(details, contains("'handle': handle"));
-    expect(details, contains("'username': handle"));
+    expect(details, isNot(contains('final _username = TextEditingController')));
+    expect(details, isNot(contains("'handle': handle")));
+    expect(details, isNot(contains("'username': handle")));
     expect(details, contains("collection('riders')"));
     expect(details, contains("collection('riderProfiles')"));
-    expect(details, contains('Your Rider username is saved'));
+    expect(
+        details, contains('Rider usernames are assigned by Circum operations'));
+    expect(details, contains('Awaiting assignment'));
     expect(profile, contains("'handle'"));
     expect(profile, contains("'riderHandle'"));
     expect(profile, contains("'username'"));
+    expect(profile, contains('assigned username'));
   });
 }

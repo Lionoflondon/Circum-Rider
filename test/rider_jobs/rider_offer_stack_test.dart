@@ -196,7 +196,7 @@ void main() {
       expect(find.text('Navigate to Drop-off'), findsNothing);
       expect(find.text(_offers.first.dropoffAddress), findsNothing);
       expect(find.text('£12.00'), findsOneWidget);
-      expect(find.text('Sentinel'), findsOneWidget);
+      expect(find.text('Agent'), findsOneWidget);
       expect(find.text('+6 Trust'), findsOneWidget);
       expect(find.text('Marylebone → Chelsea'), findsOneWidget);
       expect(find.textContaining('Reject'), findsNothing);
@@ -242,7 +242,7 @@ void main() {
       expect(find.text('Report Difference'), findsOneWidget);
       expect(
           find.text(
-              'Gift verification: photo required. Requirements are read from backend state.'),
+              'Gift verification: photo required. Requirements are read from the delivery record.'),
           findsOneWidget);
       expect(find.textContaining('Vanguard Protection'), findsNothing);
     });
@@ -330,6 +330,27 @@ void main() {
 
       expect(find.text('Confirmed'), findsOneWidget);
       expect(find.text('Confirm'), findsNothing);
+    });
+
+    test(
+        'Rider discrepancy states are backend-read and do not mutate authority',
+        () {
+      final source = File('lib/app/rider_jobs/rider_job_offer_screen.dart')
+          .readAsStringSync();
+      expect(source, contains('Submitted - awaiting Admin review'));
+      expect(source, contains('More evidence requested'));
+      expect(source, contains('Approved - awaiting sender payment'));
+      expect(
+          source,
+          contains(
+              'The adjustment was approved and Circum completed payment.'));
+      expect(source,
+          contains('Hold collection until Circum reviews the evidence.'));
+      expect(source,
+          contains('Add the requested evidence before collection continues.'));
+      expect(source, contains('Report Submitted'));
+      expect(source, isNot(contains("collection('deliveryAdjustments').doc")));
+      expect(source, isNot(contains(".update({'price'")));
     });
 
     testWidgets('pickup CTA renders backend-returned delivery stage',

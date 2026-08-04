@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class RiderRothOnboardingResult {
   const RiderRothOnboardingResult({
@@ -11,10 +11,10 @@ class RiderRothOnboardingResult {
 }
 
 class RiderRothOnboarding {
-  const RiderRothOnboarding({FirebaseFirestore? firestore})
-      : _firestore = firestore;
+  const RiderRothOnboarding({FirebaseFunctions? functions})
+      : _functions = functions;
 
-  final FirebaseFirestore? _firestore;
+  final FirebaseFunctions? _functions;
 
   static const walletCollection = 'riderRothWallets';
   static const ledgerCollection = 'riderRothLedger';
@@ -22,70 +22,23 @@ class RiderRothOnboarding {
   static const completionField = 'rothOnboardingComplete';
   static const statusField = 'rothOnboardingStatus';
 
-  FirebaseFirestore get _db => _firestore ?? FirebaseFirestore.instance;
+  FirebaseFunctions get _callables =>
+      _functions ?? FirebaseFunctions.instanceFor(region: 'us-central1');
 
   Future<RiderRothOnboardingResult> ensureWalletForRider({
     required String riderId,
     String? email,
   }) async {
-    final riderRef = _db.collection('riders').doc(riderId);
-    final walletRef = _db.collection(walletCollection).doc(riderId);
-    var created = false;
-    var existed = false;
-
-    await _db.runTransaction((transaction) async {
-      final wallet = await transaction.get(walletRef);
-      final timestamp = FieldValue.serverTimestamp();
-      if (wallet.exists) {
-        existed = true;
-        transaction.set(
-            riderRef,
-            {
-              completionField: true,
-              statusField: 'connected',
-              'rothWalletId': walletRef.id,
-              'rothWalletConnectedAt': timestamp,
-              'updatedAt': timestamp,
-            },
-            SetOptions(merge: true));
-      } else {
-        created = true;
-        transaction.set(walletRef, {
-          'riderId': riderId,
-          if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
-          'currency': 'ROTH',
-          'balance': 0,
-          'available': 0,
-          'pending': 0,
-          'status': 'active',
-          'createdAt': timestamp,
-          'updatedAt': timestamp,
-          'source': 'rider_onboarding',
-        });
-        transaction.set(
-            riderRef,
-            {
-              completionField: true,
-              statusField: 'wallet_created',
-              'rothWalletId': walletRef.id,
-              'rothWalletConnectedAt': timestamp,
-              'updatedAt': timestamp,
-            },
-            SetOptions(merge: true));
-      }
-    });
-
-    await _db.collection(auditCollection).add({
+    final result =
+        await _callables.httpsCallable('ensureRiderRothWallet').call({
       'riderId': riderId,
-      'eventType': created ? 'roth_wallet_created' : 'roth_wallet_connected',
-      'walletId': riderId,
-      'timestamp': FieldValue.serverTimestamp(),
-      'statusAfterEvent': created ? 'wallet_created' : 'connected',
+      if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
     });
+    final data = Map<String, dynamic>.from(result.data as Map);
 
     return RiderRothOnboardingResult(
-      walletCreated: created,
-      walletExisted: existed,
+      walletCreated: data['walletCreated'] == true,
+      walletExisted: data['walletExisted'] == true,
     );
   }
 

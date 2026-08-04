@@ -508,7 +508,7 @@ class RiderRatingsHistoryView extends StatelessWidget {
                           icon: Icons.star_outline_rounded,
                           title: 'No ratings yet',
                           message:
-                              'Sender appreciation will appear here after completed deliveries.',
+                              'Circum appreciation will appear here after completed deliveries.',
                         )
                       else
                         ...ratings.take(20).map((doc) {

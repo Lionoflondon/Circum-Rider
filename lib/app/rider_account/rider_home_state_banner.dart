@@ -58,7 +58,7 @@ class RiderHomeStateBanner extends StatelessWidget {
                                     ? (online
                                         ? 'Online'
                                         : 'Ready when you are, ${_firstName(rider)}')
-                                    : 'Rider account update',
+                                    : 'Circum Rider account update',
                                 style: const TextStyle(
                                   color: RiderPalette.paper,
                                   fontSize: 17,
@@ -123,7 +123,7 @@ class RiderHomeStateBanner extends StatelessWidget {
         RiderAccountState.suspended ||
         RiderAccountState.frozen =>
           'Operational actions are disabled.',
-        _ => 'Complete your Rider account to start delivering.',
+        _ => 'Complete your Circum Rider account to start delivering.',
       };
     }
     final details = <String>[

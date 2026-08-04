@@ -174,9 +174,9 @@ class _CentralAction extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<HomeBloc, HomeState>(
       builder: (context, home) {
-        final online = home.rideStatus == RideStatus.online;
+        final online = home.availability.isOnline;
         final loading = home.requestStatus == RequestStatus.loading;
-        final semantic = online ? 'Rider online. Go offline' : 'Go online';
+        final semantic = _availabilityActionLabel(home.availability);
         return Semantics(
           button: true,
           label: semantic,
@@ -245,7 +245,9 @@ class _CentralAction extends StatelessWidget {
                 padding: const EdgeInsets.all(20),
                 child: BlocBuilder<HomeBloc, HomeState>(
                   builder: (context, liveHome) {
-                    final liveOnline = liveHome.rideStatus == RideStatus.online;
+                    final availability = liveHome.availability;
+                    final liveOnline = availability.isOnline;
+                    final intendsOnline = availability.intendsToBeOnline;
                     final busy =
                         liveHome.requestStatus == RequestStatus.loading;
                     return Column(
@@ -279,7 +281,7 @@ class _CentralAction extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    liveOnline ? 'Online' : 'Offline',
+                                    _availabilityTitle(availability),
                                     style: const TextStyle(
                                       color: RiderPalette.paper,
                                       fontFamily: RiderTypography.heading,
@@ -288,9 +290,7 @@ class _CentralAction extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    liveOnline
-                                        ? 'Nearby eligible offers can reach you.'
-                                        : 'Go online to receive eligible offers.',
+                                    _availabilityDescription(availability),
                                     style: const TextStyle(
                                       color: RiderPalette.muted,
                                       fontSize: 13,
@@ -321,7 +321,7 @@ class _CentralAction extends StatelessWidget {
                               : () {
                                   context.read<HomeBloc>().add(
                                         SetRideStatus(
-                                          status: liveOnline
+                                          status: liveOnline || intendsOnline
                                               ? RideStatus.offline
                                               : RideStatus.online,
                                         ),
@@ -346,7 +346,8 @@ class _CentralAction extends StatelessWidget {
                                     color: Colors.white,
                                   ),
                                 )
-                              : Text(liveOnline ? 'Go offline' : 'Go online'),
+                              : Text(
+                                  intendsOnline ? 'Go offline' : 'Go online'),
                         ),
                         TextButton(
                           onPressed: () => Navigator.pop(sheetContext),
@@ -362,5 +363,40 @@ class _CentralAction extends StatelessWidget {
         );
       },
     );
+  }
+
+  String _availabilityTitle(RiderAvailability availability) =>
+      switch (availability.status) {
+        RiderAvailabilityStatus.goingOnline => 'Going online',
+        RiderAvailabilityStatus.waitingForLocation => 'Waiting for location',
+        RiderAvailabilityStatus.online => 'Online',
+        RiderAvailabilityStatus.temporarilyUnavailable =>
+          'Temporarily unavailable',
+        RiderAvailabilityStatus.goingOffline => 'Going offline',
+        RiderAvailabilityStatus.error => 'Availability unavailable',
+        RiderAvailabilityStatus.offline => 'Offline',
+      };
+
+  String _availabilityDescription(RiderAvailability availability) =>
+      switch (availability.status) {
+        RiderAvailabilityStatus.online =>
+          'Nearby eligible offers can reach you.',
+        RiderAvailabilityStatus.goingOnline =>
+          'Circum is confirming your availability.',
+        RiderAvailabilityStatus.waitingForLocation =>
+          'A fresh location is required before offers can reach you.',
+        RiderAvailabilityStatus.temporarilyUnavailable =>
+          'Circum is restoring your live availability.',
+        RiderAvailabilityStatus.goingOffline =>
+          'Circum is closing your availability.',
+        RiderAvailabilityStatus.error =>
+          'Availability could not be confirmed. Try again.',
+        RiderAvailabilityStatus.offline =>
+          'Go online to receive eligible offers.',
+      };
+
+  String _availabilityActionLabel(RiderAvailability availability) {
+    if (availability.intendsToBeOnline) return 'Rider availability. Go offline';
+    return 'Rider offline. Go online';
   }
 }

@@ -74,6 +74,7 @@ class RiderNotificationRecord {
     required this.createdAt,
     required this.destination,
     required this.type,
+    required this.roleScope,
   });
 
   final String id;
@@ -86,16 +87,19 @@ class RiderNotificationRecord {
   final DateTime? createdAt;
   final Map<String, dynamic> destination;
   final String type;
+  final String roleScope;
 
   factory RiderNotificationRecord.fromDocument(
     DocumentSnapshot<Map<String, dynamic>> document,
   ) {
     final data = document.data() ?? const <String, dynamic>{};
+    final payload = data['data'] is Map
+        ? Map<String, dynamic>.from(data['data'] as Map)
+        : const <String, dynamic>{};
     final destination = data['destination'] is Map
         ? Map<String, dynamic>.from(data['destination'] as Map)
-        : data['data'] is Map && (data['data'] as Map)['destination'] is Map
-            ? Map<String, dynamic>.from(
-                (data['data'] as Map)['destination'] as Map)
+        : payload['destination'] is Map
+            ? Map<String, dynamic>.from(payload['destination'] as Map)
             : const <String, dynamic>{};
     final created = data['createdAt'] ?? data['timestamp'];
     return RiderNotificationRecord(
@@ -111,12 +115,14 @@ class RiderNotificationRecord {
       createdAt: created is Timestamp ? created.toDate() : null,
       destination: destination,
       type: '${data['type'] ?? ''}'.trim(),
+      roleScope: normalizeNotificationRoleScope(data, payload),
     );
   }
 }
 
 String normalizeNotificationCategory(String raw) {
   final value = raw.trim().toLowerCase();
+  if (value.contains('campaign')) return 'campaigns';
   if (value.contains('job') || value == 'new_delivery') return 'jobs';
   if (value.contains('message') || value.contains('chat')) return 'messages';
   if (value.contains('schedule')) return 'schedule';
@@ -138,6 +144,41 @@ String normalizeNotificationCategory(String raw) {
   return 'system';
 }
 
+String normalizeNotificationRoleScope(
+  Map<String, dynamic> data,
+  Map<String, dynamic> payload,
+) {
+  final values = [
+    data['recipientRole'],
+    data['role'],
+    data['audience'],
+    data['app'],
+    data['surface'],
+    data['product'],
+    payload['recipientRole'],
+    payload['role'],
+    payload['audience'],
+    payload['app'],
+    payload['surface'],
+    payload['product'],
+  ].map((value) => '${value ?? ''}'.trim().toLowerCase()).join(' ');
+
+  if (values.contains('sender') ||
+      values.contains('customer') ||
+      values.contains('circum app') ||
+      values.contains('sender_app') ||
+      values.contains('sender-web')) {
+    return 'sender';
+  }
+  if (values.contains('rider') ||
+      values.contains('driver') ||
+      values.contains('courier') ||
+      values.contains('circum rider')) {
+    return 'rider';
+  }
+  return 'unknown';
+}
+
 class RiderCommunicationService {
   RiderCommunicationService({
     FirebaseFirestore? firestore,
@@ -154,18 +195,22 @@ class RiderCommunicationService {
 
   Stream<RiderConversationSnapshot> watchConversation(String chatId) {
     final chat = firestore.collection('chats').doc(chatId);
-    return chat.snapshots().asyncMap((chatSnapshot) async {
+    final controller = StreamController<RiderConversationSnapshot>();
+    DocumentSnapshot<Map<String, dynamic>>? latestChat;
+    QuerySnapshot<Map<String, dynamic>>? latestMessages;
+    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? chatSub;
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? messageSub;
+
+    void emitIfReady() {
+      final chatSnapshot = latestChat;
+      final messageSnapshot = latestMessages;
+      if (chatSnapshot == null || messageSnapshot == null) return;
       final data = chatSnapshot.data() ?? const <String, dynamic>{};
-      final messageSnapshot = await chat
-          .collection('messages')
-          .orderBy('createdAt', descending: false)
-          .limit(80)
-          .get();
       final now = DateTime.now().millisecondsSinceEpoch;
       final typing = data['typing'] is Map
           ? Map<String, dynamic>.from(data['typing'] as Map)
           : const <String, dynamic>{};
-      return RiderConversationSnapshot(
+      controller.add(RiderConversationSnapshot(
         chatId: chatId,
         readOnly: data['readOnly'] == true,
         messages: messageSnapshot.docs
@@ -181,8 +226,29 @@ class RiderCommunicationService {
             ? List<String>.from(
                 (data['unreadBy'] as Iterable).map((item) => '$item'))
             : const [],
-      );
-    });
+      ));
+    }
+
+    controller.onListen = () {
+      chatSub = chat.snapshots().listen((snapshot) {
+        latestChat = snapshot;
+        emitIfReady();
+      }, onError: controller.addError);
+      messageSub = chat
+          .collection('messages')
+          .orderBy('createdAt', descending: false)
+          .limit(80)
+          .snapshots()
+          .listen((snapshot) {
+        latestMessages = snapshot;
+        emitIfReady();
+      }, onError: controller.addError);
+    };
+    controller.onCancel = () async {
+      await chatSub?.cancel();
+      await messageSub?.cancel();
+    };
+    return controller.stream;
   }
 
   Future<void> sendText({
@@ -214,21 +280,66 @@ class RiderCommunicationService {
         .call({'chatId': chatId});
   }
 
+  Future<String?> deliverySenderName(String chatId) async {
+    final cleanChatId = chatId.trim();
+    if (cleanChatId.isEmpty) return null;
+    final chat = await firestore.collection('chats').doc(cleanChatId).get();
+    final chatData = chat.data() ?? const <String, dynamic>{};
+    final chatName = _firstDisplayName(chatData);
+    if (chatName != null) return chatName;
+
+    final deliveryId =
+        '${chatData['deliveryId'] ?? chatData['bookingId'] ?? chatData['requestId'] ?? cleanChatId}'
+            .trim();
+    if (deliveryId.isEmpty) return null;
+    final delivery =
+        await firestore.collection('deliveryRequests').doc(deliveryId).get();
+    return _firstDisplayName(delivery.data() ?? const <String, dynamic>{});
+  }
+
+  static String? _firstDisplayName(Map<String, dynamic> data) {
+    final candidates = [
+      data['senderName'],
+      data['senderDisplayName'],
+      data['customerName'],
+      data['customerDisplayName'],
+      data['bookedByName'],
+      data['collectionContactName'],
+      if (data['sender'] is Map) (data['sender'] as Map)['name'],
+      if (data['customer'] is Map) (data['customer'] as Map)['name'],
+      if (data['collectionContact'] is Map)
+        (data['collectionContact'] as Map)['name'],
+    ];
+    for (final candidate in candidates) {
+      final name = _safeDisplayName(candidate);
+      if (name != null) return name;
+    }
+    return null;
+  }
+
+  static String? _safeDisplayName(Object? value) {
+    final text = '${value ?? ''}'.trim();
+    if (text.isEmpty || text.toLowerCase() == 'null') return null;
+    if (text.contains('@')) return null;
+    if (RegExp(r'^[A-Za-z0-9_-]{18,}$').hasMatch(text)) return null;
+    return text;
+  }
+
   Stream<List<RiderNotificationRecord>> watchNotifications() {
     final uid = auth.currentUser?.uid;
     if (uid == null) return Stream.value(const []);
     return firestore
         .collection('notifications')
         .where('recipientId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
         .limit(100)
         .snapshots()
         .map((snapshot) {
       final records = snapshot.docs
           .map(RiderNotificationRecord.fromDocument)
+          .where((record) => record.roleScope != 'sender')
           .where((record) => !record.archived && !record.deleted)
           .toList();
-      records.sort((a, b) => (b.createdAt ?? DateTime(1970))
-          .compareTo(a.createdAt ?? DateTime(1970)));
       return records;
     });
   }
@@ -240,38 +351,31 @@ class RiderCommunicationService {
   }
 
   Future<void> markNotificationRead(String id) =>
-      firestore.collection('notifications').doc(id).set({
-        'read': true,
-        'isRead': true,
-        'readAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      functions.httpsCallable('updateRiderNotificationState').call({
+        'notificationId': id,
+        'action': 'mark_read',
+      });
 
   Future<void> markAllNotificationsRead(Iterable<String> ids) async {
-    final batch = firestore.batch();
-    for (final id in ids) {
-      batch.set(
-        firestore.collection('notifications').doc(id),
-        {
-          'read': true,
-          'isRead': true,
-          'readAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-    }
-    await batch.commit();
+    final notificationIds = ids.where((id) => id.trim().isNotEmpty).toList();
+    if (notificationIds.isEmpty) return;
+    await functions.httpsCallable('updateRiderNotificationState').call({
+      'notificationIds': notificationIds,
+      'action': 'mark_read',
+    });
   }
 
   Future<void> archiveNotification(String id) =>
-      firestore.collection('notifications').doc(id).set({
-        'archived': true,
-        'archivedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      functions.httpsCallable('updateRiderNotificationState').call({
+        'notificationId': id,
+        'action': 'archive',
+      });
 
   Future<void> deleteNotification(String id) =>
-      firestore.collection('notifications').doc(id).set({
-        'deletedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      functions.httpsCallable('updateRiderNotificationState').call({
+        'notificationId': id,
+        'action': 'delete',
+      });
 }
 
 class RiderTypingController {
