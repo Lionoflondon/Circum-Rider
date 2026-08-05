@@ -8,6 +8,22 @@ class RiderDeliveryTransitionResult {
   const RiderDeliveryTransitionResult(this.status);
 }
 
+class RiderCapturedEvidence {
+  final String photoId;
+  final String storagePath;
+  final String checksum;
+  final String mimeType;
+  final int fileSize;
+
+  const RiderCapturedEvidence({
+    required this.photoId,
+    required this.storagePath,
+    required this.checksum,
+    required this.mimeType,
+    required this.fileSize,
+  });
+}
+
 abstract class RiderDeliveryController {
   Future<RiderDeliveryTransitionResult> completeDelivery({
     required String deliveryId,
@@ -44,6 +60,11 @@ abstract class RiderDeliveryController {
 
   Future<Map<String, dynamic>> confirmIrisAssessment({
     required String deliveryId,
+  });
+
+  Future<Map<String, dynamic>> recordEvidence({
+    required String deliveryId,
+    required RiderCapturedEvidence evidence,
   });
 }
 
@@ -162,6 +183,23 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
         .call({'deliveryId': deliveryId});
     return Map<String, dynamic>.from(result.data as Map);
   }
+
+  @override
+  Future<Map<String, dynamic>> recordEvidence({
+    required String deliveryId,
+    required RiderCapturedEvidence evidence,
+  }) async {
+    final result = await functions.httpsCallable('recordDeliveryEvidence').call({
+      'deliveryId': deliveryId,
+      'photoId': evidence.photoId,
+      'type': 'PHOTO',
+      'storagePath': evidence.storagePath,
+      'checksum': evidence.checksum,
+      'mimeType': evidence.mimeType,
+      'fileSize': evidence.fileSize,
+    });
+    return Map<String, dynamic>.from(result.data as Map);
+  }
 }
 
 class RiderEvidenceUploader {
@@ -172,7 +210,7 @@ class RiderEvidenceUploader {
       : storage = storage ?? FirebaseStorage.instance,
         picker = picker ?? ImagePicker();
 
-  Future<String?> capture({
+  Future<RiderCapturedEvidence?> capture({
     required String deliveryId,
     required String stage,
   }) async {
@@ -184,10 +222,22 @@ class RiderEvidenceUploader {
     if (image == null) return null;
     final bytes = await image.readAsBytes();
     final safeStage = stage.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final photoId = '${DateTime.now().microsecondsSinceEpoch}_$safeStage';
+    final storagePath = 'deliveries/$deliveryId/evidence/photos/$photoId.jpg';
     final ref = storage.ref(
-      'delivery_weight_evidence/$deliveryId/$safeStage/${DateTime.now().millisecondsSinceEpoch}.jpg',
+      storagePath,
     );
-    await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
-    return ref.getDownloadURL();
+    await ref.putData(
+      bytes,
+      SettableMetadata(contentType: 'image/jpeg'),
+    );
+    final metadata = await ref.getMetadata();
+    return RiderCapturedEvidence(
+      photoId: photoId,
+      storagePath: storagePath,
+      checksum: metadata.md5Hash ?? '',
+      mimeType: metadata.contentType ?? 'image/jpeg',
+      fileSize: metadata.size ?? bytes.length,
+    );
   }
 }

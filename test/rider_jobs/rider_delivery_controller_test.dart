@@ -74,6 +74,12 @@ class _RecordingController implements RiderDeliveryController {
       },
     };
   }
+
+  @override
+  Future<Map<String, dynamic>> recordEvidence({
+    required String deliveryId,
+    required RiderCapturedEvidence evidence,
+  }) async => {'success': true};
 }
 
 void main() {

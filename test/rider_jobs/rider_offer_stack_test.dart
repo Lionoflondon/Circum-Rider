@@ -75,6 +75,12 @@ class _BackendStageController implements RiderDeliveryController {
       },
     };
   }
+
+  @override
+  Future<Map<String, dynamic>> recordEvidence({
+    required String deliveryId,
+    required RiderCapturedEvidence evidence,
+  }) async => {'success': true};
 }
 
 void main() {

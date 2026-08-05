@@ -1668,7 +1668,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       if (pin == null) return;
     }
     if ((action == 'verify_collection_pin' && _verificationRequired) ||
-        (action == 'verify_receiver_pin' && _pinRequired)) {
+        action == 'verify_receiver_pin') {
       evidence = await _captureEvidence(
         pickup: action == 'verify_collection_pin',
       );
@@ -1716,12 +1716,12 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   Future<Map<String, dynamic>?> _captureEvidence({required bool pickup}) async {
     setState(() => _transitioning = true);
     try {
-      final photoUrl =
+      final captured =
           await (_evidenceUploader ??= RiderEvidenceUploader()).capture(
         deliveryId: widget.offer.id,
         stage: pickup ? 'pickup' : 'handover',
       );
-      if (photoUrl == null || !mounted) return null;
+      if (captured == null || !mounted) return null;
       final recipient = TextEditingController();
       final actualWeight = TextEditingController();
       var conditionConfirmed = false;
@@ -1791,9 +1791,20 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       recipient.dispose();
       actualWeight.dispose();
       if (confirmed != true) return null;
+      await (widget.deliveryController ?? CallableRiderDeliveryController())
+          .recordEvidence(
+            deliveryId: widget.offer.id,
+            evidence: captured,
+          );
       return {
-        'evidenceId': photoUrl,
-        'photoUrl': photoUrl,
+        'evidenceId': captured.photoId,
+        'photoId': captured.photoId,
+        'storagePath': captured.storagePath,
+        'checksum': captured.checksum,
+        'mimeType': captured.mimeType,
+        'fileSize': captured.fileSize,
+        'capturedAt': DateTime.now().toUtc().toIso8601String(),
+        'device': 'rider_app',
         if (pickup) 'conditionConfirmed': conditionConfirmed,
         if (pickup) 'riderDeclarationAccepted': declarationAccepted,
         if (pickup && actualWeightKg != null) 'actualWeightKg': actualWeightKg,
@@ -1878,18 +1889,18 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       final controller =
           widget.deliveryController ?? CallableRiderDeliveryController();
       if (category == 'parcel_mismatch' || category == 'vehicle_suitability') {
-        final photoUrl =
+        final captured =
             await (_evidenceUploader ??= RiderEvidenceUploader()).capture(
           deliveryId: widget.offer.id,
           stage: 'discrepancy',
         );
-        if (photoUrl == null) return;
+        if (captured == null) return;
         await controller.reportDiscrepancy(
           deliveryId: widget.offer.id,
           reason: category == 'vehicle_suitability'
               ? 'dimensions_exceeded'
               : 'item_differs_from_booking',
-          evidencePhotos: [photoUrl],
+          evidencePhotos: [captured.storagePath],
           notes: detail,
         );
         if (mounted) {
