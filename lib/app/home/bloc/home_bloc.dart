@@ -36,6 +36,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   static const _directionsApiKey =
       String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY');
   static const _presenceHeartbeatInterval = Duration(seconds: 45);
+  static const _founderUid = 'T2eV6PQucdUKmwSipEn2NAn4N9z1';
 
   FirebaseAuth auth = FirebaseAuth.instance;
   FirebaseFirestore db = FirebaseFirestore.instance;
@@ -232,14 +233,12 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
 
   void _handleSetRideStatus(SetRideStatus event, Emitter emit) async {
     final User? user = auth.currentUser;
-    final internalAccess = user == null
-        ? false
-        : (await user.getIdTokenResult()).claims?['founderRider'] == true;
     if (user == null) {
       emit(state.copyWith(
           message: 'Sign in before changing Rider availability.'));
       return;
     }
+    final internalAccess = await _readFounderClaim(user);
     if (event.status == RideStatus.offline) {
       final previousAvailability = state.availability;
       try {
@@ -271,6 +270,35 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       }
       return;
     } else {
+      if (user.uid == _founderUid) {
+        try {
+          await FirebaseFunctions.instanceFor(region: 'us-central1')
+              .httpsCallable('founderRiderOperationalPreflight')
+              .call();
+        } on FirebaseFunctionsException catch (error, stackTrace) {
+          debugPrint(
+              '[RIDER_OPERATIONAL_PREFLIGHT] code=${error.code} message=${error.message} details=${error.details}');
+          debugPrintStack(stackTrace: stackTrace);
+          emit(state.copyWith(
+            rideStatus: RideStatus.offline,
+            canGoOnline: false,
+            requestStatus: RequestStatus.initial,
+            message:
+                'FOUNDER_PREFLIGHT_FAILED: ${_availabilityErrorMessage(error, fallback: 'Operational preflight failed. Retry.')}',
+          ));
+          return;
+        } catch (error, stackTrace) {
+          debugPrint('[RIDER_OPERATIONAL_PREFLIGHT] type=${error.runtimeType} error=$error');
+          debugPrintStack(stackTrace: stackTrace);
+          emit(state.copyWith(
+            rideStatus: RideStatus.offline,
+            canGoOnline: false,
+            requestStatus: RequestStatus.initial,
+            message: 'FOUNDER_PREFLIGHT_FAILED: ${error.runtimeType}',
+          ));
+          return;
+        }
+      }
       final accountState = await _loadAccountState(user.uid);
       if (!internalAccess &&
           !RiderAccountStateResolver.canOperate(accountState)) {
@@ -356,17 +384,20 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
               minDrawerHeight: state.minDrawerHeight,
               maxDrawerHeight: 0.75.sh));
           add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
-        } on FirebaseFunctionsException catch (error) {
+        } on FirebaseFunctionsException catch (error, stackTrace) {
           if (fallbackRideStatus == RideStatus.offline) {
             _stopPresenceHeartbeat();
           }
+          debugPrint(
+              '[RIDER_GO_ONLINE_FAILURE] code=${error.code} message=${error.message} details=${error.details}');
+          debugPrintStack(stackTrace: stackTrace);
           emit(state.copyWith(
               rideStatus: fallbackRideStatus,
               availability: previousAvailability,
               requestStatus: RequestStatus.initial,
               message: _availabilityErrorMessage(
                 error,
-                fallback: 'Could not go online. Try again.',
+                fallback: 'FUNCTION_${error.code.toUpperCase().replaceAll('-', '_')}',
               )));
         } on _RiderAvailabilityTimeout {
           if (fallbackRideStatus == RideStatus.offline) {
@@ -389,19 +420,31 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
             requestStatus: RequestStatus.initial,
             message: error.message,
           ));
-        } catch (_) {
+        } catch (error, stackTrace) {
           if (fallbackRideStatus == RideStatus.offline) {
             _stopPresenceHeartbeat();
           }
+          debugPrint(
+              '[RIDER_GO_ONLINE_FAILURE] type=${error.runtimeType} error=$error');
+          debugPrintStack(stackTrace: stackTrace);
           emit(state.copyWith(
               rideStatus: fallbackRideStatus,
               availability: previousAvailability,
               requestStatus: RequestStatus.initial,
-              message:
-                  'Could not go online. Check your connection and retry.'));
+              message: 'UNKNOWN_INTERNAL_ERROR: ${error.runtimeType}'));
         }
         return;
       }
+    }
+  }
+
+  Future<bool> _readFounderClaim(User user) async {
+    try {
+      return (await user.getIdTokenResult()).claims?['founderRider'] == true;
+    } catch (error, stackTrace) {
+      debugPrint('[RIDER_AUTH] getIdTokenResult failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      return false;
     }
   }
 

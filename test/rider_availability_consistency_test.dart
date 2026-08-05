@@ -8,6 +8,7 @@ void main() {
   final state = File('lib/app/home/bloc/home_state.dart');
   final nav = File('lib/app/bottom_nav/view/app_nav.dart');
   final jobs = File('lib/app/rider_jobs/rider_job_offer_screen.dart');
+  final homeBloc = File('lib/app/home/bloc/home_bloc.dart');
 
   test('dashboard renders availability from HomeState only', () {
     final source = dashboard.readAsStringSync();
@@ -97,5 +98,22 @@ void main() {
     }, now: now);
     expect(availability.status, RiderAvailabilityStatus.offline);
     expect(availability.intendsToBeOnline, isFalse);
+  });
+
+  test('Founder online transition runs backend operational preflight', () {
+    final source = homeBloc.readAsStringSync();
+    expect(source, contains("static const _founderUid = 'T2eV6PQucdUKmwSipEn2NAn4N9z1'"));
+    expect(source, contains("httpsCallable('founderRiderOperationalPreflight')"));
+    expect(source, contains('FOUNDER_PREFLIGHT_FAILED'));
+  });
+
+  test('online failures retain structured callable diagnostics', () {
+    final source = homeBloc.readAsStringSync();
+    expect(source, contains('[RIDER_GO_ONLINE_FAILURE]'));
+    expect(source, contains('error.code'));
+    expect(source, contains('error.details'));
+    expect(source, contains('FUNCTION_'));
+    expect(source, contains('UNKNOWN_INTERNAL_ERROR'));
+    expect(source, isNot(contains("fallback: 'Could not go online. Try again.'")));
   });
 }
