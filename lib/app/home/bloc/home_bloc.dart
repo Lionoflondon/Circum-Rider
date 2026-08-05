@@ -1039,8 +1039,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         );
       }
       var permission = await Geolocator.checkPermission();
+      debugPrint('[GPS_HEALTH_CLIENT] permission=$permission web=$kIsWeb highAccuracy=$highAccuracy');
       if (permission == LocationPermission.denied && requestPermission) {
         permission = await Geolocator.requestPermission();
+        debugPrint('[GPS_HEALTH_CLIENT] permissionAfterRequest=$permission');
       }
       if (permission == LocationPermission.denied) {
         throw const _RiderLocationUnavailable(
@@ -1048,8 +1050,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         );
       }
       if (permission == LocationPermission.deniedForever) {
-        final fallback = await _freshWebPresenceLocationPayload();
-        if (fallback != null) return fallback;
+        if (!requestPermission) {
+          final fallback = await _freshWebPresenceLocationPayload();
+          if (fallback != null) return fallback;
+        }
         throw const _RiderLocationUnavailable(
           'Location access is blocked. Enable it in your browser or device settings before going online.',
         );
@@ -1060,6 +1064,12 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy:
             highAccuracy ? LocationAccuracy.high : LocationAccuracy.medium,
+      );
+      debugPrint(
+        '[GPS_HEALTH_CLIENT] position latitude=${position.latitude} '
+        'longitude=${position.longitude} accuracy=${position.accuracy} '
+        'timestamp=${position.timestamp} speed=${position.speed} '
+        'heading=${position.heading}',
       );
       return <String, dynamic>{
         'latitude': position.latitude,
@@ -1075,9 +1085,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       };
     } on _RiderLocationUnavailable {
       rethrow;
-    } catch (_) {
-      final fallback = await _freshWebPresenceLocationPayload();
-      if (fallback != null) return fallback;
+    } catch (error, stackTrace) {
+      debugPrint('[GPS_HEALTH_CLIENT] locationException=$error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (!requestPermission) {
+        final fallback = await _freshWebPresenceLocationPayload();
+        if (fallback != null) return fallback;
+      }
       if (requestPermission) {
         throw const _RiderLocationUnavailable(
           'Location could not refresh. Keep this tab open, allow location access, and try again.',
@@ -1088,8 +1102,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   }
 
   Future<Map<String, dynamic>?> _onlinePresenceLocationPayload() async {
-    final webFallback = await _freshWebPresenceLocationPayload();
-    if (kIsWeb && webFallback != null) return webFallback;
     return _currentPresenceLocationPayload(
       highAccuracy: true,
       requestPermission: true,
@@ -1105,19 +1117,35 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       final data = snapshot.data();
       if (data == null) return null;
       final location = data['currentLocation'];
-      if (location is! Map) return null;
+      if (location is! Map) {
+        debugPrint('[GPS_HEALTH_CLIENT] cachedPresence=no_location');
+        return null;
+      }
       final latitude = (location['latitude'] as num?)?.toDouble();
       final longitude = (location['longitude'] as num?)?.toDouble();
-      if (latitude == null || longitude == null) return null;
+      if (latitude == null || longitude == null) {
+        debugPrint('[GPS_HEALTH_CLIENT] cachedPresence=invalid_coordinates');
+        return null;
+      }
       final updatedAt = _millisFromPresenceTime(
         location['updatedAt'] ?? data['lastLocationAt'],
       );
-      if (updatedAt == null) return null;
+      if (updatedAt == null) {
+        debugPrint('[GPS_HEALTH_CLIENT] cachedPresence=missing_timestamp');
+        return null;
+      }
       final age = DateTime.now().millisecondsSinceEpoch - updatedAt;
-      if (age < 0 || age > 24 * 60 * 60 * 1000) return null;
+      if (age < 0 || age > 24 * 60 * 60 * 1000) {
+        debugPrint('[GPS_HEALTH_CLIENT] cachedPresence=stale ageMs=$age');
+        return null;
+      }
       final accuracy = (location['accuracyMeters'] as num?)?.toDouble() ??
           (location['accuracy'] as num?)?.toDouble() ??
           0;
+      debugPrint(
+        '[GPS_HEALTH_CLIENT] cachedPresence latitude=$latitude '
+        'longitude=$longitude accuracy=$accuracy ageMs=$age',
+      );
       return <String, dynamic>{
         'latitude': latitude,
         'longitude': longitude,
@@ -1130,7 +1158,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         'permission': 'cachedForeground',
         'backgroundTracking': 'foregroundOnly',
       };
-    } catch (_) {
+    } catch (error, stackTrace) {
+      debugPrint('[GPS_HEALTH_CLIENT] cachedPresenceException=$error');
+      debugPrintStack(stackTrace: stackTrace);
       return null;
     }
   }
