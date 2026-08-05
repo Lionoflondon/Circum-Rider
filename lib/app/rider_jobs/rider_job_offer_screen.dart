@@ -1659,9 +1659,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     if (action == null) return;
     String? pin;
     Map<String, dynamic>? evidence;
-    if (_pinRequired &&
-        (action == 'verify_collection_pin' ||
-            action == 'verify_receiver_pin')) {
+    if (action == 'verify_receiver_pin' ||
+        (_pinRequired && action == 'verify_collection_pin')) {
       pin = await _requestPin(
         action == 'verify_collection_pin' ? 'Pickup PIN' : 'Delivery PIN',
       );
@@ -1680,13 +1679,19 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       _transitionError = null;
     });
     try {
-      final result =
-          await (controller ?? CallableRiderDeliveryController()).transition(
-        deliveryId: widget.offer.id,
-        action: action,
-        pin: pin,
-        evidence: evidence,
-      );
+      final result = action == 'verify_receiver_pin'
+          ? await (controller ?? CallableRiderDeliveryController()).completeDelivery(
+              deliveryId: widget.offer.id,
+              deliveryPin: pin!,
+              evidenceId: evidence?['evidenceId'] as String?,
+              evidence: evidence,
+            )
+          : await (controller ?? CallableRiderDeliveryController()).transition(
+              deliveryId: widget.offer.id,
+              action: action,
+              pin: pin,
+              evidence: evidence,
+            );
       if (!mounted) return;
       setState(() => _stage = RiderDeliveryStagePolicy.fromRaw(result.status));
       if (action == 'start_heading_to_pickup') {
@@ -1786,6 +1791,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       actualWeight.dispose();
       if (confirmed != true) return null;
       return {
+        'evidenceId': photoUrl,
         'photoUrl': photoUrl,
         if (pickup) 'conditionConfirmed': conditionConfirmed,
         if (pickup) 'riderDeclarationAccepted': declarationAccepted,

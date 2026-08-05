@@ -9,6 +9,22 @@ class _RecordingController implements RiderDeliveryController {
   int irisConfirmationCalls = 0;
 
   @override
+  Future<RiderDeliveryTransitionResult> completeDelivery({
+    required String deliveryId,
+    required String deliveryPin,
+    String? evidenceId,
+    Map<String, dynamic>? evidence,
+    String? clientVersion,
+    Map<String, dynamic>? deviceMetadata,
+  }) async {
+    calls += 1;
+    this.deliveryId = deliveryId;
+    action = 'completeDelivery';
+    pin = deliveryPin;
+    return const RiderDeliveryTransitionResult('delivered');
+  }
+
+  @override
   Future<RiderDeliveryTransitionResult> transition({
     required String deliveryId,
     required String action,

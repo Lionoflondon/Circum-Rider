@@ -9,6 +9,15 @@ class RiderDeliveryTransitionResult {
 }
 
 abstract class RiderDeliveryController {
+  Future<RiderDeliveryTransitionResult> completeDelivery({
+    required String deliveryId,
+    required String deliveryPin,
+    String? evidenceId,
+    Map<String, dynamic>? evidence,
+    String? clientVersion,
+    Map<String, dynamic>? deviceMetadata,
+  });
+
   Future<RiderDeliveryTransitionResult> transition({
     required String deliveryId,
     required String action,
@@ -46,6 +55,27 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
             functions ?? FirebaseFunctions.instanceFor(region: 'us-central1');
 
   @override
+  Future<RiderDeliveryTransitionResult> completeDelivery({
+    required String deliveryId,
+    required String deliveryPin,
+    String? evidenceId,
+    Map<String, dynamic>? evidence,
+    String? clientVersion,
+    Map<String, dynamic>? deviceMetadata,
+  }) async {
+    final result = await functions.httpsCallable('completeDelivery').call({
+      'deliveryId': deliveryId,
+      'deliveryPin': deliveryPin,
+      if (evidenceId != null) 'evidenceId': evidenceId,
+      if (evidence != null) 'evidence': evidence,
+      if (clientVersion != null) 'clientVersion': clientVersion,
+      if (deviceMetadata != null) 'deviceMetadata': deviceMetadata,
+    });
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return RiderDeliveryTransitionResult('${data['status'] ?? ''}');
+  }
+
+  @override
   Future<RiderDeliveryTransitionResult> transition({
     required String deliveryId,
     required String action,
@@ -64,7 +94,8 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
           : const <String, dynamic>{};
       if (arrivalData['success'] != true) {
         throw StateError(
-            '${decision['riderMessage'] ?? 'Arrival could not be confirmed.'}');
+          '${decision['riderMessage'] ?? 'Arrival could not be confirmed.'}',
+        );
       }
       return RiderDeliveryTransitionResult('${decision['state'] ?? ''}');
     }
@@ -156,10 +187,7 @@ class RiderEvidenceUploader {
     final ref = storage.ref(
       'delivery_weight_evidence/$deliveryId/$safeStage/${DateTime.now().millisecondsSinceEpoch}.jpg',
     );
-    await ref.putData(
-      bytes,
-      SettableMetadata(contentType: 'image/jpeg'),
-    );
+    await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
     return ref.getDownloadURL();
   }
 }

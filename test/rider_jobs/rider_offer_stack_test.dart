@@ -14,6 +14,20 @@ class _BackendStageController implements RiderDeliveryController {
   int irisConfirmationCalls = 0;
 
   @override
+  Future<RiderDeliveryTransitionResult> completeDelivery({
+    required String deliveryId,
+    required String deliveryPin,
+    String? evidenceId,
+    Map<String, dynamic>? evidence,
+    String? clientVersion,
+    Map<String, dynamic>? deviceMetadata,
+  }) async {
+    actions.add('completeDelivery');
+    final status = results.isEmpty ? 'delivered' : results.removeAt(0);
+    return RiderDeliveryTransitionResult(status);
+  }
+
+  @override
   Future<RiderDeliveryTransitionResult> transition({
     required String deliveryId,
     required String action,
