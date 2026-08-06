@@ -2,6 +2,11 @@ name: Deploy Rider Web
 
 on:
   workflow_dispatch:
+    inputs:
+      release_ref:
+        description: Approved Rider commit or branch to deploy
+        required: true
+        default: main
 
 jobs:
   deploy-rider-web:
@@ -11,6 +16,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_ref }}
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -22,4 +29,8 @@ jobs:
       - run: node --test test/rider_deployment_manifest_test.js
       - run: RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_rider_web.sh
       - run: node scripts/rider_deployment_manifest.js verify
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
+      - run: npm install -g firebase-tools
       - run: firebase deploy --only hosting --project circum-2797c
