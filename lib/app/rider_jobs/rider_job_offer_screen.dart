@@ -1505,6 +1505,39 @@ class RiderDeliveryStagePolicy {
         return 'accepted';
     }
   }
+
+  static String? actionFor(
+    RiderDeliveryStage stage, {
+    required bool verificationRequired,
+    required bool pinRequired,
+  }) {
+    switch (stage) {
+      case RiderDeliveryStage.accepted:
+        return 'start_heading_to_pickup';
+      case RiderDeliveryStage.navigatingToPickup:
+        return 'arrived_at_pickup';
+      case RiderDeliveryStage.arrivedAtPickup:
+        return verificationRequired
+            ? 'verify_collection_pin'
+            : 'confirm_collected';
+      case RiderDeliveryStage.pickupVerification:
+        return 'verify_collection_pin';
+      case RiderDeliveryStage.pickupVerified:
+        return 'confirm_collected';
+      case RiderDeliveryStage.collected:
+        return 'start_delivery';
+      case RiderDeliveryStage.navigatingToDropoff:
+        return 'arrived_at_dropoff';
+      case RiderDeliveryStage.arrivedAtDropoff:
+        return pinRequired ? 'verify_receiver_pin' : 'complete_delivery';
+      case RiderDeliveryStage.pinRequired:
+        return 'verify_receiver_pin';
+      case RiderDeliveryStage.waiting:
+      case RiderDeliveryStage.issueReported:
+      case RiderDeliveryStage.delivered:
+        return null;
+    }
+  }
 }
 
 class RiderAcceptedJobScreen extends StatefulWidget {
@@ -1667,8 +1700,10 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       );
       if (pin == null) return;
     }
+    final completing =
+        action == 'verify_receiver_pin' || action == 'complete_delivery';
     if ((action == 'verify_collection_pin' && _verificationRequired) ||
-        action == 'verify_receiver_pin') {
+        completing) {
       evidence = await _captureEvidence(
         pickup: action == 'verify_collection_pin',
       );
@@ -1680,10 +1715,10 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       _transitionError = null;
     });
     try {
-      final result = action == 'verify_receiver_pin'
+      final result = completing
           ? await (controller ?? CallableRiderDeliveryController()).completeDelivery(
               deliveryId: widget.offer.id,
-              deliveryPin: pin!,
+              deliveryPin: pin,
               evidenceId: evidence?['evidenceId'] as String?,
               evidence: evidence,
             )
@@ -1927,32 +1962,11 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   }
 
   String? _actionForStage(RiderDeliveryStage current) {
-    switch (current) {
-      case RiderDeliveryStage.accepted:
-        return 'start_heading_to_pickup';
-      case RiderDeliveryStage.navigatingToPickup:
-        return 'arrived_at_pickup';
-      case RiderDeliveryStage.arrivedAtPickup:
-        return _verificationRequired
-            ? 'verify_collection_pin'
-            : 'confirm_collected';
-      case RiderDeliveryStage.pickupVerification:
-        return 'verify_collection_pin';
-      case RiderDeliveryStage.pickupVerified:
-        return 'confirm_collected';
-      case RiderDeliveryStage.collected:
-        return 'start_delivery';
-      case RiderDeliveryStage.navigatingToDropoff:
-        return 'arrived_at_dropoff';
-      case RiderDeliveryStage.arrivedAtDropoff:
-      case RiderDeliveryStage.waiting:
-        return _pinRequired ? 'verify_receiver_pin' : 'verify_receiver_pin';
-      case RiderDeliveryStage.pinRequired:
-        return 'verify_receiver_pin';
-      case RiderDeliveryStage.issueReported:
-      case RiderDeliveryStage.delivered:
-        return null;
-    }
+    return RiderDeliveryStagePolicy.actionFor(
+      current,
+      verificationRequired: _verificationRequired,
+      pinRequired: _pinRequired,
+    );
   }
 
   Future<String?> _requestPin(String title) async {

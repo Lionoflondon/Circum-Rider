@@ -16,7 +16,7 @@ class _BackendStageController implements RiderDeliveryController {
   @override
   Future<RiderDeliveryTransitionResult> completeDelivery({
     required String deliveryId,
-    required String deliveryPin,
+    String? deliveryPin,
     String? evidenceId,
     Map<String, dynamic>? evidence,
     String? clientVersion,
@@ -84,6 +84,42 @@ class _BackendStageController implements RiderDeliveryController {
 }
 
 void main() {
+  test('standard and protected deliveries use distinct verification actions',
+      () {
+    expect(
+      RiderDeliveryStagePolicy.actionFor(
+        RiderDeliveryStage.arrivedAtPickup,
+        verificationRequired: false,
+        pinRequired: false,
+      ),
+      'confirm_collected',
+    );
+    expect(
+      RiderDeliveryStagePolicy.actionFor(
+        RiderDeliveryStage.arrivedAtDropoff,
+        verificationRequired: false,
+        pinRequired: false,
+      ),
+      'complete_delivery',
+    );
+    expect(
+      RiderDeliveryStagePolicy.actionFor(
+        RiderDeliveryStage.arrivedAtDropoff,
+        verificationRequired: true,
+        pinRequired: true,
+      ),
+      'verify_receiver_pin',
+    );
+    expect(
+      RiderDeliveryStagePolicy.actionFor(
+        RiderDeliveryStage.waiting,
+        verificationRequired: false,
+        pinRequired: false,
+      ),
+      isNull,
+    );
+  });
+
   test('offer earnings presentation has no bonus reward system', () {
     final source =
         File('lib/app/rider_jobs/rider_offer_card.dart').readAsStringSync();

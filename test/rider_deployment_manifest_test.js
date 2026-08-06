@@ -30,6 +30,18 @@ test('Rider Hosting configuration targets only the Rider site', () => {
   assert.equal(validateFirebaseConfiguration(fixture()), true);
 });
 
+test('Rider workflow deploys the direct single-site Hosting configuration', () => {
+  const workflow = fs.readFileSync(
+    path.join(process.cwd(), '.github/workflows/deploy_rider_web.yml'),
+    'utf8',
+  );
+  assert.match(
+    workflow,
+    /firebase deploy --only hosting --project circum-2797c/,
+  );
+  assert.doesNotMatch(workflow, /hosting:rider/);
+});
+
 test('wrong Firebase project blocks Rider deployment', () => {
   const root = fixture();
   fs.writeFileSync(path.join(root, '.firebaserc'), JSON.stringify({

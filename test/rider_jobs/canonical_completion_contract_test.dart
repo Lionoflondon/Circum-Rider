@@ -16,6 +16,7 @@ void main() {
       expect(controller, contains("httpsCallable('completeDelivery')"));
       expect(screen, contains('completeDelivery('));
       expect(screen, contains("action == 'verify_receiver_pin'"));
+      expect(screen, contains("action == 'complete_delivery'"));
       expect(screen, isNot(contains("'status':")));
       expect(screen, isNot(contains("'earnings':")));
       expect(screen, isNot(contains("'trust':")));

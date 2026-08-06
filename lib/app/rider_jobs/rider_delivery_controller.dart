@@ -27,7 +27,7 @@ class RiderCapturedEvidence {
 abstract class RiderDeliveryController {
   Future<RiderDeliveryTransitionResult> completeDelivery({
     required String deliveryId,
-    required String deliveryPin,
+    String? deliveryPin,
     String? evidenceId,
     Map<String, dynamic>? evidence,
     String? clientVersion,
@@ -78,7 +78,7 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
   @override
   Future<RiderDeliveryTransitionResult> completeDelivery({
     required String deliveryId,
-    required String deliveryPin,
+    String? deliveryPin,
     String? evidenceId,
     Map<String, dynamic>? evidence,
     String? clientVersion,
@@ -86,7 +86,7 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
   }) async {
     final result = await functions.httpsCallable('completeDelivery').call({
       'deliveryId': deliveryId,
-      'deliveryPin': deliveryPin,
+      if (deliveryPin != null) 'deliveryPin': deliveryPin,
       if (evidenceId != null) 'evidenceId': evidenceId,
       if (evidence != null) 'evidence': evidence,
       if (clientVersion != null) 'clientVersion': clientVersion,

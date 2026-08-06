@@ -50,18 +50,18 @@ assertContains(
   "Rider iOS Maps key lookup",
 );
 assertContains(
-  "docs/ios-ci-google-maps-readiness.md",
+  "docs/google-maps-production-architecture.md",
   "RIDER_IOS_GOOGLE_MAPS_API_KEY",
   "Future Rider iOS CI Maps secret contract",
 );
 assertContains(
-  "docs/ios-ci-google-maps-readiness.md",
+  "docs/google-maps-production-architecture.md",
   "GOOGLE_MAPS_API_KEY",
   "Future Rider iOS CI build setting mapping",
 );
 assertContains(
   ".github/workflows/rc1_release_build.yml",
-  "SENDER_ANDROID_GOOGLE_MAPS_API_KEY",
+  "RIDER_ANDROID_GOOGLE_MAPS_API_KEY",
   "Rider Android CI Maps secret",
 );
 assertContains(

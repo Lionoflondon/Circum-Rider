@@ -40,7 +40,8 @@ extension on DirectionsService {
 class DirectionsService {
   final Dio _dio;
   final FlutterTts flutterTts = FlutterTts();
-  static const _mapsApiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+  static const _mapsApiKey =
+      String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY');
 
   DirectionsService() : _dio = Dio();
 

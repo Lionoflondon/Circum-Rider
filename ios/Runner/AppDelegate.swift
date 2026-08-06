@@ -14,7 +14,13 @@ import flutter_local_notifications
     if #available(iOS 10.0, *) {
       UNUserNotificationCenter.current().delegate = self as? UNUserNotificationCenterDelegate
     }
-    GMSServices.provideAPIKey("AIzaSyAlYnyfrY6xAxsKSifd7uizBF3Ug8TlvmA")
+    guard let mapsApiKey = Bundle.main.object(forInfoDictionaryKey: "GoogleMapsApiKey") as? String,
+          !mapsApiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+          !mapsApiKey.contains("$(") else {
+      assertionFailure("Missing GOOGLE_MAPS_API_KEY build setting")
+      return false
+    }
+    GMSServices.provideAPIKey(mapsApiKey)
     // This is required to make any communication available in the action isolate.
     FlutterLocalNotificationsPlugin.setPluginRegistrantCallback { (registry) in
         GeneratedPluginRegistrant.register(with: registry)

@@ -11,7 +11,7 @@ class _RecordingController implements RiderDeliveryController {
   @override
   Future<RiderDeliveryTransitionResult> completeDelivery({
     required String deliveryId,
-    required String deliveryPin,
+    String? deliveryPin,
     String? evidenceId,
     Map<String, dynamic>? evidence,
     String? clientVersion,

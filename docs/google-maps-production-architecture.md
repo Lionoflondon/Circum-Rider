@@ -6,7 +6,7 @@ Status: repository prepared, console verification pending.
 
 | Surface | Runtime | Key source | APIs used | Failure behaviour |
 | --- | --- | --- | --- | --- |
-| Rider Android | `google_maps_flutter` native Android SDK | `GOOGLE_MAPS_API_KEY` manifest placeholder from shared `SENDER_ANDROID_GOOGLE_MAPS_API_KEY` in CI | Maps SDK for Android | Build now fails if the Android Maps key secret is missing. |
+| Rider Android | `google_maps_flutter` native Android SDK | `GOOGLE_MAPS_API_KEY` manifest placeholder from `RIDER_ANDROID_GOOGLE_MAPS_API_KEY` in CI | Maps SDK for Android | Build fails if the Android Maps key is missing. |
 | Rider iOS | `google_maps_flutter` native iOS SDK | `$(GOOGLE_MAPS_API_KEY)` read from `Info.plist` by `AppDelegate`; future CI secret name `RIDER_IOS_GOOGLE_MAPS_API_KEY` | Maps SDK for iOS | `GMSServices` is called only when the build setting is present. |
 | Rider mobile directions | Direct HTTPS from Flutter | `GOOGLE_MAPS_DIRECTIONS_API_KEY` | Directions API | Direction steps return empty on failure and log the error. |
 
@@ -23,7 +23,7 @@ Routes API is not used.
 
 Required repository secrets today:
 
-- `SENDER_ANDROID_GOOGLE_MAPS_API_KEY`: shared Sender/Rider Android native map SDK secret, with both package/SHA restrictions, Maps SDK for Android only.
+- `RIDER_ANDROID_GOOGLE_MAPS_API_KEY`: Rider Android native map SDK secret, package/SHA restricted to `com.circum.rider`, Maps SDK for Android only.
 - `GOOGLE_MAPS_DIRECTIONS_API_KEY`: temporary shared client-side route preview key, API restricted to Directions API.
 
 Reserved future iOS CI secret:
@@ -35,6 +35,11 @@ iOS builds currently consume `GOOGLE_MAPS_API_KEY` through Xcode build settings 
 ```bash
 GOOGLE_MAPS_API_KEY="$RIDER_IOS_GOOGLE_MAPS_API_KEY" flutter build ipa --release --target=lib/main.dart
 ```
+
+For local Android development, add `GOOGLE_MAPS_API_KEY` to the ignored
+`android/local.properties` file or export it in the shell before invoking an
+Android build. The Gradle configuration fails before compilation when neither
+source is present, and never prints the configured value.
 
 ## Recommended Firebase Function Proxy
 
@@ -81,7 +86,7 @@ These cannot be completed from the repository.
 
 5. GitHub -> Rider repository Settings -> Secrets and variables -> Actions.
    Button: New repository secret.
-   Values: `SENDER_ANDROID_GOOGLE_MAPS_API_KEY`, `GOOGLE_MAPS_DIRECTIONS_API_KEY`.
+   Values: `RIDER_ANDROID_GOOGLE_MAPS_API_KEY`, `GOOGLE_MAPS_DIRECTIONS_API_KEY`.
    Why: Rider Android CI now fails if either required Maps secret is absent.
    Blocking: yes.
    Estimate: 2 minutes.

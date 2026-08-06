@@ -44,6 +44,8 @@
 		</array>
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
+		<key>GoogleMapsApiKey</key>
+		<string>$(GOOGLE_MAPS_API_KEY)</string>
 		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 		<string>Circum needs to use your location for accepting delivey requests</string>
 		<key>NSLocationAlwaysUsageDescription</key>
