@@ -24,6 +24,7 @@ import '../../../helper/messaging_server.dart';
 import '../../../utils/theme/theme.dart';
 import '../../communication/rider_communication_service.dart';
 import '../../rider_account/rider_account_state.dart';
+import '../../rider_jobs/rider_active_delivery_restoration.dart';
 import '../models/dispatch_request.m..dart';
 import '../models/message.m.dart';
 import '../models/place_coordinates.m.dart';
@@ -288,7 +289,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
           ));
           return;
         } catch (error, stackTrace) {
-          debugPrint('[RIDER_OPERATIONAL_PREFLIGHT] type=${error.runtimeType} error=$error');
+          debugPrint(
+              '[RIDER_OPERATIONAL_PREFLIGHT] type=${error.runtimeType} error=$error');
           debugPrintStack(stackTrace: stackTrace);
           emit(state.copyWith(
             rideStatus: RideStatus.offline,
@@ -397,7 +399,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
               requestStatus: RequestStatus.initial,
               message: _availabilityErrorMessage(
                 error,
-                fallback: 'FUNCTION_${error.code.toUpperCase().replaceAll('-', '_')}',
+                fallback:
+                    'FUNCTION_${error.code.toUpperCase().replaceAll('-', '_')}',
               )));
         } on _RiderAvailabilityTimeout {
           if (fallbackRideStatus == RideStatus.offline) {
@@ -880,18 +883,59 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
     }
   }
 
-  void _handleCheckForActiveRequest(
-      CheckForActiveRequest event, Emitter emit) async {
-    User? user = auth.currentUser;
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    final double? riderLng = prefs.getDouble('longitude');
-    final double? riderLat = prefs.getDouble('latitude');
-    String? statusString = prefs.getString('status');
-    RideStatus? status;
+  Future<void> _handleCheckForActiveRequest(
+      CheckForActiveRequest event, Emitter<HomeState> emit) async {
+    final user = auth.currentUser;
+    if (user == null) return;
+
+    final resolution =
+        await RiderActiveDeliveryResolver.firestore(firestore: db)
+            .resolve(user.uid);
+    if (resolution.shouldRestore && resolution.rawDelivery != null) {
+      final data = resolution.rawDelivery!;
+      final activeRequest = DispatchRequest.fromJson(data);
+      final stage = resolution.normalizedStatus!;
+      final restoredRideStatus = _rideStatusForRestoredStage(stage);
+      final actionButtonStatus = _actionButtonForRestoredStage(stage);
+
+      emit(state.copyWith(
+        rideStatus: restoredRideStatus,
+        actionButtonStatus: actionButtonStatus,
+        activeRequest: activeRequest,
+        activeDeliveryId: resolution.deliveryId,
+        activeDeliveryData: data,
+        availability: state.availability.copyWith(hasActiveDelivery: true),
+        canGoOnline: true,
+        message: null,
+      ));
+      if (state.availability.intendsToBeOnline) _startPresenceHeartbeat();
+      add(BroadcastLocation());
+      return;
+    }
+
+    if (resolution.disposition != RiderActiveDeliveryDisposition.none) {
+      debugPrint(
+        '[RIDER_ACTIVE_RESTORE] disposition=${resolution.disposition.name} '
+        'deliveryId=${resolution.deliveryId ?? "none"} '
+        'status=${resolution.normalizedStatus ?? "unknown"}',
+      );
+      if (resolution.disposition == RiderActiveDeliveryDisposition.terminal ||
+          resolution.disposition == RiderActiveDeliveryDisposition.missing ||
+          resolution.disposition ==
+              RiderActiveDeliveryDisposition.assignmentMismatch) {
+        await _repairStaleActiveDeliveryPointer();
+      }
+      add(CancelRequest());
+      emit(state.copyWith(
+        availability: state.availability.copyWith(hasActiveDelivery: false),
+      ));
+      return;
+    }
+
+    final prefs = await SharedPreferences.getInstance();
     final backendPresenceOnline =
-        user == null ? false : await _backendPresenceIndicatesOnline(user.uid);
-    if (statusString == 'online' || backendPresenceOnline) {
-      status = RideStatus.online;
+        await _backendPresenceIndicatesOnline(user.uid);
+    if (prefs.getString('status') == 'online' || backendPresenceOnline) {
       _startPresenceHeartbeat();
       emit(state.copyWith(
         rideStatus: RideStatus.online,
@@ -903,62 +947,55 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
           minDrawerHeight: state.minDrawerHeight, maxDrawerHeight: 0.75.sh));
       add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
     }
-    final documentReference = db
-        .collection('deliveryRequests')
-        .where('riderId', isEqualTo: user!.uid);
+  }
 
-    final docResponse = await documentReference.get();
-    // final doc = docResponse.docs.firstOrNull;
-
-    for (final doc in docResponse.docs) {
-      final data = doc.data();
-      final activeRequest = DispatchRequest.fromJson(data);
-
-      PlaceCoordinate pickupCoordinates;
-      PlaceCoordinate desinationCoordinate;
-
-      if (data['status'] == 'accepted') {
-        status = RideStatus.userConfirmedRide;
-        pickupCoordinates = PlaceCoordinate(lat: riderLat!, lng: riderLng!);
-        desinationCoordinate = PlaceCoordinate(
-            lat: activeRequest.pickupData.position.geopoint.latitude,
-            lng: activeRequest.pickupData.position.geopoint.longitude);
-        add(GetPolylines(
-            desinationCoordinate: desinationCoordinate,
-            pickupCoordinate: pickupCoordinates));
-        emit(state.copyWith(
-            actionButtonStatus: ActionButtonStatus.goingToPickupLocation));
-      }
-
-      if (data['status'] == 'outForDelivery') {
-        status = RideStatus.outForDelivery;
-        pickupCoordinates = PlaceCoordinate(
-            lat: activeRequest.pickupData.position.geopoint.latitude,
-            lng: activeRequest.pickupData.position.geopoint.longitude);
-        desinationCoordinate = PlaceCoordinate(
-            lat: activeRequest.dropoffData.position.geopoint.latitude,
-            lng: activeRequest.dropoffData.position.geopoint.longitude);
-        add(GetPolylines(
-            desinationCoordinate: desinationCoordinate,
-            pickupCoordinate: pickupCoordinates));
-        emit(state.copyWith(
-            actionButtonStatus: ActionButtonStatus.outForDelivery));
-      }
-
-      if (status != null) {
-        emit(state.copyWith(rideStatus: status));
-      }
-
-      if (data['status'] != 'confirmed') {
-        emit(state.copyWith(
-          activeRequest: activeRequest,
-        ));
-        add(BroadcastLocation());
-      }
+  RideStatus _rideStatusForRestoredStage(String stage) {
+    switch (stage) {
+      case 'accepted':
+        return RideStatus.userConfirmedRide;
+      case 'arrived_at_pickup':
+        return RideStatus.arrivedAtPickupLocation;
+      case 'navigating_to_pickup':
+      case 'waiting':
+      case 'pickup_verification':
+      case 'pickup_verified':
+        return RideStatus.userConfirmedRide;
+      case 'collected':
+      case 'navigating_to_dropoff':
+      case 'arrived_at_dropoff':
+      case 'issue_reported':
+        return RideStatus.outForDelivery;
+      default:
+        return RideStatus.userConfirmedRide;
     }
+  }
 
-    if (docResponse.docs.isEmpty) {
-      add(CancelRequest());
+  ActionButtonStatus _actionButtonForRestoredStage(String stage) {
+    switch (stage) {
+      case 'arrived_at_pickup':
+        return ActionButtonStatus.arrivedPickupLocation;
+      case 'collected':
+      case 'navigating_to_dropoff':
+      case 'arrived_at_dropoff':
+      case 'issue_reported':
+        return ActionButtonStatus.outForDelivery;
+      default:
+        return ActionButtonStatus.goingToPickupLocation;
+    }
+  }
+
+  Future<void> _repairStaleActiveDeliveryPointer() async {
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('goOffline')
+          .call();
+    } on FirebaseFunctionsException catch (error) {
+      debugPrint(
+        '[RIDER_ACTIVE_RESTORE] stale pointer repair rejected '
+        'code=${error.code} message=${error.message}',
+      );
+    } catch (error) {
+      debugPrint('[RIDER_ACTIVE_RESTORE] stale pointer repair failed: $error');
     }
   }
 
@@ -1039,7 +1076,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         );
       }
       var permission = await Geolocator.checkPermission();
-      debugPrint('[GPS_HEALTH_CLIENT] permission=$permission web=$kIsWeb highAccuracy=$highAccuracy');
+      debugPrint(
+          '[GPS_HEALTH_CLIENT] permission=$permission web=$kIsWeb highAccuracy=$highAccuracy');
       if (permission == LocationPermission.denied && requestPermission) {
         permission = await Geolocator.requestPermission();
         debugPrint('[GPS_HEALTH_CLIENT] permissionAfterRequest=$permission');

@@ -22,35 +22,46 @@ class AppNavView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<NavbarBloc, NavbarState>(
-      builder: (context, nav) {
-        void select(int index) =>
-            context.read<NavbarBloc>().add(ChangeTabIndex(index: index));
+    return BlocListener<HomeBloc, HomeState>(
+      listenWhen: (previous, current) =>
+          previous.activeDeliveryId != current.activeDeliveryId &&
+          current.activeDeliveryId != null,
+      listener: (context, home) {
+        if (context.read<NavbarBloc>().state.currentNavIndex != 1) {
+          context.read<NavbarBloc>().add(ChangeTabIndex(index: 1));
+        }
+      },
+      child: BlocBuilder<NavbarBloc, NavbarState>(
+        builder: (context, nav) {
+          void select(int index) =>
+              context.read<NavbarBloc>().add(ChangeTabIndex(index: index));
 
-        final screens = <Widget>[
-          RiderDashboardView(onSelectTab: select),
-          RiderJobOfferScreen(
-            onScheduledAccepted: () => select(2),
-            onNavigateTab: select,
-          ),
-          const RiderScheduleView(embedded: true),
-          const EarningsView(embedded: true),
-          RiderProfileView(onSelectTab: select),
-        ];
+          final screens = <Widget>[
+            RiderDashboardView(onSelectTab: select),
+            RiderJobOfferScreen(
+              onScheduledAccepted: () => select(2),
+              onNavigateTab: select,
+            ),
+            const RiderScheduleView(embedded: true),
+            const EarningsView(embedded: true),
+            RiderProfileView(onSelectTab: select),
+          ];
 
-        return RiderAppreciationListener(
-          child: RiderMobileFrame(
-            child: Scaffold(
-              backgroundColor: RiderPalette.background,
-              body: IndexedStack(index: nav.currentNavIndex, children: screens),
-              bottomNavigationBar: _RiderDashboardNav(
-                currentIndex: nav.currentNavIndex,
-                onSelect: select,
+          return RiderAppreciationListener(
+            child: RiderMobileFrame(
+              child: Scaffold(
+                backgroundColor: RiderPalette.background,
+                body:
+                    IndexedStack(index: nav.currentNavIndex, children: screens),
+                bottomNavigationBar: _RiderDashboardNav(
+                  currentIndex: nav.currentNavIndex,
+                  onSelect: select,
+                ),
               ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
@@ -366,34 +377,39 @@ class _CentralAction extends StatelessWidget {
   }
 
   String _availabilityTitle(RiderAvailability availability) =>
-      switch (availability.status) {
-        RiderAvailabilityStatus.goingOnline => 'Going online',
-        RiderAvailabilityStatus.waitingForLocation => 'Waiting for location',
-        RiderAvailabilityStatus.online => 'Online',
-        RiderAvailabilityStatus.temporarilyUnavailable =>
-          'Temporarily unavailable',
-        RiderAvailabilityStatus.goingOffline => 'Going offline',
-        RiderAvailabilityStatus.error => 'Availability unavailable',
-        RiderAvailabilityStatus.offline => 'Offline',
-      };
+      availability.hasActiveDelivery
+          ? 'Active delivery'
+          : switch (availability.status) {
+              RiderAvailabilityStatus.goingOnline => 'Going online',
+              RiderAvailabilityStatus.waitingForLocation =>
+                'Waiting for location',
+              RiderAvailabilityStatus.online => 'Online',
+              RiderAvailabilityStatus.temporarilyUnavailable =>
+                'Temporarily unavailable',
+              RiderAvailabilityStatus.goingOffline => 'Going offline',
+              RiderAvailabilityStatus.error => 'Availability unavailable',
+              RiderAvailabilityStatus.offline => 'Offline',
+            };
 
   String _availabilityDescription(RiderAvailability availability) =>
-      switch (availability.status) {
-        RiderAvailabilityStatus.online =>
-          'Nearby eligible offers can reach you.',
-        RiderAvailabilityStatus.goingOnline =>
-          'Circum is confirming your availability.',
-        RiderAvailabilityStatus.waitingForLocation =>
-          'A fresh location is required before offers can reach you.',
-        RiderAvailabilityStatus.temporarilyUnavailable =>
-          'Circum is restoring your live availability.',
-        RiderAvailabilityStatus.goingOffline =>
-          'Circum is closing your availability.',
-        RiderAvailabilityStatus.error =>
-          'Availability could not be confirmed. Try again.',
-        RiderAvailabilityStatus.offline =>
-          'Go online to receive eligible offers.',
-      };
+      availability.hasActiveDelivery
+          ? 'Your active delivery is being restored.'
+          : switch (availability.status) {
+              RiderAvailabilityStatus.online =>
+                'Nearby eligible offers can reach you.',
+              RiderAvailabilityStatus.goingOnline =>
+                'Circum is confirming your availability.',
+              RiderAvailabilityStatus.waitingForLocation =>
+                'A fresh location is required before offers can reach you.',
+              RiderAvailabilityStatus.temporarilyUnavailable =>
+                'Circum is restoring your live availability.',
+              RiderAvailabilityStatus.goingOffline =>
+                'Circum is closing your availability.',
+              RiderAvailabilityStatus.error =>
+                'Availability could not be confirmed. Try again.',
+              RiderAvailabilityStatus.offline =>
+                'Go online to receive eligible offers.',
+            };
 
   String _availabilityActionLabel(RiderAvailability availability) {
     if (availability.intendsToBeOnline) return 'Rider availability. Go offline';

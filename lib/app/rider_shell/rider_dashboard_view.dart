@@ -713,34 +713,39 @@ class _AvailabilityCard extends StatelessWidget {
   }
 
   String _title(RiderAvailability availability) =>
-      switch (availability.status) {
-        RiderAvailabilityStatus.goingOnline => 'Going online',
-        RiderAvailabilityStatus.waitingForLocation => 'Waiting for location',
-        RiderAvailabilityStatus.online => 'Online and available',
-        RiderAvailabilityStatus.temporarilyUnavailable =>
-          'Temporarily unavailable',
-        RiderAvailabilityStatus.goingOffline => 'Going offline',
-        RiderAvailabilityStatus.error => 'Availability unavailable',
-        RiderAvailabilityStatus.offline => 'You are currently offline',
-      };
+      availability.hasActiveDelivery
+          ? 'Active delivery'
+          : switch (availability.status) {
+              RiderAvailabilityStatus.goingOnline => 'Going online',
+              RiderAvailabilityStatus.waitingForLocation =>
+                'Waiting for location',
+              RiderAvailabilityStatus.online => 'Online and available',
+              RiderAvailabilityStatus.temporarilyUnavailable =>
+                'Temporarily unavailable',
+              RiderAvailabilityStatus.goingOffline => 'Going offline',
+              RiderAvailabilityStatus.error => 'Availability unavailable',
+              RiderAvailabilityStatus.offline => 'You are currently offline',
+            };
 
   String _description(RiderAvailability availability) =>
-      switch (availability.status) {
-        RiderAvailabilityStatus.online =>
-          'Circum is checking eligible delivery opportunities near you.',
-        RiderAvailabilityStatus.goingOnline =>
-          'Circum is confirming your availability.',
-        RiderAvailabilityStatus.waitingForLocation =>
-          'A fresh location is required before eligible jobs can reach you.',
-        RiderAvailabilityStatus.temporarilyUnavailable =>
-          'Circum is restoring your connection and dispatch readiness.',
-        RiderAvailabilityStatus.goingOffline =>
-          'Circum is closing your availability.',
-        RiderAvailabilityStatus.error =>
-          'Availability could not be confirmed. Try again.',
-        RiderAvailabilityStatus.offline =>
-          'Go online when you are ready to receive eligible jobs.',
-      };
+      availability.hasActiveDelivery
+          ? 'Your active delivery is being restored. Open Jobs to continue it.'
+          : switch (availability.status) {
+              RiderAvailabilityStatus.online =>
+                'Circum is checking eligible delivery opportunities near you.',
+              RiderAvailabilityStatus.goingOnline =>
+                'Circum is confirming your availability.',
+              RiderAvailabilityStatus.waitingForLocation =>
+                'A fresh location is required before eligible jobs can reach you.',
+              RiderAvailabilityStatus.temporarilyUnavailable =>
+                'Circum is restoring your connection and dispatch readiness.',
+              RiderAvailabilityStatus.goingOffline =>
+                'Circum is closing your availability.',
+              RiderAvailabilityStatus.error =>
+                'Availability could not be confirmed. Try again.',
+              RiderAvailabilityStatus.offline =>
+                'Go online when you are ready to receive eligible jobs.',
+            };
 }
 
 class _InternalDiagnosticsCard extends StatelessWidget {

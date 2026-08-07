@@ -127,6 +127,20 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                         title: 'Account action required',
                         message: rider.blockedReason ??
                             'Your Circum Rider account cannot receive jobs right now.');
+                  final activeData = home.activeDeliveryData;
+                  final activeDeliveryId = home.activeDeliveryId;
+                  if (activeData != null && activeDeliveryId != null) {
+                    return RiderAcceptedJobScreen(
+                      offer: RiderJobOffer.fromFirestore(
+                        docId: activeDeliveryId,
+                        data: activeData,
+                      ),
+                      firestore: _firestore,
+                      riderId: user.uid,
+                      riderRank: rider.riderRank ?? 'Agent',
+                      onNavigateTab: widget.onNavigateTab,
+                    );
+                  }
                   if (!home.availability.dispatchEligible)
                     return _JobsStateScaffold(
                         title: home.availability.intendsToBeOnline
@@ -1368,6 +1382,10 @@ class _JobsInfoTile extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: () {
+          if (title == 'Active deliveries') {
+            context.read<HomeBloc>().add(CheckForActiveRequest());
+            return;
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(offline
@@ -1460,7 +1478,13 @@ class RiderDeliveryStagePolicy {
         return RiderDeliveryStage.pickupVerified;
       case 'collected':
         return RiderDeliveryStage.collected;
+      case 'picked_up':
+        return RiderDeliveryStage.collected;
       case 'navigating_to_dropoff':
+        return RiderDeliveryStage.navigatingToDropoff;
+      case 'out_for_delivery':
+      case 'outfordelivery':
+      case 'in_transit':
         return RiderDeliveryStage.navigatingToDropoff;
       case 'arrived_at_dropoff':
         return RiderDeliveryStage.arrivedAtDropoff;

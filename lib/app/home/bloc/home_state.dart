@@ -41,14 +41,17 @@ class RiderAvailability {
     this.lastFix,
     this.lastHeartbeat,
     this.dispatchEligible = false,
+    this.hasActiveDelivery = false,
   });
 
   final RiderAvailabilityStatus status;
   final DateTime? lastFix;
   final DateTime? lastHeartbeat;
   final bool dispatchEligible;
+  final bool hasActiveDelivery;
 
-  bool get isOnline => status == RiderAvailabilityStatus.online;
+  bool get isOnline =>
+      status == RiderAvailabilityStatus.online && !hasActiveDelivery;
 
   bool get intendsToBeOnline => switch (status) {
         RiderAvailabilityStatus.goingOnline ||
@@ -67,12 +70,14 @@ class RiderAvailability {
     DateTime? lastFix,
     DateTime? lastHeartbeat,
     bool? dispatchEligible,
+    bool? hasActiveDelivery,
   }) {
     return RiderAvailability(
       status: status ?? this.status,
       lastFix: lastFix ?? this.lastFix,
       lastHeartbeat: lastHeartbeat ?? this.lastHeartbeat,
       dispatchEligible: dispatchEligible ?? this.dispatchEligible,
+      hasActiveDelivery: hasActiveDelivery ?? this.hasActiveDelivery,
     );
   }
 
@@ -95,6 +100,8 @@ class RiderAvailability {
         '${presence['availabilityStatus'] ?? presence['status'] ?? ''}'
             .trim()
             .toLowerCase();
+    final hasActiveDelivery =
+        '${presence['activeDeliveryId'] ?? ''}'.trim().isNotEmpty;
     final explicitlyOnline = presence['isOnline'] == true ||
         rawStatus == 'online' ||
         rawStatus == 'available' ||
@@ -115,6 +122,7 @@ class RiderAvailability {
       lastFix: lastFix,
       lastHeartbeat: heartbeat,
       dispatchEligible: eligible,
+      hasActiveDelivery: hasActiveDelivery,
     );
   }
 
@@ -142,6 +150,8 @@ class HomeState {
   final Position? locationData;
   List<DispatchRequest> dispatchRequests;
   DispatchRequest? activeRequest;
+  String? activeDeliveryId;
+  Map<String, dynamic>? activeDeliveryData;
   int? selectedRequestIndex;
   Map<MarkerId, Marker> markers;
   List<Polyline> polylines;
@@ -177,6 +187,8 @@ class HomeState {
     this.maxDrawerHeight = 180,
     this.selectedRequestIndex,
     this.activeRequest,
+    this.activeDeliveryId,
+    this.activeDeliveryData,
     this.broadcastStatus = BroadcastStatus.initialized,
     this.chatMessages = const [],
     this.chatStatus = ChatStatus.initial,
@@ -204,6 +216,9 @@ class HomeState {
       double? maxDrawerHeight,
       int? selectedRequestIndex,
       DispatchRequest? activeRequest,
+      String? activeDeliveryId,
+      Map<String, dynamic>? activeDeliveryData,
+      bool clearActiveDelivery = false,
       List<Message>? chatMessages,
       ChatStatus? chatStatus,
       String? message,
@@ -228,7 +243,14 @@ class HomeState {
         panelControlStatus: panelControlStatus ?? this.panelControlStatus,
         actionButtonStatus: actionButtonStatus ?? this.actionButtonStatus,
         selectedRequestIndex: selectedRequestIndex ?? this.selectedRequestIndex,
-        activeRequest: activeRequest ?? this.activeRequest,
+        activeRequest:
+            clearActiveDelivery ? null : activeRequest ?? this.activeRequest,
+        activeDeliveryId: clearActiveDelivery
+            ? null
+            : activeDeliveryId ?? this.activeDeliveryId,
+        activeDeliveryData: clearActiveDelivery
+            ? null
+            : activeDeliveryData ?? this.activeDeliveryData,
         chatMessages: chatMessages ?? this.chatMessages,
         chatStatus: chatStatus ?? this.chatStatus,
         message: message ?? this.message,
