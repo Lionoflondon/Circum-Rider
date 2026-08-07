@@ -1,6 +1,79 @@
+import 'dart:developer' as developer;
+import 'dart:typed_data';
+
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+
+String _redactEvidenceDiagnostic(String value) {
+  return value
+      .replaceAll(
+        RegExp(r'(token|access_token|auth)=[^&\s]+', caseSensitive: false),
+        r'\1=[REDACTED]',
+      )
+      .replaceAll(
+        RegExp(r'bearer\s+[^\s]+', caseSensitive: false),
+        'Bearer [REDACTED]',
+      );
+}
+
+class RiderEvidenceUploadException implements Exception {
+  final String stage;
+  final String deliveryId;
+  final String storagePath;
+  final String bucket;
+  final int byteSize;
+  final String contentType;
+  final String? firebaseCode;
+  final String message;
+
+  const RiderEvidenceUploadException({
+    required this.stage,
+    required this.deliveryId,
+    required this.storagePath,
+    required this.bucket,
+    required this.byteSize,
+    required this.contentType,
+    required this.firebaseCode,
+    required this.message,
+  });
+
+  factory RiderEvidenceUploadException.fromError({
+    required String stage,
+    required String deliveryId,
+    required String storagePath,
+    required String bucket,
+    required int byteSize,
+    required String contentType,
+    required Object error,
+  }) {
+    final firebaseError = error is FirebaseException ? error : null;
+    final rawMessage = firebaseError?.message ?? error.toString();
+    return RiderEvidenceUploadException(
+      stage: stage,
+      deliveryId: deliveryId,
+      storagePath: storagePath,
+      bucket: bucket,
+      byteSize: byteSize,
+      contentType: contentType,
+      firebaseCode: firebaseError?.code,
+      message: _redactEvidenceDiagnostic(rawMessage),
+    );
+  }
+
+  String get userMessage =>
+      'Evidence upload failed. Check your connection and retry.';
+
+  @override
+  String toString() {
+    return 'RiderEvidenceUploadException('
+        'stage=$stage, deliveryId=$deliveryId, bucket=$bucket, '
+        'storagePath=$storagePath, byteSize=$byteSize, '
+        'contentType=$contentType, firebaseCode=$firebaseCode, '
+        'message=$message)';
+  }
+}
 
 class RiderDeliveryTransitionResult {
   final String status;
@@ -11,6 +84,7 @@ class RiderDeliveryTransitionResult {
 class RiderCapturedEvidence {
   final String photoId;
   final String storagePath;
+  final String bucket;
   final String checksum;
   final String mimeType;
   final int fileSize;
@@ -18,6 +92,7 @@ class RiderCapturedEvidence {
   const RiderCapturedEvidence({
     required this.photoId,
     required this.storagePath,
+    required this.bucket,
     required this.checksum,
     required this.mimeType,
     required this.fileSize,
@@ -189,7 +264,8 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
     required String deliveryId,
     required RiderCapturedEvidence evidence,
   }) async {
-    final result = await functions.httpsCallable('recordDeliveryEvidence').call({
+    final result =
+        await functions.httpsCallable('recordDeliveryEvidence').call({
       'deliveryId': deliveryId,
       'photoId': evidence.photoId,
       'type': 'PHOTO',
@@ -220,21 +296,103 @@ class RiderEvidenceUploader {
       maxWidth: 1600,
     );
     if (image == null) return null;
-    final bytes = await image.readAsBytes();
+    final sourceMime = image.mimeType?.trim().toLowerCase() ?? '';
+    final sourceName = image.name.toLowerCase();
+    final jpegSelected = sourceMime == 'image/jpeg' ||
+        (sourceMime.isEmpty &&
+            (sourceName.endsWith('.jpg') || sourceName.endsWith('.jpeg')));
     final safeStage = stage.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
     final photoId = '${DateTime.now().microsecondsSinceEpoch}_$safeStage';
     final storagePath = 'deliveries/$deliveryId/evidence/photos/$photoId.jpg';
-    final ref = storage.ref(
-      storagePath,
-    );
-    await ref.putData(
-      bytes,
-      SettableMetadata(contentType: 'image/jpeg'),
-    );
-    final metadata = await ref.getMetadata();
+    final ref = storage.ref(storagePath);
+    const contentType = 'image/jpeg';
+    if (!jpegSelected) {
+      final failure = RiderEvidenceUploadException.fromError(
+        stage: 'validate_input',
+        deliveryId: deliveryId,
+        storagePath: storagePath,
+        bucket: ref.bucket,
+        byteSize: 0,
+        contentType: sourceMime,
+        error: StateError('Evidence photo must be a JPEG.'),
+      );
+      developer.log(failure.toString(), name: 'rider.evidence.upload');
+      throw failure;
+    }
+
+    late final Uint8List bytes;
+    try {
+      bytes = await image.readAsBytes();
+    } catch (error, stackTrace) {
+      final failure = RiderEvidenceUploadException.fromError(
+        stage: 'read_bytes',
+        deliveryId: deliveryId,
+        storagePath: storagePath,
+        bucket: ref.bucket,
+        byteSize: 0,
+        contentType: contentType,
+        error: error,
+      );
+      developer.log(
+        failure.toString(),
+        name: 'rider.evidence.upload',
+        error: failure,
+        stackTrace: stackTrace,
+      );
+      throw failure;
+    }
+    try {
+      if (bytes.isEmpty) {
+        throw StateError('Evidence image contains no bytes.');
+      }
+      await ref.putData(
+        bytes,
+        SettableMetadata(contentType: contentType),
+      );
+    } catch (error, stackTrace) {
+      final failure = RiderEvidenceUploadException.fromError(
+        stage: 'storage_put_data',
+        deliveryId: deliveryId,
+        storagePath: storagePath,
+        bucket: ref.bucket,
+        byteSize: bytes.length,
+        contentType: contentType,
+        error: error,
+      );
+      developer.log(
+        failure.toString(),
+        name: 'rider.evidence.upload',
+        error: failure,
+        stackTrace: stackTrace,
+      );
+      throw failure;
+    }
+
+    FullMetadata metadata;
+    try {
+      metadata = await ref.getMetadata();
+    } catch (error, stackTrace) {
+      final failure = RiderEvidenceUploadException.fromError(
+        stage: 'storage_get_metadata',
+        deliveryId: deliveryId,
+        storagePath: storagePath,
+        bucket: ref.bucket,
+        byteSize: bytes.length,
+        contentType: contentType,
+        error: error,
+      );
+      developer.log(
+        failure.toString(),
+        name: 'rider.evidence.upload',
+        error: failure,
+        stackTrace: stackTrace,
+      );
+      throw failure;
+    }
     return RiderCapturedEvidence(
       photoId: photoId,
       storagePath: storagePath,
+      bucket: ref.bucket,
       checksum: metadata.md5Hash ?? '',
       mimeType: metadata.contentType ?? 'image/jpeg',
       fileSize: metadata.size ?? bytes.length,

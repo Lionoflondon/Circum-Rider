@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:circum_rider/app/rider_jobs/rider_delivery_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -79,7 +80,8 @@ class _RecordingController implements RiderDeliveryController {
   Future<Map<String, dynamic>> recordEvidence({
     required String deliveryId,
     required RiderCapturedEvidence evidence,
-  }) async => {'success': true};
+  }) async =>
+      {'success': true};
 }
 
 void main() {
@@ -111,5 +113,28 @@ void main() {
     expect(result['success'], true);
     expect((result['acknowledgement'] as Map)['acknowledgementStatus'],
         'confirmed');
+  });
+
+  test('evidence diagnostics preserve Firebase error code without secrets', () {
+    final failure = RiderEvidenceUploadException.fromError(
+      stage: 'storage_put_data',
+      deliveryId: 'delivery-1',
+      storagePath: 'deliveries/delivery-1/evidence/photos/photo-1.jpg',
+      bucket: 'circum-2797c.appspot.com',
+      byteSize: 1024,
+      contentType: 'image/jpeg',
+      error: FirebaseException(
+        plugin: 'firebase_storage',
+        code: 'unauthorized',
+        message: 'request denied?access_token=secret-value',
+      ),
+    );
+
+    expect(failure.firebaseCode, 'unauthorized');
+    expect(failure.stage, 'storage_put_data');
+    expect(failure.bucket, 'circum-2797c.appspot.com');
+    expect(failure.byteSize, 1024);
+    expect(failure.toString(), isNot(contains('secret-value')));
+    expect(failure.userMessage, contains('retry'));
   });
 }

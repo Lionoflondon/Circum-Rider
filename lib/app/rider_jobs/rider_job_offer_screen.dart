@@ -1,6 +1,7 @@
 // ignore_for_file: deprecated_member_use, prefer_const_constructors, curly_braces_in_flow_control_structures
 
 import 'dart:async';
+import 'dart:developer' as developer;
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -1716,7 +1717,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     });
     try {
       final result = completing
-          ? await (controller ?? CallableRiderDeliveryController()).completeDelivery(
+          ? await (controller ?? CallableRiderDeliveryController())
+              .completeDelivery(
               deliveryId: widget.offer.id,
               deliveryPin: pin,
               evidenceId: evidence?['evidenceId'] as String?,
@@ -1826,11 +1828,30 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       recipient.dispose();
       actualWeight.dispose();
       if (confirmed != true) return null;
-      await (widget.deliveryController ?? CallableRiderDeliveryController())
-          .recordEvidence(
-            deliveryId: widget.offer.id,
-            evidence: captured,
-          );
+      try {
+        await (widget.deliveryController ?? CallableRiderDeliveryController())
+            .recordEvidence(
+          deliveryId: widget.offer.id,
+          evidence: captured,
+        );
+      } catch (error, stackTrace) {
+        final failure = RiderEvidenceUploadException.fromError(
+          stage: 'record_delivery_evidence',
+          deliveryId: widget.offer.id,
+          storagePath: captured.storagePath,
+          bucket: captured.bucket,
+          byteSize: captured.fileSize,
+          contentType: captured.mimeType,
+          error: error,
+        );
+        developer.log(
+          failure.toString(),
+          name: 'rider.evidence.upload',
+          error: failure,
+          stackTrace: stackTrace,
+        );
+        throw failure;
+      }
       return {
         'evidenceId': captured.photoId,
         'photoId': captured.photoId,
@@ -1846,7 +1867,23 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
         if (!pickup) 'recipientName': recipientName,
         if (!pickup) 'recipientConfirmed': true,
       };
-    } catch (_) {
+    } on RiderEvidenceUploadException catch (error) {
+      if (mounted) {
+        developer.log(
+          error.toString(),
+          name: 'rider.evidence.upload',
+          error: error,
+        );
+        setState(() => _transitionError = error.userMessage);
+      }
+      return null;
+    } catch (error, stackTrace) {
+      developer.log(
+        'Unexpected Rider evidence failure: $error',
+        name: 'rider.evidence.upload',
+        error: error,
+        stackTrace: stackTrace,
+      );
       if (mounted) {
         setState(() => _transitionError =
             'Evidence upload failed. Check your connection and retry.');

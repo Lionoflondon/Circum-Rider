@@ -17,6 +17,9 @@ void main() {
       expect(screen, contains('completeDelivery('));
       expect(screen, contains("action == 'verify_receiver_pin'"));
       expect(screen, contains("action == 'complete_delivery'"));
+      expect(screen, contains('recordEvidence('));
+      expect(screen, contains('if (evidence == null) return;'));
+      expect(screen, contains('RiderEvidenceUploadException'));
       expect(screen, isNot(contains("'status':")));
       expect(screen, isNot(contains("'earnings':")));
       expect(screen, isNot(contains("'trust':")));
