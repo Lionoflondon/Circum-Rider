@@ -21,6 +21,7 @@ import '../support/view/support.dart';
 import '../tracking/rider_live_tracking_controller.dart';
 import 'rider_accept_controller.dart';
 import 'rider_delivery_controller.dart';
+import 'rider_completion_policy.dart';
 import 'rider_offer_card.dart';
 import 'rider_offer_stack.dart';
 
@@ -1616,23 +1617,17 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       widget.offer.raw['serviceType'] == 'gift' ||
       widget.offer.raw['isGift'] == true;
   bool get _pinRequired =>
-      _vanguard ||
-      _healthPlus ||
-      widget.offer.raw['pinRequired'] == true ||
-      widget.offer.raw['receiverPinRequired'] == true;
+      _completionPolicy.receiverVerificationRequired;
   bool get _photoRequired =>
-      _gift ||
-      widget.offer.raw['photoRequired'] == true ||
-      widget.offer.raw['proofPhotoRequired'] == true;
+      _completionPolicy.handoverEvidenceRequired;
   bool get _signatureRequired =>
       widget.offer.raw['signatureRequired'] == true ||
       widget.offer.raw['receiverSignatureRequired'] == true;
   bool get _verificationRequired =>
-      _vanguard ||
-      _healthPlus ||
-      _gift ||
-      widget.offer.raw['verificationRequired'] == true ||
-      widget.offer.raw['requiresVerification'] == true;
+      _completionPolicy.pickupVerificationRequired;
+
+  RiderCompletionPolicy get _completionPolicy =>
+      RiderCompletionPolicy.fromRaw(widget.offer.raw);
 
   @override
   void initState() {

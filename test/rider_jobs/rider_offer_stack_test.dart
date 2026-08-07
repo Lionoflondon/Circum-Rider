@@ -298,7 +298,7 @@ void main() {
       expect(find.text('Report Difference'), findsOneWidget);
       expect(
           find.text(
-              'Gift verification: photo required. Requirements are read from the delivery record.'),
+              'Gift verification: PIN mandatory, photo required. Requirements are read from the delivery record.'),
           findsOneWidget);
       expect(find.textContaining('Vanguard Protection'), findsNothing);
     });
@@ -519,6 +519,15 @@ const _offers = [
     weightText: '1.4kg',
     pickupTiming: 'ASAP',
     warningChips: ['Gift'],
-    raw: {'isGift': true},
+    raw: {
+      'isGift': true,
+      'iris': {
+        'verification': {
+          'pickupVerificationRequired': true,
+          'recipientPinRequired': true,
+          'handoverEvidenceRequired': true,
+        },
+      },
+    },
   ),
 ];
