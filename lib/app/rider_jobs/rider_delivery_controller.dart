@@ -25,6 +25,7 @@ class RiderEvidenceUploadException implements Exception {
   final String bucket;
   final int byteSize;
   final String contentType;
+  final String? firebasePlugin;
   final String? firebaseCode;
   final String message;
 
@@ -35,6 +36,7 @@ class RiderEvidenceUploadException implements Exception {
     required this.bucket,
     required this.byteSize,
     required this.contentType,
+    required this.firebasePlugin,
     required this.firebaseCode,
     required this.message,
   });
@@ -57,6 +59,7 @@ class RiderEvidenceUploadException implements Exception {
       bucket: bucket,
       byteSize: byteSize,
       contentType: contentType,
+      firebasePlugin: firebaseError?.plugin,
       firebaseCode: firebaseError?.code,
       message: _redactEvidenceDiagnostic(rawMessage),
     );
@@ -70,7 +73,8 @@ class RiderEvidenceUploadException implements Exception {
     return 'RiderEvidenceUploadException('
         'stage=$stage, deliveryId=$deliveryId, bucket=$bucket, '
         'storagePath=$storagePath, byteSize=$byteSize, '
-        'contentType=$contentType, firebaseCode=$firebaseCode, '
+        'contentType=$contentType, firebasePlugin=$firebasePlugin, '
+        'firebaseCode=$firebaseCode, '
         'message=$message)';
   }
 }

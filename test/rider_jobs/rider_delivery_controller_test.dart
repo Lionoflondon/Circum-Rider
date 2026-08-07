@@ -133,6 +133,7 @@ void main() {
     expect(failure.firebaseCode, 'unauthorized');
     expect(failure.stage, 'storage_put_data');
     expect(failure.bucket, 'circum-2797c.appspot.com');
+    expect(failure.firebasePlugin, 'firebase_storage');
     expect(failure.byteSize, 1024);
     expect(failure.toString(), isNot(contains('secret-value')));
     expect(failure.userMessage, contains('retry'));
