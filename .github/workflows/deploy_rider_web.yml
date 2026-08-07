@@ -23,4 +23,7 @@ jobs:
       - run: node --test test/rider_deployment_manifest_test.js
       - run: RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_rider_web.sh
       - run: node scripts/rider_deployment_manifest.js verify
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
       - run: firebase deploy --only hosting --project circum-2797c
