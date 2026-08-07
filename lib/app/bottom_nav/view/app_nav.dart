@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -5,6 +9,7 @@ import '../../account/view/earnings.dart';
 import '../../home/bloc/home_bloc.dart';
 import '../../rider_design/rider_ui.dart';
 import '../../rider_jobs/rider_job_offer_screen.dart';
+import '../../rider_jobs/rider_active_delivery_resolver.dart';
 import '../../ratings/rider_appreciation.dart';
 import '../../rider_shell/rider_dashboard_view.dart';
 import '../../rider_shell/rider_profile_view.dart';
@@ -15,10 +20,69 @@ import '../bloc/navbar_bloc.dart';
 ///
 /// Delivery chat, notifications and schedule remain contextual destinations;
 /// they are intentionally not restored as legacy primary tabs.
-class AppNavView extends StatelessWidget {
+class AppNavView extends StatefulWidget {
   const AppNavView({super.key});
 
   static const labels = ['Home', 'Jobs', 'Action', 'Earnings', 'Profile'];
+
+  @override
+  State<AppNavView> createState() => _AppNavViewState();
+}
+
+class _AppNavViewState extends State<AppNavView>
+    with WidgetsBindingObserver {
+  late final RiderActiveDeliveryResolver _activeDeliveryResolver;
+  RiderActiveDeliveryResolution? _activeResolution;
+  bool _restoring = true;
+  bool _restoreInFlight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _activeDeliveryResolver = RiderActiveDeliveryResolver(
+      firestore: FirebaseFirestore.instance,
+    );
+    unawaited(_restoreActiveDelivery());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_restoreActiveDelivery(forceOpen: false));
+    }
+  }
+
+  Future<void> _restoreActiveDelivery({bool forceOpen = true}) async {
+    if (_restoreInFlight) return;
+    _restoreInFlight = true;
+    final riderId = FirebaseAuth.instance.currentUser?.uid;
+    if (riderId == null || riderId.isEmpty) {
+      _restoreInFlight = false;
+      if (mounted) setState(() => _restoring = false);
+      return;
+    }
+    try {
+      final resolution =
+          await _activeDeliveryResolver.resolve(riderId: riderId);
+      if (!mounted) return;
+      setState(() {
+        _activeResolution = resolution;
+        _restoring = false;
+      });
+      if (resolution.hasActiveDelivery && forceOpen) {
+        context.read<NavbarBloc>().add(ChangeTabIndex(index: 1));
+      }
+    } finally {
+      _restoreInFlight = false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,11 +91,17 @@ class AppNavView extends StatelessWidget {
         void select(int index) =>
             context.read<NavbarBloc>().add(ChangeTabIndex(index: index));
 
+        final restored = _activeResolution;
         final screens = <Widget>[
-          RiderDashboardView(onSelectTab: select),
+          RiderDashboardView(
+            onSelectTab: select,
+          ),
           RiderJobOfferScreen(
             onScheduledAccepted: () => select(2),
             onNavigateTab: select,
+            restoredResolution: restored,
+            restoringActiveDelivery: _restoring,
+            onRefreshActiveDelivery: _restoreActiveDelivery,
           ),
           const RiderScheduleView(embedded: true),
           const EarningsView(embedded: true),
@@ -347,7 +417,8 @@ class _CentralAction extends StatelessWidget {
                                   ),
                                 )
                               : Text(
-                                  intendsOnline ? 'Go offline' : 'Go online'),
+                                  intendsOnline ? 'Go offline' : 'Go online',
+                                ),
                         ),
                         TextButton(
                           onPressed: () => Navigator.pop(sheetContext),
@@ -373,11 +444,14 @@ class _CentralAction extends StatelessWidget {
         RiderAvailabilityStatus.temporarilyUnavailable =>
           'Temporarily unavailable',
         RiderAvailabilityStatus.goingOffline => 'Going offline',
+        RiderAvailabilityStatus.activeDelivery => 'Active delivery',
         RiderAvailabilityStatus.error => 'Availability unavailable',
         RiderAvailabilityStatus.offline => 'Offline',
       };
 
-  String _availabilityDescription(RiderAvailability availability) =>
+  String _availabilityDescription(
+    RiderAvailability availability,
+  ) =>
       switch (availability.status) {
         RiderAvailabilityStatus.online =>
           'Nearby eligible offers can reach you.',
@@ -389,6 +463,8 @@ class _CentralAction extends StatelessWidget {
           'Circum is restoring your live availability.',
         RiderAvailabilityStatus.goingOffline =>
           'Circum is closing your availability.',
+        RiderAvailabilityStatus.activeDelivery =>
+          'You have an active delivery. Restore it to continue.',
         RiderAvailabilityStatus.error =>
           'Availability could not be confirmed. Try again.',
         RiderAvailabilityStatus.offline =>

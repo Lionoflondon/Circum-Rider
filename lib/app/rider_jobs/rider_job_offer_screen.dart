@@ -19,6 +19,7 @@ import '../rider_truth/rider_truth.dart';
 import '../support/view/support.dart';
 import '../tracking/rider_live_tracking_controller.dart';
 import 'rider_accept_controller.dart';
+import 'rider_active_delivery_resolver.dart';
 import 'rider_delivery_controller.dart';
 import 'rider_offer_card.dart';
 import 'rider_offer_stack.dart';
@@ -32,6 +33,9 @@ class RiderJobOfferScreen extends StatefulWidget {
   final List<RiderJobOffer>? previewOffers;
   final VoidCallback? onScheduledAccepted;
   final ValueChanged<int>? onNavigateTab;
+  final RiderActiveDeliveryResolution? restoredResolution;
+  final bool restoringActiveDelivery;
+  final Future<void> Function()? onRefreshActiveDelivery;
 
   const RiderJobOfferScreen({
     super.key,
@@ -41,6 +45,9 @@ class RiderJobOfferScreen extends StatefulWidget {
     this.previewOffers,
     this.onScheduledAccepted,
     this.onNavigateTab,
+    this.restoredResolution,
+    this.restoringActiveDelivery = false,
+    this.onRefreshActiveDelivery,
   });
 
   @override
@@ -63,10 +70,9 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     if (widget.previewOffers != null) return;
     _firestore = widget.firestore ?? FirebaseFirestore.instance;
     _auth = widget.auth ?? FirebaseAuth.instance;
-    _acceptController = widget.acceptController ??
-        RiderAcceptController(
-          store: CallableRiderJobTransactionStore(),
-        );
+    _acceptController =
+        widget.acceptController ??
+        RiderAcceptController(store: CallableRiderJobTransactionStore());
   }
 
   @override
@@ -101,134 +107,166 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       );
     }
 
+    if (widget.restoringActiveDelivery) {
+      return const _JobsStateScaffold(
+        title: 'Restoring active delivery',
+        message: 'Loading the latest assigned delivery state.',
+        loading: true,
+      );
+    }
+
+    final restored = widget.restoredResolution;
+    if (restored != null && restored.hasActiveDelivery) {
+      final id = restored.deliveryId;
+      final data = restored.data;
+      if (id != null && data != null) {
+        return RiderAcceptedJobScreen(
+          offer: RiderJobOffer.fromFirestore(docId: id, data: data),
+          firestore: _firestore,
+          riderId: user.uid,
+          onNavigateTab: widget.onNavigateTab,
+        );
+      }
+    }
+
     final home = context.watch<HomeBloc>().state;
     return FutureBuilder<bool>(
-        future: RiderInternalAccess.enabled(),
-        builder: (context, internalAccessSnapshot) {
-          final internalAccess = internalAccessSnapshot.data == true;
-          return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: _firestore.collection('riders').doc(user.uid).snapshots(),
-            builder: (context, riderSnapshot) {
-              return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                stream: _firestore
-                    .collection('riderProfiles')
-                    .doc(user.uid)
-                    .snapshots(),
-                builder: (context, profileSnapshot) {
-                  final riderData = <String, dynamic>{
-                    ...?profileSnapshot.data?.data(),
-                    ...?riderSnapshot.data?.data()
-                  };
-                  final rider = _riderProfile(user.uid, riderData,
-                      internalAccess: internalAccess);
-                  if (!rider.canAcceptJobs)
-                    return _JobsStateScaffold(
-                        title: 'Account action required',
-                        message: rider.blockedReason ??
-                            'Your Circum Rider account cannot receive jobs right now.');
-                  if (!home.availability.dispatchEligible)
-                    return _JobsStateScaffold(
-                        title: home.availability.intendsToBeOnline
-                            ? 'Waiting for availability'
-                            : "You're offline",
-                        message: home.availability.intendsToBeOnline
-                            ? 'A fresh location and heartbeat are required before offers can reach you.'
-                            : 'Go online to receive eligible delivery offers.',
-                        actionLabel: home.availability.intendsToBeOnline
-                            ? null
-                            : 'Go Online',
-                        onAction: () => context
-                            .read<HomeBloc>()
-                            .add(SetRideStatus(status: RideStatus.online)));
-
-                  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: _firestore
-                        .collection('deliveryRequests')
-                        .where('status', isEqualTo: 'requested')
-                        .where('matchingStatus', isEqualTo: 'available')
-                        .limit(80)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      if (snapshot.hasError) {
-                        return const _JobsStateScaffold(
-                          title: 'Network error',
-                          message:
-                              'We could not load offers. Please try again.',
-                        );
-                      }
-
-                      if (!snapshot.hasData ||
-                          (riderSnapshot.connectionState ==
-                                  ConnectionState.waiting &&
-                              profileSnapshot.connectionState ==
-                                  ConnectionState.waiting)) {
-                        return const _JobsStateScaffold(
-                          title: 'Loading offers',
-                          message: 'Checking nearby delivery requests.',
-                          loading: true,
-                        );
-                      }
-
-                      final offers = _filterOffers(
-                        docs: snapshot.data!.docs,
-                        riderId: user.uid,
-                        riderVehicle: rider.riderVehicle,
-                        internalAccess: internalAccess,
-                      );
-
-                      if (_activeIndex >= offers.length && offers.isNotEmpty) {
-                        scheduleMicrotask(() {
-                          if (mounted)
-                            setState(() => _activeIndex = offers.length - 1);
-                        });
-                      }
-
-                      if (offers.isEmpty) {
-                        return const _JobsStateScaffold(
-                          title: 'No offers nearby',
-                          message:
-                              'New delivery offers will appear here when available.',
-                        );
-                      }
-
-                      final safeIndex =
-                          _activeIndex.clamp(0, offers.length - 1);
-                      return _OfferExperience(
-                        offers: offers,
-                        activeIndex: safeIndex,
-                        accepting: _accepting,
-                        accepted: _accepted,
-                        riderRank: rider.riderRank ?? 'Agent',
-                        statusMessage: _statusMessage,
-                        acceptStatus: _acceptStatus,
-                        onBackToFeed: _resetTakenState,
-                        onIndexChanged: (index) {
-                          setState(() {
-                            _activeIndex = index;
-                            _accepted = false;
-                            _statusMessage = null;
-                            _acceptStatus = null;
-                          });
-                        },
-                        onAccept: (offer) => _accept(offer, rider),
-                      );
-                    },
+      future: RiderInternalAccess.enabled(),
+      builder: (context, internalAccessSnapshot) {
+        final internalAccess = internalAccessSnapshot.data == true;
+        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: _firestore.collection('riders').doc(user.uid).snapshots(),
+          builder: (context, riderSnapshot) {
+            return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: _firestore
+                  .collection('riderProfiles')
+                  .doc(user.uid)
+                  .snapshots(),
+              builder: (context, profileSnapshot) {
+                final riderData = <String, dynamic>{
+                  ...?profileSnapshot.data?.data(),
+                  ...?riderSnapshot.data?.data(),
+                };
+                final rider = _riderProfile(
+                  user.uid,
+                  riderData,
+                  internalAccess: internalAccess,
+                );
+                if (!rider.canAcceptJobs)
+                  return _JobsStateScaffold(
+                    title: 'Account action required',
+                    message:
+                        rider.blockedReason ??
+                        'Your Circum Rider account cannot receive jobs right now.',
                   );
-                },
-              );
-            },
-          );
-        });
+                if (!home.availability.dispatchEligible)
+                  return _JobsStateScaffold(
+                    title: home.availability.intendsToBeOnline
+                        ? 'Waiting for availability'
+                        : "You're offline",
+                    message: home.availability.intendsToBeOnline
+                        ? 'A fresh location and heartbeat are required before offers can reach you.'
+                        : 'Go online to receive eligible delivery offers.',
+                    actionLabel: home.availability.intendsToBeOnline
+                        ? null
+                        : 'Go Online',
+                    onAction: () => context.read<HomeBloc>().add(
+                      SetRideStatus(status: RideStatus.online),
+                    ),
+                  );
+
+                return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                  stream: _firestore
+                      .collection('deliveryRequests')
+                      .where('status', isEqualTo: 'requested')
+                      .where('matchingStatus', isEqualTo: 'available')
+                      .limit(80)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return const _JobsStateScaffold(
+                        title: 'Network error',
+                        message: 'We could not load offers. Please try again.',
+                      );
+                    }
+
+                    if (!snapshot.hasData ||
+                        (riderSnapshot.connectionState ==
+                                ConnectionState.waiting &&
+                            profileSnapshot.connectionState ==
+                                ConnectionState.waiting)) {
+                      return const _JobsStateScaffold(
+                        title: 'Loading offers',
+                        message: 'Checking nearby delivery requests.',
+                        loading: true,
+                      );
+                    }
+
+                    final offers = _filterOffers(
+                      docs: snapshot.data!.docs,
+                      riderId: user.uid,
+                      riderVehicle: rider.riderVehicle,
+                      internalAccess: internalAccess,
+                    );
+
+                    if (_activeIndex >= offers.length && offers.isNotEmpty) {
+                      scheduleMicrotask(() {
+                        if (mounted)
+                          setState(() => _activeIndex = offers.length - 1);
+                      });
+                    }
+
+                    if (offers.isEmpty) {
+                      return const _JobsStateScaffold(
+                        title: 'No offers nearby',
+                        message:
+                            'New delivery offers will appear here when available.',
+                      );
+                    }
+
+                    final safeIndex = _activeIndex.clamp(0, offers.length - 1);
+                    return _OfferExperience(
+                      offers: offers,
+                      activeIndex: safeIndex,
+                      accepting: _accepting,
+                      accepted: _accepted,
+                      riderRank: rider.riderRank ?? 'Agent',
+                      statusMessage: _statusMessage,
+                      acceptStatus: _acceptStatus,
+                      onBackToFeed: _resetTakenState,
+                      onIndexChanged: (index) {
+                        setState(() {
+                          _activeIndex = index;
+                          _accepted = false;
+                          _statusMessage = null;
+                          _acceptStatus = null;
+                        });
+                      },
+                      onAccept: (offer) => _accept(offer, rider),
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
   }
 
-  RiderProfileSnapshot _riderProfile(String uid, Map<String, dynamic> riderData,
-      {bool internalAccess = false}) {
+  RiderProfileSnapshot _riderProfile(
+    String uid,
+    Map<String, dynamic> riderData, {
+    bool internalAccess = false,
+  }) {
     final canAccept =
         internalAccess || RiderOnboardingPolicy.canAcceptJobs(riderData);
     final firstName = '${riderData['firstName'] ?? ''}'.trim();
     final lastName = '${riderData['lastName'] ?? ''}'.trim();
-    final displayName =
-        [firstName, lastName].where((part) => part.isNotEmpty).join(' ').trim();
+    final displayName = [
+      firstName,
+      lastName,
+    ].where((part) => part.isNotEmpty).join(' ').trim();
     final vehicle = riderData['vehicle'] is Map
         ? '${riderData['vehicle']['type'] ?? riderData['vehicleType'] ?? ''}'
         : '${riderData['vehicleType'] ?? riderData['typeOfVehicle'] ?? ''}';
@@ -239,8 +277,9 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       riderVehicle: vehicle.trim().isEmpty ? null : vehicle.trim(),
       riderRank: RiderRankSnapshot.from(riderData)?.rank,
       canAcceptJobs: canAccept,
-      blockedReason:
-          canAccept ? null : RiderOnboardingPolicy.blockedReason(riderData),
+      blockedReason: canAccept
+          ? null
+          : RiderOnboardingPolicy.blockedReason(riderData),
     );
   }
 
@@ -251,24 +290,36 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     bool internalAccess = false,
   }) {
     return docs
-        .where((doc) => _isVisibleToRider(doc.data(), riderId, riderVehicle,
-            internalAccess: internalAccess))
-        .map((doc) =>
-            RiderJobOffer.fromFirestore(docId: doc.id, data: doc.data()))
+        .where(
+          (doc) => _isVisibleToRider(
+            doc.data(),
+            riderId,
+            riderVehicle,
+            internalAccess: internalAccess,
+          ),
+        )
+        .map(
+          (doc) => RiderJobOffer.fromFirestore(docId: doc.id, data: doc.data()),
+        )
         .toList()
       ..sort(
-          (a, b) => _createdAtMillis(b.raw).compareTo(_createdAtMillis(a.raw)));
+        (a, b) => _createdAtMillis(b.raw).compareTo(_createdAtMillis(a.raw)),
+      );
   }
 
   bool _isVisibleToRider(
-      Map<String, dynamic> data, String riderId, String? riderVehicle,
-      {bool internalAccess = false}) {
+    Map<String, dynamic> data,
+    String riderId,
+    String? riderVehicle, {
+    bool internalAccess = false,
+  }) {
     final ignored = _stringList(data['ignoredRiders']);
     final rejected = _stringList(data['rejectedRiders']);
     if (ignored.contains(riderId) || rejected.contains(riderId)) return false;
 
-    final matchingStatus =
-        '${data['matchingStatus'] ?? 'available'}'.trim().toLowerCase();
+    final matchingStatus = '${data['matchingStatus'] ?? 'available'}'
+        .trim()
+        .toLowerCase();
     if (matchingStatus != 'available' && matchingStatus != 'requested') {
       return false;
     }
@@ -307,21 +358,23 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
   }
 
   bool _hasAssignedRider(Map<String, dynamic> data, String riderId) {
-    final assigned = [
-      data['riderId'],
-      data['driverId'],
-      data['assignedRider'],
-      data['assignedRiderId'],
-      data['assignedDriverId'],
-      data['courierId'],
-    ]
-        .map((value) => value == null ? '' : '$value'.trim())
-        .where((value) => value.isNotEmpty);
+    final assigned =
+        [
+              data['riderId'],
+              data['driverId'],
+              data['assignedRider'],
+              data['assignedRiderId'],
+              data['assignedDriverId'],
+              data['courierId'],
+            ]
+            .map((value) => value == null ? '' : '$value'.trim())
+            .where((value) => value.isNotEmpty);
     return assigned.any((value) => value != riderId);
   }
 
   bool _isExpiredOffer(Map<String, dynamic> data) {
-    final expiry = _timestampMillis(data['offerExpiresAt']) ??
+    final expiry =
+        _timestampMillis(data['offerExpiresAt']) ??
         _timestampMillis(data['dispatchExpiresAt']) ??
         _timestampMillis(data['expiresAt']) ??
         _timestampMillis(data['matchingExpiresAt']);
@@ -404,10 +457,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     return 'motorbike';
   }
 
-  Future<void> _accept(
-    RiderJobOffer offer,
-    RiderProfileSnapshot rider,
-  ) async {
+  Future<void> _accept(RiderJobOffer offer, RiderProfileSnapshot rider) async {
     if (_accepting) return;
     setState(() {
       _accepting = true;
@@ -567,60 +617,71 @@ class _TakenState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: const Color(0xFF07090F),
-        body: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Padding(
-                padding: const EdgeInsets.all(22),
-                child: RiderGlassSurface(
-                  padding: const EdgeInsets.all(24),
-                  radius: 24,
-                  opacity: .70,
-                  blur: 20,
-                  edgeColor: RiderPalette.red,
-                  borderColor: Colors.white.withValues(alpha: .14),
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Container(
-                      width: 54,
-                      height: 54,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: const Color(0xFFF87171).withValues(alpha: .12),
-                      ),
-                      child: const Icon(Icons.work_off_outlined,
-                          color: Color(0xFFF87171)),
+    backgroundColor: const Color(0xFF07090F),
+    body: SafeArea(
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+            padding: const EdgeInsets.all(22),
+            child: RiderGlassSurface(
+              padding: const EdgeInsets.all(24),
+              radius: 24,
+              opacity: .70,
+              blur: 20,
+              edgeColor: RiderPalette.red,
+              borderColor: Colors.white.withValues(alpha: .14),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xFFF87171).withValues(alpha: .12),
                     ),
-                    const SizedBox(height: 16),
-                    const Text('Job no longer available',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 8),
-                    Text('Another Rider accepted this delivery first.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                            color: Colors.white.withValues(alpha: .62),
-                            height: 1.4)),
-                    const SizedBox(height: 18),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: FilledButton(
-                        onPressed: onBackToFeed,
-                        child: const Text('Back to job feed'),
-                      ),
+                    child: const Icon(
+                      Icons.work_off_outlined,
+                      color: Color(0xFFF87171),
                     ),
-                  ]),
-                ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Job no longer available',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Another Rider accepted this delivery first.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: .62),
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: FilledButton(
+                      onPressed: onBackToFeed,
+                      child: const Text('Back to job feed'),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class RiderJobOfferPreview {
@@ -798,19 +859,24 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
 
   void _focusPickup() {
     final pickup = _latLng(
-        widget.offer.raw['pickupDetails'] ?? widget.offer.raw['pickup']);
+      widget.offer.raw['pickupDetails'] ?? widget.offer.raw['pickup'],
+    );
     if (pickup == null) return;
-    _controller?.animateCamera(CameraUpdate.newCameraPosition(
-      CameraPosition(target: pickup, zoom: 15.5),
-    ));
+    _controller?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(target: pickup, zoom: 15.5),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final pickup = _latLng(
-        widget.offer.raw['pickupDetails'] ?? widget.offer.raw['pickup']);
+      widget.offer.raw['pickupDetails'] ?? widget.offer.raw['pickup'],
+    );
     final dropoff = _latLng(
-        widget.offer.raw['dropoffDetails'] ?? widget.offer.raw['dropoff']);
+      widget.offer.raw['dropoffDetails'] ?? widget.offer.raw['dropoff'],
+    );
 
     if (pickup == null || dropoff == null) {
       return const _MapFallback();
@@ -843,8 +909,9 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
         Marker(
           markerId: const MarkerId('pickup'),
           position: pickup,
-          icon:
-              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueAzure,
+          ),
         ),
         Marker(
           markerId: const MarkerId('dropoff'),
@@ -859,8 +926,9 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
                 ? widget.riderPosition!.heading
                 : 0,
             anchor: const Offset(.5, .5),
-            icon:
-                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
+            icon: BitmapDescriptor.defaultMarkerWithHue(
+              BitmapDescriptor.hueCyan,
+            ),
           ),
       },
       polylines: {
@@ -938,11 +1006,7 @@ class _MapFallback extends StatelessWidget {
         gradient: RadialGradient(
           center: Alignment.topRight,
           radius: 1.2,
-          colors: [
-            Color(0x553B82F6),
-            Color(0x220B1020),
-            Color(0xFF07090F),
-          ],
+          colors: [Color(0x553B82F6), Color(0x220B1020), Color(0xFF07090F)],
         ),
       ),
       child: CustomPaint(
@@ -1136,8 +1200,9 @@ class _JobsStateScaffold extends StatelessWidget {
                           boxShadow: offline
                               ? [
                                   BoxShadow(
-                                    color: RiderPalette.amber
-                                        .withValues(alpha: .10 + value * .10),
+                                    color: RiderPalette.amber.withValues(
+                                      alpha: .10 + value * .10,
+                                    ),
                                     blurRadius: 30 + value * 16,
                                     spreadRadius: 1,
                                   ),
@@ -1153,8 +1218,8 @@ class _JobsStateScaffold extends StatelessWidget {
                         edgeColor: error
                             ? RiderPalette.red
                             : offline
-                                ? RiderPalette.amber
-                                : RiderPalette.blue,
+                            ? RiderPalette.amber
+                            : RiderPalette.blue,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -1165,12 +1230,13 @@ class _JobsStateScaffold extends StatelessWidget {
                                   height: 46,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: (error
-                                            ? RiderPalette.red
-                                            : offline
+                                    color:
+                                        (error
+                                                ? RiderPalette.red
+                                                : offline
                                                 ? RiderPalette.amber
                                                 : RiderPalette.blue)
-                                        .withValues(alpha: .14),
+                                            .withValues(alpha: .14),
                                   ),
                                   child: loading
                                       ? const Padding(
@@ -1184,14 +1250,13 @@ class _JobsStateScaffold extends StatelessWidget {
                                           error
                                               ? Icons.cloud_off_rounded
                                               : offline
-                                                  ? Icons
-                                                      .power_settings_new_rounded
-                                                  : Icons.radar_rounded,
+                                              ? Icons.power_settings_new_rounded
+                                              : Icons.radar_rounded,
                                           color: error
                                               ? RiderPalette.red
                                               : offline
-                                                  ? RiderPalette.amber
-                                                  : RiderPalette.blue,
+                                              ? RiderPalette.amber
+                                              : RiderPalette.blue,
                                         ),
                                 ),
                                 const SizedBox(width: 14),
@@ -1249,10 +1314,7 @@ class _JobsStateScaffold extends StatelessWidget {
 }
 
 class _GoOnlineActionButton extends StatefulWidget {
-  const _GoOnlineActionButton({
-    required this.label,
-    required this.onPressed,
-  });
+  const _GoOnlineActionButton({required this.label, required this.onPressed});
 
   final String label;
   final VoidCallback? onPressed;
@@ -1287,9 +1349,7 @@ class _GoOnlineActionButtonState extends State<_GoOnlineActionButton> {
       style: FilledButton.styleFrom(
         backgroundColor: RiderPalette.blue,
         minimumSize: const Size.fromHeight(56),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(17),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(17)),
       ),
     );
   }
@@ -1369,9 +1429,11 @@ class _JobsInfoTile extends StatelessWidget {
         onTap: () {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(offline
-                  ? 'Go online first to use $title.'
-                  : '$title will open when matching work is available.'),
+              content: Text(
+                offline
+                    ? 'Go online first to use $title.'
+                    : '$title will open when matching work is available.',
+              ),
             ),
           );
         },
@@ -1568,8 +1630,9 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   RiderLiveTrackingController? _trackingController;
   StreamSubscription<RiderLiveTrackingSnapshot>? _trackingSub;
   bool _terminalExitScheduled = false;
-  RiderLiveTrackingSnapshot _trackingSnapshot =
-      const RiderLiveTrackingSnapshot(status: RiderLiveTrackingStatus.idle);
+  RiderLiveTrackingSnapshot _trackingSnapshot = const RiderLiveTrackingSnapshot(
+    status: RiderLiveTrackingStatus.idle,
+  );
   Timer? _markerTweenTimer;
   Position? _displayRiderPosition;
   bool _expanded = false;
@@ -1618,8 +1681,9 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       );
       _trackingSub = _trackingController!.states.listen(_handleTrackingState);
     }
-    _stage =
-        RiderDeliveryStagePolicy.fromRaw(widget.offer.raw['deliveryStage']);
+    _stage = RiderDeliveryStagePolicy.fromRaw(
+      widget.offer.raw['deliveryStage'],
+    );
   }
 
   @override
@@ -1658,8 +1722,9 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     }
     const steps = 8;
     var tick = 0;
-    _markerTweenTimer =
-        Timer.periodic(const Duration(milliseconds: 45), (timer) {
+    _markerTweenTimer = Timer.periodic(const Duration(milliseconds: 45), (
+      timer,
+    ) {
       tick += 1;
       final t = (tick / steps).clamp(0, 1).toDouble();
       final eased = Curves.easeOutCubic.transform(t);
@@ -1671,7 +1736,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
         _displayRiderPosition = Position(
           latitude:
               previous.latitude + (next.latitude - previous.latitude) * eased,
-          longitude: previous.longitude +
+          longitude:
+              previous.longitude +
               (next.longitude - previous.longitude) * eased,
           timestamp: next.timestamp,
           accuracy: next.accuracy,
@@ -1716,12 +1782,13 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     });
     try {
       final result = completing
-          ? await (controller ?? CallableRiderDeliveryController()).completeDelivery(
-              deliveryId: widget.offer.id,
-              deliveryPin: pin,
-              evidenceId: evidence?['evidenceId'] as String?,
-              evidence: evidence,
-            )
+          ? await (controller ?? CallableRiderDeliveryController())
+                .completeDelivery(
+                  deliveryId: widget.offer.id,
+                  deliveryPin: pin,
+                  evidenceId: evidence?['evidenceId'] as String?,
+                  evidence: evidence,
+                )
           : await (controller ?? CallableRiderDeliveryController()).transition(
               deliveryId: widget.offer.id,
               action: action,
@@ -1741,8 +1808,10 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       setState(() => _transitionError = error.message ?? 'Action failed.');
     } catch (_) {
       if (!mounted) return;
-      setState(() => _transitionError =
-          'We could not update this delivery. Check your connection and retry.');
+      setState(
+        () => _transitionError =
+            'We could not update this delivery. Check your connection and retry.',
+      );
     } finally {
       if (mounted) setState(() => _transitioning = false);
     }
@@ -1751,11 +1820,11 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   Future<Map<String, dynamic>?> _captureEvidence({required bool pickup}) async {
     setState(() => _transitioning = true);
     try {
-      final captured =
-          await (_evidenceUploader ??= RiderEvidenceUploader()).capture(
-        deliveryId: widget.offer.id,
-        stage: pickup ? 'pickup' : 'handover',
-      );
+      final captured = await (_evidenceUploader ??= RiderEvidenceUploader())
+          .capture(
+            deliveryId: widget.offer.id,
+            stage: pickup ? 'pickup' : 'handover',
+          );
       if (captured == null || !mounted) return null;
       final recipient = TextEditingController();
       final actualWeight = TextEditingController();
@@ -1765,8 +1834,9 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
         context: context,
         builder: (context) => StatefulBuilder(
           builder: (context, setDialogState) => AlertDialog(
-            title:
-                Text(pickup ? 'Confirm Pickup Evidence' : 'Confirm Handover'),
+            title: Text(
+              pickup ? 'Confirm Pickup Evidence' : 'Confirm Handover',
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1788,10 +1858,12 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                   if (widget.offer.raw['weightVerificationRequired'] == true)
                     TextField(
                       controller: actualWeight,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: const InputDecoration(
-                          labelText: 'Actual weight (kg)'),
+                        labelText: 'Actual weight (kg)',
+                      ),
                     ),
                 ] else
                   TextField(
@@ -1827,10 +1899,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       actualWeight.dispose();
       if (confirmed != true) return null;
       await (widget.deliveryController ?? CallableRiderDeliveryController())
-          .recordEvidence(
-            deliveryId: widget.offer.id,
-            evidence: captured,
-          );
+          .recordEvidence(deliveryId: widget.offer.id, evidence: captured);
       return {
         'evidenceId': captured.photoId,
         'photoId': captured.photoId,
@@ -1848,8 +1917,10 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       };
     } catch (_) {
       if (mounted) {
-        setState(() => _transitionError =
-            'Evidence upload failed. Check your connection and retry.');
+        setState(
+          () => _transitionError =
+              'Evidence upload failed. Check your connection and retry.',
+        );
       }
       return null;
     } finally {
@@ -1870,28 +1941,30 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
             children: [
               DropdownButtonFormField<String>(
                 value: category,
-                items: const {
-                  'vehicle_breakdown': 'Vehicle breakdown',
-                  'accident': 'Accident',
-                  'road_closure': 'Road closure',
-                  'medical_emergency': 'Medical emergency',
-                  'customer_change_request': 'Customer requests change',
-                  'sender_unavailable': 'Circum unavailable',
-                  'recipient_unavailable': 'Recipient unavailable',
-                  'access_problem': 'Unable to access property',
-                  'address_problem': 'Address problem',
-                  'parcel_mismatch': 'Parcel mismatch',
-                  'unsafe_situation': 'Unsafe situation',
-                  'damaged_parcel': 'Damaged parcel',
-                  'vehicle_suitability': 'Vehicle suitability problem',
-                  'other': 'Other',
-                }
-                    .entries
-                    .map((item) => DropdownMenuItem(
-                          value: item.key,
-                          child: Text(item.value),
-                        ))
-                    .toList(),
+                items:
+                    const {
+                          'vehicle_breakdown': 'Vehicle breakdown',
+                          'accident': 'Accident',
+                          'road_closure': 'Road closure',
+                          'medical_emergency': 'Medical emergency',
+                          'customer_change_request': 'Customer requests change',
+                          'sender_unavailable': 'Circum unavailable',
+                          'recipient_unavailable': 'Recipient unavailable',
+                          'access_problem': 'Unable to access property',
+                          'address_problem': 'Address problem',
+                          'parcel_mismatch': 'Parcel mismatch',
+                          'unsafe_situation': 'Unsafe situation',
+                          'damaged_parcel': 'Damaged parcel',
+                          'vehicle_suitability': 'Vehicle suitability problem',
+                          'other': 'Other',
+                        }.entries
+                        .map(
+                          (item) => DropdownMenuItem(
+                            value: item.key,
+                            child: Text(item.value),
+                          ),
+                        )
+                        .toList(),
                 onChanged: (value) =>
                     setDialogState(() => category = value ?? 'other'),
                 decoration: const InputDecoration(labelText: 'Issue'),
@@ -1924,11 +1997,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       final controller =
           widget.deliveryController ?? CallableRiderDeliveryController();
       if (category == 'parcel_mismatch' || category == 'vehicle_suitability') {
-        final captured =
-            await (_evidenceUploader ??= RiderEvidenceUploader()).capture(
-          deliveryId: widget.offer.id,
-          stage: 'discrepancy',
-        );
+        final captured = await (_evidenceUploader ??= RiderEvidenceUploader())
+            .capture(deliveryId: widget.offer.id, stage: 'discrepancy');
         if (captured == null) return;
         await controller.reportDiscrepancy(
           deliveryId: widget.offer.id,
@@ -1939,8 +2009,10 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
           notes: detail,
         );
         if (mounted) {
-          setState(() => _transitionError =
-              'Discrepancy submitted for Circum review. Do not collect yet.');
+          setState(
+            () => _transitionError =
+                'Discrepancy submitted for Circum review. Do not collect yet.',
+          );
         }
         return;
       }
@@ -1951,7 +2023,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       );
       if (mounted) {
         setState(
-            () => _stage = RiderDeliveryStagePolicy.fromRaw(result.status));
+          () => _stage = RiderDeliveryStagePolicy.fromRaw(result.status),
+        );
       }
     } catch (_) {
       if (mounted)
@@ -2002,11 +2075,14 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   Future<void> _openNavigationOptions({required bool toPickup}) async {
     final target = toPickup
         ? _locationPayload(
-            widget.offer.raw['pickupDetails'] ?? widget.offer.raw['pickup'])
+            widget.offer.raw['pickupDetails'] ?? widget.offer.raw['pickup'],
+          )
         : _locationPayload(
-            widget.offer.raw['dropoffDetails'] ?? widget.offer.raw['dropoff']);
+            widget.offer.raw['dropoffDetails'] ?? widget.offer.raw['dropoff'],
+          );
     final label = Uri.encodeComponent(
-        toPickup ? widget.offer.pickupAddress : widget.offer.dropoffAddress);
+      toPickup ? widget.offer.pickupAddress : widget.offer.dropoffAddress,
+    );
     final lat = target.$1;
     final lng = target.$2;
     final query = lat != null && lng != null ? '$lat,$lng' : label;
@@ -2026,24 +2102,30 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: const [
-                Text('Navigate',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900)),
+                Text(
+                  'Navigate',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
                 SizedBox(height: 10),
                 _MapChoice(
-                    label: 'Google Maps',
-                    icon: Icons.map_rounded,
-                    value: 'google'),
+                  label: 'Google Maps',
+                  icon: Icons.map_rounded,
+                  value: 'google',
+                ),
                 _MapChoice(
-                    label: 'Apple Maps',
-                    icon: Icons.navigation_rounded,
-                    value: 'apple'),
+                  label: 'Apple Maps',
+                  icon: Icons.navigation_rounded,
+                  value: 'apple',
+                ),
                 _MapChoice(
-                    label: 'Waze',
-                    icon: Icons.alt_route_rounded,
-                    value: 'waze'),
+                  label: 'Waze',
+                  icon: Icons.alt_route_rounded,
+                  value: 'waze',
+                ),
               ],
             ),
           ),
@@ -2052,8 +2134,9 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     );
     if (app == null) return;
     final uri = switch (app) {
-      'google' =>
-        Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$query'),
+      'google' => Uri.parse(
+        'https://www.google.com/maps/dir/?api=1&destination=$query',
+      ),
       'apple' => Uri.parse('https://maps.apple.com/?daddr=$query'),
       'waze' => Uri.parse('https://waze.com/ul?q=$query&navigate=yes'),
       _ => null,
@@ -2080,7 +2163,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     final lng = data['lng'] ?? data['longitude'];
     return (
       lat is num ? lat.toDouble() : null,
-      lng is num ? lng.toDouble() : null
+      lng is num ? lng.toDouble() : null,
     );
   }
 
@@ -2096,20 +2179,23 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       builder: (context, snapshot) {
         if (snapshot.hasError)
           return const _StateScaffold(
-              title: 'Delivery unavailable',
-              message:
-                  'Check your connection and retry. Your delivery state remains safe.');
+            title: 'Delivery unavailable',
+            message:
+                'Check your connection and retry. Your delivery state remains safe.',
+          );
         if (!snapshot.hasData)
           return const _StateScaffold(
-              title: 'Restoring delivery',
-              message: 'Loading the latest operational state.',
-              loading: true);
+            title: 'Restoring delivery',
+            message: 'Loading the latest operational state.',
+            loading: true,
+          );
         final live = snapshot.data?.data();
         if (live == null)
           return const _StateScaffold(
-              title: 'Delivery unavailable',
-              message:
-                  'This delivery record is no longer available. Contact Circum Support.');
+            title: 'Delivery unavailable',
+            message:
+                'This delivery record is no longer available. Contact Circum Support.',
+          );
         final rawStatus =
             live['deliveryStage'] ?? live['deliveryStatus'] ?? live['status'];
         final restored = RiderDeliveryStagePolicy.fromRaw(rawStatus);
@@ -2121,9 +2207,10 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
         if (RiderLiveTrackingPolicy.isTerminalDeliveryStatus(terminal)) {
           _scheduleTerminalExit(terminal);
           return _StateScaffold(
-              title: terminal.replaceAll('_', ' '),
-              message:
-                  'This delivery can no longer progress. The latest delivery state has been restored.');
+            title: terminal.replaceAll('_', ' '),
+            message:
+                'This delivery can no longer progress. The latest delivery state has been restored.',
+          );
         }
         scheduleMicrotask(() => _syncLiveTracking(live, restored));
         return _buildExperience(context, live);
@@ -2189,16 +2276,15 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     try {
       final result =
           await (widget.deliveryController ?? CallableRiderDeliveryController())
-              .transition(
-        deliveryId: widget.offer.id,
-        action: action,
-      );
+              .transition(deliveryId: widget.offer.id, action: action);
       if (!mounted) return;
       setState(() => _stage = RiderDeliveryStagePolicy.fromRaw(result.status));
     } catch (_) {
       if (!mounted) return;
-      setState(() => _transitionError =
-          "Arrival detected, but confirmation failed. Tap I've Arrived to retry.");
+      setState(
+        () => _transitionError =
+            "Arrival detected, but confirmation failed. Tap I've Arrived to retry.",
+      );
     } finally {
       if (mounted) setState(() => _arrivalTransitioning = false);
     }
@@ -2207,10 +2293,11 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   Widget _buildExperience(BuildContext context, Map<String, dynamic> live) {
     if (_stage == RiderDeliveryStage.delivered)
       return _DeliveryCompleteView(
-          offer: widget.offer,
-          delivery: live,
-          onNavigateTab: widget.onNavigateTab,
-          onReportIssue: _reportIssue);
+        offer: widget.offer,
+        delivery: live,
+        onNavigateTab: widget.onNavigateTab,
+        onReportIssue: _reportIssue,
+      );
     final nextTitle = _nextActionTitle(_stage);
     final irisConfirmed = _irisConfirmed(live);
     final differenceReported =
@@ -2218,8 +2305,10 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     final discrepancy = live['loadDiscrepancy'] is Map
         ? Map<String, dynamic>.from(live['loadDiscrepancy'] as Map)
         : const <String, dynamic>{};
-    final discrepancyReview =
-        _riderDiscrepancyReviewState(live: live, discrepancy: discrepancy);
+    final discrepancyReview = _riderDiscrepancyReviewState(
+      live: live,
+      discrepancy: discrepancy,
+    );
     return Scaffold(
       backgroundColor: const Color(0xFF07090F),
       body: Stack(
@@ -2262,7 +2351,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                     ),
                     const SizedBox(height: 10),
                     if (_TrackingPermissionCard.shouldShow(
-                        _trackingSnapshot.status)) ...[
+                      _trackingSnapshot.status,
+                    )) ...[
                       _TrackingPermissionCard(
                         snapshot: _trackingSnapshot,
                         onRetry: _trackingController?.retry,
@@ -2284,7 +2374,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                     _WaitingPolicyCard(
                       firestore: widget.firestore!,
                       deliveryId: widget.offer.id,
-                      controller: widget.deliveryController ??
+                      controller:
+                          widget.deliveryController ??
                           CallableRiderDeliveryController(),
                     ),
                   ],
@@ -2322,9 +2413,10 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                         : () => _customerResponded(widget.offer.id),
                     onReportDifference:
                         _transitioning || irisConfirmed || differenceReported
-                            ? null
-                            : _reportIssue,
-                    onConfirmIris: irisConfirmed ||
+                        ? null
+                        : _reportIssue,
+                    onConfirmIris:
+                        irisConfirmed ||
                             differenceReported ||
                             _confirmingIris ||
                             !_canConfirmIrisAtPickup(live)
@@ -2361,13 +2453,17 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       }
     } on FirebaseFunctionsException catch (error) {
       if (mounted) {
-        setState(() => _transitionError =
-            error.message ?? 'IRIS confirmation failed. Retry.');
+        setState(
+          () => _transitionError =
+              error.message ?? 'IRIS confirmation failed. Retry.',
+        );
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _transitionError =
-            'IRIS confirmation failed. Check your connection and retry.');
+        setState(
+          () => _transitionError =
+              'IRIS confirmation failed. Check your connection and retry.',
+        );
       }
     } finally {
       if (mounted) setState(() => _confirmingIris = false);
@@ -2402,14 +2498,15 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     try {
       await (widget.deliveryController ?? CallableRiderDeliveryController())
           .reportWaitingContext(
-        deliveryId: deliveryId,
-        type: 'customer_responded',
-        note: 'Customer responded during waiting period',
-      );
+            deliveryId: deliveryId,
+            type: 'customer_responded',
+            note: 'Customer responded during waiting period',
+          );
     } catch (_) {
       if (mounted) {
-        setState(() =>
-            _transitionError = 'Could not update waiting context. Retry.');
+        setState(
+          () => _transitionError = 'Could not update waiting context. Retry.',
+        );
       }
     } finally {
       if (mounted) setState(() => _transitioning = false);
@@ -2421,8 +2518,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       RiderLiveTrackingStatus.live ||
       RiderLiveTrackingStatus.backgroundActive ||
       RiderLiveTrackingStatus.arrivedAtPickup ||
-      RiderLiveTrackingStatus.arrivedAtDropoff =>
-        'Live',
+      RiderLiveTrackingStatus.arrivedAtDropoff => 'Live',
       RiderLiveTrackingStatus.offline => 'Offline',
       _ => 'Syncing',
     };
@@ -2470,11 +2566,12 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
 }
 
 class _DeliveryCompleteView extends StatelessWidget {
-  const _DeliveryCompleteView(
-      {required this.offer,
-      required this.delivery,
-      required this.onNavigateTab,
-      required this.onReportIssue});
+  const _DeliveryCompleteView({
+    required this.offer,
+    required this.delivery,
+    required this.onNavigateTab,
+    required this.onReportIssue,
+  });
   final RiderJobOffer offer;
   final Map<String, dynamic> delivery;
   final ValueChanged<int>? onNavigateTab;
@@ -2488,116 +2585,144 @@ class _DeliveryCompleteView extends StatelessWidget {
         ? Map<String, dynamic>.from(delivery['riderEarningBreakdown'] as Map)
         : const <String, dynamic>{};
     num part(String key) => breakdown[key] is num ? breakdown[key] as num : 0;
-    final feedback = delivery['feedbackRequired'] == true ||
+    final feedback =
+        delivery['feedbackRequired'] == true ||
         delivery['requiresFeedback'] == true ||
         delivery['senderRatingRequired'] == true ||
         delivery['deliveryIssuePromptRequired'] == true;
     return Scaffold(
-        backgroundColor: const Color(0xFF07090F),
-        body: Stack(children: [
+      backgroundColor: const Color(0xFF07090F),
+      body: Stack(
+        children: [
           _OfferMapBackground(offer: offer),
           Container(color: const Color(0xFF07090F).withValues(alpha: .78)),
           SafeArea(
-              child: Center(
-                  child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(20),
-                      child: Container(
-                          constraints: const BoxConstraints(maxWidth: 430),
-                          padding: const EdgeInsets.all(22),
-                          decoration: BoxDecoration(
-                              color: const Color(0xF20D111C),
-                              borderRadius: BorderRadius.circular(24),
-                              border:
-                                  Border.all(color: const Color(0x5534D399))),
-                          child:
-                              Column(mainAxisSize: MainAxisSize.min, children: [
-                            const CircleAvatar(
-                                radius: 28,
-                                backgroundColor: Color(0x2234D399),
-                                child: Icon(Icons.check_rounded,
-                                    color: Color(0xFF34D399), size: 34)),
-                            const SizedBox(height: 14),
-                            const Text('Delivery complete',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 28,
-                                    fontWeight: FontWeight.w800)),
-                            const SizedBox(height: 6),
-                            Text(
-                                'Reference ${delivery['requestId'] ?? offer.id}',
-                                style: TextStyle(
-                                    color: Colors.white.withValues(alpha: .62),
-                                    fontSize: 12)),
-                            const SizedBox(height: 18),
-                            _CompletionRow(
-                                'Delivery earnings',
-                                total -
-                                    part('tip') -
-                                    part('waiting') -
-                                    part('adjustment')),
-                            if (part('tip') != 0)
-                              _CompletionRow('Tip', part('tip')),
-                            if (part('waiting') != 0)
-                              _CompletionRow(
-                                  'Waiting / no-show', part('waiting')),
-                            if (part('adjustment') != 0)
-                              _CompletionRow('Adjustment', part('adjustment')),
-                            const Divider(color: Colors.white12),
-                            _CompletionRow('Total credited', total,
-                                strong: true),
-                            const SizedBox(height: 8),
-                            Text(
-                                '+${delivery['trustPointsAwarded'] ?? 0} Trust Points',
-                                style: const TextStyle(
-                                    color: Color(0xFFA78BFA),
-                                    fontWeight: FontWeight.w800)),
-                            const SizedBox(height: 5),
-                            const Text(
-                                'Roth is separate from withdrawable cash.',
-                                style: TextStyle(
-                                    color: Colors.white54, fontSize: 11)),
-                            const SizedBox(height: 20),
-                            if (feedback) ...[
-                              SizedBox(
-                                  width: double.infinity,
-                                  child: FilledButton(
-                                      onPressed: () {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(const SnackBar(
-                                          content: Text(
-                                              'Circum rating is not available for this delivery yet.'),
-                                        ));
-                                      },
-                                      child: const Text('Rate Circum'))),
-                              TextButton(
-                                  onPressed: onReportIssue,
-                                  child: const Text('Report Delivery Issue')),
-                              const SizedBox(height: 4),
-                            ],
-                            SizedBox(
-                                width: double.infinity,
-                                child: FilledButton(
-                                    onPressed: () {
-                                      onNavigateTab?.call(0);
-                                      Navigator.of(context).pop();
-                                    },
-                                    child: Text(feedback
-                                        ? 'Return to Home'
-                                        : 'Return Home'))),
-                            TextButton(
-                                onPressed: () {
-                                  onNavigateTab?.call(3);
-                                  Navigator.of(context).pop();
-                                },
-                                child: const Text('View Earnings')),
-                            TextButton(
-                                onPressed: () {
-                                  onNavigateTab?.call(4);
-                                  Navigator.of(context).pop();
-                                },
-                                child: const Text('View Delivery activity')),
-                          ])))))
-        ]));
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 430),
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    color: const Color(0xF20D111C),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: const Color(0x5534D399)),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircleAvatar(
+                        radius: 28,
+                        backgroundColor: Color(0x2234D399),
+                        child: Icon(
+                          Icons.check_rounded,
+                          color: Color(0xFF34D399),
+                          size: 34,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Delivery complete',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Reference ${delivery['requestId'] ?? offer.id}',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: .62),
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      _CompletionRow(
+                        'Delivery earnings',
+                        total -
+                            part('tip') -
+                            part('waiting') -
+                            part('adjustment'),
+                      ),
+                      if (part('tip') != 0) _CompletionRow('Tip', part('tip')),
+                      if (part('waiting') != 0)
+                        _CompletionRow('Waiting / no-show', part('waiting')),
+                      if (part('adjustment') != 0)
+                        _CompletionRow('Adjustment', part('adjustment')),
+                      const Divider(color: Colors.white12),
+                      _CompletionRow('Total credited', total, strong: true),
+                      const SizedBox(height: 8),
+                      Text(
+                        '+${delivery['trustPointsAwarded'] ?? 0} Trust Points',
+                        style: const TextStyle(
+                          color: Color(0xFFA78BFA),
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      const Text(
+                        'Roth is separate from withdrawable cash.',
+                        style: TextStyle(color: Colors.white54, fontSize: 11),
+                      ),
+                      const SizedBox(height: 20),
+                      if (feedback) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'Circum rating is not available for this delivery yet.',
+                                  ),
+                                ),
+                              );
+                            },
+                            child: const Text('Rate Circum'),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: onReportIssue,
+                          child: const Text('Report Delivery Issue'),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: () {
+                            onNavigateTab?.call(0);
+                            Navigator.of(context).pop();
+                          },
+                          child: Text(
+                            feedback ? 'Return to Home' : 'Return Home',
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          onNavigateTab?.call(3);
+                          Navigator.of(context).pop();
+                        },
+                        child: const Text('View Earnings'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          onNavigateTab?.call(4);
+                          Navigator.of(context).pop();
+                        },
+                        child: const Text('View Delivery activity'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -2608,18 +2733,28 @@ class _CompletionRow extends StatelessWidget {
   final bool strong;
   @override
   Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(children: [
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Row(
+      children: [
         Expanded(
-            child: Text(label,
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: .7),
-                    fontWeight: strong ? FontWeight.w800 : FontWeight.w500))),
-        Text('£${amount.toStringAsFixed(2)}',
+          child: Text(
+            label,
             style: TextStyle(
-                color: Colors.white,
-                fontWeight: strong ? FontWeight.w900 : FontWeight.w700))
-      ]));
+              color: Colors.white.withValues(alpha: .7),
+              fontWeight: strong ? FontWeight.w800 : FontWeight.w500,
+            ),
+          ),
+        ),
+        Text(
+          '£${amount.toStringAsFixed(2)}',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: strong ? FontWeight.w900 : FontWeight.w700,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _WaitingPolicyCard extends StatefulWidget {
@@ -2667,8 +2802,9 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
       _error = null;
     });
     try {
-      final result =
-          await widget.controller.markNoShow(deliveryId: widget.deliveryId);
+      final result = await widget.controller.markNoShow(
+        deliveryId: widget.deliveryId,
+      );
       if (mounted) setState(() => _lastNoShowResult = result);
     } catch (_) {
       if (mounted) setState(() => _error = 'No-show failed. Retry.');
@@ -2692,29 +2828,33 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
         final noShowFinancial = data['noShowFinancial'] is Map
             ? Map<String, dynamic>.from(data['noShowFinancial'] as Map)
             : _lastNoShowResult?['financial'] is Map
-                ? Map<String, dynamic>.from(
-                    _lastNoShowResult!['financial'] as Map)
-                : const <String, dynamic>{};
+            ? Map<String, dynamic>.from(_lastNoShowResult!['financial'] as Map)
+            : const <String, dynamic>{};
         final rawDeadline = waiting['noShowAvailableAt'];
         final deadline = rawDeadline is Timestamp
             ? rawDeadline.toDate()
             : rawDeadline is num
-                ? DateTime.fromMillisecondsSinceEpoch(rawDeadline.toInt())
-                : null;
+            ? DateTime.fromMillisecondsSinceEpoch(rawDeadline.toInt())
+            : null;
         final feeAmount = _moneyValue(
-            noShowFinancial['amount'] ?? waiting['noShowFeeAmount']);
+          noShowFinancial['amount'] ?? waiting['noShowFeeAmount'],
+        );
         final riderCompensation = _moneyValue(
-            noShowFinancial['riderCompensation'] ??
-                waiting['noShowRiderCompensation']);
+          noShowFinancial['riderCompensation'] ??
+              waiting['noShowRiderCompensation'],
+        );
         final currency =
             '${noShowFinancial['currency'] ?? waiting['currency'] ?? 'GBP'}';
-        final noShowRecorded = data['state'] == 'sender_no_show_pickup' ||
+        final noShowRecorded =
+            data['state'] == 'sender_no_show_pickup' ||
             noShowFinancial.isNotEmpty ||
             _lastNoShowResult?['success'] == true;
         final backendHasWaitingDeadline = deadline != null;
         return StreamBuilder<int>(
           stream: Stream<int>.periodic(
-              const Duration(seconds: 1), (value) => value),
+            const Duration(seconds: 1),
+            (value) => value,
+          ),
           builder: (context, _) {
             final remaining = deadline == null
                 ? const Duration(minutes: 3)
@@ -2740,21 +2880,25 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  const Text('Circum notified on arrival',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontFamily: RiderTypography.mono,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: .8)),
+                  const Text(
+                    'Circum notified on arrival',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontFamily: RiderTypography.mono,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: .8,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     'Waiting timer is managed by Circum and stays accurate if you background the app.',
                     style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.70),
-                        fontSize: 12,
-                        height: 1.35,
-                        fontWeight: FontWeight.w600),
+                      color: Colors.white.withValues(alpha: 0.70),
+                      fontSize: 12,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   if (feeAmount != null) ...[
                     const SizedBox(height: 10),
@@ -2777,11 +2921,14 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
                   ],
                   if (_error != null) ...[
                     const SizedBox(height: 8),
-                    Text(_error!,
-                        style: const TextStyle(
-                            color: Color(0xFFFF8A8A),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700)),
+                    Text(
+                      _error!,
+                      style: const TextStyle(
+                        color: Color(0xFFFF8A8A),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 12),
                   Row(
@@ -2814,11 +2961,12 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
                     label: noShowRecorded
                         ? 'No Show recorded'
                         : backendHasWaitingDeadline
-                            ? _markingNoShow
-                                ? 'Marking No Show...'
-                                : 'Request No Show review'
-                            : 'Waiting for no-show policy',
-                    enabled: backendHasWaitingDeadline &&
+                        ? _markingNoShow
+                              ? 'Marking No Show...'
+                              : 'Request No Show review'
+                        : 'Waiting for no-show policy',
+                    enabled:
+                        backendHasWaitingDeadline &&
                         !noShowRecorded &&
                         !_markingNoShow,
                     onTap: _markNoShow,
@@ -2855,8 +3003,8 @@ class _WaitingCountdownRing extends StatelessWidget {
     final color = noShowRecorded
         ? const Color(0xFF34D399)
         : noShowReady
-            ? const Color(0xFFFF452B)
-            : const Color(0xFF3B82F6);
+        ? const Color(0xFFFF452B)
+        : const Color(0xFF3B82F6);
     return Container(
       width: 152,
       height: 152,
@@ -2887,25 +3035,27 @@ class _WaitingCountdownRing extends StatelessWidget {
                 noShowRecorded
                     ? 'DONE'
                     : noShowReady
-                        ? '00:00'
-                        : label,
+                    ? '00:00'
+                    : label,
                 style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 31,
-                    fontFamily: RiderTypography.mono,
-                    fontWeight: FontWeight.w900),
+                  color: Colors.white,
+                  fontSize: 31,
+                  fontFamily: RiderTypography.mono,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
                 noShowRecorded
                     ? 'recorded'
                     : noShowReady
-                        ? 'no-show available'
-                        : 'free wait remaining',
+                    ? 'no-show available'
+                    : 'free wait remaining',
                 style: TextStyle(
-                    color: Colors.white.withValues(alpha: .52),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700),
+                  color: Colors.white.withValues(alpha: .52),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
@@ -2936,20 +3086,24 @@ class _WaitingChargeLine extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(label,
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: muted ? .48 : .72),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700)),
-          ),
-          Text('$symbol${amount.toStringAsFixed(2)}',
+            child: Text(
+              label,
               style: TextStyle(
-                  color: muted
-                      ? Colors.white.withValues(alpha: .50)
-                      : Colors.white,
-                  fontSize: 13,
-                  fontFamily: RiderTypography.mono,
-                  fontWeight: FontWeight.w900)),
+                color: Colors.white.withValues(alpha: muted ? .48 : .72),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Text(
+            '$symbol${amount.toStringAsFixed(2)}',
+            style: TextStyle(
+              color: muted ? Colors.white.withValues(alpha: .50) : Colors.white,
+              fontSize: 13,
+              fontFamily: RiderTypography.mono,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ],
       ),
     );
@@ -2986,13 +3140,16 @@ class _WaitingActionButton extends StatelessWidget {
             Icon(icon, color: const Color(0xFF60A5FA), size: 15),
             const SizedBox(width: 6),
             Flexible(
-              child: Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900)),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
             ),
           ],
         ),
@@ -3028,14 +3185,18 @@ class _WaitingNoShowButton extends StatelessWidget {
             color: const Color(0xFFFF452B).withValues(alpha: .08),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-                color: const Color(0xFFFF452B).withValues(alpha: .30)),
+              color: const Color(0xFFFF452B).withValues(alpha: .30),
+            ),
           ),
-          child: Text(label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  color: Color(0xFFFF7A63),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900)),
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFFFF7A63),
+              fontSize: 12,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ),
       ),
     );
@@ -3090,8 +3251,11 @@ class _CompactProgressIndicator extends StatelessWidget {
                     ),
                   ),
                   child: complete
-                      ? const Icon(Icons.check_rounded,
-                          size: 14, color: Colors.white)
+                      ? const Icon(
+                          Icons.check_rounded,
+                          size: 14,
+                          color: Colors.white,
+                        )
                       : null,
                 ),
                 const SizedBox(height: 4),
@@ -3172,10 +3336,7 @@ class _AcceptedTopPill extends StatelessWidget {
 }
 
 class _TrackingStatusPill extends StatelessWidget {
-  const _TrackingStatusPill({
-    required this.snapshot,
-    required this.onRetry,
-  });
+  const _TrackingStatusPill({required this.snapshot, required this.onRetry});
 
   final RiderLiveTrackingSnapshot snapshot;
   final Future<void> Function()? onRetry;
@@ -3213,7 +3374,7 @@ class _TrackingStatusPill extends StatelessWidget {
                       color: color.withValues(alpha: .42),
                       blurRadius: 12,
                       spreadRadius: 2,
-                    )
+                    ),
                   ],
                 ),
               ),
@@ -3275,8 +3436,7 @@ class _TrackingStatusPill extends StatelessWidget {
   static IconData _icon(RiderLiveTrackingStatus status) {
     return switch (status) {
       RiderLiveTrackingStatus.live ||
-      RiderLiveTrackingStatus.backgroundActive =>
-        Icons.radar_rounded,
+      RiderLiveTrackingStatus.backgroundActive => Icons.radar_rounded,
       RiderLiveTrackingStatus.acquiring => Icons.gps_fixed_rounded,
       RiderLiveTrackingStatus.poorAccuracy => Icons.gps_not_fixed_rounded,
       RiderLiveTrackingStatus.foregroundOnly => Icons.phone_iphone_rounded,
@@ -3288,11 +3448,9 @@ class _TrackingStatusPill extends StatelessWidget {
         Icons.location_disabled_rounded,
       RiderLiveTrackingStatus.servicesDisabled => Icons.location_off_rounded,
       RiderLiveTrackingStatus.arrivedAtPickup ||
-      RiderLiveTrackingStatus.arrivedAtDropoff =>
-        Icons.where_to_vote_rounded,
+      RiderLiveTrackingStatus.arrivedAtDropoff => Icons.where_to_vote_rounded,
       RiderLiveTrackingStatus.stopped ||
-      RiderLiveTrackingStatus.idle =>
-        Icons.pause_circle_outline_rounded,
+      RiderLiveTrackingStatus.idle => Icons.pause_circle_outline_rounded,
       RiderLiveTrackingStatus.error => Icons.error_outline_rounded,
     };
   }
@@ -3302,23 +3460,19 @@ class _TrackingStatusPill extends StatelessWidget {
       RiderLiveTrackingStatus.live ||
       RiderLiveTrackingStatus.backgroundActive ||
       RiderLiveTrackingStatus.arrivedAtPickup ||
-      RiderLiveTrackingStatus.arrivedAtDropoff =>
-        RiderPalette.blue,
+      RiderLiveTrackingStatus.arrivedAtDropoff => RiderPalette.blue,
       RiderLiveTrackingStatus.acquiring ||
       RiderLiveTrackingStatus.poorAccuracy ||
       RiderLiveTrackingStatus.foregroundOnly ||
       RiderLiveTrackingStatus.offline ||
-      RiderLiveTrackingStatus.reconnecting =>
-        RiderPalette.amber,
+      RiderLiveTrackingStatus.reconnecting => RiderPalette.amber,
       RiderLiveTrackingStatus.permissionRequired ||
       RiderLiveTrackingStatus.permissionDenied ||
       RiderLiveTrackingStatus.permissionPermanentlyDenied ||
       RiderLiveTrackingStatus.servicesDisabled ||
-      RiderLiveTrackingStatus.error =>
-        RiderPalette.red,
+      RiderLiveTrackingStatus.error => RiderPalette.red,
       RiderLiveTrackingStatus.stopped ||
-      RiderLiveTrackingStatus.idle =>
-        RiderPalette.muted,
+      RiderLiveTrackingStatus.idle => RiderPalette.muted,
     };
   }
 
@@ -3355,7 +3509,8 @@ class _TrackingEtaCard extends StatelessWidget {
     final toDropoff = stage.index >= RiderDeliveryStage.collected.index;
     final label = toDropoff ? 'To drop-off' : 'To pickup';
     final lastRefresh = _lastRefreshLabel(snapshot.lastPublishedAt);
-    final subdued = snapshot.status == RiderLiveTrackingStatus.offline ||
+    final subdued =
+        snapshot.status == RiderLiveTrackingStatus.offline ||
         snapshot.status == RiderLiveTrackingStatus.reconnecting ||
         snapshot.status == RiderLiveTrackingStatus.stopped ||
         snapshot.status == RiderLiveTrackingStatus.idle;
@@ -3486,8 +3641,7 @@ class _TrackingPermissionCard extends StatelessWidget {
       RiderLiveTrackingStatus.foregroundOnly ||
       RiderLiveTrackingStatus.poorAccuracy ||
       RiderLiveTrackingStatus.offline ||
-      RiderLiveTrackingStatus.reconnecting =>
-        true,
+      RiderLiveTrackingStatus.reconnecting => true,
       _ => false,
     };
   }
@@ -3581,14 +3735,12 @@ class _TrackingPermissionCard extends StatelessWidget {
   static String? _actionLabel(RiderLiveTrackingStatus status) {
     return switch (status) {
       RiderLiveTrackingStatus.permissionPermanentlyDenied ||
-      RiderLiveTrackingStatus.servicesDisabled =>
-        'Settings',
+      RiderLiveTrackingStatus.servicesDisabled => 'Settings',
       RiderLiveTrackingStatus.permissionRequired ||
       RiderLiveTrackingStatus.permissionDenied ||
       RiderLiveTrackingStatus.offline ||
       RiderLiveTrackingStatus.reconnecting ||
-      RiderLiveTrackingStatus.poorAccuracy =>
-        'Retry',
+      RiderLiveTrackingStatus.poorAccuracy => 'Retry',
       _ => null,
     };
   }
@@ -3613,13 +3765,11 @@ class _TrackingPermissionCard extends StatelessWidget {
       RiderLiveTrackingStatus.poorAccuracy ||
       RiderLiveTrackingStatus.foregroundOnly ||
       RiderLiveTrackingStatus.offline ||
-      RiderLiveTrackingStatus.reconnecting =>
-        RiderPalette.amber,
+      RiderLiveTrackingStatus.reconnecting => RiderPalette.amber,
       RiderLiveTrackingStatus.permissionRequired ||
       RiderLiveTrackingStatus.permissionDenied ||
       RiderLiveTrackingStatus.permissionPermanentlyDenied ||
-      RiderLiveTrackingStatus.servicesDisabled =>
-        RiderPalette.red,
+      RiderLiveTrackingStatus.servicesDisabled => RiderPalette.red,
       _ => RiderPalette.blue,
     };
   }
@@ -3630,8 +3780,11 @@ class _NavigationInstructionCard extends StatelessWidget {
   final String subtitle;
   final String status;
 
-  const _NavigationInstructionCard(
-      {required this.title, required this.subtitle, required this.status});
+  const _NavigationInstructionCard({
+    required this.title,
+    required this.subtitle,
+    required this.status,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -3651,29 +3804,37 @@ class _NavigationInstructionCard extends StatelessWidget {
               color: const Color(0xFF3B82F6).withValues(alpha: 0.22),
               borderRadius: BorderRadius.circular(16),
             ),
-            child:
-                const Icon(Icons.navigation_rounded, color: Color(0xFF60A5FA)),
+            child: const Icon(
+              Icons.navigation_rounded,
+              color: Color(0xFF60A5FA),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900)),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.68),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600)),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.68),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),
@@ -3736,9 +3897,13 @@ class _MapChoice extends StatelessWidget {
     return ListTile(
       minLeadingWidth: 28,
       leading: Icon(icon, color: const Color(0xFF60A5FA)),
-      title: Text(label,
-          style: const TextStyle(
-              color: Colors.white, fontWeight: FontWeight.w800)),
+      title: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
       trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white54),
       onTap: () => Navigator.pop(context, value),
     );
@@ -3845,9 +4010,13 @@ class _AcceptedBottomPanel extends StatelessWidget {
                           const SizedBox(height: 10),
                         ],
                         _ExpandedLine(
-                            title: 'Pickup', body: offer.pickupAddress),
+                          title: 'Pickup',
+                          body: offer.pickupAddress,
+                        ),
                         _ExpandedLine(
-                            title: 'Drop-off', body: offer.dropoffAddress),
+                          title: 'Drop-off',
+                          body: offer.dropoffAddress,
+                        ),
                         _ExpandedLine(
                           title: 'IRIS Brief',
                           body:
@@ -3869,8 +4038,9 @@ class _AcceptedBottomPanel extends StatelessWidget {
                           body: _verificationCopy,
                         ),
                         _StageTracker(
-                            stage: stage,
-                            verificationRequired: verificationRequired),
+                          stage: stage,
+                          verificationRequired: verificationRequired,
+                        ),
                         if (stage == RiderDeliveryStage.arrivedAtPickup ||
                             stage == RiderDeliveryStage.waiting) ...[
                           const SizedBox(height: 10),
@@ -3909,10 +4079,10 @@ class _AcceptedBottomPanel extends StatelessWidget {
     final service = healthPlus
         ? 'Health+'
         : vanguard
-            ? 'Vanguard'
-            : gift
-                ? 'Gift'
-                : 'Standard';
+        ? 'Vanguard'
+        : gift
+        ? 'Gift'
+        : 'Standard';
     return '$service verification: ${methods.join(', ')}. Requirements are read from the delivery record.';
   }
 }
@@ -4026,57 +4196,78 @@ class _AcceptedEssentialSummary extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: Text(_money(offer.earnings, offer.currency),
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 30,
-                      fontWeight: FontWeight.w900)),
-            ),
-            Text(riderRank,
+              child: Text(
+                _money(offer.earnings, offer.currency),
                 style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900)),
+                  color: Colors.white,
+                  fontSize: 30,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            Text(
+              riderRank,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 2),
-        Text('+$points Trust',
-            style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.72),
-                fontSize: 13,
-                fontWeight: FontWeight.w800)),
+        Text(
+          '+$points Trust',
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.72),
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
         const SizedBox(height: 11),
-        Text(_collapsedChips(offer),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.72),
-                fontSize: 12,
-                fontWeight: FontWeight.w700)),
+        Text(
+          _collapsedChips(offer),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.72),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 10),
-        Text('${offer.pickupArea} → ${offer.dropoffArea}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w900)),
+        Text(
+          '${offer.pickupArea} → ${offer.dropoffArea}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
         const SizedBox(height: 8),
-        Text('${offer.parcelGuidance} - ${offer.weightText}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.76),
-                fontSize: 13,
-                fontWeight: FontWeight.w700)),
+        Text(
+          '${offer.parcelGuidance} - ${offer.weightText}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.76),
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 8),
-        Text('Vehicle: ${offer.minimumVehicle} - Pickup: ${offer.pickupTiming}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.62),
-                fontSize: 12,
-                fontWeight: FontWeight.w700)),
+        Text(
+          'Vehicle: ${offer.minimumVehicle} - Pickup: ${offer.pickupTiming}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.62),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 14),
         SizedBox(
           width: double.infinity,
@@ -4088,11 +4279,13 @@ class _AcceptedEssentialSummary extends StatelessWidget {
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(17)),
+                borderRadius: BorderRadius.circular(17),
+              ),
             ),
-            child: Text(cta,
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+            child: Text(
+              cta,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+            ),
           ),
         ),
       ],
@@ -4105,8 +4298,10 @@ class _AcceptedEssentialSummary extends StatelessWidget {
   }
 
   static String _collapsedChips(RiderJobOffer offer) {
-    final chips =
-        offer.warningChips.where((chip) => chip != 'Standard').take(3).toList();
+    final chips = offer.warningChips
+        .where((chip) => chip != 'Standard')
+        .take(3)
+        .toList();
     chips.add(offer.minimumVehicle);
     return chips.join(' - ');
   }
@@ -4123,16 +4318,18 @@ class _VanguardGuidance extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF2563EB).withValues(alpha: 0.13),
         borderRadius: BorderRadius.circular(18),
-        border:
-            Border.all(color: const Color(0xFF60A5FA).withValues(alpha: 0.26)),
+        border: Border.all(
+          color: const Color(0xFF60A5FA).withValues(alpha: 0.26),
+        ),
       ),
       child: const Text(
         'Vanguard Protection\nThis delivery requires enhanced handling. Follow IRIS handling guidance, verify parcel condition, maintain secure custody, and complete every required verification step.',
         style: TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            height: 1.35,
-            fontWeight: FontWeight.w700),
+          color: Colors.white,
+          fontSize: 12,
+          height: 1.35,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }
@@ -4151,18 +4348,24 @@ class _ExpandedLine extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900)),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(body,
-              style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.72),
-                  fontSize: 12,
-                  height: 1.35,
-                  fontWeight: FontWeight.w600)),
+          Text(
+            body,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.72),
+              fontSize: 12,
+              height: 1.35,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -4232,11 +4435,14 @@ class _PickupWorkflowPanel extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('✓ ',
-                      style: TextStyle(
-                          color: Color(0xFF60A5FA),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w900)),
+                  const Text(
+                    '✓ ',
+                    style: TextStyle(
+                      color: Color(0xFF60A5FA),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                   Expanded(
                     child: Text(
                       step,
@@ -4260,16 +4466,20 @@ class _PickupWorkflowPanel extends StatelessWidget {
               color: const Color(0xFF3B82F6).withValues(alpha: .10),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                  color: const Color(0xFF60A5FA).withValues(alpha: .22)),
+                color: const Color(0xFF60A5FA).withValues(alpha: .22),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('IRIS Recommendation',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w900)),
+                const Text(
+                  'IRIS Recommendation',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 _IrisLine('Detected Item', iris.detectedItem),
                 _IrisLine('Suggested Category', iris.category),
@@ -4290,8 +4500,8 @@ class _PickupWorkflowPanel extends StatelessWidget {
                         label: irisConfirmed
                             ? 'Confirmed'
                             : irisConfirmationPending
-                                ? 'Confirming...'
-                                : 'Confirm',
+                            ? 'Confirming...'
+                            : 'Confirm',
                         icon: irisConfirmed
                             ? Icons.verified_rounded
                             : Icons.check_rounded,
@@ -4325,8 +4535,8 @@ class _PickupWorkflowPanel extends StatelessWidget {
     final iris = raw['irisRecommendation'] is Map
         ? Map<String, dynamic>.from(raw['irisRecommendation'] as Map)
         : raw['iris'] is Map
-            ? Map<String, dynamic>.from(raw['iris'] as Map)
-            : const <String, dynamic>{};
+        ? Map<String, dynamic>.from(raw['iris'] as Map)
+        : const <String, dynamic>{};
     return _IrisRecommendation(
       detectedItem:
           '${iris['detectedItem'] ?? raw['itemName'] ?? offer.parcelGuidance}',
@@ -4367,22 +4577,28 @@ class _IrisLine extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(label,
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: .50),
-                    fontSize: 10,
-                    fontFamily: RiderTypography.mono,
-                    fontWeight: FontWeight.w800)),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: .50),
+                fontSize: 10,
+                fontFamily: RiderTypography.mono,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
           Flexible(
-            child: Text(value,
-                textAlign: TextAlign.right,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800)),
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
         ],
       ),
@@ -4420,13 +4636,16 @@ class _MiniGlassButton extends StatelessWidget {
             Icon(icon, color: const Color(0xFF60A5FA), size: 16),
             const SizedBox(width: 6),
             Flexible(
-              child: Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w900)),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
             ),
           ],
         ),
@@ -4439,8 +4658,10 @@ class _StageTracker extends StatelessWidget {
   final RiderDeliveryStage stage;
   final bool verificationRequired;
 
-  const _StageTracker(
-      {required this.stage, required this.verificationRequired});
+  const _StageTracker({
+    required this.stage,
+    required this.verificationRequired,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -4467,17 +4688,21 @@ class _StageTracker extends StatelessWidget {
                 : Colors.white.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-                color: active
-                    ? const Color(0xFF60A5FA).withValues(alpha: 0.4)
-                    : Colors.white.withValues(alpha: 0.08)),
+              color: active
+                  ? const Color(0xFF60A5FA).withValues(alpha: 0.4)
+                  : Colors.white.withValues(alpha: 0.08),
+            ),
           ),
-          child: Text(label,
-              style: TextStyle(
-                  color: active
-                      ? Colors.white
-                      : Colors.white.withValues(alpha: 0.58),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700)),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: active
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: 0.58),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         );
       }).toList(),
     );
@@ -4522,25 +4747,29 @@ class _SecondaryContactRow extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-            child: _SecondaryButton(
-                icon: Icons.call_rounded,
-                label: 'Call',
-                onTap: () => _call(offer.raw))),
+          child: _SecondaryButton(
+            icon: Icons.call_rounded,
+            label: 'Call',
+            onTap: () => _call(offer.raw),
+          ),
+        ),
         const SizedBox(width: 8),
         Expanded(
-            child: _SecondaryButton(
-                icon: Icons.chat_bubble_rounded,
-                label: 'Message',
-                onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => RiderConversationView(
-                                chatId: offer.requestId,
-                                title: 'Delivery chat',
-                                subtitle:
-                                    '${offer.pickupArea} to ${offer.dropoffArea}',
-                              )),
-                    ))),
+          child: _SecondaryButton(
+            icon: Icons.chat_bubble_rounded,
+            label: 'Message',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => RiderConversationView(
+                  chatId: offer.requestId,
+                  title: 'Delivery chat',
+                  subtitle: '${offer.pickupArea} to ${offer.dropoffArea}',
+                ),
+              ),
+            ),
+          ),
+        ),
         const SizedBox(width: 8),
         Expanded(
           child: _SecondaryButton(
@@ -4569,8 +4798,11 @@ class _SecondaryButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _SecondaryButton(
-      {required this.icon, required this.label, required this.onTap});
+  const _SecondaryButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -4590,13 +4822,16 @@ class _SecondaryButton extends StatelessWidget {
             Icon(icon, color: const Color(0xFF60A5FA), size: 14),
             const SizedBox(width: 4),
             Flexible(
-              child: Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800)),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
             ),
           ],
         ),
