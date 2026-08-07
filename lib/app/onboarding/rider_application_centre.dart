@@ -540,8 +540,12 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
       );
       await _functions.httpsCallable('updateRiderProfile').call({
         'vehicles': capped,
-        if (primary.isNotEmpty) 'vehicle': primary,
         if (primary['type'] != null) 'vehicleType': primary['type'],
+        if (primary['make'] != null || primary['model'] != null)
+          'vehicleMakeModel': [primary['make'], primary['model']]
+              .where((value) => value != null && '$value'.trim().isNotEmpty)
+              .join(' '),
+        if (primary['colour'] != null) 'vehicleColour': primary['colour'],
         if (primary['registration'] != null)
           'vehicleRegistration': primary['registration'],
       });
