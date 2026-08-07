@@ -17,6 +17,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}'
       - run: npm install --global firebase-tools
       - run: flutter pub get
       - run: flutter test test/canonical_rider_entry_point_test.dart test/security/rider_app_check_contract_test.dart
