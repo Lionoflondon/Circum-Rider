@@ -146,7 +146,10 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                     stream: _firestore
                         .collection('deliveryRequests')
                         .where('status', isEqualTo: 'requested')
-                        .where('matchingStatus', isEqualTo: 'available')
+                        .where('matchingStatus', whereIn: [
+                          'available',
+                          'broadcasted',
+                        ])
                         .limit(80)
                         .snapshots(),
                     builder: (context, snapshot) {
@@ -270,7 +273,9 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
 
     final matchingStatus =
         '${data['matchingStatus'] ?? 'available'}'.trim().toLowerCase();
-    if (matchingStatus != 'available' && matchingStatus != 'requested') {
+    if (matchingStatus != 'available' &&
+        matchingStatus != 'broadcasted' &&
+        matchingStatus != 'requested') {
       return false;
     }
     if (_hasTerminalState(data)) return false;

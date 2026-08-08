@@ -90,6 +90,7 @@ void main() {
       expect(dashboard, contains("collection('deliveryRequests')"));
       expect(dashboard, contains('watchUnreadNotificationCount'));
       expect(dashboard, contains("where('status', isEqualTo: 'requested')"));
+      expect(dashboard, contains("matching != 'broadcasted'"));
       expect(dashboard, contains('Good '));
       expect(dashboard, contains('Go online'));
       expect(dashboard, contains('Available deliveries'));
@@ -144,6 +145,8 @@ void main() {
     });
 
     test('jobs expose Taken state and scheduled handoff', () {
+      expect(offers, contains("matchingStatus', whereIn: ["));
+      expect(offers, contains("'broadcasted'"));
       expect(offers, contains('Job no longer available'));
       expect(offers, contains('Back to job feed'));
       expect(offers, contains('RiderAcceptStatus.alreadyTaken'));

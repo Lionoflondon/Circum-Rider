@@ -83,7 +83,6 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                           stream: FirebaseFirestore.instance
                               .collection('deliveryRequests')
                               .where('status', isEqualTo: 'requested')
-                              .where('matchingStatus', isEqualTo: 'available')
                               .limit(80)
                               .snapshots(),
                           builder: (context, offersSnapshot) {
@@ -201,7 +200,8 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
     final matching = '${item['matchingStatus'] ?? ''}'.trim().toLowerCase();
     if (matching.isNotEmpty &&
         matching != 'available' &&
-        matching != 'requested') {
+        matching != 'requested' &&
+        matching != 'broadcasted') {
       return false;
     }
     final assigned = [
