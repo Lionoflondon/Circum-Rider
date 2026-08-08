@@ -26,4 +26,4 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
       - run: npm install -g firebase-tools
-      - run: firebase deploy --only hosting:rider --project circum-2797c
+      - run: firebase deploy --only hosting --project circum-2797c
