@@ -113,6 +113,11 @@ void main() {
       expect(dashboard, contains('Job readiness'));
     });
 
+    test('web offer surface does not block on Google Maps readiness', () {
+      expect(offers, contains("if (kIsWeb) return const _MapFallback();"));
+      expect(offers, contains('Offer discovery and acceptance must remain'));
+    });
+
     test('rider profile photos use the canonical identity contract', () {
       expect(authBloc, contains("httpsCallable('submitRiderDocument')"));
       expect(authBloc, contains("'documentType': 'profile_photo'"));

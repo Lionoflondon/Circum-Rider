@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
@@ -807,6 +808,10 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
 
   @override
   Widget build(BuildContext context) {
+    // Offer discovery and acceptance must remain usable while the web map
+    // plugin is loading or unavailable.
+    if (kIsWeb) return const _MapFallback();
+
     final pickup = _latLng(
         widget.offer.raw['pickupDetails'] ?? widget.offer.raw['pickup']);
     final dropoff = _latLng(
