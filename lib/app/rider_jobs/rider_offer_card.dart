@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 
 import '../rider_design/rider_ui.dart';
+import 'rider_address_presentation.dart';
 import 'rider_points_rules.dart';
 
 class RiderJobOffer {
@@ -48,9 +49,17 @@ class RiderJobOffer {
   }) {
     final pickupDetails = data['pickupDetails'] ?? data['pickup'];
     final dropoffDetails = data['dropoffDetails'] ?? data['dropoff'];
-    final pickup = _areaSummary(pickupDetails);
-    final dropoff = _areaSummary(dropoffDetails);
-    final requestId = '${data['requestId'] ?? data['code'] ?? docId}'.trim();
+    final pickupAddress = RiderAddressPresentation.fromValue(
+      pickupDetails,
+      fallback: data['pickupAddress'],
+    );
+    final dropoffAddress = RiderAddressPresentation.fromValue(
+      dropoffDetails,
+      fallback: data['dropoffAddress'],
+    );
+    final requestId =
+        '${data['requestId'] ?? data['deliveryId'] ?? data['bookingId'] ?? docId}'
+            .trim();
     final price =
         (data['riderEarning'] ?? data['riderPay'] ?? data['price'] ?? 0);
     final distance = data['distanceText'] ??
@@ -59,19 +68,31 @@ class RiderJobOffer {
     final duration = data['durationText'] ??
         data['estimatedDurationText'] ??
         data['duration'];
-    final item = data['itemName'] ??
+    final parcel = data['parcel'] is Map
+        ? Map<String, dynamic>.from(data['parcel'] as Map)
+        : const <String, dynamic>{};
+    final iris = data['iris'] is Map
+        ? Map<String, dynamic>.from(data['iris'] as Map)
+        : const <String, dynamic>{};
+    final item = parcel['itemName'] ??
+        parcel['description'] ??
+        data['normalizedItemName'] ??
+        data['itemName'] ??
         data['itemDescription'] ??
+        iris['detectedItem'] ??
+        iris['itemName'] ??
         data['parcelDescription'] ??
+        data['packageDescription'] ??
         data['packageType'] ??
         'Parcel';
 
     return RiderJobOffer(
       id: docId,
       requestId: requestId.isEmpty ? docId : requestId,
-      pickupArea: pickup,
-      dropoffArea: dropoff,
-      pickupAddress: _fullAddress(pickupDetails),
-      dropoffAddress: _fullAddress(dropoffDetails),
+      pickupArea: pickupAddress.area,
+      dropoffArea: dropoffAddress.area,
+      pickupAddress: pickupAddress.formatted,
+      dropoffAddress: dropoffAddress.formatted,
       earnings: price is num ? price.toDouble() : 0,
       currency: '${data['currency'] ?? 'GBP'}',
       distanceText: distance == null || '$distance'.trim().isEmpty
@@ -81,8 +102,7 @@ class RiderJobOffer {
           ? 'Calculating arrival time'
           : '$duration',
       parcelGuidance: '$item',
-      minimumVehicle:
-          '${data['minimumVehicle'] ?? data['recommendedVehicle'] ?? data['vehicleType'] ?? 'Bike'}',
+      minimumVehicle: _requiredVehicle(data),
       weightText: _weightText(data),
       pickupTiming: _pickupTiming(data),
       warningChips: _warningChips(data),
@@ -90,53 +110,31 @@ class RiderJobOffer {
     );
   }
 
+  static String _requiredVehicle(Map<String, dynamic> data) {
+    final iris = data['iris'] is Map ? data['iris'] as Map : const {};
+    final candidates = [
+      data['vehicleRequirement'],
+      data['requiredVehicle'],
+      data['minimumVehicleClass'],
+      data['minimumVehicle'],
+      data['irisRecommendedVehicle'],
+      data['selectedVehicle'],
+      data['vehicleType'],
+      data['recommendedVehicle'],
+      iris['vehicleRequirement'],
+      iris['requiredVehicle'],
+      iris['minimumVehicleClass'],
+      iris['recommendedVehicle'],
+      iris['vehicleType'],
+    ];
+    for (final candidate in candidates) {
+      final value = '$candidate'.trim();
+      if (value.isNotEmpty && value != 'null') return value;
+    }
+    return 'Motorbike';
+  }
+
   RiderPointsResult get points => RiderPointsRules.resolve(raw);
-
-  static String _areaSummary(dynamic value) {
-    if (value is Map) {
-      final candidates = [
-        value['area'],
-        value['city'],
-        value['postcode'],
-      ];
-      for (final candidate in candidates) {
-        final text = '$candidate'.trim();
-        if (candidate != null && text.isNotEmpty && text != 'null') {
-          return text;
-        }
-      }
-    }
-    final text = '$value'.trim();
-    if (text.isNotEmpty && text != 'null') return text;
-    return 'Location pending';
-  }
-
-  static String _fullAddress(dynamic value) {
-    if (value is Map) {
-      final candidates = [
-        value['formattedAddress'],
-        value['address'],
-        [
-          value['addressLine1'],
-          value['addressLine2'],
-          value['city'],
-          value['postcode'],
-        ].where((part) {
-          final text = '$part'.trim();
-          return part != null && text.isNotEmpty && text != 'null';
-        }).join(', '),
-      ];
-      for (final candidate in candidates) {
-        final text = '$candidate'.trim();
-        if (candidate != null && text.isNotEmpty && text != 'null') {
-          return text;
-        }
-      }
-    }
-    final text = '$value'.trim();
-    if (text.isNotEmpty && text != 'null') return text;
-    return 'Address pending';
-  }
 
   static List<String> _warningChips(Map<String, dynamic> data) {
     final chips = <String>[];
