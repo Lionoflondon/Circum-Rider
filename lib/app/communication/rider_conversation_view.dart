@@ -73,6 +73,48 @@ class _RiderConversationViewState extends State<RiderConversationView> {
     }
   }
 
+  Future<void> _report(RiderConversationMessage message) async {
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text('Report message'),
+              subtitle: Text('Circum Support will review this report.'),
+            ),
+            for (final reason in const [
+              'Harassment or abuse',
+              'Unsafe or threatening content',
+              'Spam or unrelated content',
+              'Other concern',
+            ])
+              ListTile(
+                title: Text(reason),
+                onTap: () => Navigator.pop(context, reason),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (reason == null || !mounted) return;
+    try {
+      await _service.reportMessage(
+        chatId: widget.chatId,
+        messageId: message.id,
+        reason: reason,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Report sent to Circum Support.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) setState(() => _error = _friendlyError(error));
+    }
+  }
+
   String get _draftKey => 'rider_conversation_draft_${widget.chatId}';
 
   Future<void> _restoreDraft() async {
@@ -190,10 +232,18 @@ class _RiderConversationViewState extends State<RiderConversationView> {
                                 itemCount: conversation.messages.length,
                                 separatorBuilder: (_, __) =>
                                     const SizedBox(height: 10),
-                                itemBuilder: (context, index) => _MessageBubble(
-                                  message: conversation.messages[index],
-                                  currentUid:
-                                      FirebaseAuth.instance.currentUser?.uid,
+                                itemBuilder: (context, index) =>
+                                    GestureDetector(
+                                  onLongPress: conversation
+                                          .messages[index].isSystem
+                                      ? null
+                                      : () =>
+                                          _report(conversation.messages[index]),
+                                  child: _MessageBubble(
+                                    message: conversation.messages[index],
+                                    currentUid:
+                                        FirebaseAuth.instance.currentUser?.uid,
+                                  ),
                                 ),
                               ),
                       ),

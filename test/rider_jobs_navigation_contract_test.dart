@@ -44,7 +44,9 @@ void main() {
       expect(dashboard, contains('onAction: () => onSelectTab(1)'));
       expect(dashboard, contains('onTap: () => onSelectTab(1)'));
       expect(dashboard, contains("label: 'Jobs'"));
-      expect(dashboard, contains("where('status', isEqualTo: 'requested')"));
+      expect(dashboard, contains('RiderJobProjectionService'));
+      expect(dashboard, contains('jobsSnapshot.data?.offers'));
+      expect(dashboard, isNot(contains("collection('deliveryRequests')")));
       expect(dashboard, contains('Open delivery offers'));
       expect(dashboard, isNot(contains('Open the marketplace')));
       expect(dashboard, isNot(contains('MarketplaceView')));

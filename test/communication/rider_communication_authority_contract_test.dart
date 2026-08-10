@@ -10,6 +10,8 @@ void main() {
 
     expect(source, contains("httpsCallable('sendCircumMessage')"));
     expect(source, contains("'clientMessageId': 'rider:\${_uuid.v4()}'"));
+    expect(source, contains("httpsCallable('reportCircumMessage')"));
+    expect(source, contains("'reportMutationId': mutationId"));
     expect(source, isNot(contains("collection('chats').add")));
     expect(source, isNot(contains("collection('messages').add")));
   });

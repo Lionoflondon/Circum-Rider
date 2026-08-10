@@ -25,8 +25,9 @@ void main() {
       expect(schedule, contains('_ScheduleFilter.today'));
       expect(schedule, contains('_ScheduleFilter.week'));
       expect(schedule, contains('_ScheduleFilter.vanguard'));
-      expect(schedule, contains('assignedRider'));
-      expect(schedule, contains("collection('deliveryRequests')"));
+      expect(schedule, contains('RiderJobProjectionService'));
+      expect(schedule, contains('snapshot.data!.active'));
+      expect(schedule, isNot(contains("collection('deliveryRequests')")));
       expect(schedule, contains('scheduledAt'));
       expect(schedule, contains('isVisible'));
       expect(schedule, contains('hidden.contains(status)'));

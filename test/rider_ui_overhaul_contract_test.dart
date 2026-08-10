@@ -87,10 +87,9 @@ void main() {
     test('home is compact, backend driven and operational', () {
       expect(dashboard, contains("collection('riderProfiles')"));
       expect(dashboard, contains("collection('riderEarnings')"));
-      expect(dashboard, contains("collection('deliveryRequests')"));
+      expect(dashboard, contains('RiderJobProjectionService'));
       expect(dashboard, contains('watchUnreadNotificationCount'));
-      expect(dashboard, contains("where('status', isEqualTo: 'requested')"));
-      expect(dashboard, contains("matching != 'broadcasted'"));
+      expect(dashboard, contains('jobsSnapshot.data?.offers'));
       expect(dashboard, contains('Good '));
       expect(dashboard, contains('Go online'));
       expect(dashboard, contains('Available deliveries'));
@@ -147,8 +146,10 @@ void main() {
     test('jobs expose Taken state and scheduled handoff', () {
       expect(offers, contains("httpsCallable('getAvailableRequests')"));
       expect(offers, contains("payload['nearestRequests']"));
-      expect(offers, isNot(contains(".collection('deliveryRequests')\n"
-          "                        .where('status', isEqualTo: 'requested')")));
+      expect(
+          offers,
+          isNot(contains(".collection('deliveryRequests')\n"
+              "                        .where('status', isEqualTo: 'requested')")));
       expect(offers, contains('Job no longer available'));
       expect(offers, contains('Back to job feed'));
       expect(offers, contains('RiderAcceptStatus.alreadyTaken'));
@@ -157,8 +158,8 @@ void main() {
     });
 
     test('schedule and earnings consume canonical records', () {
-      expect(schedule, contains("collection('deliveryRequests')"));
-      expect(schedule, contains('assignedRider'));
+      expect(schedule, contains('RiderJobProjectionService'));
+      expect(schedule, isNot(contains("collection('deliveryRequests')")));
       expect(schedule,
           anyOf(contains('expected earnings'), contains('riderEarning')));
       expect(schedule, contains('_ScheduleFilter'));

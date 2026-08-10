@@ -283,6 +283,20 @@ class RiderCommunicationService {
         .call({'chatId': chatId});
   }
 
+  Future<void> reportMessage({
+    required String chatId,
+    required String messageId,
+    required String reason,
+  }) async {
+    final mutationId = const Uuid().v4();
+    await functions.httpsCallable('reportCircumMessage').call({
+      'chatId': chatId,
+      'messageId': messageId,
+      'reason': reason,
+      'reportMutationId': mutationId,
+    });
+  }
+
   Future<String?> deliverySenderName(String chatId) async {
     final cleanChatId = chatId.trim();
     if (cleanChatId.isEmpty) return null;
@@ -295,9 +309,7 @@ class RiderCommunicationService {
         '${chatData['deliveryId'] ?? chatData['bookingId'] ?? chatData['requestId'] ?? cleanChatId}'
             .trim();
     if (deliveryId.isEmpty) return null;
-    final delivery =
-        await firestore.collection('deliveryRequests').doc(deliveryId).get();
-    return _firstDisplayName(delivery.data() ?? const <String, dynamic>{});
+    return null;
   }
 
   static String? _firstDisplayName(Map<String, dynamic> data) {

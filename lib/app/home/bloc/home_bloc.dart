@@ -606,20 +606,25 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       Timer.periodic(const Duration(seconds: 2), (timer) async {
         try {
           final requestID = requests[event.selectedRequestIndex].requestId;
-          final docReference = db
-              .collection('deliveryRequests')
-              .where('requestId', isEqualTo: requestID);
+          final response = await FirebaseFunctions.instanceFor(
+            region: 'us-central1',
+          ).httpsCallable('getAvailableRequests').call();
+          final payload = Map<String, dynamic>.from(response.data as Map);
+          final activeJobs = payload['activeJobs'] is List
+              ? payload['activeJobs'] as List<dynamic>
+              : const <dynamic>[];
+          final active = activeJobs.whereType<Map>().firstWhere(
+                (job) => '${job['requestId']}' == requestID,
+                orElse: () => const <String, dynamic>{},
+              );
 
-          final docResponse = await docReference.get();
-          final doc = docResponse.docs.firstOrNull;
-
-          if (doc != null) {
-            final data = doc.data();
-            if (data['riderId'] != null && data['riderId'] == user.uid) {
+          if (active.isNotEmpty) {
+            final deliveryId = '${active['id'] ?? active['deliveryId']}';
+            if (deliveryId.isNotEmpty) {
               await FirebaseFunctions.instanceFor(region: 'us-central1')
                   .httpsCallable('confirmRiderActiveDelivery')
                   .call({
-                'deliveryId': doc.id,
+                'deliveryId': deliveryId,
                 'requestId': requestID,
               });
               if (!rideAssigned.isCompleted) rideAssigned.complete(true);

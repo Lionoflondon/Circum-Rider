@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -1240,6 +1241,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<SignOut>(
       (event, emit) async {
         FlutterSecureStorage storage = const FlutterSecureStorage();
+        final token = await FirebaseMessaging.instance.getToken();
+        if (token != null && auth.currentUser != null) {
+          await functions.httpsCallable('updateRiderPushToken').call({
+            'fcmToken': token,
+            'revoke': true,
+          });
+        }
         await auth.signOut();
         emit(const AuthState());
         emit(state.copyWith(currentState: AppState.unauthenticated));

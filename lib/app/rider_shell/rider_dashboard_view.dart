@@ -7,6 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../authentication/bloc/auth_bloc.dart';
 import '../communication/rider_communication_service.dart';
 import '../rider_internal_access/rider_internal_access.dart';
+import '../rider_jobs/rider_job_projection_service.dart';
 import '../home/bloc/home_bloc.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../onboarding/rider_guide_view.dart';
@@ -25,9 +26,13 @@ class RiderDashboardView extends StatefulWidget {
 }
 
 class _RiderDashboardViewState extends State<RiderDashboardView> {
+  final _projectionService = RiderJobProjectionService();
+  late Future<RiderJobProjectionSnapshot> _jobsProjection;
+
   @override
   void initState() {
     super.initState();
+    _jobsProjection = _projectionService.load();
     context.read<HomeBloc>()
       ..add(CheckForPushToken())
       ..add(CheckForActiveRequest());
@@ -71,75 +76,59 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                       .doc(uid)
                       .snapshots(),
                   builder: (context, presenceSnapshot) {
-                    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                      stream: FirebaseFirestore.instance
-                          .collection('deliveryRequests')
-                          .where('assignedRider', isEqualTo: uid)
-                          .limit(24)
-                          .snapshots(),
-                      builder: (context, assignedSnapshot) {
-                        return StreamBuilder<
-                            QuerySnapshot<Map<String, dynamic>>>(
-                          stream: FirebaseFirestore.instance
-                              .collection('deliveryRequests')
-                              .where('status', isEqualTo: 'requested')
-                              .limit(80)
-                              .snapshots(),
-                          builder: (context, offersSnapshot) {
-                            final assigned = _docs(assignedSnapshot);
-                            final offers = _docs(offersSnapshot)
-                                .where((item) => _isLiveOffer(item, uid))
-                                .toList()
-                              ..sort((a, b) => _time(b).compareTo(_time(a)));
-                            final data = _DashboardData(
-                              profile: profile,
-                              earnings:
-                                  earningsSnapshot.data?.data() ?? const {},
-                              presence:
-                                  presenceSnapshot.data?.data() ?? const {},
-                              eligibleOffers: offers.take(8).toList(),
-                              scheduled: assigned
-                                  .where(
-                                    (item) =>
-                                        _isScheduled(item) &&
-                                        !_isFinished(item),
-                                  )
-                                  .toList()
-                                ..sort(
-                                  (a, b) => _time(a).compareTo(_time(b)),
-                                ),
-                              recent: assigned.where(_isFinished).toList()
-                                ..sort((a, b) => _time(b).compareTo(_time(a))),
-                              loading: profileSnapshot.connectionState ==
-                                      ConnectionState.waiting &&
-                                  riderSnapshot.connectionState ==
-                                      ConnectionState.waiting,
-                              hasDataError: profileSnapshot.hasError ||
-                                  riderSnapshot.hasError ||
-                                  earningsSnapshot.hasError ||
-                                  presenceSnapshot.hasError ||
-                                  assignedSnapshot.hasError ||
-                                  offersSnapshot.hasError,
-                              notificationsUnavailable: false,
-                            );
-                            return BlocBuilder<HomeBloc, HomeState>(
-                              builder: (context, homeState) {
-                                return _DashboardSurface(
-                                  data: data,
-                                  home: homeState,
-                                  onSelectTab: widget.onSelectTab,
-                                  onToggleAvailability: () {
-                                    final intendsOnline = homeState
-                                        .availability.intendsToBeOnline;
-                                    context.read<HomeBloc>().add(
-                                          SetRideStatus(
-                                            status: intendsOnline
-                                                ? RideStatus.offline
-                                                : RideStatus.online,
-                                          ),
-                                        );
-                                  },
-                                );
+                    return FutureBuilder<RiderJobProjectionSnapshot>(
+                      future: _jobsProjection,
+                      builder: (context, jobsSnapshot) {
+                        final assigned = [
+                          ...?jobsSnapshot.data?.active,
+                          ...?jobsSnapshot.data?.completed,
+                        ];
+                        final offers = [
+                          ...?jobsSnapshot.data?.offers,
+                        ]..sort((a, b) => _time(b).compareTo(_time(a)));
+                        final data = _DashboardData(
+                          profile: profile,
+                          earnings: earningsSnapshot.data?.data() ?? const {},
+                          presence: presenceSnapshot.data?.data() ?? const {},
+                          eligibleOffers: offers.take(8).toList(),
+                          scheduled: assigned
+                              .where(
+                                (item) =>
+                                    _isScheduled(item) && !_isFinished(item),
+                              )
+                              .toList()
+                            ..sort(
+                              (a, b) => _time(a).compareTo(_time(b)),
+                            ),
+                          recent: assigned.where(_isFinished).toList()
+                            ..sort((a, b) => _time(b).compareTo(_time(a))),
+                          loading: profileSnapshot.connectionState ==
+                                  ConnectionState.waiting &&
+                              riderSnapshot.connectionState ==
+                                  ConnectionState.waiting,
+                          hasDataError: profileSnapshot.hasError ||
+                              riderSnapshot.hasError ||
+                              earningsSnapshot.hasError ||
+                              presenceSnapshot.hasError ||
+                              jobsSnapshot.hasError,
+                          notificationsUnavailable: false,
+                        );
+                        return BlocBuilder<HomeBloc, HomeState>(
+                          builder: (context, homeState) {
+                            return _DashboardSurface(
+                              data: data,
+                              home: homeState,
+                              onSelectTab: widget.onSelectTab,
+                              onToggleAvailability: () {
+                                final intendsOnline =
+                                    homeState.availability.intendsToBeOnline;
+                                context.read<HomeBloc>().add(
+                                      SetRideStatus(
+                                        status: intendsOnline
+                                            ? RideStatus.offline
+                                            : RideStatus.online,
+                                      ),
+                                    );
                               },
                             );
                           },
@@ -155,14 +144,6 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
       },
     );
   }
-
-  static List<Map<String, dynamic>> _docs(
-    AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot,
-  ) =>
-      snapshot.data?.docs
-          .map((doc) => {'id': doc.id, ...doc.data()})
-          .toList() ??
-      const <Map<String, dynamic>>[];
 
   static bool _isScheduled(Map<String, dynamic> item) =>
       item['scheduled'] == true ||

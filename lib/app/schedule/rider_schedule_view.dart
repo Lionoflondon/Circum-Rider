@@ -1,7 +1,8 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
+import '../rider_jobs/rider_job_projection_service.dart';
 import '../rider_jobs/rider_job_offer_screen.dart';
 import '../rider_jobs/rider_offer_card.dart';
 import '../rider_design/rider_ui.dart';
@@ -19,18 +20,22 @@ class RiderScheduleView extends StatefulWidget {
 
 class _RiderScheduleViewState extends State<RiderScheduleView> {
   _ScheduleFilter _filter = _ScheduleFilter.all;
+  final _projectionService = RiderJobProjectionService();
+  late Future<RiderJobProjectionSnapshot> _projection;
+
+  @override
+  void initState() {
+    super.initState();
+    _projection = _projectionService.load();
+  }
 
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final content = uid == null
         ? const _ScheduleEmpty(message: 'Sign in to view your schedule.')
-        : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
-                .collection('deliveryRequests')
-                .where('assignedRider', isEqualTo: uid)
-                .limit(40)
-                .snapshots(),
+        : FutureBuilder<RiderJobProjectionSnapshot>(
+            future: _projection,
             builder: (context, snapshot) {
               if (snapshot.hasError) {
                 return const _ScheduleEmpty(
@@ -41,11 +46,15 @@ class _RiderScheduleViewState extends State<RiderScheduleView> {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              final jobs = snapshot.data!.docs
-                  .map((doc) => _ScheduleJob.from(doc.id, doc.data()))
-                  .where((job) => job.isVisible)
-                  .toList()
-                ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+              final jobs =
+                  [...snapshot.data!.active, ...snapshot.data!.completed]
+                      .map((job) => _ScheduleJob.from(
+                            '${job['id'] ?? job['deliveryId']}',
+                            job,
+                          ))
+                      .where((job) => job.isVisible)
+                      .toList()
+                    ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
               final filtered = jobs.where(_matchesFilter).toList();
 
               return CustomScrollView(

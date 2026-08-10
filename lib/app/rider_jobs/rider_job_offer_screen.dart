@@ -21,6 +21,7 @@ import '../support/view/support.dart';
 import '../tracking/rider_live_tracking_controller.dart';
 import 'rider_accept_controller.dart';
 import 'rider_delivery_controller.dart';
+import 'rider_job_projection_service.dart';
 import 'rider_offer_card.dart';
 import 'rider_offer_stack.dart';
 
@@ -1078,12 +1079,9 @@ class _InlineStatus extends StatelessWidget {
 class _StateScaffold extends StatelessWidget {
   final String title;
   final String message;
-  final bool loading;
-
   const _StateScaffold({
     required this.title,
     required this.message,
-    this.loading = false,
   });
 
   @override
@@ -1097,10 +1095,6 @@ class _StateScaffold extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (loading) ...[
-                  const CircularProgressIndicator(color: Color(0xFF60A5FA)),
-                  const SizedBox(height: 22),
-                ],
                 Text(
                   title,
                   textAlign: TextAlign.center,
@@ -1587,7 +1581,10 @@ class RiderAcceptedJobScreen extends StatefulWidget {
 }
 
 class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
+  RiderJobProjectionService? _projectionService;
   late RiderDeliveryStage _stage;
+  Map<String, dynamic>? _liveProjection;
+  Timer? _projectionTimer;
   RiderEvidenceUploader? _evidenceUploader;
   RiderLiveTrackingController? _trackingController;
   StreamSubscription<RiderLiveTrackingSnapshot>? _trackingSub;
@@ -1636,11 +1633,16 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.firestore != null) {
+    if (widget.firestore != null && widget.deliveryController == null) {
+      _projectionService = RiderJobProjectionService();
       _trackingController = RiderLiveTrackingController(
-        firestore: widget.firestore,
       );
       _trackingSub = _trackingController!.states.listen(_handleTrackingState);
+      unawaited(_refreshProjection());
+      _projectionTimer = Timer.periodic(
+        const Duration(seconds: 8),
+        (_) => unawaited(_refreshProjection()),
+      );
     }
     _stage = RiderDeliveryStagePolicy.fromRaw(
       widget.offer.raw['deliveryStage'],
@@ -1649,10 +1651,32 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
 
   @override
   void dispose() {
+    _projectionTimer?.cancel();
     _markerTweenTimer?.cancel();
     unawaited(_trackingSub?.cancel());
     _trackingController?.dispose();
     super.dispose();
+  }
+
+  Future<void> _refreshProjection() async {
+    try {
+      final snapshot = await _projectionService!.load();
+      final live = snapshot.delivery(widget.offer.id);
+      if (!mounted || live == null) return;
+      final rawStatus =
+          live['deliveryStage'] ?? live['deliveryStatus'] ?? live['status'];
+      final restored = RiderDeliveryStagePolicy.fromRaw(rawStatus);
+      setState(() {
+        _liveProjection = live;
+        _stage = restored;
+      });
+      await _syncLiveTracking(live, restored);
+    } catch (_) {
+      if (mounted && _liveProjection == null) {
+        setState(() => _transitionError =
+            'The latest delivery state could not be refreshed. Retry shortly.');
+      }
+    }
   }
 
   void _handleTrackingState(RiderLiveTrackingSnapshot snapshot) {
@@ -2134,40 +2158,9 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final firestore = widget.firestore;
-    if (firestore == null) return _buildExperience(context, widget.offer.raw);
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: firestore
-          .collection('deliveryRequests')
-          .doc(widget.offer.id)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError)
-          return const _StateScaffold(
-            title: 'Delivery unavailable',
-            message:
-                'Check your connection and retry. Your delivery state remains safe.',
-          );
-        if (!snapshot.hasData)
-          return const _StateScaffold(
-            title: 'Restoring delivery',
-            message: 'Loading the latest operational state.',
-            loading: true,
-          );
-        final live = snapshot.data?.data();
-        if (live == null)
-          return const _StateScaffold(
-            title: 'Delivery unavailable',
-            message:
-                'This delivery record is no longer available. Contact Circum Support.',
-          );
+    final live = _liveProjection ?? widget.offer.raw;
         final rawStatus =
             live['deliveryStage'] ?? live['deliveryStatus'] ?? live['status'];
-        final restored = RiderDeliveryStagePolicy.fromRaw(rawStatus);
-        if (restored != _stage)
-          scheduleMicrotask(() {
-            if (mounted) setState(() => _stage = restored);
-          });
         final terminal = '$rawStatus'.toLowerCase();
         if (terminal == 'cancelled' ||
             terminal == 'failed' ||
@@ -2179,17 +2172,14 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                 'This delivery can no longer progress. The latest delivery state has been restored.',
           );
         }
-        scheduleMicrotask(() => _syncLiveTracking(live, restored));
-        return _buildExperience(context, live);
-      },
-    );
+    return _buildExperience(context, live);
   }
 
   Future<void> _syncLiveTracking(
     Map<String, dynamic> live,
     RiderDeliveryStage stage,
   ) async {
-    if (!mounted || widget.firestore == null) return;
+    if (!mounted) return;
     final status = RiderDeliveryStagePolicy.storageValue(stage);
     final terminal = RiderLiveTrackingPolicy.isTerminalDeliveryStatus(status);
     final active = RiderLiveTrackingPolicy.isActiveDeliveryStatus(status);
@@ -2327,10 +2317,10 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                   _CompactProgressIndicator(stage: _stage),
                   if ((_stage == RiderDeliveryStage.arrivedAtPickup ||
                           _stage == RiderDeliveryStage.waiting) &&
-                      widget.firestore != null) ...[
+                      _liveProjection != null) ...[
                     const SizedBox(height: 10),
                     _WaitingPolicyCard(
-                      firestore: widget.firestore!,
+                      delivery: live,
                       deliveryId: widget.offer.id,
                       controller:
                           widget.deliveryController ??
@@ -2716,12 +2706,12 @@ class _CompletionRow extends StatelessWidget {
 }
 
 class _WaitingPolicyCard extends StatefulWidget {
-  final FirebaseFirestore firestore;
+  final Map<String, dynamic> delivery;
   final String deliveryId;
   final RiderDeliveryController controller;
 
   const _WaitingPolicyCard({
-    required this.firestore,
+    required this.delivery,
     required this.deliveryId,
     required this.controller,
   });
@@ -2773,13 +2763,7 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: widget.firestore
-          .collection('deliveryRequests')
-          .doc(widget.deliveryId)
-          .snapshots(),
-      builder: (context, snapshot) {
-        final data = snapshot.data?.data() ?? const <String, dynamic>{};
+        final data = widget.delivery;
         final waiting = data['waiting'] is Map
             ? Map<String, dynamic>.from(data['waiting'] as Map)
             : const <String, dynamic>{};
@@ -2934,8 +2918,6 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
             );
           },
         );
-      },
-    );
   }
 
   double? _moneyValue(Object? value) {

@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
@@ -291,13 +290,10 @@ class RiderLiveTrackingPolicy {
 
 class RiderLiveTrackingController {
   RiderLiveTrackingController({
-    FirebaseFirestore? firestore,
     FirebaseFunctions? functions,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _functions =
+  }) : _functions =
             functions ?? FirebaseFunctions.instanceFor(region: 'us-central1');
 
-  final FirebaseFirestore _firestore;
   final FirebaseFunctions _functions;
   final _states = StreamController<RiderLiveTrackingSnapshot>.broadcast();
   final Queue<_QueuedLocationUpdate> _queue = Queue<_QueuedLocationUpdate>();
@@ -305,7 +301,6 @@ class RiderLiveTrackingController {
   final Queue<DateTime> _dropoffArrivalHits = Queue<DateTime>();
 
   StreamSubscription<Position>? _positionSub;
-  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _deliverySub;
   RiderLiveTrackingSnapshot _snapshot =
       const RiderLiveTrackingSnapshot(status: RiderLiveTrackingStatus.idle);
   String? _deliveryId;
@@ -358,17 +353,6 @@ class RiderLiveTrackingController {
       return;
     }
 
-    _deliverySub = _firestore
-        .collection('deliveryRequests')
-        .doc(deliveryId)
-        .snapshots()
-        .listen(_handleDeliverySnapshot, onError: (_) {
-      _emit(_snapshot.copyWith(
-        status: RiderLiveTrackingStatus.reconnecting,
-        message: 'Reconnecting to delivery state',
-      ));
-    });
-
     const settings = kIsWeb
         ? LocationSettings(
             accuracy: LocationAccuracy.high,
@@ -397,9 +381,7 @@ class RiderLiveTrackingController {
     final deliveryId = _deliveryId;
     final riderId = _riderId;
     await _positionSub?.cancel();
-    await _deliverySub?.cancel();
     _positionSub = null;
-    _deliverySub = null;
     _queue.clear();
     _pickupArrivalHits.clear();
     _dropoffArrivalHits.clear();
@@ -480,26 +462,6 @@ class RiderLiveTrackingController {
         message: 'Location permission could not be checked.',
       );
     }
-  }
-
-  void _handleDeliverySnapshot(
-      DocumentSnapshot<Map<String, dynamic>> snapshot) {
-    final deliveryId = _deliveryId;
-    final riderId = _riderId;
-    if (deliveryId == null || riderId == null) return;
-    final data = snapshot.data();
-    if (data == null ||
-        !RiderLiveTrackingPolicy.assignedToRider(data, riderId) ||
-        RiderLiveTrackingPolicy.isTerminalDeliveryStatus(
-          data['deliveryStage'] ?? data['deliveryStatus'] ?? data['status'],
-        ) ||
-        !RiderLiveTrackingPolicy.isActiveDeliveryStatus(
-          data['deliveryStage'] ?? data['deliveryStatus'] ?? data['status'],
-        )) {
-      unawaited(stop(status: 'inactive_or_unassigned'));
-      return;
-    }
-    _flushQueue();
   }
 
   void _handlePosition(Position position) {
