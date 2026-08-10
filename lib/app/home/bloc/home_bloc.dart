@@ -860,15 +860,30 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
           minDrawerHeight: state.minDrawerHeight, maxDrawerHeight: 0.75.sh));
       add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
     }
-    final documentReference = db
-        .collection('deliveryRequests')
-        .where('riderId', isEqualTo: user!.uid);
+    if (user == null) {
+      add(CancelRequest());
+      return;
+    }
 
-    final docResponse = await documentReference.get();
-    // final doc = docResponse.docs.firstOrNull;
+    List<dynamic> activeJobs = const [];
+    try {
+      final response = await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('getAvailableRequests').call();
+      final payload = Map<String, dynamic>.from(response.data as Map);
+      activeJobs = payload['activeJobs'] is List
+          ? payload['activeJobs'] as List<dynamic>
+          : const [];
+    } on FirebaseFunctionsException {
+      emit(state.copyWith(
+        requestStatus: RequestStatus.failure,
+        message: 'Your active delivery could not be restored. Try again.',
+      ));
+      return;
+    }
 
-    for (final doc in docResponse.docs) {
-      final data = doc.data();
+    for (final rawJob in activeJobs) {
+      final data = Map<String, dynamic>.from(rawJob as Map);
       final activeRequest = DispatchRequest.fromJson(data);
 
       PlaceCoordinate pickupCoordinates;
@@ -914,7 +929,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       }
     }
 
-    if (docResponse.docs.isEmpty) {
+    if (activeJobs.isEmpty) {
       add(CancelRequest());
     }
   }
