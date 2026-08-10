@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -82,18 +83,14 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
         'homeAddress': _address.text.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
-      final batch = FirebaseFirestore.instance.batch();
-      batch.set(
-          FirebaseFirestore.instance.collection('riders').doc(widget.user.uid),
-          patch,
-          SetOptions(merge: true));
-      batch.set(
-          FirebaseFirestore.instance
-              .collection('riderProfiles')
-              .doc(widget.user.uid),
-          patch,
-          SetOptions(merge: true));
-      await batch.commit();
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      await functions.httpsCallable('updateRiderProfile').call({
+        ...patch,
+        'phoneNumber': _phone.text.trim(),
+      });
+      await functions.httpsCallable('claimSenderUsername').call({
+        'username': handle,
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated.')),
@@ -685,21 +682,15 @@ class RiderVehicleManagerView extends StatelessWidget {
     final active = vehicles.cast<Map<String, dynamic>?>().firstWhere(
         (v) => v?['primary'] == true,
         orElse: () => vehicles.isEmpty ? null : vehicles.first);
-    final patch = <String, dynamic>{
-      'vehicles': vehicles,
-      if (active != null) 'vehicle': active,
-      if (active != null) 'vehicleType': active['type'],
-      if (active != null) 'vehicleRegistration': active['registration'],
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-    final batch = FirebaseFirestore.instance.batch();
-    batch.set(FirebaseFirestore.instance.collection('riders').doc(userId),
-        patch, SetOptions(merge: true));
-    batch.set(
-        FirebaseFirestore.instance.collection('riderProfiles').doc(userId),
-        patch,
-        SetOptions(merge: true));
-    await batch.commit();
+    if (active == null) return;
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('updateRiderProfile')
+        .call({
+      'vehicleType': active['type'],
+      'vehicleRegistration': active['registration'],
+      'vehicleMakeModel': active['makeModel'],
+      'vehicleColour': active['colour'],
+    });
   }
 
   Future<void> _setActive(

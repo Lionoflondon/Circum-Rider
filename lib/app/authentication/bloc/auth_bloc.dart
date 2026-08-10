@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:circum_rider/extension/email_validation.dart';
 import 'package:circum_rider/helper/location_helper.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -53,12 +54,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       required User user,
       required Map<String, dynamic> data,
     }) async {
-      await db.collection('riders').doc(user.uid).set({
-        'uid': user.uid,
-        'email': user.email,
-        'updatedAt': FieldValue.serverTimestamp(),
-        ...data,
-      }, SetOptions(merge: true));
+      final allowed = <String, dynamic>{
+        'fullName': data['fullName'] ?? data['name'],
+        'phoneNumber': data['phoneNumber'] ?? data['phone'],
+        'vehicleType': data['vehicleType'] ?? data['typeOfVehicle'],
+        'vehicleRegistration':
+            data['vehicleRegistration'] ?? data['plateNumber'],
+        'vehicleMakeModel': data['vehicleMakeModel'],
+        'vehicleColour': data['vehicleColour'],
+        'homeAddress': data['homeAddress'] ?? data['address'],
+        'locationEnabled': data['locationEnabled'],
+      }..removeWhere((key, value) => value == null);
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('updateRiderProfile')
+          .call(allowed);
     }
 
     Future<String?> vehicleRegistrationDocumentStatus(String uid) async {
@@ -570,77 +579,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           //   await user!.updatePhotoURL(state.oAuthPhotoURL!);
           // }
 
-          final documentReference = db.collection('riders').doc(user.uid);
           final SharedPreferences prefs = await SharedPreferences.getInstance();
 
           await prefs.setString('riderId', user.uid);
 
-          // Get the document snapshot
-          final documentSnapshot = await documentReference.get();
-
-          if (documentSnapshot.exists) {
-            // Document exists
-            await db.collection("riders").doc(user.uid).update({
-              'name': event.username,
-              'role': 'rider',
-              'roles': ['rider'],
-              'phone': user.phoneNumber ?? state.phoneNumber,
-              'phoneVerified': state.isPhoneVerified,
-              if (state.isPhoneVerified)
-                'phoneVerifiedAt': FieldValue.serverTimestamp(),
-              'status': 'offline',
-              'approvalStatus': 'pending',
-              'verificationStatus': 'verification_pending',
-              'profileCompletionStatus': 'complete',
-              'onboardingStatus': 'profile_complete',
-              'driverStatus': 'offline',
-              'riderRank': 'agent',
-              'rating': '0.0',
-              'vehicle': {
-                'type': state.vehicleType?.trim(),
-                'makeModel': state.vehicleMakeModel?.trim(),
-                'colour': state.vehicleColour?.trim(),
-                'plateNumber': state.vehicleRegistration?.trim(),
-              },
-              'vehicleType': state.vehicleType?.trim(),
-              'vehicleMakeModel': state.vehicleMakeModel?.trim(),
-              'vehicleColour': state.vehicleColour?.trim(),
-              'vehicleRegistration': state.vehicleRegistration?.trim(),
-              'plateNumber': state.vehicleRegistration?.trim(),
-              'typeOfVehicle': state.vehicleType?.trim(),
-            });
-          } else {
-            // Document does not exist
-            await db.collection("riders").doc(user.uid).set({
-              'name': event.username,
-              "role": 'rider',
-              'roles': ['rider'],
-              'phone': user.phoneNumber ?? state.phoneNumber,
-              'phoneVerified': state.isPhoneVerified,
-              if (state.isPhoneVerified)
-                'phoneVerifiedAt': FieldValue.serverTimestamp(),
-              'status': 'offline',
-              'approvalStatus': 'pending',
-              'verificationStatus': 'verification_pending',
-              'profileCompletionStatus': 'complete',
-              'onboardingStatus': 'profile_complete',
-              'driverStatus': 'offline',
-              'riderRank': 'agent',
-              'rating': '0.0',
-              'vehicle': {
-                'type': state.vehicleType?.trim(),
-                'makeModel': state.vehicleMakeModel?.trim(),
-                'colour': state.vehicleColour?.trim(),
-                'plateNumber': state.vehicleRegistration?.trim(),
-              },
-              'vehicleType': state.vehicleType?.trim(),
-              'vehicleMakeModel': state.vehicleMakeModel?.trim(),
-              'vehicleColour': state.vehicleColour?.trim(),
-              'vehicleRegistration': state.vehicleRegistration?.trim(),
-              'plateNumber': state.vehicleRegistration?.trim(),
-              'typeOfVehicle': state.vehicleType?.trim(),
-            });
-          }
+          await FirebaseFunctions.instanceFor(region: 'us-central1')
+              .httpsCallable('updateRiderProfile')
+              .call({
+            'fullName': event.username,
+            'phoneNumber': user.phoneNumber ?? state.phoneNumber,
+            'vehicleType': state.vehicleType,
+            'vehicleRegistration': state.vehicleRegistration,
+            'vehicleMakeModel': state.vehicleMakeModel,
+            'vehicleColour': state.vehicleColour,
+          });
 
           await rothOnboarding.ensureWalletForRider(
             riderId: user.uid,
@@ -742,25 +694,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             hasLocationPermission: true,
             isLocationEnabled: true,
           ));
-          await db.collection("riders").doc(user?.uid).update({
-            'position': myLocation.data,
-            'locationEnabled': true,
-            'approvalStatus': 'pending',
-            'verificationStatus': 'verification_pending',
-            'profileCompletionStatus': 'complete',
-            'onboardingStatus': 'profile_complete',
-            'driverStatus': 'offline',
-            'role': 'rider',
-            'roles': ['rider'],
-            'riderRank': 'agent',
-            'submittedAt': FieldValue.serverTimestamp(),
-          });
-          await db.collection('riderOnboardingEvents').add({
-            'riderId': user.uid,
-            'eventType': 'profile_complete',
-            'timestamp': FieldValue.serverTimestamp(),
-            'statusAfterEvent': 'profile_complete',
-          });
+          await FirebaseFunctions.instanceFor(region: 'us-central1')
+              .httpsCallable('updateRiderProfile')
+              .call({'locationEnabled': true});
           await rothOnboarding.ensureWalletForRider(
             riderId: user.uid,
             email: user.email,
@@ -786,10 +722,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               hasLocationPermission: true,
               isLocationEnabled: true,
               status: Status.locationRequested));
-          await db
-              .collection("riders")
-              .doc(user?.uid)
-              .update({'position': myLocation.data});
+          await FirebaseFunctions.instanceFor(region: 'us-central1')
+              .httpsCallable('updateRiderProfile')
+              .call({'locationEnabled': true});
         } catch (e) {
           if (e == 'Location permissions are permanently denied') {
             await Geolocator.openLocationSettings();
@@ -816,12 +751,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             'roles': ['rider'],
             'riderRank': 'agent',
             'submittedAt': FieldValue.serverTimestamp(),
-          });
-          await db.collection('riderOnboardingEvents').add({
-            'riderId': user.uid,
-            'eventType': 'profile_complete',
-            'timestamp': FieldValue.serverTimestamp(),
-            'statusAfterEvent': 'profile_complete',
           });
           await rothOnboarding.ensureWalletForRider(
             riderId: user.uid,
@@ -996,6 +925,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<SubmitVerificationDocuments>(
       (event, emit) async {
+        emit(state.copyWith(
+          verificationUploadStatus: VerificationUploadStatus.failure,
+          errorMessage:
+              'Please submit documents from the Rider application centre.',
+        ));
+        return;
+        // Legacy verification UI remains routable for compatibility only; its
+        // former direct Firestore/Storage mutation path is intentionally dead.
         final User? user = auth.currentUser;
 
         if (event.idType == 'drivers license' ||
@@ -1481,15 +1418,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       (event, emit) async {
         try {
           User? user = auth.currentUser;
+          if (user == null) return;
           FlutterSecureStorage storage = const FlutterSecureStorage();
           final documentReference = db.collection('riders').doc(user?.uid);
           // Get the document snapshot
           final documentSnapshot = await documentReference.get();
 
           if (documentSnapshot.exists) {
-            await db.collection("riders").doc(user!.uid).update({
-              'phone': event.value,
-            });
+            await FirebaseFunctions.instanceFor(region: 'us-central1')
+                .httpsCallable('updateRiderProfile')
+                .call({'phoneNumber': event.value});
 
             await storage.write(key: 'phone', value: event.value);
 

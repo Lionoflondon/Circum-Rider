@@ -14,6 +14,7 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 import 'app.dart';
 import 'app/authentication/bloc/auth_bloc.dart';
+import 'app/security/circum_app_check.dart';
 import 'app/bottom_nav/bloc/navbar_bloc.dart';
 import 'app/home/bloc/home_bloc.dart';
 import 'app/history/bloc/history_bloc.dart';
@@ -42,7 +43,12 @@ void main() async {
 
   if (kIsWeb) {
     runApp(RiderStartupApp(
-      initializer: _initializeRiderWeb,
+      initializer: () async {
+        await _initializeRiderWeb();
+        if (!await initializeCircumAppCheck()) {
+          throw StateError('Security verification is unavailable.');
+        }
+      },
       appBuilder: (_) => const CircumRider(),
     ));
     return;
@@ -67,16 +73,14 @@ void main() async {
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   await Firebase.initializeApp();
-
-  // Activate app check after initialization, but before
-  // usage of any Firebase services.
-  // await FirebaseAppCheck.instance
-  //     // Your personal reCaptcha public key goes here:
-  //     .activate(
-  //   androidProvider: AndroidProvider.playIntegrity,
-  //   appleProvider: AppleProvider.appAttest,
-  // webProvider: ReCaptchaV3Provider(kWebRecaptchaSiteKey),
-  // );
+  if (!await initializeCircumAppCheck()) {
+    FlutterNativeSplash.remove();
+    runApp(RiderStartupApp(
+      initializer: initializeCircumAppCheck,
+      appBuilder: (_) => const CircumRider(),
+    ));
+    return;
+  }
 
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
     alert: true, // Required to display a heads up notification
@@ -252,6 +256,49 @@ class _RiderStartupHold extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       home: Scaffold(
         backgroundColor: Color(0xFF131313),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Starting Rider'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class RiderStartupFailure extends StatelessWidget {
+  const RiderStartupFailure({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark(useMaterial3: true),
+      home: Scaffold(
+        backgroundColor: const Color(0xFF07090F),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Security verification is unavailable.',
+                    textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () => main(),
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
