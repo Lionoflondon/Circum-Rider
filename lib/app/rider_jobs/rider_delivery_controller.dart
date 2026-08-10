@@ -158,8 +158,14 @@ class RiderEvidenceUploader {
     );
     await ref.putData(
       bytes,
-      SettableMetadata(contentType: 'image/jpeg'),
+      SettableMetadata(
+        contentType: 'image/jpeg',
+        customMetadata: {
+          'deliveryId': deliveryId,
+          'evidenceType': 'weight_discrepancy',
+        },
+      ),
     );
-    return ref.getDownloadURL();
+    return ref.fullPath;
   }
 }

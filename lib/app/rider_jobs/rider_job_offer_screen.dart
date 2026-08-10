@@ -1816,6 +1816,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
 
   Future<void> _reportIssue() async {
     final notes = TextEditingController();
+    final observedWeight = TextEditingController();
     var category = 'other';
     final submit = await showDialog<bool>(
       context: context,
@@ -1838,6 +1839,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                   'access_problem': 'Unable to access property',
                   'address_problem': 'Address problem',
                   'parcel_mismatch': 'Parcel mismatch',
+                  'weight_exceeded': 'Parcel is heavier than booked',
+                  'additional_undeclared_items': 'Additional undeclared items',
                   'unsafe_situation': 'Unsafe situation',
                   'damaged_parcel': 'Damaged parcel',
                   'vehicle_suitability': 'Vehicle suitability problem',
@@ -1858,6 +1861,14 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                 maxLines: 3,
                 decoration: const InputDecoration(labelText: 'Notes'),
               ),
+              if (category == 'weight_exceeded')
+                TextField(
+                  controller: observedWeight,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration:
+                      const InputDecoration(labelText: 'Observed weight (kg)'),
+                ),
             ],
           ),
           actions: [
@@ -1866,7 +1877,13 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(context, true),
+              onPressed: () {
+                if (category == 'weight_exceeded' &&
+                    (double.tryParse(observedWeight.text.trim()) ?? 0) <= 0) {
+                  return;
+                }
+                Navigator.pop(context, true);
+              },
               child: const Text('Report'),
             ),
           ],
@@ -1874,13 +1891,18 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       ),
     );
     final detail = notes.text.trim();
+    final observedWeightKg = double.tryParse(observedWeight.text.trim());
     notes.dispose();
+    observedWeight.dispose();
     if (submit != true) return;
     setState(() => _transitioning = true);
     try {
       final controller =
           widget.deliveryController ?? CallableRiderDeliveryController();
-      if (category == 'parcel_mismatch' || category == 'vehicle_suitability') {
+      if (category == 'parcel_mismatch' ||
+          category == 'vehicle_suitability' ||
+          category == 'weight_exceeded' ||
+          category == 'additional_undeclared_items') {
         final photoUrl =
             await (_evidenceUploader ??= RiderEvidenceUploader()).capture(
           deliveryId: widget.offer.id,
@@ -1889,10 +1911,14 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
         if (photoUrl == null) return;
         await controller.reportDiscrepancy(
           deliveryId: widget.offer.id,
-          reason: category == 'vehicle_suitability'
-              ? 'dimensions_exceeded'
-              : 'item_differs_from_booking',
+          reason: switch (category) {
+            'vehicle_suitability' => 'dimensions_exceeded',
+            'weight_exceeded' => 'weight_exceeded',
+            'additional_undeclared_items' => 'additional_undeclared_items',
+            _ => 'item_differs_from_booking',
+          },
           evidencePhotos: [photoUrl],
+          observedWeightKg: observedWeightKg,
           notes: detail,
         );
         if (mounted) {

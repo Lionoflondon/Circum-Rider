@@ -349,6 +349,17 @@ void main() {
       expect(source,
           contains('Add the requested evidence before collection continues.'));
       expect(source, contains('Report Submitted'));
+      expect(source, contains('Parcel is heavier than booked'));
+      expect(source, contains('Additional undeclared items'));
+      expect(source, contains('Observed weight (kg)'));
+      for (final reason in [
+        'weight_exceeded',
+        'dimensions_exceeded',
+        'additional_undeclared_items',
+        'item_differs_from_booking',
+      ]) {
+        expect(source, contains("'$reason'"));
+      }
       expect(source, isNot(contains("collection('deliveryAdjustments').doc")));
       expect(source, isNot(contains(".update({'price'")));
     });
