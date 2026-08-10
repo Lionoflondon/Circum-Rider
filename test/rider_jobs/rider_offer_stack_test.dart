@@ -1,5 +1,6 @@
 import 'package:circum_rider/app/rider_jobs/rider_job_offer_screen.dart';
 import 'package:circum_rider/app/rider_jobs/rider_delivery_controller.dart';
+import 'package:circum_rider/app/rider_jobs/circum_route_presentation.dart';
 import 'package:circum_rider/app/rider_jobs/rider_offer_card.dart';
 import 'package:circum_rider/app/rider_jobs/rider_offer_stack.dart';
 import 'package:flutter/material.dart';
@@ -424,6 +425,75 @@ void main() {
       expect(legacyHome, isNot(contains('HomeRepo().endTrip')));
       expect(legacyEvents, isNot(contains('class StartDelivery')));
       expect(legacyEvents, isNot(contains('class RideCompleted')));
+    });
+
+    test('CIRCUM route pulse remains bounded to authoritative geometry', () {
+      final route = List<int>.generate(30, (index) => index);
+      final early = CircumRoutePresentation.energySegment(route, 0);
+      final late = CircumRoutePresentation.energySegment(route, 1);
+
+      expect(early, everyElement(isIn(route)));
+      expect(late, everyElement(isIn(route)));
+      expect(early.length, inInclusiveRange(2, 12));
+      expect(late.last, route.last);
+      expect(CircumRoutePresentation.base, isNot(const Color(0xFFF44336)));
+    });
+
+    testWidgets('completion renders backend values and assigned rank truthfully',
+        (tester) async {
+      final base = _offers.first;
+      final offer = RiderJobOffer(
+        id: base.id,
+        requestId: base.requestId,
+        pickupArea: base.pickupArea,
+        dropoffArea: base.dropoffArea,
+        pickupAddress: base.pickupAddress,
+        dropoffAddress: base.dropoffAddress,
+        earnings: base.earnings,
+        currency: base.currency,
+        distanceText: base.distanceText,
+        timeText: base.timeText,
+        parcelGuidance: base.parcelGuidance,
+        minimumVehicle: base.minimumVehicle,
+        weightText: base.weightText,
+        pickupTiming: base.pickupTiming,
+        warningChips: base.warningChips,
+        raw: {
+          ...base.raw,
+          'deliveryStage': 'delivered',
+          'riderEarning': 18.75,
+          'riderEarningBreakdown': {
+            'delivery': 14.0,
+            'waiting': 2.75,
+            'tip': 2.0,
+          },
+          'trustPointsAwarded': 4,
+        },
+      );
+
+      await tester.pumpWidget(MaterialApp(
+        home: RiderAcceptedJobScreen(
+          offer: offer,
+          riderRank: 'Veteran',
+          riderRankAssigned: true,
+        ),
+      ));
+      await tester.pump();
+
+      expect(find.text('Delivery complete'), findsOneWidget);
+      expect(find.text('Total credited'), findsOneWidget);
+      expect(find.text('£18.75'), findsOneWidget);
+      expect(find.text('+4 Trust Points'), findsOneWidget);
+      expect(find.text('Assigned rank: Veteran'), findsOneWidget);
+      expect(find.textContaining('Highest rank earned'), findsNothing);
+    });
+
+    test('web fallback never paints fabricated route geometry', () {
+      final source = File('lib/app/rider_jobs/rider_job_offer_screen.dart')
+          .readAsStringSync();
+      expect(source, contains('Route preview unavailable'));
+      expect(source, isNot(contains('class _RouteFallbackPainter')));
+      expect(source, contains("PolylineId('circum_route_energy')"));
     });
   });
 }

@@ -6,6 +6,7 @@ class RiderProfileSnapshot {
   final String? riderName;
   final String? riderVehicle;
   final String? riderRank;
+  final bool riderRankAssigned;
   final bool canAcceptJobs;
   final String? blockedReason;
 
@@ -14,6 +15,7 @@ class RiderProfileSnapshot {
     this.riderName,
     this.riderVehicle,
     this.riderRank,
+    this.riderRankAssigned = false,
     required this.canAcceptJobs,
     this.blockedReason,
   });
