@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:uuid/uuid.dart';
 
 class RiderConversationMessage {
   const RiderConversationMessage({
@@ -192,6 +193,7 @@ class RiderCommunicationService {
   final FirebaseFirestore firestore;
   final FirebaseFunctions functions;
   final FirebaseAuth auth;
+  static const Uuid _uuid = Uuid();
 
   Stream<RiderConversationSnapshot> watchConversation(String chatId) {
     final chat = firestore.collection('chats').doc(chatId);
@@ -261,6 +263,7 @@ class RiderCommunicationService {
       'chatId': chatId,
       'message': trimmed,
       'messageType': 'text',
+      'clientMessageId': 'rider:${_uuid.v4()}',
     });
   }
 
