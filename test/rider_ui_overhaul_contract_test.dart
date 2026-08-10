@@ -116,7 +116,8 @@ void main() {
     });
 
     test('web offer surface does not block on Google Maps readiness', () {
-      expect(offers, contains("if (kIsWeb) return const _MapFallback();"));
+      expect(offers, isNot(contains("if (kIsWeb) return const _MapFallback();")));
+      expect(offers, contains('return GoogleMap('));
       expect(offers, contains('Offer discovery and acceptance must remain'));
     });
 

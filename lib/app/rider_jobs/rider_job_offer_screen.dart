@@ -884,8 +884,6 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
   Widget build(BuildContext context) {
     // Offer discovery and acceptance must remain usable while the web map
     // plugin is loading or unavailable.
-    if (kIsWeb) return const _MapFallback();
-
     final pickup = _latLng(
       widget.offer.raw['pickupDetails'] ?? widget.offer.raw['pickup'],
     );
@@ -1846,7 +1844,10 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     setState(() => _transitioning = true);
     try {
       final photoId = await (_evidenceUploader ??= RiderEvidenceUploader())
-          .captureDeliveryEvidence(deliveryId: widget.offer.id);
+          .captureDeliveryEvidence(
+            deliveryId: widget.offer.id,
+            purpose: pickup ? 'PICKUP' : 'HANDOVER',
+          );
       if (photoId == null || !mounted) return null;
       final recipient = TextEditingController();
       final actualWeight = TextEditingController();

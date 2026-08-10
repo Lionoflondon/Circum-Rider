@@ -148,6 +148,7 @@ class RiderEvidenceUploader {
 
   Future<String?> captureDeliveryEvidence({
     required String deliveryId,
+    required String purpose,
   }) async {
     final image = await picker.pickImage(
         source: ImageSource.camera, imageQuality: 82, maxWidth: 1600);
@@ -168,6 +169,7 @@ class RiderEvidenceUploader {
       'type': 'PHOTO',
       'mimeType': metadata.contentType ?? 'image/jpeg',
       'fileSize': metadata.size,
+      'purpose': purpose,
       if ((metadata.md5Hash ?? '').isNotEmpty) 'checksum': metadata.md5Hash,
     });
     final data = Map<String, dynamic>.from(result.data as Map);

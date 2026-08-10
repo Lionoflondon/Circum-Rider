@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -84,10 +83,6 @@ class _MapsViewState extends State<MapsView> {
               state.rideStatus == RideStatus.arrivedAtPickupLocation) &&
           state.broadcastStatus == BroadcastStatus.initialized) {
         context.read<HomeBloc>().add(BroadcastLocation());
-      }
-
-      if (kIsWeb) {
-        return const _WebMapUnavailable();
       }
 
       return GoogleMap(
