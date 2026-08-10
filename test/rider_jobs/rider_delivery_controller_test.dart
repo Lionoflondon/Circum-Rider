@@ -1,4 +1,5 @@
 import 'package:circum_rider/app/rider_jobs/rider_delivery_controller.dart';
+import 'package:circum_rider/app/rider_jobs/rider_job_offer_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _RecordingController implements RiderDeliveryController {
@@ -61,6 +62,14 @@ class _RecordingController implements RiderDeliveryController {
 }
 
 void main() {
+  test('terminal and unknown backend statuses never reopen accepted work', () {
+    expect(RiderDeliveryStagePolicy.fromRaw('completed'), RiderDeliveryStage.delivered);
+    expect(RiderDeliveryStagePolicy.fromRaw('delivery_completed'), RiderDeliveryStage.delivered);
+    expect(RiderDeliveryStagePolicy.fromRaw('cancelled'), RiderDeliveryStage.cancelled);
+    expect(RiderDeliveryStagePolicy.fromRaw('failed'), RiderDeliveryStage.failed);
+    expect(RiderDeliveryStagePolicy.fromRaw('new_future_status'), RiderDeliveryStage.unknown);
+  });
+
   test('delivery controller contract keeps PIN inside trusted callable request',
       () async {
     final controller = _RecordingController();

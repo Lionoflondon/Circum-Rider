@@ -66,8 +66,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     if (widget.previewOffers != null) return;
     _firestore = widget.firestore ?? FirebaseFirestore.instance;
     _auth = widget.auth ?? FirebaseAuth.instance;
-    _acceptController =
-        widget.acceptController ??
+    _acceptController = widget.acceptController ??
         RiderAcceptController(store: CallableRiderJobTransactionStore());
     _refreshOffers();
   }
@@ -77,22 +76,22 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
         .httpsCallable('getAvailableRequests')
         .call()
         .then((result) {
-          final payload = Map<String, dynamic>.from(result.data as Map);
-          final records = payload['nearestRequests'] is List
-              ? payload['nearestRequests'] as List
-              : const [];
-          return records
-              .whereType<Map>()
-              .map((record) {
-                final data = Map<String, dynamic>.from(record);
-                final id =
-                    '${data['id'] ?? data['deliveryId'] ?? data['requestId']}'
-                        .trim();
-                return RiderJobOffer.fromFirestore(docId: id, data: data);
-              })
-              .where((offer) => offer.id.isNotEmpty)
-              .toList();
-        });
+      final payload = Map<String, dynamic>.from(result.data as Map);
+      final records = payload['nearestRequests'] is List
+          ? payload['nearestRequests'] as List
+          : const [];
+      return records
+          .whereType<Map>()
+          .map((record) {
+            final data = Map<String, dynamic>.from(record);
+            final id =
+                '${data['id'] ?? data['deliveryId'] ?? data['requestId']}'
+                    .trim();
+            return RiderJobOffer.fromFirestore(docId: id, data: data);
+          })
+          .where((offer) => offer.id.isNotEmpty)
+          .toList();
+    });
   }
 
   @override
@@ -153,8 +152,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                 if (!rider.canAcceptJobs)
                   return _JobsStateScaffold(
                     title: 'Account action required',
-                    message:
-                        rider.blockedReason ??
+                    message: rider.blockedReason ??
                         'Your Circum Rider account cannot receive jobs right now.',
                   );
                 if (!home.availability.dispatchEligible)
@@ -169,8 +167,8 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                         ? null
                         : 'Go Online',
                     onAction: () => context.read<HomeBloc>().add(
-                      SetRideStatus(status: RideStatus.online),
-                    ),
+                          SetRideStatus(status: RideStatus.online),
+                        ),
                   );
 
                 return FutureBuilder<List<RiderJobOffer>>(
@@ -267,9 +265,8 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       riderVehicle: vehicle.trim().isEmpty ? null : vehicle.trim(),
       riderRank: RiderRankSnapshot.from(riderData)?.rank,
       canAcceptJobs: canAccept,
-      blockedReason: canAccept
-          ? null
-          : RiderOnboardingPolicy.blockedReason(riderData),
+      blockedReason:
+          canAccept ? null : RiderOnboardingPolicy.blockedReason(riderData),
     );
   }
 
@@ -307,9 +304,8 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     final rejected = _stringList(data['rejectedRiders']);
     if (ignored.contains(riderId) || rejected.contains(riderId)) return false;
 
-    final matchingStatus = '${data['matchingStatus'] ?? 'available'}'
-        .trim()
-        .toLowerCase();
+    final matchingStatus =
+        '${data['matchingStatus'] ?? 'available'}'.trim().toLowerCase();
     if (matchingStatus != 'available' &&
         matchingStatus != 'broadcasted' &&
         matchingStatus != 'requested') {
@@ -350,23 +346,21 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
   }
 
   bool _hasAssignedRider(Map<String, dynamic> data, String riderId) {
-    final assigned =
-        [
-              data['riderId'],
-              data['driverId'],
-              data['assignedRider'],
-              data['assignedRiderId'],
-              data['assignedDriverId'],
-              data['courierId'],
-            ]
-            .map((value) => value == null ? '' : '$value'.trim())
-            .where((value) => value.isNotEmpty);
+    final assigned = [
+      data['riderId'],
+      data['driverId'],
+      data['assignedRider'],
+      data['assignedRiderId'],
+      data['assignedDriverId'],
+      data['courierId'],
+    ]
+        .map((value) => value == null ? '' : '$value'.trim())
+        .where((value) => value.isNotEmpty);
     return assigned.any((value) => value != riderId);
   }
 
   bool _isExpiredOffer(Map<String, dynamic> data) {
-    final expiry =
-        _timestampMillis(data['offerExpiresAt']) ??
+    final expiry = _timestampMillis(data['offerExpiresAt']) ??
         _timestampMillis(data['dispatchExpiresAt']) ??
         _timestampMillis(data['expiresAt']) ??
         _timestampMillis(data['matchingExpiresAt']);
@@ -609,71 +603,71 @@ class _TakenState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFF07090F),
-    body: SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Padding(
-            padding: const EdgeInsets.all(22),
-            child: RiderGlassSurface(
-              padding: const EdgeInsets.all(24),
-              radius: 24,
-              opacity: .70,
-              blur: 20,
-              edgeColor: RiderPalette.red,
-              borderColor: Colors.white.withValues(alpha: .14),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 54,
-                    height: 54,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xFFF87171).withValues(alpha: .12),
-                    ),
-                    child: const Icon(
-                      Icons.work_off_outlined,
-                      color: Color(0xFFF87171),
-                    ),
+        backgroundColor: const Color(0xFF07090F),
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Padding(
+                padding: const EdgeInsets.all(22),
+                child: RiderGlassSurface(
+                  padding: const EdgeInsets.all(24),
+                  radius: 24,
+                  opacity: .70,
+                  blur: 20,
+                  edgeColor: RiderPalette.red,
+                  borderColor: Colors.white.withValues(alpha: .14),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: const Color(0xFFF87171).withValues(alpha: .12),
+                        ),
+                        child: const Icon(
+                          Icons.work_off_outlined,
+                          color: Color(0xFFF87171),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Job no longer available',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Another Rider accepted this delivery first.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: .62),
+                          height: 1.4,
+                        ),
+                      ),
+                      const SizedBox(height: 18),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: FilledButton(
+                          onPressed: onBackToFeed,
+                          child: const Text('Back to job feed'),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Job no longer available',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Another Rider accepted this delivery first.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: .62),
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: FilledButton(
-                      onPressed: onBackToFeed,
-                      child: const Text('Back to job feed'),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
         ),
-      ),
-    ),
-  );
+      );
 }
 
 class RiderJobOfferPreview {
@@ -884,6 +878,7 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
             widget.riderPosition!.latitude,
             widget.riderPosition!.longitude,
           );
+    final routePoints = _routePoints(widget.offer.raw['routeGeometry']);
 
     return GoogleMap(
       onMapCreated: (controller) {
@@ -928,12 +923,13 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
           ),
       },
       polylines: {
-        Polyline(
-          polylineId: const PolylineId('route'),
-          points: [pickup, dropoff],
-          color: const Color(0xFF60A5FA),
-          width: 5,
-        ),
+        if (routePoints.length > 1)
+          Polyline(
+            polylineId: const PolylineId('route'),
+            points: routePoints,
+            color: const Color(0xFF60A5FA),
+            width: 5,
+          ),
       },
       circles: {
         if (riderLatLng != null)
@@ -966,6 +962,11 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
     final lng = value['lng'] ?? value['longitude'];
     if (lat is num && lng is num) return LatLng(lat.toDouble(), lng.toDouble());
     return null;
+  }
+
+  static List<LatLng> _routePoints(dynamic value) {
+    if (value is! Iterable) return const [];
+    return value.map(_latLng).whereType<LatLng>().toList(growable: false);
   }
 }
 
@@ -1207,8 +1208,8 @@ class _JobsStateScaffold extends StatelessWidget {
                         edgeColor: error
                             ? RiderPalette.red
                             : offline
-                            ? RiderPalette.amber
-                            : RiderPalette.blue,
+                                ? RiderPalette.amber
+                                : RiderPalette.blue,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -1219,13 +1220,12 @@ class _JobsStateScaffold extends StatelessWidget {
                                   height: 46,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color:
-                                        (error
-                                                ? RiderPalette.red
-                                                : offline
+                                    color: (error
+                                            ? RiderPalette.red
+                                            : offline
                                                 ? RiderPalette.amber
                                                 : RiderPalette.blue)
-                                            .withValues(alpha: .14),
+                                        .withValues(alpha: .14),
                                   ),
                                   child: loading
                                       ? const Padding(
@@ -1239,13 +1239,14 @@ class _JobsStateScaffold extends StatelessWidget {
                                           error
                                               ? Icons.cloud_off_rounded
                                               : offline
-                                              ? Icons.power_settings_new_rounded
-                                              : Icons.radar_rounded,
+                                                  ? Icons
+                                                      .power_settings_new_rounded
+                                                  : Icons.radar_rounded,
                                           color: error
                                               ? RiderPalette.red
                                               : offline
-                                              ? RiderPalette.amber
-                                              : RiderPalette.blue,
+                                                  ? RiderPalette.amber
+                                                  : RiderPalette.blue,
                                         ),
                                 ),
                                 const SizedBox(width: 14),
@@ -1492,12 +1493,18 @@ enum RiderDeliveryStage {
   pinRequired,
   delivered,
   issueReported,
+  cancelled,
+  failed,
+  unknown,
 }
 
 class RiderDeliveryStagePolicy {
   static RiderDeliveryStage fromRaw(dynamic value) {
     final text = '$value'.trim().toLowerCase();
     switch (text) {
+      case 'accepted':
+      case 'assigned':
+        return RiderDeliveryStage.accepted;
       case 'navigating_to_pickup':
         return RiderDeliveryStage.navigatingToPickup;
       case 'arrived_at_pickup':
@@ -1520,11 +1527,22 @@ class RiderDeliveryStagePolicy {
       case 'dropoff_verification_required':
         return RiderDeliveryStage.pinRequired;
       case 'delivered':
+      case 'completed':
+      case 'delivery_completed':
         return RiderDeliveryStage.delivered;
+      case 'cancelled':
+      case 'canceled':
+      case 'sender_no_show_pickup':
+      case 'no_show':
+      case 'archived':
+        return RiderDeliveryStage.cancelled;
+      case 'failed':
+      case 'expired':
+        return RiderDeliveryStage.failed;
       case 'issue_reported':
         return RiderDeliveryStage.issueReported;
       default:
-        return RiderDeliveryStage.accepted;
+        return RiderDeliveryStage.unknown;
     }
   }
 
@@ -1552,6 +1570,12 @@ class RiderDeliveryStagePolicy {
         return 'delivered';
       case RiderDeliveryStage.issueReported:
         return 'issue_reported';
+      case RiderDeliveryStage.cancelled:
+        return 'cancelled';
+      case RiderDeliveryStage.failed:
+        return 'failed';
+      case RiderDeliveryStage.unknown:
+        return 'unknown';
       case RiderDeliveryStage.accepted:
         return 'accepted';
     }
@@ -1635,8 +1659,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     super.initState();
     if (widget.firestore != null && widget.deliveryController == null) {
       _projectionService = RiderJobProjectionService();
-      _trackingController = RiderLiveTrackingController(
-      );
+      _trackingController = RiderLiveTrackingController();
       _trackingSub = _trackingController!.states.listen(_handleTrackingState);
       unawaited(_refreshProjection());
       _projectionTimer = Timer.periodic(
@@ -1645,7 +1668,9 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       );
     }
     _stage = RiderDeliveryStagePolicy.fromRaw(
-      widget.offer.raw['deliveryStage'],
+      widget.offer.raw['deliveryStage'] ??
+          widget.offer.raw['status'] ??
+          'accepted',
     );
   }
 
@@ -1721,8 +1746,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
         _displayRiderPosition = Position(
           latitude:
               previous.latitude + (next.latitude - previous.latitude) * eased,
-          longitude:
-              previous.longitude +
+          longitude: previous.longitude +
               (next.longitude - previous.longitude) * eased,
           timestamp: next.timestamp,
           accuracy: next.accuracy,
@@ -1742,6 +1766,11 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     if (_transitioning) return;
     final action = _actionForStage(_stage);
     if (action == null) return;
+    if (_signatureRequired) {
+      setState(() => _transitionError =
+          'Signature capture is required but is not available. Contact Circum Support.');
+      return;
+    }
     String? pin;
     Map<String, dynamic>? evidence;
     if (_pinRequired &&
@@ -1753,7 +1782,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       if (pin == null) return;
     }
     if ((action == 'verify_collection_pin' && _verificationRequired) ||
-        (action == 'verify_receiver_pin' && _pinRequired)) {
+        ((action == 'verify_receiver_pin' || action == 'complete_delivery') &&
+            (_photoRequired || _pinRequired))) {
       evidence = await _captureEvidence(
         pickup: action == 'verify_collection_pin',
       );
@@ -1765,13 +1795,13 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       _transitionError = null;
     });
     try {
-      final result = await (controller ?? CallableRiderDeliveryController())
-          .transition(
-            deliveryId: widget.offer.id,
-            action: action,
-            pin: pin,
-            evidence: evidence,
-          );
+      final result =
+          await (controller ?? CallableRiderDeliveryController()).transition(
+        deliveryId: widget.offer.id,
+        action: action,
+        pin: pin,
+        evidence: evidence,
+      );
       if (!mounted) return;
       setState(() => _stage = RiderDeliveryStagePolicy.fromRaw(result.status));
       if (action == 'start_heading_to_pickup') {
@@ -1797,12 +1827,9 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   Future<Map<String, dynamic>?> _captureEvidence({required bool pickup}) async {
     setState(() => _transitioning = true);
     try {
-      final photoUrl = await (_evidenceUploader ??= RiderEvidenceUploader())
-          .capture(
-            deliveryId: widget.offer.id,
-            stage: pickup ? 'pickup' : 'handover',
-          );
-      if (photoUrl == null || !mounted) return null;
+      final photoId = await (_evidenceUploader ??= RiderEvidenceUploader())
+          .captureDeliveryEvidence(deliveryId: widget.offer.id);
+      if (photoId == null || !mounted) return null;
       final recipient = TextEditingController();
       final actualWeight = TextEditingController();
       var conditionConfirmed = false;
@@ -1814,43 +1841,45 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
             title: Text(
               pickup ? 'Confirm Pickup Evidence' : 'Confirm Handover',
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (pickup) ...[
-                  CheckboxListTile(
-                    value: conditionConfirmed,
-                    onChanged: (value) => setDialogState(
-                      () => conditionConfirmed = value == true,
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (pickup) ...[
+                    CheckboxListTile(
+                      value: conditionConfirmed,
+                      onChanged: (value) => setDialogState(
+                        () => conditionConfirmed = value == true,
+                      ),
+                      title: const Text('Parcel condition confirmed'),
                     ),
-                    title: const Text('Parcel condition confirmed'),
-                  ),
-                  CheckboxListTile(
-                    value: declarationAccepted,
-                    onChanged: (value) => setDialogState(
-                      () => declarationAccepted = value == true,
+                    CheckboxListTile(
+                      value: declarationAccepted,
+                      onChanged: (value) => setDialogState(
+                        () => declarationAccepted = value == true,
+                      ),
+                      title: const Text('I confirm this evidence is accurate'),
                     ),
-                    title: const Text('I confirm this evidence is accurate'),
-                  ),
-                  if (widget.offer.raw['weightVerificationRequired'] == true)
+                    if (widget.offer.raw['weightVerificationRequired'] == true)
+                      TextField(
+                        controller: actualWeight,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Actual weight (kg)',
+                        ),
+                      ),
+                  ] else
                     TextField(
-                      controller: actualWeight,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
+                      controller: recipient,
+                      textCapitalization: TextCapitalization.words,
                       decoration: const InputDecoration(
-                        labelText: 'Actual weight (kg)',
+                        labelText: 'Recipient name',
                       ),
                     ),
-                ] else
-                  TextField(
-                    controller: recipient,
-                    textCapitalization: TextCapitalization.words,
-                    decoration: const InputDecoration(
-                      labelText: 'Recipient name',
-                    ),
-                  ),
-              ],
+                ],
+              ),
             ),
             actions: [
               TextButton(
@@ -1876,7 +1905,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       actualWeight.dispose();
       if (confirmed != true) return null;
       return {
-        'photoUrl': photoUrl,
+        'photoId': photoId,
         if (pickup) 'conditionConfirmed': conditionConfirmed,
         if (pickup) 'riderDeclarationAccepted': declarationAccepted,
         if (pickup && actualWeightKg != null) 'actualWeightKg': actualWeightKg,
@@ -1909,30 +1938,30 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
             children: [
               DropdownButtonFormField<String>(
                 value: category,
-                items:
-                    const {
-                          'vehicle_breakdown': 'Vehicle breakdown',
-                          'accident': 'Accident',
-                          'road_closure': 'Road closure',
-                          'medical_emergency': 'Medical emergency',
-                          'customer_change_request': 'Customer requests change',
-                          'sender_unavailable': 'Circum unavailable',
-                          'recipient_unavailable': 'Recipient unavailable',
-                          'access_problem': 'Unable to access property',
-                          'address_problem': 'Address problem',
-                          'parcel_mismatch': 'Parcel mismatch',
-                          'unsafe_situation': 'Unsafe situation',
-                          'damaged_parcel': 'Damaged parcel',
-                          'vehicle_suitability': 'Vehicle suitability problem',
-                          'other': 'Other',
-                        }.entries
-                        .map(
-                          (item) => DropdownMenuItem(
-                            value: item.key,
-                            child: Text(item.value),
-                          ),
-                        )
-                        .toList(),
+                items: const {
+                  'vehicle_breakdown': 'Vehicle breakdown',
+                  'accident': 'Accident',
+                  'road_closure': 'Road closure',
+                  'medical_emergency': 'Medical emergency',
+                  'customer_change_request': 'Customer requests change',
+                  'sender_unavailable': 'Circum unavailable',
+                  'recipient_unavailable': 'Recipient unavailable',
+                  'access_problem': 'Unable to access property',
+                  'address_problem': 'Address problem',
+                  'parcel_mismatch': 'Parcel mismatch',
+                  'unsafe_situation': 'Unsafe situation',
+                  'damaged_parcel': 'Damaged parcel',
+                  'vehicle_suitability': 'Vehicle suitability problem',
+                  'other': 'Other',
+                }
+                    .entries
+                    .map(
+                      (item) => DropdownMenuItem(
+                        value: item.key,
+                        child: Text(item.value),
+                      ),
+                    )
+                    .toList(),
                 onChanged: (value) =>
                     setDialogState(() => category = value ?? 'other'),
                 decoration: const InputDecoration(labelText: 'Issue'),
@@ -2022,11 +2051,14 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
         return 'arrived_at_dropoff';
       case RiderDeliveryStage.arrivedAtDropoff:
       case RiderDeliveryStage.waiting:
-        return _pinRequired ? 'verify_receiver_pin' : 'verify_receiver_pin';
+        return _pinRequired ? 'verify_receiver_pin' : 'complete_delivery';
       case RiderDeliveryStage.pinRequired:
         return 'verify_receiver_pin';
       case RiderDeliveryStage.issueReported:
       case RiderDeliveryStage.delivered:
+      case RiderDeliveryStage.cancelled:
+      case RiderDeliveryStage.failed:
+      case RiderDeliveryStage.unknown:
         return null;
     }
   }
@@ -2124,8 +2156,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     if (app == null) return;
     final uri = switch (app) {
       'google' => Uri.parse(
-        'https://www.google.com/maps/dir/?api=1&destination=$query',
-      ),
+          'https://www.google.com/maps/dir/?api=1&destination=$query',
+        ),
       'apple' => Uri.parse('https://maps.apple.com/?daddr=$query'),
       'waze' => Uri.parse('https://waze.com/ul?q=$query&navigate=yes'),
       _ => null,
@@ -2159,19 +2191,19 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   @override
   Widget build(BuildContext context) {
     final live = _liveProjection ?? widget.offer.raw;
-        final rawStatus =
-            live['deliveryStage'] ?? live['deliveryStatus'] ?? live['status'];
-        final terminal = '$rawStatus'.toLowerCase();
-        if (terminal == 'cancelled' ||
-            terminal == 'failed' ||
-            terminal.contains('no_show') ||
-            terminal == 'disputed') {
-          return _StateScaffold(
-            title: terminal.replaceAll('_', ' '),
-            message:
-                'This delivery can no longer progress. The latest delivery state has been restored.',
-          );
-        }
+    final rawStatus =
+        live['deliveryStage'] ?? live['deliveryStatus'] ?? live['status'];
+    final terminal = '$rawStatus'.toLowerCase();
+    if (terminal == 'cancelled' ||
+        terminal == 'failed' ||
+        terminal.contains('no_show') ||
+        terminal == 'disputed') {
+      return _StateScaffold(
+        title: terminal.replaceAll('_', ' '),
+        message:
+            'This delivery can no longer progress. The latest delivery state has been restored.',
+      );
+    }
     return _buildExperience(context, live);
   }
 
@@ -2322,8 +2354,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                     _WaitingPolicyCard(
                       delivery: live,
                       deliveryId: widget.offer.id,
-                      controller:
-                          widget.deliveryController ??
+                      controller: widget.deliveryController ??
                           CallableRiderDeliveryController(),
                     ),
                   ],
@@ -2361,10 +2392,9 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                         : () => _customerResponded(widget.offer.id),
                     onReportDifference:
                         _transitioning || irisConfirmed || differenceReported
-                        ? null
-                        : _reportIssue,
-                    onConfirmIris:
-                        irisConfirmed ||
+                            ? null
+                            : _reportIssue,
+                    onConfirmIris: irisConfirmed ||
                             differenceReported ||
                             _confirmingIris ||
                             !_canConfirmIrisAtPickup(live)
@@ -2446,10 +2476,10 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     try {
       await (widget.deliveryController ?? CallableRiderDeliveryController())
           .reportWaitingContext(
-            deliveryId: deliveryId,
-            type: 'customer_responded',
-            note: 'Customer responded during waiting period',
-          );
+        deliveryId: deliveryId,
+        type: 'customer_responded',
+        note: 'Customer responded during waiting period',
+      );
     } catch (_) {
       if (mounted) {
         setState(
@@ -2466,7 +2496,8 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       RiderLiveTrackingStatus.live ||
       RiderLiveTrackingStatus.backgroundActive ||
       RiderLiveTrackingStatus.arrivedAtPickup ||
-      RiderLiveTrackingStatus.arrivedAtDropoff => 'Live',
+      RiderLiveTrackingStatus.arrivedAtDropoff =>
+        'Live',
       RiderLiveTrackingStatus.offline => 'Offline',
       _ => 'Syncing',
     };
@@ -2497,6 +2528,12 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
         return 'Delivery Complete';
       case RiderDeliveryStage.issueReported:
         return 'Support Active';
+      case RiderDeliveryStage.cancelled:
+        return 'Delivery Cancelled';
+      case RiderDeliveryStage.failed:
+        return 'Delivery Needs Support';
+      case RiderDeliveryStage.unknown:
+        return 'Status Unavailable';
     }
   }
 
@@ -2533,8 +2570,7 @@ class _DeliveryCompleteView extends StatelessWidget {
         ? Map<String, dynamic>.from(delivery['riderEarningBreakdown'] as Map)
         : const <String, dynamic>{};
     num part(String key) => breakdown[key] is num ? breakdown[key] as num : 0;
-    final feedback =
-        delivery['feedbackRequired'] == true ||
+    final feedback = delivery['feedbackRequired'] == true ||
         delivery['requiresFeedback'] == true ||
         delivery['senderRatingRequired'] == true ||
         delivery['deliveryIssuePromptRequired'] == true;
@@ -2586,13 +2622,8 @@ class _DeliveryCompleteView extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 18),
-                      _CompletionRow(
-                        'Delivery earnings',
-                        total -
-                            part('tip') -
-                            part('waiting') -
-                            part('adjustment'),
-                      ),
+                      if (part('delivery') != 0)
+                        _CompletionRow('Delivery earnings', part('delivery')),
                       if (part('tip') != 0) _CompletionRow('Tip', part('tip')),
                       if (part('waiting') != 0)
                         _CompletionRow('Waiting / no-show', part('waiting')),
@@ -2615,21 +2646,6 @@ class _DeliveryCompleteView extends StatelessWidget {
                       ),
                       const SizedBox(height: 20),
                       if (feedback) ...[
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Circum rating is not available for this delivery yet.',
-                                  ),
-                                ),
-                              );
-                            },
-                            child: const Text('Rate Circum'),
-                          ),
-                        ),
                         TextButton(
                           onPressed: onReportIssue,
                           child: const Text('Report Delivery Issue'),
@@ -2681,28 +2697,28 @@ class _CompletionRow extends StatelessWidget {
   final bool strong;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 5),
-    child: Row(
-      children: [
-        Expanded(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: .7),
-              fontWeight: strong ? FontWeight.w800 : FontWeight.w500,
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: .7),
+                  fontWeight: strong ? FontWeight.w800 : FontWeight.w500,
+                ),
+              ),
             ),
-          ),
+            Text(
+              '£${amount.toStringAsFixed(2)}',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: strong ? FontWeight.w900 : FontWeight.w700,
+              ),
+            ),
+          ],
         ),
-        Text(
-          '£${amount.toStringAsFixed(2)}',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: strong ? FontWeight.w900 : FontWeight.w700,
-          ),
-        ),
-      ],
-    ),
-  );
+      );
 }
 
 class _WaitingPolicyCard extends StatefulWidget {
@@ -2763,161 +2779,159 @@ class _WaitingPolicyCardState extends State<_WaitingPolicyCard> {
 
   @override
   Widget build(BuildContext context) {
-        final data = widget.delivery;
-        final waiting = data['waiting'] is Map
-            ? Map<String, dynamic>.from(data['waiting'] as Map)
-            : const <String, dynamic>{};
-        final noShowFinancial = data['noShowFinancial'] is Map
-            ? Map<String, dynamic>.from(data['noShowFinancial'] as Map)
-            : _lastNoShowResult?['financial'] is Map
+    final data = widget.delivery;
+    final waiting = data['waiting'] is Map
+        ? Map<String, dynamic>.from(data['waiting'] as Map)
+        : const <String, dynamic>{};
+    final noShowFinancial = data['noShowFinancial'] is Map
+        ? Map<String, dynamic>.from(data['noShowFinancial'] as Map)
+        : _lastNoShowResult?['financial'] is Map
             ? Map<String, dynamic>.from(_lastNoShowResult!['financial'] as Map)
             : const <String, dynamic>{};
-        final rawDeadline = waiting['noShowAvailableAt'];
-        final deadline = rawDeadline is Timestamp
-            ? rawDeadline.toDate()
-            : rawDeadline is num
+    final rawDeadline = waiting['noShowAvailableAt'];
+    final deadline = rawDeadline is Timestamp
+        ? rawDeadline.toDate()
+        : rawDeadline is num
             ? DateTime.fromMillisecondsSinceEpoch(rawDeadline.toInt())
             : null;
-        final feeAmount = _moneyValue(
-          noShowFinancial['amount'] ?? waiting['noShowFeeAmount'],
-        );
-        final riderCompensation = _moneyValue(
-          noShowFinancial['riderCompensation'] ??
-              waiting['noShowRiderCompensation'],
-        );
-        final currency =
-            '${noShowFinancial['currency'] ?? waiting['currency'] ?? 'GBP'}';
-        final noShowRecorded =
-            data['state'] == 'sender_no_show_pickup' ||
-            noShowFinancial.isNotEmpty ||
-            _lastNoShowResult?['success'] == true;
-        final backendHasWaitingDeadline = deadline != null;
-        return StreamBuilder<int>(
-          stream: Stream<int>.periodic(
-            const Duration(seconds: 1),
-            (value) => value,
-          ),
-          builder: (context, _) {
-            final remaining = deadline == null
-                ? const Duration(minutes: 3)
-                : deadline.difference(DateTime.now());
-            final seconds = remaining.isNegative ? 0 : remaining.inSeconds;
-            final label =
-                '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
-            return RiderGlassSurface(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              radius: 18,
-              opacity: .64,
-              blur: 18,
-              borderColor: Colors.white.withValues(alpha: .16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: _WaitingCountdownRing(
-                      label: label,
-                      noShowReady: false,
-                      noShowRecorded: noShowRecorded,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'Circum notified on arrival',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontFamily: RiderTypography.mono,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: .8,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Waiting timer is managed by Circum and stays accurate if you background the app.',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.70),
-                      fontSize: 12,
-                      height: 1.35,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (feeAmount != null) ...[
-                    const SizedBox(height: 10),
-                    _WaitingChargeLine(
-                      label: noShowRecorded
-                          ? 'No-show charge recorded'
-                          : 'No-show charge set by Circum policy',
-                      amount: feeAmount,
-                      currency: currency,
-                    ),
-                    if (riderCompensation != null)
-                      _WaitingChargeLine(
-                        label: noShowRecorded
-                            ? 'Rider compensation recorded'
-                            : 'Rider compensation if approved',
-                        amount: riderCompensation,
-                        currency: currency,
-                        muted: !noShowRecorded,
-                      ),
-                  ],
-                  if (_error != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      _error!,
-                      style: const TextStyle(
-                        color: Color(0xFFFF8A8A),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _WaitingActionButton(
-                          label: 'Contact Circum',
-                          icon: Icons.chat_bubble_outline_rounded,
-                          onTap: () => widget.controller.reportWaitingContext(
-                            deliveryId: widget.deliveryId,
-                            type: 'waiting_for_building_access',
-                            note: 'Rider contacted sender during wait',
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _WaitingActionButton(
-                          label: _updatingContext
-                              ? 'Updating...'
-                              : 'Customer Responded',
-                          icon: Icons.mark_chat_read_outlined,
-                          onTap: _updatingContext ? null : _customerResponded,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  _WaitingNoShowButton(
+    final feeAmount = _moneyValue(
+      noShowFinancial['amount'] ?? waiting['noShowFeeAmount'],
+    );
+    final riderCompensation = _moneyValue(
+      noShowFinancial['riderCompensation'] ??
+          waiting['noShowRiderCompensation'],
+    );
+    final currency =
+        '${noShowFinancial['currency'] ?? waiting['currency'] ?? 'GBP'}';
+    final noShowRecorded = data['state'] == 'sender_no_show_pickup' ||
+        noShowFinancial.isNotEmpty ||
+        _lastNoShowResult?['success'] == true;
+    final backendHasWaitingDeadline = deadline != null;
+    return StreamBuilder<int>(
+      stream: Stream<int>.periodic(
+        const Duration(seconds: 1),
+        (value) => value,
+      ),
+      builder: (context, _) {
+        final remaining = deadline == null
+            ? const Duration(minutes: 3)
+            : deadline.difference(DateTime.now());
+        final seconds = remaining.isNegative ? 0 : remaining.inSeconds;
+        final label =
+            '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
+        return RiderGlassSurface(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          radius: 18,
+          opacity: .64,
+          blur: 18,
+          borderColor: Colors.white.withValues(alpha: .16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: _WaitingCountdownRing(
+                  label: label,
+                  noShowReady: false,
+                  noShowRecorded: noShowRecorded,
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Circum notified on arrival',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontFamily: RiderTypography.mono,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: .8,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Waiting timer is managed by Circum and stays accurate if you background the app.',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.70),
+                  fontSize: 12,
+                  height: 1.35,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (feeAmount != null) ...[
+                const SizedBox(height: 10),
+                _WaitingChargeLine(
+                  label: noShowRecorded
+                      ? 'No-show charge recorded'
+                      : 'No-show charge set by Circum policy',
+                  amount: feeAmount,
+                  currency: currency,
+                ),
+                if (riderCompensation != null)
+                  _WaitingChargeLine(
                     label: noShowRecorded
-                        ? 'No Show recorded'
-                        : backendHasWaitingDeadline
-                        ? _markingNoShow
-                              ? 'Marking No Show...'
-                              : 'Request No Show review'
-                        : 'Waiting for no-show policy',
-                    enabled:
-                        backendHasWaitingDeadline &&
-                        !noShowRecorded &&
-                        !_markingNoShow,
-                    onTap: _markNoShow,
+                        ? 'Rider compensation recorded'
+                        : 'Rider compensation if approved',
+                    amount: riderCompensation,
+                    currency: currency,
+                    muted: !noShowRecorded,
+                  ),
+              ],
+              if (_error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _error!,
+                  style: const TextStyle(
+                    color: Color(0xFFFF8A8A),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _WaitingActionButton(
+                      label: 'Contact Circum',
+                      icon: Icons.chat_bubble_outline_rounded,
+                      onTap: () => widget.controller.reportWaitingContext(
+                        deliveryId: widget.deliveryId,
+                        type: 'waiting_for_building_access',
+                        note: 'Rider contacted sender during wait',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _WaitingActionButton(
+                      label: _updatingContext
+                          ? 'Updating...'
+                          : 'Customer Responded',
+                      icon: Icons.mark_chat_read_outlined,
+                      onTap: _updatingContext ? null : _customerResponded,
+                    ),
                   ),
                 ],
               ),
-            );
-          },
+              const SizedBox(height: 8),
+              _WaitingNoShowButton(
+                label: noShowRecorded
+                    ? 'No Show recorded'
+                    : backendHasWaitingDeadline
+                        ? _markingNoShow
+                            ? 'Marking No Show...'
+                            : 'Request No Show review'
+                        : 'Waiting for no-show policy',
+                enabled: backendHasWaitingDeadline &&
+                    !noShowRecorded &&
+                    !_markingNoShow,
+                onTap: _markNoShow,
+              ),
+            ],
+          ),
         );
+      },
+    );
   }
 
   double? _moneyValue(Object? value) {
@@ -2943,8 +2957,8 @@ class _WaitingCountdownRing extends StatelessWidget {
     final color = noShowRecorded
         ? const Color(0xFF34D399)
         : noShowReady
-        ? const Color(0xFFFF452B)
-        : const Color(0xFF3B82F6);
+            ? const Color(0xFFFF452B)
+            : const Color(0xFF3B82F6);
     return Container(
       width: 152,
       height: 152,
@@ -2975,8 +2989,8 @@ class _WaitingCountdownRing extends StatelessWidget {
                 noShowRecorded
                     ? 'DONE'
                     : noShowReady
-                    ? '00:00'
-                    : label,
+                        ? '00:00'
+                        : label,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 31,
@@ -2989,8 +3003,8 @@ class _WaitingCountdownRing extends StatelessWidget {
                 noShowRecorded
                     ? 'recorded'
                     : noShowReady
-                    ? 'no-show available'
-                    : 'free wait remaining',
+                        ? 'no-show available'
+                        : 'free wait remaining',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: .52),
                   fontSize: 11,
@@ -3241,6 +3255,10 @@ class _CompactProgressIndicator extends StatelessWidget {
         return 6;
       case RiderDeliveryStage.issueReported:
         return 4;
+      case RiderDeliveryStage.cancelled:
+      case RiderDeliveryStage.failed:
+      case RiderDeliveryStage.unknown:
+        return 0;
     }
   }
 }
@@ -3376,7 +3394,8 @@ class _TrackingStatusPill extends StatelessWidget {
   static IconData _icon(RiderLiveTrackingStatus status) {
     return switch (status) {
       RiderLiveTrackingStatus.live ||
-      RiderLiveTrackingStatus.backgroundActive => Icons.radar_rounded,
+      RiderLiveTrackingStatus.backgroundActive =>
+        Icons.radar_rounded,
       RiderLiveTrackingStatus.acquiring => Icons.gps_fixed_rounded,
       RiderLiveTrackingStatus.poorAccuracy => Icons.gps_not_fixed_rounded,
       RiderLiveTrackingStatus.foregroundOnly => Icons.phone_iphone_rounded,
@@ -3388,9 +3407,11 @@ class _TrackingStatusPill extends StatelessWidget {
         Icons.location_disabled_rounded,
       RiderLiveTrackingStatus.servicesDisabled => Icons.location_off_rounded,
       RiderLiveTrackingStatus.arrivedAtPickup ||
-      RiderLiveTrackingStatus.arrivedAtDropoff => Icons.where_to_vote_rounded,
+      RiderLiveTrackingStatus.arrivedAtDropoff =>
+        Icons.where_to_vote_rounded,
       RiderLiveTrackingStatus.stopped ||
-      RiderLiveTrackingStatus.idle => Icons.pause_circle_outline_rounded,
+      RiderLiveTrackingStatus.idle =>
+        Icons.pause_circle_outline_rounded,
       RiderLiveTrackingStatus.error => Icons.error_outline_rounded,
     };
   }
@@ -3400,19 +3421,23 @@ class _TrackingStatusPill extends StatelessWidget {
       RiderLiveTrackingStatus.live ||
       RiderLiveTrackingStatus.backgroundActive ||
       RiderLiveTrackingStatus.arrivedAtPickup ||
-      RiderLiveTrackingStatus.arrivedAtDropoff => RiderPalette.blue,
+      RiderLiveTrackingStatus.arrivedAtDropoff =>
+        RiderPalette.blue,
       RiderLiveTrackingStatus.acquiring ||
       RiderLiveTrackingStatus.poorAccuracy ||
       RiderLiveTrackingStatus.foregroundOnly ||
       RiderLiveTrackingStatus.offline ||
-      RiderLiveTrackingStatus.reconnecting => RiderPalette.amber,
+      RiderLiveTrackingStatus.reconnecting =>
+        RiderPalette.amber,
       RiderLiveTrackingStatus.permissionRequired ||
       RiderLiveTrackingStatus.permissionDenied ||
       RiderLiveTrackingStatus.permissionPermanentlyDenied ||
       RiderLiveTrackingStatus.servicesDisabled ||
-      RiderLiveTrackingStatus.error => RiderPalette.red,
+      RiderLiveTrackingStatus.error =>
+        RiderPalette.red,
       RiderLiveTrackingStatus.stopped ||
-      RiderLiveTrackingStatus.idle => RiderPalette.muted,
+      RiderLiveTrackingStatus.idle =>
+        RiderPalette.muted,
     };
   }
 
@@ -3449,8 +3474,7 @@ class _TrackingEtaCard extends StatelessWidget {
     final toDropoff = stage.index >= RiderDeliveryStage.collected.index;
     final label = toDropoff ? 'To drop-off' : 'To pickup';
     final lastRefresh = _lastRefreshLabel(snapshot.lastPublishedAt);
-    final subdued =
-        snapshot.status == RiderLiveTrackingStatus.offline ||
+    final subdued = snapshot.status == RiderLiveTrackingStatus.offline ||
         snapshot.status == RiderLiveTrackingStatus.reconnecting ||
         snapshot.status == RiderLiveTrackingStatus.stopped ||
         snapshot.status == RiderLiveTrackingStatus.idle;
@@ -3581,7 +3605,8 @@ class _TrackingPermissionCard extends StatelessWidget {
       RiderLiveTrackingStatus.foregroundOnly ||
       RiderLiveTrackingStatus.poorAccuracy ||
       RiderLiveTrackingStatus.offline ||
-      RiderLiveTrackingStatus.reconnecting => true,
+      RiderLiveTrackingStatus.reconnecting =>
+        true,
       _ => false,
     };
   }
@@ -3675,12 +3700,14 @@ class _TrackingPermissionCard extends StatelessWidget {
   static String? _actionLabel(RiderLiveTrackingStatus status) {
     return switch (status) {
       RiderLiveTrackingStatus.permissionPermanentlyDenied ||
-      RiderLiveTrackingStatus.servicesDisabled => 'Settings',
+      RiderLiveTrackingStatus.servicesDisabled =>
+        'Settings',
       RiderLiveTrackingStatus.permissionRequired ||
       RiderLiveTrackingStatus.permissionDenied ||
       RiderLiveTrackingStatus.offline ||
       RiderLiveTrackingStatus.reconnecting ||
-      RiderLiveTrackingStatus.poorAccuracy => 'Retry',
+      RiderLiveTrackingStatus.poorAccuracy =>
+        'Retry',
       _ => null,
     };
   }
@@ -3705,11 +3732,13 @@ class _TrackingPermissionCard extends StatelessWidget {
       RiderLiveTrackingStatus.poorAccuracy ||
       RiderLiveTrackingStatus.foregroundOnly ||
       RiderLiveTrackingStatus.offline ||
-      RiderLiveTrackingStatus.reconnecting => RiderPalette.amber,
+      RiderLiveTrackingStatus.reconnecting =>
+        RiderPalette.amber,
       RiderLiveTrackingStatus.permissionRequired ||
       RiderLiveTrackingStatus.permissionDenied ||
       RiderLiveTrackingStatus.permissionPermanentlyDenied ||
-      RiderLiveTrackingStatus.servicesDisabled => RiderPalette.red,
+      RiderLiveTrackingStatus.servicesDisabled =>
+        RiderPalette.red,
       _ => RiderPalette.blue,
     };
   }
@@ -4019,10 +4048,10 @@ class _AcceptedBottomPanel extends StatelessWidget {
     final service = healthPlus
         ? 'Health+'
         : vanguard
-        ? 'Vanguard'
-        : gift
-        ? 'Gift'
-        : 'Standard';
+            ? 'Vanguard'
+            : gift
+                ? 'Gift'
+                : 'Standard';
     return '$service verification: ${methods.join(', ')}. Requirements are read from the delivery record.';
   }
 }
@@ -4238,10 +4267,8 @@ class _AcceptedEssentialSummary extends StatelessWidget {
   }
 
   static String _collapsedChips(RiderJobOffer offer) {
-    final chips = offer.warningChips
-        .where((chip) => chip != 'Standard')
-        .take(3)
-        .toList();
+    final chips =
+        offer.warningChips.where((chip) => chip != 'Standard').take(3).toList();
     chips.add(offer.minimumVehicle);
     return chips.join(' - ');
   }
@@ -4440,8 +4467,8 @@ class _PickupWorkflowPanel extends StatelessWidget {
                         label: irisConfirmed
                             ? 'Confirmed'
                             : irisConfirmationPending
-                            ? 'Confirming...'
-                            : 'Confirm',
+                                ? 'Confirming...'
+                                : 'Confirm',
                         icon: irisConfirmed
                             ? Icons.verified_rounded
                             : Icons.check_rounded,
@@ -4475,8 +4502,8 @@ class _PickupWorkflowPanel extends StatelessWidget {
     final iris = raw['irisRecommendation'] is Map
         ? Map<String, dynamic>.from(raw['irisRecommendation'] as Map)
         : raw['iris'] is Map
-        ? Map<String, dynamic>.from(raw['iris'] as Map)
-        : const <String, dynamic>{};
+            ? Map<String, dynamic>.from(raw['iris'] as Map)
+            : const <String, dynamic>{};
     return _IrisRecommendation(
       detectedItem:
           '${iris['detectedItem'] ?? raw['itemName'] ?? offer.parcelGuidance}',
@@ -4636,9 +4663,8 @@ class _StageTracker extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: active
-                  ? Colors.white
-                  : Colors.white.withValues(alpha: 0.58),
+              color:
+                  active ? Colors.white : Colors.white.withValues(alpha: 0.58),
               fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
@@ -4672,6 +4698,12 @@ class _StageTracker extends StatelessWidget {
         return 'Delivery Complete';
       case RiderDeliveryStage.issueReported:
         return 'Support Active';
+      case RiderDeliveryStage.cancelled:
+        return 'Cancelled';
+      case RiderDeliveryStage.failed:
+        return 'Needs Support';
+      case RiderDeliveryStage.unknown:
+        return 'Status Unavailable';
     }
   }
 }

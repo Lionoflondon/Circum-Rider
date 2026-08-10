@@ -136,10 +136,43 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
 class RiderEvidenceUploader {
   final FirebaseStorage storage;
   final ImagePicker picker;
+  final FirebaseFunctions functions;
 
-  RiderEvidenceUploader({FirebaseStorage? storage, ImagePicker? picker})
+  RiderEvidenceUploader(
+      {FirebaseStorage? storage,
+      ImagePicker? picker,
+      FirebaseFunctions? functions})
       : storage = storage ?? FirebaseStorage.instance,
-        picker = picker ?? ImagePicker();
+        picker = picker ?? ImagePicker(),
+        functions = functions ?? FirebaseFunctions.instance;
+
+  Future<String?> captureDeliveryEvidence({
+    required String deliveryId,
+  }) async {
+    final image = await picker.pickImage(
+        source: ImageSource.camera, imageQuality: 82, maxWidth: 1600);
+    if (image == null) return null;
+    final bytes = await image.readAsBytes();
+    final photoId = DateTime.now().microsecondsSinceEpoch.toString();
+    final storagePath = 'deliveries/$deliveryId/evidence/photos/$photoId.jpg';
+    final snapshot = await storage.ref(storagePath).putData(
+          bytes,
+          SettableMetadata(contentType: 'image/jpeg'),
+        );
+    final metadata = await snapshot.ref.getMetadata();
+    final result =
+        await functions.httpsCallable('recordDeliveryEvidence').call({
+      'deliveryId': deliveryId,
+      'photoId': photoId,
+      'storagePath': storagePath,
+      'type': 'PHOTO',
+      'mimeType': metadata.contentType ?? 'image/jpeg',
+      'fileSize': metadata.size,
+      if ((metadata.md5Hash ?? '').isNotEmpty) 'checksum': metadata.md5Hash,
+    });
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return data['verified'] == true ? '${data['photoId'] ?? photoId}' : null;
+  }
 
   Future<String?> capture({
     required String deliveryId,
