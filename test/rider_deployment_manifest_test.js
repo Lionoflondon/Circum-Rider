@@ -58,7 +58,7 @@ test('Rider bundle markers must be present', () => {
   assert.equal(
     validateBundle(
       'const title = "Circum Rider";',
-      "window.CIRCUM_RIDER_BUILD = 'rider-web-cache-v1';",
+      "window.CIRCUM_RIDER_BUILD = 'rider-web-cache-v2';",
     ),
     true,
   );
