@@ -4,7 +4,7 @@ part of 'home_bloc.dart';
 enum MapCameraStatus {
   initialized,
   showingDeviceLocation,
-  showingSourceAndDestinationLocations
+  showingSourceAndDestinationLocations,
 }
 
 enum SourceAndDestinationStatus { unselected, selected }
@@ -16,7 +16,7 @@ enum RideStatus {
   userConfirmedRide,
   arrivedAtPickupLocation,
   outForDelivery,
-  delivered
+  delivered,
 }
 
 enum PanelControlStatus { initialized, isOpened, isClosed }
@@ -24,6 +24,8 @@ enum PanelControlStatus { initialized, isOpened, isClosed }
 enum BroadcastStatus { initialized, broadcasting }
 
 enum RequestStatus { initial, loading, success, failure }
+
+enum ActiveDeliveryRestoreStatus { initial, restoring, restored, failed }
 
 enum RiderAvailabilityStatus {
   offline,
@@ -51,16 +53,13 @@ class RiderAvailability {
   bool get isOnline => status == RiderAvailabilityStatus.online;
 
   bool get intendsToBeOnline => switch (status) {
-        RiderAvailabilityStatus.goingOnline ||
-        RiderAvailabilityStatus.waitingForLocation ||
-        RiderAvailabilityStatus.online ||
-        RiderAvailabilityStatus.temporarilyUnavailable ||
-        RiderAvailabilityStatus.goingOffline =>
-          true,
-        RiderAvailabilityStatus.offline ||
-        RiderAvailabilityStatus.error =>
-          false,
-      };
+    RiderAvailabilityStatus.goingOnline ||
+    RiderAvailabilityStatus.waitingForLocation ||
+    RiderAvailabilityStatus.online ||
+    RiderAvailabilityStatus.temporarilyUnavailable ||
+    RiderAvailabilityStatus.goingOffline => true,
+    RiderAvailabilityStatus.offline || RiderAvailabilityStatus.error => false,
+  };
 
   RiderAvailability copyWith({
     RiderAvailabilityStatus? status,
@@ -87,15 +86,18 @@ class RiderAvailability {
       locationMap['updatedAt'] ?? presence['lastLocationAt'],
     );
     final heartbeat = _time(presence['lastHeartbeatAt']);
-    final locationFresh = lastFix != null &&
+    final locationFresh =
+        lastFix != null &&
         evaluatedAt.difference(lastFix) <= const Duration(minutes: 2);
-    final heartbeatFresh = heartbeat != null &&
+    final heartbeatFresh =
+        heartbeat != null &&
         evaluatedAt.difference(heartbeat) <= const Duration(minutes: 2);
     final rawStatus =
         '${presence['availabilityStatus'] ?? presence['status'] ?? ''}'
             .trim()
             .toLowerCase();
-    final explicitlyOnline = presence['isOnline'] == true ||
+    final explicitlyOnline =
+        presence['isOnline'] == true ||
         rawStatus == 'online' ||
         rawStatus == 'available' ||
         rawStatus == 'busy' ||
@@ -106,10 +108,10 @@ class RiderAvailability {
     final status = !explicitlyOnline || rawStatus == 'offline'
         ? RiderAvailabilityStatus.offline
         : !locationFresh
-            ? RiderAvailabilityStatus.waitingForLocation
-            : eligible
-                ? RiderAvailabilityStatus.online
-                : RiderAvailabilityStatus.temporarilyUnavailable;
+        ? RiderAvailabilityStatus.waitingForLocation
+        : eligible
+        ? RiderAvailabilityStatus.online
+        : RiderAvailabilityStatus.temporarilyUnavailable;
     return RiderAvailability(
       status: status,
       lastFix: lastFix,
@@ -133,7 +135,7 @@ enum ActionButtonStatus {
   goingToPickupLocation,
   arrivedPickupLocation,
   outForDelivery,
-  delivered
+  delivered,
 }
 
 class HomeState {
@@ -160,6 +162,7 @@ class HomeState {
   List<String> verificationChecklist;
   RequestStatus requestStatus;
   RiderAvailability availability;
+  ActiveDeliveryRestoreStatus activeDeliveryRestoreStatus;
 
   HomeState({
     this.ongoingRequests = const [],
@@ -185,57 +188,63 @@ class HomeState {
     this.verificationChecklist = const [],
     this.requestStatus = RequestStatus.initial,
     this.availability = const RiderAvailability(),
+    this.activeDeliveryRestoreStatus = ActiveDeliveryRestoreStatus.initial,
   });
 
-  HomeState copyWith(
-      {List? ongoingRequests,
-      RideStatus? rideStatus,
-      Position? locationData,
-      Map<MarkerId, Marker>? markers,
-      List<Polyline>? polylines,
-      List<LatLng>? polylineCoordinates,
-      List<DispatchRequest>? dispatchRequests,
-      SourceAndDestinationStatus? sourceAndDestinationStatus,
-      MapCameraStatus? mapCameraStatus,
-      PanelControlStatus? panelControlStatus,
-      ActionButtonStatus? actionButtonStatus,
-      BroadcastStatus? broadcastStatus,
-      double? minDrawerHeight,
-      double? maxDrawerHeight,
-      int? selectedRequestIndex,
-      DispatchRequest? activeRequest,
-      List<Message>? chatMessages,
-      ChatStatus? chatStatus,
-      String? message,
-      bool? canGoOnline,
-      List<String>? verificationChecklist,
-      RequestStatus? requestStatus,
-      RiderAvailability? availability}) {
+  HomeState copyWith({
+    List? ongoingRequests,
+    RideStatus? rideStatus,
+    Position? locationData,
+    Map<MarkerId, Marker>? markers,
+    List<Polyline>? polylines,
+    List<LatLng>? polylineCoordinates,
+    List<DispatchRequest>? dispatchRequests,
+    SourceAndDestinationStatus? sourceAndDestinationStatus,
+    MapCameraStatus? mapCameraStatus,
+    PanelControlStatus? panelControlStatus,
+    ActionButtonStatus? actionButtonStatus,
+    BroadcastStatus? broadcastStatus,
+    double? minDrawerHeight,
+    double? maxDrawerHeight,
+    int? selectedRequestIndex,
+    DispatchRequest? activeRequest,
+    List<Message>? chatMessages,
+    ChatStatus? chatStatus,
+    String? message,
+    bool? canGoOnline,
+    List<String>? verificationChecklist,
+    RequestStatus? requestStatus,
+    RiderAvailability? availability,
+    ActiveDeliveryRestoreStatus? activeDeliveryRestoreStatus,
+  }) {
     return HomeState(
-        ongoingRequests: ongoingRequests ?? this.ongoingRequests,
-        rideStatus: rideStatus ?? this.rideStatus,
-        locationData: locationData ?? this.locationData,
-        dispatchRequests: dispatchRequests ?? this.dispatchRequests,
-        markers: markers ?? this.markers,
-        polylines: polylines ?? this.polylines,
-        polylineCoordinates: polylineCoordinates ?? this.polylineCoordinates,
-        sourceAndDestinationStatus:
-            sourceAndDestinationStatus ?? this.sourceAndDestinationStatus,
-        broadcastStatus: broadcastStatus ?? this.broadcastStatus,
-        mapCameraStatus: mapCameraStatus ?? this.mapCameraStatus,
-        minDrawerHeight: minDrawerHeight ?? this.minDrawerHeight,
-        maxDrawerHeight: maxDrawerHeight ?? this.maxDrawerHeight,
-        panelControlStatus: panelControlStatus ?? this.panelControlStatus,
-        actionButtonStatus: actionButtonStatus ?? this.actionButtonStatus,
-        selectedRequestIndex: selectedRequestIndex ?? this.selectedRequestIndex,
-        activeRequest: activeRequest ?? this.activeRequest,
-        chatMessages: chatMessages ?? this.chatMessages,
-        chatStatus: chatStatus ?? this.chatStatus,
-        message: message ?? this.message,
-        canGoOnline: canGoOnline ?? this.canGoOnline,
-        verificationChecklist:
-            verificationChecklist ?? this.verificationChecklist,
-        requestStatus: requestStatus ?? this.requestStatus,
-        availability: availability ?? this.availability);
+      ongoingRequests: ongoingRequests ?? this.ongoingRequests,
+      rideStatus: rideStatus ?? this.rideStatus,
+      locationData: locationData ?? this.locationData,
+      dispatchRequests: dispatchRequests ?? this.dispatchRequests,
+      markers: markers ?? this.markers,
+      polylines: polylines ?? this.polylines,
+      polylineCoordinates: polylineCoordinates ?? this.polylineCoordinates,
+      sourceAndDestinationStatus:
+          sourceAndDestinationStatus ?? this.sourceAndDestinationStatus,
+      broadcastStatus: broadcastStatus ?? this.broadcastStatus,
+      mapCameraStatus: mapCameraStatus ?? this.mapCameraStatus,
+      minDrawerHeight: minDrawerHeight ?? this.minDrawerHeight,
+      maxDrawerHeight: maxDrawerHeight ?? this.maxDrawerHeight,
+      panelControlStatus: panelControlStatus ?? this.panelControlStatus,
+      actionButtonStatus: actionButtonStatus ?? this.actionButtonStatus,
+      selectedRequestIndex: selectedRequestIndex ?? this.selectedRequestIndex,
+      activeRequest: activeRequest ?? this.activeRequest,
+      chatMessages: chatMessages ?? this.chatMessages,
+      chatStatus: chatStatus ?? this.chatStatus,
+      message: message ?? this.message,
+      canGoOnline: canGoOnline ?? this.canGoOnline,
+      verificationChecklist:
+          verificationChecklist ?? this.verificationChecklist,
+      requestStatus: requestStatus ?? this.requestStatus,
+      availability: availability ?? this.availability,
+      activeDeliveryRestoreStatus:
+          activeDeliveryRestoreStatus ?? this.activeDeliveryRestoreStatus,
+    );
   }
 }

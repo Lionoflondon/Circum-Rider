@@ -40,15 +40,22 @@ void _reportRiderWebError(Object error, StackTrace? stack) {
 }
 
 Future<void> _initializeRiderWeb() async {
+  final startup = Stopwatch()..start();
+  debugPrint('[RIDER_STARTUP] firebase_begin=0ms');
   try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
   } on FirebaseException catch (error) {
     if (error.code != 'duplicate-app') rethrow;
   }
+  debugPrint('[RIDER_STARTUP] firebase_ready=${startup.elapsedMilliseconds}ms');
   final appCheckStartup = await initializeRiderAppCheck();
+  debugPrint(
+    '[RIDER_STARTUP] app_check_ready=${startup.elapsedMilliseconds}ms',
+  );
   if (appCheckStartup.blockStartup) {
     throw StateError(appCheckStartup.message);
   }
+  debugPrint('[RIDER_STARTUP] shell_ready=${startup.elapsedMilliseconds}ms');
 }
 
 class RiderWebStartupApp extends StatefulWidget {
@@ -210,10 +217,7 @@ class _RiderWebStartupHold extends StatelessWidget {
                   Text(
                     'Preparing your Rider workspace.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Color(0xFF9CA8B8),
-                      height: 1.45,
-                    ),
+                    style: TextStyle(color: Color(0xFF9CA8B8), height: 1.45),
                   ),
                 ],
               ),

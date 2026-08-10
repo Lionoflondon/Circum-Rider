@@ -41,7 +41,9 @@ void main() {
 
     test('old four-tab shell is gone', () {
       expect(
-          nav, contains("['Home', 'Jobs', 'Action', 'Earnings', 'Profile']"));
+        nav,
+        contains("['Home', 'Jobs', 'Availability', 'Earnings', 'Profile']"),
+      );
       expect(nav, contains('const _CentralAction()'));
       expect(nav, contains('_showAvailabilitySheet'));
       expect(nav, contains('SetRideStatus('));

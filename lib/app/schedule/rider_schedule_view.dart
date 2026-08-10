@@ -1,4 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+import 'package:cloud_firestore/cloud_firestore.dart'
+    show FirebaseFirestore, Timestamp;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -6,6 +7,7 @@ import '../rider_jobs/rider_job_projection_service.dart';
 import '../rider_jobs/rider_job_offer_screen.dart';
 import '../rider_jobs/rider_offer_card.dart';
 import '../rider_design/rider_ui.dart';
+import '../rider_truth/rider_truth.dart';
 
 enum _ScheduleFilter { all, today, week, vanguard }
 
@@ -48,13 +50,20 @@ class _RiderScheduleViewState extends State<RiderScheduleView> {
 
               final jobs =
                   [...snapshot.data!.active, ...snapshot.data!.completed]
-                      .map((job) => _ScheduleJob.from(
-                            '${job['id'] ?? job['deliveryId']}',
-                            job,
-                          ))
+                      .map(
+                        (job) => _ScheduleJob.from(
+                          '${job['id'] ?? job['deliveryId']}',
+                          job,
+                        ),
+                      )
                       .where((job) => job.isVisible)
                       .toList()
-                    ..sort((a, b) => a.scheduledAt.compareTo(b.scheduledAt));
+                    ..sort((a, b) {
+                      if (a.scheduleValid != b.scheduleValid) {
+                        return a.scheduleValid ? -1 : 1;
+                      }
+                      return a.scheduledAt.compareTo(b.scheduledAt);
+                    });
               final filtered = jobs.where(_matchesFilter).toList();
 
               return CustomScrollView(
@@ -83,14 +92,14 @@ class _RiderScheduleViewState extends State<RiderScheduleView> {
                             const _ScheduleEmptyPanel()
                           else
                             ..._grouped(filtered).entries.map(
-                                  (entry) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 22),
-                                    child: _DayGroup(
-                                      label: entry.key,
-                                      jobs: entry.value,
-                                    ),
-                                  ),
+                              (entry) => Padding(
+                                padding: const EdgeInsets.only(bottom: 22),
+                                child: _DayGroup(
+                                  label: entry.key,
+                                  jobs: entry.value,
                                 ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -101,10 +110,7 @@ class _RiderScheduleViewState extends State<RiderScheduleView> {
           );
 
     if (widget.embedded) return content;
-    return Scaffold(
-      backgroundColor: RiderPalette.background,
-      body: content,
-    );
+    return Scaffold(backgroundColor: RiderPalette.background, body: content);
   }
 
   bool _matchesFilter(_ScheduleJob job) {
@@ -112,9 +118,10 @@ class _RiderScheduleViewState extends State<RiderScheduleView> {
     final local = job.scheduledAt.toLocal();
     return switch (_filter) {
       _ScheduleFilter.all => true,
-      _ScheduleFilter.today => local.year == now.year &&
-          local.month == now.month &&
-          local.day == now.day,
+      _ScheduleFilter.today =>
+        local.year == now.year &&
+            local.month == now.month &&
+            local.day == now.day,
       _ScheduleFilter.week =>
         local.isBefore(now.add(const Duration(days: 7))) &&
             !local.isBefore(DateTime(now.year, now.month, now.day)),
@@ -146,8 +153,10 @@ class _ScheduleHeader extends StatelessWidget {
               backgroundColor: Colors.white.withValues(alpha: .045),
               side: BorderSide(color: Colors.white.withValues(alpha: .09)),
             ),
-            icon: const Icon(Icons.chevron_left_rounded,
-                color: RiderPalette.paper),
+            icon: const Icon(
+              Icons.chevron_left_rounded,
+              color: RiderPalette.paper,
+            ),
           ),
           const SizedBox(width: 10),
         ],
@@ -224,8 +233,9 @@ class _FilterChip extends StatelessWidget {
         backgroundColor: Colors.white.withValues(alpha: .045),
         selectedColor: RiderPalette.blue,
         side: BorderSide(
-          color:
-              active ? Colors.transparent : Colors.white.withValues(alpha: .09),
+          color: active
+              ? Colors.transparent
+              : Colors.white.withValues(alpha: .09),
         ),
         labelStyle: TextStyle(
           color: active ? Colors.white : RiderPalette.muted,
@@ -415,19 +425,27 @@ class _ScheduledJobCard extends StatelessWidget {
     );
   }
 
-  void _showDetails(BuildContext context, _ScheduleJob job) {
+  Future<void> _showDetails(BuildContext context, _ScheduleJob job) async {
     if (job.ready) {
       final uid = FirebaseAuth.instance.currentUser?.uid;
       if (uid != null) {
+        final records = await Future.wait([
+          FirebaseFirestore.instance.collection('riders').doc(uid).get(),
+          FirebaseFirestore.instance.collection('riderProfiles').doc(uid).get(),
+        ]);
+        if (!context.mounted) return;
+        final rank =
+            RiderRankSnapshot.from({
+              ...?records[0].data(),
+              ...?records[1].data(),
+            })?.rank ??
+            'Agent';
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => RiderAcceptedJobScreen(
-              offer: RiderJobOffer.fromFirestore(
-                docId: job.id,
-                data: job.raw,
-              ),
+              offer: RiderJobOffer.fromFirestore(docId: job.id, data: job.raw),
               riderId: uid,
-              riderRank: 'Agent',
+              riderRank: rank,
             ),
           ),
         );
@@ -542,8 +560,10 @@ class _ScheduleEmptyPanel extends StatelessWidget {
                 color: RiderPalette.purple.withValues(alpha: .25),
               ),
             ),
-            child: const Icon(Icons.calendar_month_outlined,
-                color: RiderPalette.purple),
+            child: const Icon(
+              Icons.calendar_month_outlined,
+              color: RiderPalette.purple,
+            ),
           ),
           const SizedBox(height: 12),
           const Text(
@@ -577,19 +597,19 @@ class _ScheduleEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
-          children: [
-            const _ScheduleHeader(),
-            const SizedBox(height: 18),
-            RiderEmptyState(
-              icon: Icons.calendar_month_outlined,
-              title: 'No scheduled deliveries',
-              message: message,
-            ),
-          ],
+    child: ListView(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 28),
+      children: [
+        const _ScheduleHeader(),
+        const SizedBox(height: 18),
+        RiderEmptyState(
+          icon: Icons.calendar_month_outlined,
+          title: 'No scheduled deliveries',
+          message: message,
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _ScheduleJob {
@@ -600,6 +620,7 @@ class _ScheduleJob {
     required this.pickup,
     required this.dropoff,
     required this.scheduledAt,
+    required this.scheduleValid,
     required this.status,
   });
 
@@ -609,17 +630,20 @@ class _ScheduleJob {
   final String pickup;
   final String dropoff;
   final DateTime scheduledAt;
+  final bool scheduleValid;
   final String status;
 
   bool get isVisible {
     final hidden = {'completed', 'cancelled', 'expired', 'rejected'};
-    final scheduled = raw['scheduled'] == true ||
+    final scheduled =
+        raw['scheduled'] == true ||
         raw['isScheduled'] == true ||
         raw['scheduledAt'] != null;
     return scheduled && !hidden.contains(status);
   }
 
   bool get ready {
+    if (!scheduleValid) return false;
     final readiness =
         '${raw['scheduleReadiness'] ?? raw['operationalWindowStatus'] ?? raw['readyState'] ?? ''}'
             .trim()
@@ -637,6 +661,7 @@ class _ScheduleJob {
   }
 
   String get readinessLabel {
+    if (!scheduleValid) return 'Schedule unavailable';
     if (ready) return 'Ready to start';
     final difference = scheduledAt.difference(DateTime.now());
     if (difference.inDays > 0) return 'Starts in ${difference.inDays}d';
@@ -647,11 +672,13 @@ class _ScheduleJob {
   Color get readinessColor => ready ? RiderPalette.green : RiderPalette.amber;
 
   String get timeLabel {
+    if (!scheduleValid) return 'Schedule unavailable';
     final local = scheduledAt.toLocal();
     return '${_two(local.day)}/${_two(local.month)}/${local.year} · ${_two(local.hour)}:${_two(local.minute)}';
   }
 
   String get dayLabel {
+    if (!scheduleValid) return 'Schedule unavailable';
     final now = DateTime.now();
     final local = scheduledAt.toLocal();
     final today = DateTime(now.year, now.month, now.day);
@@ -662,19 +689,26 @@ class _ScheduleJob {
   }
 
   static _ScheduleJob from(String id, Map<String, dynamic> data) {
+    final scheduledAt = scheduledDate(data);
     return _ScheduleJob(
       id: id,
       raw: data,
       service: _ScheduleService.from(data),
-      pickup: area(data['pickupDetails'] ??
-          data['pickup'] ??
-          data['pickupArea'] ??
-          data['pickupPostcode']),
-      dropoff: area(data['dropoffDetails'] ??
-          data['dropoff'] ??
-          data['dropoffArea'] ??
-          data['dropoffPostcode']),
-      scheduledAt: scheduledDate(data),
+      pickup: area(
+        data['pickupDetails'] ??
+            data['pickup'] ??
+            data['pickupArea'] ??
+            data['pickupPostcode'],
+      ),
+      dropoff: area(
+        data['dropoffDetails'] ??
+            data['dropoff'] ??
+            data['dropoffArea'] ??
+            data['dropoffPostcode'],
+      ),
+      scheduledAt:
+          scheduledAt ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      scheduleValid: scheduledAt != null,
       status: '${data['status'] ?? data['deliveryState'] ?? ''}'.toLowerCase(),
     );
   }
@@ -687,28 +721,33 @@ class _ScheduleJob {
     return text.isEmpty || text == 'null' ? 'Location pending' : text;
   }
 
-  static DateTime scheduledDate(Map<String, dynamic> data) {
+  static DateTime? scheduledDate(Map<String, dynamic> data) {
     final value = data['scheduledAt'] ?? data['scheduledTime'];
-    return value is Timestamp ? value.toDate() : DateTime.now();
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is num) {
+      return DateTime.fromMillisecondsSinceEpoch(value.toInt(), isUtc: true);
+    }
+    return DateTime.tryParse('${value ?? ''}');
   }
 
   static String _two(int value) => value.toString().padLeft(2, '0');
   static String _weekday(int value) =>
       const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][value - 1];
   static String _month(int value) => const [
-        'Jan',
-        'Feb',
-        'Mar',
-        'Apr',
-        'May',
-        'Jun',
-        'Jul',
-        'Aug',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dec'
-      ][value - 1];
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ][value - 1];
 }
 
 enum _ScheduleService {

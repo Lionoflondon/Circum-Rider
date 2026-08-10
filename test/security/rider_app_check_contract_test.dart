@@ -60,7 +60,10 @@ void main() {
     );
     expect(
       File('lib/app/home/bloc/home_bloc.dart').readAsStringSync(),
-      contains("String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY')"),
+      allOf(
+        contains('String.fromEnvironment('),
+        contains("'GOOGLE_MAPS_DIRECTIONS_API_KEY'"),
+      ),
     );
     expect(
       File('lib/app/home/repo/direction_service.dart').readAsStringSync(),

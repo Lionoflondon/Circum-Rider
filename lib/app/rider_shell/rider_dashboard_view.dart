@@ -83,30 +83,31 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                           ...?jobsSnapshot.data?.active,
                           ...?jobsSnapshot.data?.completed,
                         ];
-                        final offers = [
-                          ...?jobsSnapshot.data?.offers,
-                        ]..sort((a, b) => _time(b).compareTo(_time(a)));
+                        final offers = [...?jobsSnapshot.data?.offers]
+                          ..sort((a, b) => _time(b).compareTo(_time(a)));
                         final data = _DashboardData(
                           profile: profile,
                           earnings: earningsSnapshot.data?.data() ?? const {},
                           presence: presenceSnapshot.data?.data() ?? const {},
                           eligibleOffers: offers.take(8).toList(),
-                          scheduled: assigned
-                              .where(
-                                (item) =>
-                                    _isScheduled(item) && !_isFinished(item),
-                              )
-                              .toList()
-                            ..sort(
-                              (a, b) => _time(a).compareTo(_time(b)),
-                            ),
+                          scheduled:
+                              assigned
+                                  .where(
+                                    (item) =>
+                                        _isScheduled(item) &&
+                                        !_isFinished(item),
+                                  )
+                                  .toList()
+                                ..sort((a, b) => _time(a).compareTo(_time(b))),
                           recent: assigned.where(_isFinished).toList()
                             ..sort((a, b) => _time(b).compareTo(_time(a))),
-                          loading: profileSnapshot.connectionState ==
+                          loading:
+                              profileSnapshot.connectionState ==
                                   ConnectionState.waiting &&
                               riderSnapshot.connectionState ==
                                   ConnectionState.waiting,
-                          hasDataError: profileSnapshot.hasError ||
+                          hasDataError:
+                              profileSnapshot.hasError ||
                               riderSnapshot.hasError ||
                               earningsSnapshot.hasError ||
                               presenceSnapshot.hasError ||
@@ -123,12 +124,12 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                                 final intendsOnline =
                                     homeState.availability.intendsToBeOnline;
                                 context.read<HomeBloc>().add(
-                                      SetRideStatus(
-                                        status: intendsOnline
-                                            ? RideStatus.offline
-                                            : RideStatus.online,
-                                      ),
-                                    );
+                                  SetRideStatus(
+                                    status: intendsOnline
+                                        ? RideStatus.offline
+                                        : RideStatus.online,
+                                  ),
+                                );
                               },
                             );
                           },
@@ -151,10 +152,9 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
       item['scheduledAt'] != null;
 
   static bool _isFinished(Map<String, dynamic> item) => {
-        'completed',
-        'delivered',
-      }.contains(
-          '${item['deliveryState'] ?? item['status'] ?? ''}'.toLowerCase());
+    'completed',
+    'delivered',
+  }.contains('${item['deliveryState'] ?? item['status'] ?? ''}'.toLowerCase());
 
   static bool _isLiveOffer(Map<String, dynamic> item, String riderId) {
     final values = [
@@ -185,16 +185,17 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
         matching != 'broadcasted') {
       return false;
     }
-    final assigned = [
-      item['riderId'],
-      item['driverId'],
-      item['assignedRider'],
-      item['assignedRiderId'],
-      item['assignedDriverId'],
-      item['courierId'],
-    ]
-        .map((value) => value == null ? '' : '$value'.trim())
-        .where((value) => value.isNotEmpty);
+    final assigned =
+        [
+              item['riderId'],
+              item['driverId'],
+              item['assignedRider'],
+              item['assignedRiderId'],
+              item['assignedDriverId'],
+              item['courierId'],
+            ]
+            .map((value) => value == null ? '' : '$value'.trim())
+            .where((value) => value.isNotEmpty);
     if (assigned.any((value) => value != riderId)) return false;
     final payment = '${item['paymentStatus'] ?? item['paymentState'] ?? ''}'
         .trim()
@@ -210,7 +211,8 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
         }.contains(payment)) {
       return false;
     }
-    final expiry = _timestampMillis(item['offerExpiresAt']) ??
+    final expiry =
+        _timestampMillis(item['offerExpiresAt']) ??
         _timestampMillis(item['dispatchExpiresAt']) ??
         _timestampMillis(item['expiresAt']) ??
         _timestampMillis(item['matchingExpiresAt']);
@@ -218,7 +220,8 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
   }
 
   static int _time(Map<String, dynamic> item) {
-    final value = item['scheduledAt'] ??
+    final value =
+        item['scheduledAt'] ??
         item['collectionStart'] ??
         item['completedAt'] ??
         item['updatedAt'] ??
@@ -260,8 +263,7 @@ String _firstProfileText(
   Map<String, dynamic> source,
   List<String> keys, {
   String fallback = '',
-}) =>
-    _firstProfileTextFromSources([source], keys, fallback: fallback);
+}) => _firstProfileTextFromSources([source], keys, fallback: fallback);
 
 String _firstProfileTextFromSources(
   List<Map<String, dynamic>> sources,
@@ -356,6 +358,8 @@ class _DashboardSurface extends StatelessWidget {
                   _AvailabilityCard(
                     home: home,
                     onToggle: onToggleAvailability,
+                    onRetryRestore: () =>
+                        context.read<HomeBloc>().add(CheckForActiveRequest()),
                   ),
                   const SizedBox(height: 14),
                   _DashboardGuideEntry(profile: data.profile),
@@ -423,16 +427,13 @@ class _DashboardHeader extends StatelessWidget {
         '${profile['firstName'] ?? profile['name'] ?? auth.username ?? ''}'
             .trim();
     final firstName = rawName.isEmpty ? 'Rider' : rawName.split(' ').first;
-    final photo = _firstProfileText(
-        profile,
-        [
-          'profileThumbnailUrl',
-          'profilePhotoUrl',
-          'profilePhoto',
-          'photoURL',
-          'photoUrl',
-        ],
-        fallback: auth.profilePhoto ?? '');
+    final photo = _firstProfileText(profile, [
+      'profileThumbnailUrl',
+      'profilePhotoUrl',
+      'profilePhoto',
+      'photoURL',
+      'photoUrl',
+    ], fallback: auth.profilePhoto ?? '');
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -578,16 +579,20 @@ class _AvailabilityCard extends StatelessWidget {
   const _AvailabilityCard({
     required this.home,
     required this.onToggle,
+    required this.onRetryRestore,
   });
 
   final HomeState home;
   final VoidCallback onToggle;
+  final VoidCallback onRetryRestore;
 
   @override
   Widget build(BuildContext context) {
     final availability = home.availability;
     final online = availability.isOnline;
     final intendsOnline = availability.intendsToBeOnline;
+    final restoreFailed =
+        home.activeDeliveryRestoreStatus == ActiveDeliveryRestoreStatus.failed;
     return RiderGlassSurface(
       opacity: .66,
       edgeColor: online ? RiderPalette.green : RiderPalette.red,
@@ -615,7 +620,9 @@ class _AvailabilityCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  _title(availability),
+                  restoreFailed
+                      ? 'Unable to restore active job'
+                      : _title(availability),
                   style: const TextStyle(
                     color: RiderPalette.paper,
                     fontWeight: FontWeight.w700,
@@ -627,7 +634,9 @@ class _AvailabilityCard extends StatelessWidget {
           ),
           const SizedBox(height: 9),
           Text(
-            _description(availability),
+            restoreFailed
+                ? 'Availability is paused until Circum confirms whether you have active work.'
+                : _description(availability),
             style: const TextStyle(
               color: RiderPalette.muted,
               fontFamily: RiderTypography.body,
@@ -646,27 +655,40 @@ class _AvailabilityCard extends StatelessWidget {
           FutureBuilder<bool>(
             future: RiderInternalAccess.enabled(),
             builder: (context, internalAccess) {
-              final allowed = internalAccess.data == true ||
-                  home.canGoOnline ||
-                  intendsOnline;
+              final allowed =
+                  !restoreFailed &&
+                  (internalAccess.data == true ||
+                      home.canGoOnline ||
+                      intendsOnline);
               return SizedBox(
                 height: 52,
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: allowed ? onToggle : null,
+                  onPressed: restoreFailed
+                      ? onRetryRestore
+                      : (allowed ? onToggle : null),
                   icon: Icon(
-                    intendsOnline
+                    restoreFailed
+                        ? Icons.refresh_rounded
+                        : intendsOnline
                         ? Icons.pause_rounded
                         : Icons.power_settings_new_rounded,
                     size: 18,
                   ),
-                  label: Text(intendsOnline ? 'Go offline' : 'Go online'),
+                  label: Text(
+                    restoreFailed
+                        ? 'Retry active job restoration'
+                        : intendsOnline
+                        ? 'Go offline'
+                        : 'Go online',
+                  ),
                   style: FilledButton.styleFrom(
                     backgroundColor: online
                         ? Colors.white.withValues(alpha: .06)
                         : RiderPalette.green,
-                    foregroundColor:
-                        online ? RiderPalette.paper : RiderPalette.background,
+                    foregroundColor: online
+                        ? RiderPalette.paper
+                        : RiderPalette.background,
                     disabledBackgroundColor: Colors.white.withValues(
                       alpha: .05,
                     ),
@@ -736,7 +758,8 @@ class _InternalDiagnosticsCard extends StatelessWidget {
     final lastFixMillis = _millis(
       locationMap['updatedAt'] ?? presence['lastLocationAt'],
     );
-    final locationIsFresh = lastFixMillis != null &&
+    final locationIsFresh =
+        lastFixMillis != null &&
         DateTime.now()
                 .difference(DateTime.fromMillisecondsSinceEpoch(lastFixMillis))
                 .inMinutes <
@@ -744,20 +767,14 @@ class _InternalDiagnosticsCard extends StatelessWidget {
     final rawGpsStatus = _clean(presence['gpsStatus'], fallback: 'Unknown');
     final displayGpsStatus = locationIsFresh ? rawGpsStatus : 'Stale';
     final rows = <({String label, String value})>[
-      (
-        label: 'Location status',
-        value: displayGpsStatus,
-      ),
+      (label: 'Location status', value: displayGpsStatus),
       (
         label: 'Accuracy',
         value: _meters(
           locationMap['accuracyMeters'] ?? locationMap['accuracy'],
         ),
       ),
-      (
-        label: 'Last fix',
-        value: _age(lastFixMillis),
-      ),
+      (label: 'Last fix', value: _age(lastFixMillis)),
       (
         label: 'Availability check',
         value: locationIsFresh ? 'Ready while online' : 'Needs fresh location',
@@ -782,8 +799,8 @@ class _InternalDiagnosticsCard extends StatelessWidget {
         label: 'Job readiness',
         value: locationIsFresh
             ? presence['dispatchEligible'] == true
-                ? 'Eligible'
-                : 'Awaiting dispatch eligibility'
+                  ? 'Eligible'
+                  : 'Awaiting dispatch eligibility'
             : 'Waiting for location update',
       ),
     ];
@@ -947,8 +964,11 @@ class _RankCard extends StatelessWidget {
     }
 
     final progress = _RankProgressData.forRank(rank.rank, rank.trustPoints);
-    final isTopRank = progress.nextRank == null;
-    final note = progress.nextRank == null
+    final assignedRank = rank.isAssigned;
+    final isTopRank = !assignedRank && progress.nextRank == null;
+    final note = assignedRank
+        ? 'Assigned rank'
+        : progress.nextRank == null
         ? 'Highest Rider rank achieved'
         : '${progress.remaining} points to ${progress.nextRank}';
     final recognitions = RiderRecognitions.from(profile);
@@ -983,7 +1003,7 @@ class _RankCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          if (isTopRank)
+          if (assignedRank || isTopRank)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               decoration: BoxDecoration(
@@ -993,18 +1013,18 @@ class _RankCard extends StatelessWidget {
                   color: RiderPalette.green.withValues(alpha: .32),
                 ),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.workspace_premium_rounded,
                     color: RiderPalette.green,
                     size: 15,
                   ),
-                  SizedBox(width: 6),
+                  const SizedBox(width: 6),
                   Text(
-                    'Top rank',
-                    style: TextStyle(
+                    assignedRank ? 'Assigned rank' : 'Top rank',
+                    style: const TextStyle(
                       color: RiderPalette.paper,
                       fontSize: 11.5,
                       fontWeight: FontWeight.w800,
@@ -1060,14 +1080,14 @@ class _RecognitionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-        label.trim(),
-        style: const TextStyle(
-          color: RiderPalette.blue,
-          fontSize: 11,
-          fontWeight: FontWeight.w900,
-          letterSpacing: .2,
-        ),
-      );
+    label.trim(),
+    style: const TextStyle(
+      color: RiderPalette.blue,
+      fontSize: 11,
+      fontWeight: FontWeight.w900,
+      letterSpacing: .2,
+    ),
+  );
 }
 
 class _TodaySection extends StatelessWidget {
@@ -1215,13 +1235,13 @@ class _PriorityJobsCard extends StatelessWidget {
     final title = !online
         ? 'Go online for jobs'
         : count == 0
-            ? 'No deliveries available'
-            : '$count eligible ${count == 1 ? 'job' : 'jobs'}';
+        ? 'No deliveries available'
+        : '$count eligible ${count == 1 ? 'job' : 'jobs'}';
     final message = !online
         ? 'Go online to receive eligible delivery offers.'
         : count == 0
-            ? 'New offers will appear here automatically.'
-            : 'Open delivery offers to review the swipeable card stack.';
+        ? 'New offers will appear here automatically.'
+        : 'Open delivery offers to review the swipeable card stack.';
     return _ActionRow(
       icon: Icons.map_outlined,
       iconColor: RiderPalette.blue,
@@ -1716,11 +1736,13 @@ class _SmallLabel extends StatelessWidget {
 }
 
 String _route(Map<String, dynamic> item) {
-  final pickup = item['pickupArea'] ??
+  final pickup =
+      item['pickupArea'] ??
       item['pickupPostcode'] ??
       item['pickupShortAddress'] ??
       'Pickup';
-  final dropoff = item['dropoffArea'] ??
+  final dropoff =
+      item['dropoffArea'] ??
       item['dropoffPostcode'] ??
       item['dropoffShortAddress'] ??
       'Drop-off';
@@ -1755,8 +1777,9 @@ class _RankProgressData {
 
   static _RankProgressData forRank(String? rank, int trustPoints) {
     var index = 0;
-    final rankIndex = RiderRankSnapshot.ranks
-        .indexWhere((item) => item.toLowerCase() == rank?.toLowerCase());
+    final rankIndex = RiderRankSnapshot.ranks.indexWhere(
+      (item) => item.toLowerCase() == rank?.toLowerCase(),
+    );
     if (rankIndex >= 0) {
       index = rankIndex;
     } else {

@@ -1,10 +1,14 @@
 class RiderRankSnapshot {
-  const RiderRankSnapshot(
-      {required this.rank, required this.trustPoints, this.overrideReason});
+  const RiderRankSnapshot({
+    required this.rank,
+    required this.trustPoints,
+    this.overrideReason,
+  });
 
   final String rank;
   final int trustPoints;
   final String? overrideReason;
+  bool get isAssigned => overrideReason != null;
 
   static const ranks = ['Agent', 'Sentinel', 'Warden', 'Knight', 'Veteran'];
   static const thresholds = [0, 100, 300, 700, 1500];
@@ -15,7 +19,8 @@ class RiderRankSnapshot {
     final validRank = ranks
         .where((rank) => rank.toLowerCase() == rawRank.toLowerCase())
         .firstOrNull;
-    final override = data['rankOverride'] == true ||
+    final override =
+        data['rankOverride'] == true ||
         '${data['rankSource'] ?? ''}'.toLowerCase() == 'manual' ||
         '${data['rankUpdatedBy'] ?? ''}'.trim().isNotEmpty ||
         '${data['rankReason'] ?? ''}'.trim().isNotEmpty;
@@ -41,13 +46,14 @@ class RiderRankSnapshot {
 }
 
 class RiderEarningsSummary {
-  const RiderEarningsSummary(
-      {required this.available,
-      required this.pending,
-      required this.delivery,
-      required this.tips,
-      required this.waiting,
-      required this.adjustments});
+  const RiderEarningsSummary({
+    required this.available,
+    required this.pending,
+    required this.delivery,
+    required this.tips,
+    required this.waiting,
+    required this.adjustments,
+  });
   final double available;
   final double pending;
   final double delivery;
@@ -73,14 +79,15 @@ class RiderEarningsSummary {
 }
 
 class RiderVehicleSnapshot {
-  const RiderVehicleSnapshot(
-      {required this.type,
-      required this.makeModel,
-      required this.colour,
-      required this.registration,
-      required this.status,
-      required this.primary,
-      required this.registrationRequired});
+  const RiderVehicleSnapshot({
+    required this.type,
+    required this.makeModel,
+    required this.colour,
+    required this.registration,
+    required this.status,
+    required this.primary,
+    required this.registrationRequired,
+  });
   final String type;
   final String? makeModel;
   final String? colour;
@@ -89,8 +96,10 @@ class RiderVehicleSnapshot {
   final bool primary;
   final bool registrationRequired;
 
-  static RiderVehicleSnapshot from(Map<String, dynamic> value,
-      {required bool primary}) {
+  static RiderVehicleSnapshot from(
+    Map<String, dynamic> value, {
+    required bool primary,
+  }) {
     final type = '${value['type'] ?? value['vehicleType'] ?? ''}'.trim();
     final make = '${value['make'] ?? ''}'.trim();
     final model = '${value['model'] ?? ''}'.trim();
@@ -102,15 +111,16 @@ class RiderVehicleSnapshot {
     final rawStatus = '${value['verificationStatus'] ?? value['status'] ?? ''}'
         .trim()
         .toLowerCase();
-    final verified = value['verified'] == true ||
+    final verified =
+        value['verified'] == true ||
         rawStatus == 'verified' ||
         rawStatus == 'approved';
     return RiderVehicleSnapshot(
       type: type,
       makeModel:
           [make, model].where((v) => v.isNotEmpty).join(' ').trim().isEmpty
-              ? null
-              : [make, model].where((v) => v.isNotEmpty).join(' '),
+          ? null
+          : [make, model].where((v) => v.isNotEmpty).join(' '),
       colour: '${value['colour'] ?? value['color'] ?? ''}'.trim().isEmpty
           ? null
           : '${value['colour'] ?? value['color']}'.trim(),
@@ -118,8 +128,8 @@ class RiderVehicleSnapshot {
       status: verified
           ? 'VERIFIED'
           : rawStatus.isEmpty
-              ? 'INCOMPLETE'
-              : rawStatus.toUpperCase(),
+          ? 'INCOMPLETE'
+          : rawStatus.toUpperCase(),
       primary: primary,
       registrationRequired: !bicycle,
     );

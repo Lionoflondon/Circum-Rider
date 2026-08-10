@@ -62,10 +62,12 @@ class RiderJobOffer {
             .trim();
     final price =
         (data['riderEarning'] ?? data['riderPay'] ?? data['price'] ?? 0);
-    final distance = data['distanceText'] ??
+    final distance =
+        data['distanceText'] ??
         data['estimatedDistanceText'] ??
         data['distance'];
-    final duration = data['durationText'] ??
+    final duration =
+        data['durationText'] ??
         data['estimatedDurationText'] ??
         data['duration'];
     final parcel = data['parcel'] is Map
@@ -74,7 +76,8 @@ class RiderJobOffer {
     final iris = data['iris'] is Map
         ? Map<String, dynamic>.from(data['iris'] as Map)
         : const <String, dynamic>{};
-    final item = parcel['itemName'] ??
+    final item =
+        parcel['itemName'] ??
         parcel['description'] ??
         data['normalizedItemName'] ??
         data['itemName'] ??
@@ -146,14 +149,18 @@ class RiderJobOffer {
     addIf(data['isHealthPlus'] ?? data['healthPlus'], 'Health+');
     addIf(data['isGift'] ?? data['giftDelivery'], 'Gift');
     addIf(data['isBusiness'] ?? data['businessDelivery'], 'Business');
-    addIf(data['isHeavyDuty'] ?? data['heavyDuty'] ?? data['heavy'], 'Heavy');
+    addIf(
+      data['isHeavyDuty'] ?? data['heavyDuty'] ?? data['heavy'],
+      'Heavy Duty',
+    );
     addIf(data['isScheduled'] ?? data['scheduled'], 'Scheduled');
     if (chips.isEmpty) chips.add('Standard');
     return chips;
   }
 
   static String _weightText(Map<String, dynamic> data) {
-    final value = data['weightKg'] ??
+    final value =
+        data['weightKg'] ??
         data['finalPricingWeightKg'] ??
         data['irisEstimatedWeightKg'] ??
         data['estimatedWeightKg'];
@@ -164,7 +171,8 @@ class RiderJobOffer {
   }
 
   static String _pickupTiming(Map<String, dynamic> data) {
-    final scheduled = data['scheduledTime'] ??
+    final scheduled =
+        data['scheduledTime'] ??
         data['pickupWindow'] ??
         data['pickupTiming'] ??
         data['scheduledAt'];
@@ -261,10 +269,12 @@ class RiderOfferCard extends StatelessWidget {
                       spacing: 7,
                       runSpacing: 7,
                       children: chips
-                          .map((chip) => _Chip(
-                                label: chip,
-                                highlighted: chip == points.label,
-                              ))
+                          .map(
+                            (chip) => _Chip(
+                              label: chip,
+                              highlighted: chip == points.label,
+                            ),
+                          )
                           .toList(),
                     ),
                     const SizedBox(height: 18),
@@ -310,8 +320,9 @@ class RiderOfferCard extends StatelessWidget {
                 onPressed: accepting ? null : onAccept,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF3B82F6),
-                  disabledBackgroundColor:
-                      const Color(0xFF3B82F6).withValues(alpha: 0.42),
+                  disabledBackgroundColor: const Color(
+                    0xFF3B82F6,
+                  ).withValues(alpha: 0.42),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -324,8 +335,9 @@ class RiderOfferCard extends StatelessWidget {
                         width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.4,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : Text(
@@ -353,12 +365,11 @@ class RiderOfferCard extends StatelessWidget {
       'Health+',
       'Gift',
       'Vanguard',
-      '${offer.minimumVehicle} minimum',
+      'Heavy Duty',
       'Scheduled',
+      '${offer.minimumVehicle} minimum',
       'Business',
       'Marketplace',
-      'Heavy',
-      'Heavy Duty',
       'Standard',
     ];
     final ordered = [
@@ -387,24 +398,31 @@ class _RankTrustColumn extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(16),
-        border:
-            Border.all(color: const Color(0xFF60A5FA).withValues(alpha: 0.38)),
+        border: Border.all(
+          color: const Color(0xFF60A5FA).withValues(alpha: 0.38),
+        ),
       ),
       child: Column(
         children: [
-          Text(rank,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900)),
+          Text(
+            rank,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text('+$trustPoints Trust Points',
-              style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.74),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700)),
+          Text(
+            '+$trustPoints Trust Points',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.74),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -435,8 +453,9 @@ class _Chip extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          color:
-              highlighted ? Colors.white : Colors.white.withValues(alpha: 0.76),
+          color: highlighted
+              ? Colors.white
+              : Colors.white.withValues(alpha: 0.76),
           fontWeight: FontWeight.w700,
           fontSize: 12,
         ),
@@ -486,12 +505,15 @@ class _InfoTile extends StatelessWidget {
           Icon(icon, color: const Color(0xFF60A5FA), size: 18),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(label,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700)),
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.8),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -516,17 +538,23 @@ class _ParcelGuidance extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.inventory_2_outlined,
-              color: Color(0xFF60A5FA), size: 19),
+          const Icon(
+            Icons.inventory_2_outlined,
+            color: Color(0xFF60A5FA),
+            size: 19,
+          ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(text,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.82),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600)),
+            child: Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.82),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),

@@ -24,20 +24,84 @@ class _EarningsViewState extends State<EarningsView> {
   late Future<Map<String, dynamic>> _summary;
   final _stripePayouts = const RiderStripePayoutOnboarding();
   bool _openingPayoutSetup = false;
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> _payoutDocs = [];
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> _transactionDocs = [];
+  bool _historyLoading = true;
+  bool _historyLoadingMore = false;
+  bool _hasMoreTransactions = true;
+  Object? _historyError;
 
   @override
   void initState() {
     super.initState();
     _summary = _loadSummary();
+    _loadFinancialHistory(reset: true);
     context.read<AccountBloc>()
       ..add(GetEarnings())
       ..add(GetRequests());
   }
 
+  Future<void> _loadFinancialHistory({required bool reset}) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || _historyLoadingMore) return;
+    if (reset) {
+      _payoutDocs.clear();
+      _transactionDocs.clear();
+      _hasMoreTransactions = true;
+    }
+    setState(() {
+      _historyLoading = reset;
+      _historyLoadingMore = !reset;
+      _historyError = null;
+    });
+    try {
+      Query<Map<String, dynamic>> payoutsQuery = FirebaseFirestore.instance
+          .collection('payoutRequests')
+          .where('riderId', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .orderBy(FieldPath.documentId, descending: true)
+          .limit(30);
+      Query<Map<String, dynamic>> transactionsQuery = FirebaseFirestore.instance
+          .collection('riderWalletTransactions')
+          .where('riderId', isEqualTo: uid)
+          .orderBy('createdAt', descending: true)
+          .orderBy(FieldPath.documentId, descending: true)
+          .limit(40);
+      if (!reset && _payoutDocs.isNotEmpty) {
+        payoutsQuery = payoutsQuery.startAfterDocument(_payoutDocs.last);
+      }
+      if (!reset && _transactionDocs.isNotEmpty) {
+        transactionsQuery = transactionsQuery.startAfterDocument(
+          _transactionDocs.last,
+        );
+      }
+      final pages = await Future.wait([
+        payoutsQuery.get(),
+        transactionsQuery.get(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _payoutDocs.addAll(pages[0].docs);
+        _transactionDocs.addAll(pages[1].docs);
+        _hasMoreTransactions =
+            pages[0].docs.length == 30 || pages[1].docs.length == 40;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _historyError = error);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _historyLoading = false;
+          _historyLoadingMore = false;
+        });
+      }
+    }
+  }
+
   Future<Map<String, dynamic>> _loadSummary() async {
-    final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('getRiderEarningsSummary')
-        .call();
+    final result = await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('getRiderEarningsSummary').call();
     return Map<String, dynamic>.from(result.data as Map);
   }
 
@@ -78,56 +142,36 @@ class _EarningsViewState extends State<EarningsView> {
               .doc(uid)
               .snapshots(),
           builder: (context, earningsSnapshot) {
-            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('payoutRequests')
-                  .where('riderId', isEqualTo: uid)
-                  .limit(30)
-                  .snapshots(),
-              builder: (context, payoutSnapshot) {
-                return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: FirebaseFirestore.instance
-                      .collection('riderWalletTransactions')
-                      .where('riderId', isEqualTo: uid)
-                      .limit(40)
-                      .snapshots(),
-                  builder: (context, transactionSnapshot) {
-                    if (earningsSnapshot.hasError ||
-                        payoutSnapshot.hasError ||
-                        transactionSnapshot.hasError) {
-                      return _EarningsFailure(
-                        onRetry: () =>
-                            setState(() => _summary = _loadSummary()),
-                      );
-                    }
-                    if (!earningsSnapshot.hasData ||
-                        !payoutSnapshot.hasData ||
-                        !transactionSnapshot.hasData) {
-                      return const _EarningsLoading();
-                    }
+            if (earningsSnapshot.hasError || _historyError != null) {
+              return _EarningsFailure(
+                onRetry: () {
+                  setState(() => _summary = _loadSummary());
+                  _loadFinancialHistory(reset: true);
+                },
+              );
+            }
+            if (!earningsSnapshot.hasData || _historyLoading) {
+              return const _EarningsLoading();
+            }
 
-                    final payouts = payoutSnapshot.data?.docs
-                            .map((doc) => {'id': doc.id, ...doc.data()})
-                            .toList() ??
-                        const <Map<String, dynamic>>[];
-                    final transactions = transactionSnapshot.data?.docs
-                            .map((doc) => {'id': doc.id, ...doc.data()})
-                            .toList() ??
-                        const <Map<String, dynamic>>[];
+            final payouts = _payoutDocs
+                .map((doc) => {'id': doc.id, ...doc.data()})
+                .toList();
+            final transactions = _transactionDocs
+                .map((doc) => {'id': doc.id, ...doc.data()})
+                .toList();
 
-                    return _EarningsContent(
-                      summary: summarySnapshot.data!,
-                      storedEarnings: earningsSnapshot.data?.data() ?? const {},
-                      payouts: payouts,
-                      transactions: transactions,
-                      onRefresh: () =>
-                          setState(() => _summary = _loadSummary()),
-                      openingPayoutSetup: _openingPayoutSetup,
-                      onOpenPayoutSetup: _openPayoutSetup,
-                    );
-                  },
-                );
-              },
+            return _EarningsContent(
+              summary: summarySnapshot.data!,
+              storedEarnings: earningsSnapshot.data?.data() ?? const {},
+              payouts: payouts,
+              transactions: transactions,
+              onRefresh: () => setState(() => _summary = _loadSummary()),
+              openingPayoutSetup: _openingPayoutSetup,
+              onOpenPayoutSetup: _openPayoutSetup,
+              hasMoreHistory: _hasMoreTransactions,
+              loadingMoreHistory: _historyLoadingMore,
+              onLoadMoreHistory: () => _loadFinancialHistory(reset: false),
             );
           },
         );
@@ -153,6 +197,9 @@ class _EarningsContent extends StatelessWidget {
     required this.onRefresh,
     required this.openingPayoutSetup,
     required this.onOpenPayoutSetup,
+    required this.hasMoreHistory,
+    required this.loadingMoreHistory,
+    required this.onLoadMoreHistory,
   });
 
   final Map<String, dynamic> summary;
@@ -162,29 +209,41 @@ class _EarningsContent extends StatelessWidget {
   final VoidCallback onRefresh;
   final bool openingPayoutSetup;
   final Future<void> Function({required bool resume}) onOpenPayoutSetup;
+  final bool hasMoreHistory;
+  final bool loadingMoreHistory;
+  final VoidCallback onLoadMoreHistory;
 
   @override
   Widget build(BuildContext context) {
     final totals = _map(summary['totals']);
-    final available = _number(summary['storedAvailable'] ??
-        summary['available'] ??
-        summary['availableBalance'] ??
-        storedEarnings['availableBalance']);
-    final pending = _number(summary['pending'] ??
-        summary['pendingBalance'] ??
-        storedEarnings['pendingBalance']);
-    final processing = _number(summary['processing'] ??
-        summary['processingBalance'] ??
-        summary['processingPayouts']);
-    final lifetime = _number(summary['lifetimeEarnings'] ??
-        summary['totalLifetimeEarnings'] ??
-        storedEarnings['lifetimeEarnings'] ??
-        storedEarnings['totalAmountEarned']);
+    final available = _number(
+      summary['storedAvailable'] ??
+          summary['available'] ??
+          summary['availableBalance'] ??
+          storedEarnings['availableBalance'],
+    );
+    final pending = _number(
+      summary['pending'] ??
+          summary['pendingBalance'] ??
+          storedEarnings['pendingBalance'],
+    );
+    final processing = _number(
+      summary['processing'] ??
+          summary['processingBalance'] ??
+          summary['processingPayouts'],
+    );
+    final lifetime = _number(
+      summary['lifetimeEarnings'] ??
+          summary['totalLifetimeEarnings'] ??
+          storedEarnings['lifetimeEarnings'] ??
+          storedEarnings['totalAmountEarned'],
+    );
     final delivery = _number(totals['delivery_earning']);
     final tips = _number(totals['tip']);
     final waiting =
         _number(totals['waiting_fee']) + _number(totals['no_show_fee']);
-    final adjustments = _number(totals['adjustment_credit']) -
+    final adjustments =
+        _number(totals['adjustment_credit']) -
         _number(totals['adjustment_debit']);
     final unexplained = _number(summary['unexplained']);
     final reconciled = summary['reconciled'] == true;
@@ -203,7 +262,8 @@ class _EarningsContent extends StatelessWidget {
     final pendingPayout = activePayout != null;
     final sortedTransactions = [...transactions]
       ..sort((a, b) => _millis(b).compareTo(_millis(a)));
-    final hasEarnings = [
+    final hasEarnings =
+        [
           available,
           pending,
           delivery,
@@ -230,9 +290,10 @@ class _EarningsContent extends StatelessWidget {
                 busy: openingPayoutSetup,
                 onPressed: riderPayoutCanContinue(payoutReadiness)
                     ? () => onOpenPayoutSetup(
-                          resume: payoutReadiness !=
-                              RiderPayoutReadiness.setupRequired,
-                        )
+                        resume:
+                            payoutReadiness !=
+                            RiderPayoutReadiness.setupRequired,
+                      )
                     : null,
               ),
               const SizedBox(height: 18),
@@ -247,7 +308,8 @@ class _EarningsContent extends StatelessWidget {
                 unexplained: unexplained,
                 activePayout: activePayout,
                 busy: account.status == AccountStatus.loading,
-                onWithdraw: pendingPayout ||
+                onWithdraw:
+                    pendingPayout ||
                         available <= 0 ||
                         readiness != 'ready' ||
                         !reconciled
@@ -255,8 +317,11 @@ class _EarningsContent extends StatelessWidget {
                     : () => _requestWithdrawal(context, available),
                 payouts: sortedPayouts,
                 reviewRequired: _requiresPayoutReview(summary, activePayout),
-                reviewMessage:
-                    _reviewMessage(summary, activePayout, unexplained),
+                reviewMessage: _reviewMessage(
+                  summary,
+                  activePayout,
+                  unexplained,
+                ),
               ),
               const SizedBox(height: 24),
               _SummaryMetricGrid(
@@ -292,9 +357,30 @@ class _EarningsContent extends StatelessWidget {
                   message:
                       'Requested and completed Stripe payouts will appear here.',
                 ),
-                rows:
-                    sortedPayouts.take(6).map(_PayoutTimelineRow.new).toList(),
+                rows: sortedPayouts
+                    .take(6)
+                    .map(_PayoutTimelineRow.new)
+                    .toList(),
               ),
+              if (hasMoreHistory) ...[
+                const SizedBox(height: 14),
+                Center(
+                  child: OutlinedButton.icon(
+                    onPressed: loadingMoreHistory ? null : onLoadMoreHistory,
+                    icon: loadingMoreHistory
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.expand_more_rounded),
+                    label: Text(
+                      loadingMoreHistory
+                          ? 'Loading older activity'
+                          : 'Load older activity',
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
               _HistorySection(
                 title: 'Transactions',
@@ -318,7 +404,9 @@ class _EarningsContent extends StatelessWidget {
   }
 
   Future<void> _requestWithdrawal(
-      BuildContext context, double available) async {
+    BuildContext context,
+    double available,
+  ) async {
     final controller = TextEditingController();
     final amount = await showModalBottomSheet<double>(
       context: context,
@@ -354,8 +442,9 @@ class _EarningsContent extends StatelessWidget {
                 TextField(
                   controller: controller,
                   autofocus: true,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   style: const TextStyle(
                     color: RiderPalette.paper,
                     fontFamily: RiderTypography.mono,
@@ -391,14 +480,16 @@ class _EarningsContent extends StatelessWidget {
     );
     controller.dispose();
     if (amount == null || !context.mounted) return;
-    context.read<AccountBloc>().add(RequestWithdrawal(
-          amount: amount.toStringAsFixed(2),
-          sortCode: '',
-          bankName: '',
-          accountNumber: '',
-          address: '',
-          saveAccountDetails: false,
-        ));
+    context.read<AccountBloc>().add(
+      RequestWithdrawal(
+        amount: amount.toStringAsFixed(2),
+        sortCode: '',
+        bankName: '',
+        accountNumber: '',
+        address: '',
+        saveAccountDetails: false,
+      ),
+    );
   }
 }
 
@@ -415,37 +506,34 @@ class _PayoutSetupBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _EarningsGlass(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              riderPayoutReadinessLabel(readiness),
-              style: const TextStyle(
-                color: RiderPalette.paper,
-                fontWeight: FontWeight.w900,
-                fontSize: 18,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              riderPayoutReadinessBody(readiness),
-              style: const TextStyle(
-                color: RiderPalette.muted,
-                height: 1.45,
-              ),
-            ),
-            if (onPressed != null) ...[
-              const SizedBox(height: 14),
-              RiderPrimaryButton(
-                label: riderPayoutReadinessActionLabel(readiness),
-                icon: Icons.open_in_new_rounded,
-                busy: busy,
-                onPressed: onPressed,
-              ),
-            ],
-          ],
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          riderPayoutReadinessLabel(readiness),
+          style: const TextStyle(
+            color: RiderPalette.paper,
+            fontWeight: FontWeight.w900,
+            fontSize: 18,
+          ),
         ),
-      );
+        const SizedBox(height: 6),
+        Text(
+          riderPayoutReadinessBody(readiness),
+          style: const TextStyle(color: RiderPalette.muted, height: 1.45),
+        ),
+        if (onPressed != null) ...[
+          const SizedBox(height: 14),
+          RiderPrimaryButton(
+            label: riderPayoutReadinessActionLabel(readiness),
+            icon: Icons.open_in_new_rounded,
+            busy: busy,
+            onPressed: onPressed,
+          ),
+        ],
+      ],
+    ),
+  );
 }
 
 class _TopBar extends StatelessWidget {
@@ -453,40 +541,41 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        children: [
-          if (Navigator.canPop(context)) ...[
-            Semantics(
-              button: true,
-              label: 'Back',
-              child: InkWell(
-                borderRadius: BorderRadius.circular(999),
-                onTap: () => Navigator.pop(context),
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .045),
-                    shape: BoxShape.circle,
-                    border:
-                        Border.all(color: Colors.white.withValues(alpha: .09)),
-                  ),
-                  child: const Icon(Icons.chevron_left_rounded,
-                      color: RiderPalette.paper),
-                ),
+    children: [
+      if (Navigator.canPop(context)) ...[
+        Semantics(
+          button: true,
+          label: 'Back',
+          child: InkWell(
+            borderRadius: BorderRadius.circular(999),
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: .045),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withValues(alpha: .09)),
+              ),
+              child: const Icon(
+                Icons.chevron_left_rounded,
+                color: RiderPalette.paper,
               ),
             ),
-            const SizedBox(width: 14),
-          ],
-          const Text(
-            'Earnings',
-            style: TextStyle(
-              color: RiderPalette.paper,
-              fontFamily: RiderTypography.heading,
-              fontSize: 30,
-            ),
           ),
-        ],
-      );
+        ),
+        const SizedBox(width: 14),
+      ],
+      const Text(
+        'Earnings',
+        style: TextStyle(
+          color: RiderPalette.paper,
+          fontFamily: RiderTypography.heading,
+          fontSize: 30,
+        ),
+      ),
+    ],
+  );
 }
 
 class _BalanceHero extends StatelessWidget {
@@ -516,65 +605,63 @@ class _BalanceHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _EarningsGlass(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _money(available),
-              style: const TextStyle(
-                color: RiderPalette.paper,
-                fontSize: 40,
-                fontWeight: FontWeight.w900,
-                letterSpacing: -.3,
-              ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'Available balance',
-              style: TextStyle(color: RiderPalette.muted, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            RiderPrimaryButton(
-              label: _withdrawalLabel(readiness, activePayout, payouts),
-              icon: Icons.account_balance_wallet_outlined,
-              busy: busy,
-              onPressed: onWithdraw,
-            ),
-            if (activePayout != null) ...[
-              const SizedBox(height: 14),
-              _PayoutStatusCard(
-                payout: activePayout!,
-              ),
-            ],
-            if (reviewRequired) ...[
-              const SizedBox(height: 14),
-              _StatusBanner(
-                title: 'Review required',
-                message: reviewMessage,
-                warning: true,
-              ),
-            ],
-            const SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.only(top: 14),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: Colors.white.withValues(alpha: .07)),
-                ),
-              ),
-              child: const Text(
-                'Cash payouts use your approved Stripe Connect account. Roth remains separate and cannot be withdrawn.',
-                style: TextStyle(
-                  color: RiderPalette.muted,
-                  fontSize: 11.5,
-                  height: 1.5,
-                ),
-              ),
-            ),
-          ],
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _money(available),
+          style: const TextStyle(
+            color: RiderPalette.paper,
+            fontSize: 40,
+            fontWeight: FontWeight.w900,
+            letterSpacing: -.3,
+          ),
         ),
-      );
+        const SizedBox(height: 4),
+        const Text(
+          'Available balance',
+          style: TextStyle(color: RiderPalette.muted, fontSize: 13),
+        ),
+        const SizedBox(height: 16),
+        RiderPrimaryButton(
+          label: _withdrawalLabel(readiness, activePayout, payouts),
+          icon: Icons.account_balance_wallet_outlined,
+          busy: busy,
+          onPressed: onWithdraw,
+        ),
+        if (activePayout != null) ...[
+          const SizedBox(height: 14),
+          _PayoutStatusCard(payout: activePayout!),
+        ],
+        if (reviewRequired) ...[
+          const SizedBox(height: 14),
+          _StatusBanner(
+            title: 'Review required',
+            message: reviewMessage,
+            warning: true,
+          ),
+        ],
+        const SizedBox(height: 14),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.only(top: 14),
+          decoration: BoxDecoration(
+            border: Border(
+              top: BorderSide(color: Colors.white.withValues(alpha: .07)),
+            ),
+          ),
+          child: const Text(
+            'Cash payouts use your approved Stripe Connect account. Roth remains separate and cannot be withdrawn.',
+            style: TextStyle(
+              color: RiderPalette.muted,
+              fontSize: 11.5,
+              height: 1.5,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _BreakdownGrid extends StatelessWidget {
@@ -673,39 +760,39 @@ class _SummaryMetricGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GridView.count(
-        crossAxisCount: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.75,
-        children: [
-          _SummaryMetricTile(
-            icon: Icons.account_balance_wallet_outlined,
-            color: RiderPalette.green,
-            value: _money(available),
-            label: 'Available Balance',
-          ),
-          _SummaryMetricTile(
-            icon: Icons.pending_actions_rounded,
-            color: RiderPalette.amber,
-            value: _money(pending),
-            label: 'Pending Payout',
-          ),
-          _SummaryMetricTile(
-            icon: Icons.sync_rounded,
-            color: RiderPalette.blue,
-            value: _money(processing),
-            label: 'Processing',
-          ),
-          _SummaryMetricTile(
-            icon: Icons.trending_up_rounded,
-            color: RiderPalette.purple,
-            value: _money(lifetime),
-            label: 'Lifetime Earnings',
-          ),
-        ],
-      );
+    crossAxisCount: 2,
+    shrinkWrap: true,
+    physics: const NeverScrollableScrollPhysics(),
+    crossAxisSpacing: 10,
+    mainAxisSpacing: 10,
+    childAspectRatio: 1.75,
+    children: [
+      _SummaryMetricTile(
+        icon: Icons.account_balance_wallet_outlined,
+        color: RiderPalette.green,
+        value: _money(available),
+        label: 'Available Balance',
+      ),
+      _SummaryMetricTile(
+        icon: Icons.pending_actions_rounded,
+        color: RiderPalette.amber,
+        value: _money(pending),
+        label: 'Pending Payout',
+      ),
+      _SummaryMetricTile(
+        icon: Icons.sync_rounded,
+        color: RiderPalette.blue,
+        value: _money(processing),
+        label: 'Processing',
+      ),
+      _SummaryMetricTile(
+        icon: Icons.trending_up_rounded,
+        color: RiderPalette.purple,
+        value: _money(lifetime),
+        label: 'Lifetime Earnings',
+      ),
+    ],
+  );
 }
 
 class _SummaryMetricTile extends StatelessWidget {
@@ -723,58 +810,56 @@ class _SummaryMetricTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Semantics(
-        label: '$label $value',
-        child: _EarningsGlass(
-          radius: 18,
-          blur: 12,
-          padding: const EdgeInsets.all(15),
-          child: Row(
-            children: [
-              _IconBox(icon: icon, color: color, size: 36),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TweenAnimationBuilder<double>(
-                      duration: const Duration(milliseconds: 420),
-                      tween: Tween(begin: 0, end: 1),
-                      builder: (context, value, child) => Opacity(
-                        opacity: value,
-                        child: child,
-                      ),
-                      child: Text(
-                        value,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: RiderPalette.paper,
-                          fontFamily: RiderTypography.mono,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 16,
-                        ),
-                      ),
+    label: '$label $value',
+    child: _EarningsGlass(
+      radius: 18,
+      blur: 12,
+      padding: const EdgeInsets.all(15),
+      child: Row(
+        children: [
+          _IconBox(icon: icon, color: color, size: 36),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TweenAnimationBuilder<double>(
+                  duration: const Duration(milliseconds: 420),
+                  tween: Tween(begin: 0, end: 1),
+                  builder: (context, value, child) =>
+                      Opacity(opacity: value, child: child),
+                  child: Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: RiderPalette.paper,
+                      fontFamily: RiderTypography.mono,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 16,
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      label,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: RiderPalette.muted,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: .2,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 3),
+                Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: RiderPalette.muted,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: .2,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }
 
 class _BreakdownTile extends StatelessWidget {
@@ -792,41 +877,41 @@ class _BreakdownTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _EarningsGlass(
-        radius: 18,
-        blur: 12,
-        padding: const EdgeInsets.all(15),
-        child: Column(
+    radius: 18,
+    blur: 12,
+    padding: const EdgeInsets.all(15),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        _IconBox(icon: icon, color: color, size: 32),
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            _IconBox(icon: icon, color: color, size: 32),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: RiderPalette.paper,
-                    fontFamily: RiderTypography.mono,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 16,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: RiderPalette.muted,
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: .3,
-                  ),
-                ),
-              ],
+            Text(
+              value,
+              style: const TextStyle(
+                color: RiderPalette.paper,
+                fontFamily: RiderTypography.mono,
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: const TextStyle(
+                color: RiderPalette.muted,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: .3,
+              ),
             ),
           ],
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _PerformanceSection extends StatelessWidget {
@@ -842,26 +927,36 @@ class _PerformanceSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final completed = _intValue(summary['completedDeliveries'] ??
-        summary['completedJobs'] ??
-        storedEarnings['completedDeliveries']);
+    final completed = _intValue(
+      summary['completedDeliveries'] ??
+          summary['completedJobs'] ??
+          storedEarnings['completedDeliveries'],
+    );
     final weekly = _periodTotal(transactions, const Duration(days: 7));
     final monthly = _periodTotal(transactions, const Duration(days: 30));
-    final trust = _number(summary['trustScore'] ??
-        summary['trustPoints'] ??
-        storedEarnings['trustScore'] ??
-        storedEarnings['trustPoints']);
+    final trust = _number(
+      summary['trustScore'] ??
+          summary['trustPoints'] ??
+          storedEarnings['trustScore'] ??
+          storedEarnings['trustPoints'],
+    );
     final rank =
         '${summary['currentRank'] ?? summary['riderRank'] ?? storedEarnings['riderRank'] ?? 'Agent'}';
-    final acceptance = _percentage(summary['acceptanceRate'] ??
-        summary['acceptance'] ??
-        storedEarnings['acceptanceRate']);
-    final completion = _percentage(summary['completionRate'] ??
-        summary['completion'] ??
-        storedEarnings['completionRate']);
-    final rating = _rating(summary['averageRating'] ??
-        summary['rating'] ??
-        storedEarnings['averageRating']);
+    final acceptance = _percentage(
+      summary['acceptanceRate'] ??
+          summary['acceptance'] ??
+          storedEarnings['acceptanceRate'],
+    );
+    final completion = _percentage(
+      summary['completionRate'] ??
+          summary['completion'] ??
+          storedEarnings['completionRate'],
+    );
+    final rating = _rating(
+      summary['averageRating'] ??
+          summary['rating'] ??
+          storedEarnings['averageRating'],
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -945,47 +1040,47 @@ class _PerformancePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Semantics(
-        label: '$label $value',
-        child: Container(
-          width: 154,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: .035),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: .075)),
+    label: '$label $value',
+    child: Container(
+      width: 154,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .035),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: .075)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(height: 9),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: RiderPalette.paper,
+              fontFamily: RiderTypography.mono,
+              fontWeight: FontWeight.w900,
+              fontSize: 15,
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(icon, color: color, size: 18),
-              const SizedBox(height: 9),
-              Text(
-                value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: RiderPalette.paper,
-                  fontFamily: RiderTypography.mono,
-                  fontWeight: FontWeight.w900,
-                  fontSize: 15,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: RiderPalette.muted,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w800,
-                  height: 1.2,
-                ),
-              ),
-            ],
+          const SizedBox(height: 3),
+          Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: RiderPalette.muted,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
+              height: 1.2,
+            ),
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }
 
 class _AnalyticsSection extends StatelessWidget {
@@ -1000,13 +1095,13 @@ class _AnalyticsSection extends StatelessWidget {
     final average = transactions.isEmpty
         ? 0.0
         : transactions
-                .map((item) => _number(item['amount']))
-                .where((amount) => amount > 0)
-                .fold<double>(0, (total, amount) => total + amount) /
-            transactions
-                .where((item) => _number(item['amount']) > 0)
-                .length
-                .clamp(1, transactions.length);
+                  .map((item) => _number(item['amount']))
+                  .where((amount) => amount > 0)
+                  .fold<double>(0, (total, amount) => total + amount) /
+              transactions
+                  .where((item) => _number(item['amount']) > 0)
+                  .length
+                  .clamp(1, transactions.length);
     final topDay = _topEarningDay(transactions);
     final peakHour = _peakWorkingHour(transactions);
     final trend = month >= week ? 'Building' : 'Cooling';
@@ -1100,40 +1195,40 @@ class _AnalyticsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: .07),
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: color.withValues(alpha: .16)),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .07),
+      borderRadius: BorderRadius.circular(15),
+      border: Border.all(color: color.withValues(alpha: .16)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: RiderPalette.paper,
+            fontFamily: RiderTypography.mono,
+            fontWeight: FontWeight.w900,
+            fontSize: 14,
+          ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: RiderPalette.paper,
-                fontFamily: RiderTypography.mono,
-                fontWeight: FontWeight.w900,
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: color,
-                fontSize: 10.5,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
+        const SizedBox(height: 4),
+        Text(
+          label,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: color,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w900,
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _HistorySection extends StatelessWidget {
@@ -1151,49 +1246,49 @@ class _HistorySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
+    children: [
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: RiderPalette.paper,
-                    fontFamily: RiderTypography.heading,
-                    fontSize: 22,
-                  ),
-                ),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: RiderPalette.paper,
+                fontFamily: RiderTypography.heading,
+                fontSize: 22,
               ),
-              if (seeAll)
-                const Text(
-                  'View all',
-                  style: TextStyle(
-                    color: RiderPalette.blue,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-            ],
+            ),
           ),
-          const SizedBox(height: 8),
-          if (rows.isEmpty)
-            empty
-          else
-            _EarningsGlass(
-              padding: EdgeInsets.zero,
-              radius: 20,
-              child: Column(
-                children: [
-                  for (var i = 0; i < rows.length; i++) ...[
-                    rows[i],
-                    if (i != rows.length - 1) const _Hairline(),
-                  ],
-                ],
+          if (seeAll)
+            const Text(
+              'View all',
+              style: TextStyle(
+                color: RiderPalette.blue,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w800,
               ),
             ),
         ],
-      );
+      ),
+      const SizedBox(height: 8),
+      if (rows.isEmpty)
+        empty
+      else
+        _EarningsGlass(
+          padding: EdgeInsets.zero,
+          radius: 20,
+          child: Column(
+            children: [
+              for (var i = 0; i < rows.length; i++) ...[
+                rows[i],
+                if (i != rows.length - 1) const _Hairline(),
+              ],
+            ],
+          ),
+        ),
+    ],
+  );
 }
 
 class _PayoutTimelineRow extends StatelessWidget {
@@ -1204,23 +1299,22 @@ class _PayoutTimelineRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final status = '${item['status'] ?? item['payoutStatus'] ?? 'pending'}';
-    final failed = status.toLowerCase().contains('fail') ||
+    final failed =
+        status.toLowerCase().contains('fail') ||
         status.toLowerCase().contains('reject');
-    final paid = status.toLowerCase().contains('paid') ||
+    final paid =
+        status.toLowerCase().contains('paid') ||
         status.toLowerCase().contains('complete');
     final amount = _number(item['amount'] ?? item['riderGrossShare']);
-    final reason =
-        '${item['failureReason'] ?? item['reviewReason'] ?? ''}'.trim();
-    final subtitle = [
-      _date(item),
-      if (reason.isNotEmpty) reason,
-    ].join(' · ');
+    final reason = '${item['failureReason'] ?? item['reviewReason'] ?? ''}'
+        .trim();
+    final subtitle = [_date(item), if (reason.isNotEmpty) reason].join(' · ');
 
     final statusColor = failed
         ? RiderPalette.red
         : paid
-            ? RiderPalette.green
-            : RiderPalette.blue;
+        ? RiderPalette.green
+        : RiderPalette.blue;
     final label = _title(status).isEmpty ? 'Processing' : _title(status);
     final reference =
         '${item['stripePayoutId'] ?? item['payoutId'] ?? item['id'] ?? ''}'
@@ -1306,10 +1400,10 @@ class _PayoutStepper extends StatelessWidget {
     final index = status.contains('paid') || status.contains('complete')
         ? 3
         : status.contains('process')
-            ? 2
-            : status.contains('request') || status.contains('pending')
-                ? 1
-                : 0;
+        ? 2
+        : status.contains('request') || status.contains('pending')
+        ? 1
+        : 0;
     return Column(
       children: [
         for (var i = 0; i < stages.length; i++) ...[
@@ -1348,7 +1442,8 @@ class _ExpandableTransactionRow extends StatelessWidget {
     final type = '${item['type'] ?? item['category'] ?? 'earning'}';
     final amount = _number(item['amount']);
     final status = _transactionStatus(item);
-    final isDebit = amount < 0 ||
+    final isDebit =
+        amount < 0 ||
         type.toLowerCase().contains('debit') ||
         type.toLowerCase().contains('payout') ||
         type.toLowerCase().contains('reversal');
@@ -1406,9 +1501,7 @@ class _ExpandableTransactionRow extends StatelessWidget {
             fontSize: 14,
           ),
         ),
-        children: [
-          _TransactionDetailGrid(item: item, reference: reference),
-        ],
+        children: [_TransactionDetailGrid(item: item, reference: reference)],
       ),
     );
   }
@@ -1441,10 +1534,7 @@ class _ExpandableTransactionRow extends StatelessWidget {
 }
 
 class _TransactionDetailGrid extends StatelessWidget {
-  const _TransactionDetailGrid({
-    required this.item,
-    required this.reference,
-  });
+  const _TransactionDetailGrid({required this.item, required this.reference});
 
   final Map<String, dynamic> item;
   final String reference;
@@ -1459,12 +1549,16 @@ class _TransactionDetailGrid extends StatelessWidget {
       MapEntry('Tip', _money(_number(item['tip']))),
       MapEntry('Fees', _money(_number(item['fees'] ?? item['fee']))),
       MapEntry(
-          'Roth earned', _clean(item['rothEarned'] ?? item['roth'] ?? '0')),
+        'Roth earned',
+        _clean(item['rothEarned'] ?? item['roth'] ?? '0'),
+      ),
       MapEntry('Date', _date(item)),
       MapEntry('Time', _time(item)),
       MapEntry('Status', _transactionStatus(item)),
       MapEntry(
-          'Payment reference', reference.isEmpty ? 'Not available' : reference),
+        'Payment reference',
+        reference.isEmpty ? 'Not available' : reference,
+      ),
     ];
     return Container(
       width: double.infinity,
@@ -1510,32 +1604,32 @@ class _DetailLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 118,
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: RiderPalette.muted,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SizedBox(
+        width: 118,
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: RiderPalette.muted,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: RiderPalette.paper,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+        ),
+      ),
+      const SizedBox(width: 10),
+      Expanded(
+        child: Text(
+          value,
+          style: const TextStyle(
+            color: RiderPalette.paper,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
           ),
-        ],
-      );
+        ),
+      ),
+    ],
+  );
 }
 
 class _PayoutStatusCard extends StatelessWidget {
@@ -1601,35 +1695,35 @@ class _NoEarningsState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => const _EarningsGlass(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _IconBox(
-              icon: Icons.account_balance_wallet_outlined,
-              color: RiderPalette.blue,
-              size: 42,
-            ),
-            SizedBox(height: 16),
-            Text(
-              'No earnings yet',
-              style: TextStyle(
-                color: RiderPalette.paper,
-                fontFamily: RiderTypography.heading,
-                fontSize: 26,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'Completed delivery earnings, tips, waiting payments and adjustments will appear here.',
-              style: TextStyle(
-                color: RiderPalette.muted,
-                fontSize: 13,
-                height: 1.45,
-              ),
-            ),
-          ],
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _IconBox(
+          icon: Icons.account_balance_wallet_outlined,
+          color: RiderPalette.blue,
+          size: 42,
         ),
-      );
+        SizedBox(height: 16),
+        Text(
+          'No earnings yet',
+          style: TextStyle(
+            color: RiderPalette.paper,
+            fontFamily: RiderTypography.heading,
+            fontSize: 26,
+          ),
+        ),
+        SizedBox(height: 8),
+        Text(
+          'Completed delivery earnings, tips, waiting payments and adjustments will appear here.',
+          style: TextStyle(
+            color: RiderPalette.muted,
+            fontSize: 13,
+            height: 1.45,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _StatusBanner extends StatelessWidget {
@@ -1712,29 +1806,25 @@ class _TinyPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: .16),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: color,
-            fontSize: 9.5,
-            fontWeight: FontWeight.w900,
-            letterSpacing: .3,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .16),
+      borderRadius: BorderRadius.circular(999),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(
+        color: color,
+        fontSize: 9.5,
+        fontWeight: FontWeight.w900,
+        letterSpacing: .3,
+      ),
+    ),
+  );
 }
 
 class _IconBox extends StatelessWidget {
-  const _IconBox({
-    required this.icon,
-    required this.color,
-    required this.size,
-  });
+  const _IconBox({required this.icon, required this.color, required this.size});
 
   final IconData icon;
   final Color color;
@@ -1742,14 +1832,14 @@ class _IconBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: .14),
-          borderRadius: BorderRadius.circular(size > 34 ? 11 : 10),
-        ),
-        child: Icon(icon, color: color, size: size > 34 ? 18 : 16),
-      );
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .14),
+      borderRadius: BorderRadius.circular(size > 34 ? 11 : 10),
+    ),
+    child: Icon(icon, color: color, size: size > 34 ? 18 : 16),
+  );
 }
 
 class _EarningsGlass extends StatelessWidget {
@@ -1767,34 +1857,34 @@ class _EarningsGlass extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ClipRRect(
-        borderRadius: BorderRadius.circular(radius),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: RiderPalette.panel.withValues(alpha: .78),
-              borderRadius: BorderRadius.circular(radius),
-              border: Border.all(color: Colors.white.withValues(alpha: .09)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: .35),
-                  blurRadius: 34,
-                  offset: const Offset(0, 14),
-                ),
-              ],
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withValues(alpha: .045),
-                  RiderPalette.panel.withValues(alpha: .78),
-                ],
-              ),
+    borderRadius: BorderRadius.circular(radius),
+    child: BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: RiderPalette.panel.withValues(alpha: .78),
+          borderRadius: BorderRadius.circular(radius),
+          border: Border.all(color: Colors.white.withValues(alpha: .09)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: .35),
+              blurRadius: 34,
+              offset: const Offset(0, 14),
             ),
-            child: Padding(padding: padding, child: child),
+          ],
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white.withValues(alpha: .045),
+              RiderPalette.panel.withValues(alpha: .78),
+            ],
           ),
         ),
-      );
+        child: Padding(padding: padding, child: child),
+      ),
+    ),
+  );
 }
 
 class _SectionLabel extends StatelessWidget {
@@ -1804,17 +1894,17 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Text(
-          label.toUpperCase(),
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: .38),
-            fontSize: 11,
-            fontWeight: FontWeight.w900,
-            letterSpacing: 1,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 4),
+    child: Text(
+      label.toUpperCase(),
+      style: TextStyle(
+        color: Colors.white.withValues(alpha: .38),
+        fontSize: 11,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 1,
+      ),
+    ),
+  );
 }
 
 class _Hairline extends StatelessWidget {
@@ -1822,21 +1912,20 @@ class _Hairline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Divider(
-        height: 1,
-        thickness: 1,
-        indent: 16,
-        endIndent: 16,
-        color: Colors.white.withValues(alpha: .07),
-      );
+    height: 1,
+    thickness: 1,
+    indent: 16,
+    endIndent: 16,
+    color: Colors.white.withValues(alpha: .07),
+  );
 }
 
 class _EarningsLoading extends StatelessWidget {
   const _EarningsLoading();
 
   @override
-  Widget build(BuildContext context) => const Center(
-        child: CircularProgressIndicator(color: RiderPalette.blue),
-      );
+  Widget build(BuildContext context) =>
+      const Center(child: CircularProgressIndicator(color: RiderPalette.blue));
 }
 
 class _EarningsFailure extends StatelessWidget {
@@ -1846,21 +1935,21 @@ class _EarningsFailure extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
-          children: [
-            const _TopBar(),
-            const SizedBox(height: 18),
-            RiderEmptyState(
-              icon: Icons.cloud_off_rounded,
-              title: 'Earnings unavailable',
-              message: 'Check your connection and try again.',
-              actionLabel: 'Retry',
-              onAction: onRetry,
-            ),
-          ],
+    child: ListView(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
+      children: [
+        const _TopBar(),
+        const SizedBox(height: 18),
+        RiderEmptyState(
+          icon: Icons.cloud_off_rounded,
+          title: 'Earnings unavailable',
+          message: 'Check your connection and try again.',
+          actionLabel: 'Retry',
+          onAction: onRetry,
         ),
-      );
+      ],
+    ),
+  );
 }
 
 Map<String, dynamic> _map(Object? value) =>
@@ -1871,14 +1960,14 @@ double _number(Object? value) => value is num ? value.toDouble() : 0;
 int _intValue(Object? value) => value is num ? value.toInt() : 0;
 
 bool _isActivePayout(Map<String, dynamic> item) {
-  final status =
-      '${item['status'] ?? item['payoutStatus'] ?? ''}'.toLowerCase();
+  final status = '${item['status'] ?? item['payoutStatus'] ?? ''}'
+      .toLowerCase();
   return {'requested', 'pending', 'approved', 'processing'}.contains(status);
 }
 
 bool _isPaidPayout(Map<String, dynamic> item) {
-  final status =
-      '${item['status'] ?? item['payoutStatus'] ?? ''}'.toLowerCase();
+  final status = '${item['status'] ?? item['payoutStatus'] ?? ''}'
+      .toLowerCase();
   return status.contains('paid') ||
       status.contains('complete') ||
       status.contains('settled');
@@ -1888,7 +1977,9 @@ double _payoutAmount(Map<String, dynamic> item) =>
     _number(item['amount'] ?? item['riderGrossShare']);
 
 bool _requiresPayoutReview(
-    Map<String, dynamic> summary, Map<String, dynamic>? activePayout) {
+  Map<String, dynamic> summary,
+  Map<String, dynamic>? activePayout,
+) {
   final readiness = '${summary['connectReadiness'] ?? ''}'.toLowerCase();
   final payoutStatus =
       '${activePayout?['status'] ?? activePayout?['payoutStatus'] ?? ''}'
@@ -1903,8 +1994,11 @@ bool _requiresPayoutReview(
       '${activePayout?['reviewReason'] ?? ''}'.trim().isNotEmpty;
 }
 
-String _reviewMessage(Map<String, dynamic> summary,
-    Map<String, dynamic>? activePayout, double unexplained) {
+String _reviewMessage(
+  Map<String, dynamic> summary,
+  Map<String, dynamic>? activePayout,
+  double unexplained,
+) {
   final reason =
       '${activePayout?['reviewReason'] ?? summary['reviewReason'] ?? summary['payoutHoldReason'] ?? ''}'
           .trim();
@@ -1921,7 +2015,8 @@ String _payoutStatusLabel(Map<String, dynamic> item) {
 }
 
 String? _estimatedArrival(Map<String, dynamic> item) {
-  final value = item['estimatedArrival'] ??
+  final value =
+      item['estimatedArrival'] ??
       item['estimatedArrivalAt'] ??
       item['expectedArrival'] ??
       item['expectedArrivalAt'] ??
@@ -1981,8 +2076,11 @@ Map<String, dynamic>? _firstWhereOrNull(
   return null;
 }
 
-String _withdrawalLabel(String readiness, Map<String, dynamic>? active,
-    List<Map<String, dynamic>> payouts) {
+String _withdrawalLabel(
+  String readiness,
+  Map<String, dynamic>? active,
+  List<Map<String, dynamic>> payouts,
+) {
   if (readiness == 'setup_required' ||
       readiness == 'restricted' ||
       readiness == 'disabled') {
@@ -2037,14 +2135,15 @@ String _topEarningDay(List<Map<String, dynamic>> items) {
   for (final item in items) {
     final timestamp = _timestamp(item);
     if (timestamp == null) continue;
-    final day = DateTime(timestamp.year, timestamp.month, timestamp.day)
-        .millisecondsSinceEpoch;
+    final day = DateTime(
+      timestamp.year,
+      timestamp.month,
+      timestamp.day,
+    ).millisecondsSinceEpoch;
     totals[day] = (totals[day] ?? 0) + _number(item['amount']);
   }
   if (totals.isEmpty) return 'No data yet';
-  final top = totals.entries.reduce(
-    (a, b) => a.value >= b.value ? a : b,
-  );
+  final top = totals.entries.reduce((a, b) => a.value >= b.value ? a : b);
   final date = DateTime.fromMillisecondsSinceEpoch(top.key);
   return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}';
 }
@@ -2067,7 +2166,8 @@ int _millis(Map<String, dynamic> item) {
 }
 
 DateTime? _timestamp(Map<String, dynamic> item) {
-  final value = item['createdAt'] ??
+  final value =
+      item['createdAt'] ??
       item['updatedAt'] ??
       item['paidAt'] ??
       item['completedAt'] ??

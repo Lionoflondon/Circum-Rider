@@ -18,7 +18,7 @@ import '../bloc/navbar_bloc.dart';
 class AppNavView extends StatelessWidget {
   const AppNavView({super.key});
 
-  static const labels = ['Home', 'Jobs', 'Action', 'Earnings', 'Profile'];
+  static const labels = ['Home', 'Jobs', 'Availability', 'Earnings', 'Profile'];
 
   @override
   Widget build(BuildContext context) {
@@ -216,7 +216,7 @@ class _CentralAction extends StatelessWidget {
                     : Icon(
                         online
                             ? Icons.power_settings_new_rounded
-                            : Icons.add_rounded,
+                            : Icons.power_settings_new_rounded,
                         color: Colors.white,
                         size: online ? 25 : 28,
                       ),
@@ -261,10 +261,11 @@ class _CentralAction extends StatelessWidget {
                               height: 44,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: (liveOnline
-                                        ? RiderPalette.green
-                                        : RiderPalette.blue)
-                                    .withValues(alpha: .14),
+                                color:
+                                    (liveOnline
+                                            ? RiderPalette.green
+                                            : RiderPalette.blue)
+                                        .withValues(alpha: .14),
                               ),
                               child: Icon(
                                 liveOnline
@@ -320,12 +321,12 @@ class _CentralAction extends StatelessWidget {
                               ? null
                               : () {
                                   context.read<HomeBloc>().add(
-                                        SetRideStatus(
-                                          status: liveOnline || intendsOnline
-                                              ? RideStatus.offline
-                                              : RideStatus.online,
-                                        ),
-                                      );
+                                    SetRideStatus(
+                                      status: liveOnline || intendsOnline
+                                          ? RideStatus.offline
+                                          : RideStatus.online,
+                                    ),
+                                  );
                                 },
                           style: FilledButton.styleFrom(
                             backgroundColor: liveOnline
@@ -347,7 +348,8 @@ class _CentralAction extends StatelessWidget {
                                   ),
                                 )
                               : Text(
-                                  intendsOnline ? 'Go offline' : 'Go online'),
+                                  intendsOnline ? 'Go offline' : 'Go online',
+                                ),
                         ),
                         TextButton(
                           onPressed: () => Navigator.pop(sheetContext),
@@ -377,23 +379,22 @@ class _CentralAction extends StatelessWidget {
         RiderAvailabilityStatus.offline => 'Offline',
       };
 
-  String _availabilityDescription(RiderAvailability availability) =>
-      switch (availability.status) {
-        RiderAvailabilityStatus.online =>
-          'Nearby eligible offers can reach you.',
-        RiderAvailabilityStatus.goingOnline =>
-          'Circum is confirming your availability.',
-        RiderAvailabilityStatus.waitingForLocation =>
-          'A fresh location is required before offers can reach you.',
-        RiderAvailabilityStatus.temporarilyUnavailable =>
-          'Circum is restoring your live availability.',
-        RiderAvailabilityStatus.goingOffline =>
-          'Circum is closing your availability.',
-        RiderAvailabilityStatus.error =>
-          'Availability could not be confirmed. Try again.',
-        RiderAvailabilityStatus.offline =>
-          'Go online to receive eligible offers.',
-      };
+  String _availabilityDescription(
+    RiderAvailability availability,
+  ) => switch (availability.status) {
+    RiderAvailabilityStatus.online => 'Nearby eligible offers can reach you.',
+    RiderAvailabilityStatus.goingOnline =>
+      'Circum is confirming your availability.',
+    RiderAvailabilityStatus.waitingForLocation =>
+      'A fresh location is required before offers can reach you.',
+    RiderAvailabilityStatus.temporarilyUnavailable =>
+      'Circum is restoring your live availability.',
+    RiderAvailabilityStatus.goingOffline =>
+      'Circum is closing your availability.',
+    RiderAvailabilityStatus.error =>
+      'Availability could not be confirmed. Try again.',
+    RiderAvailabilityStatus.offline => 'Go online to receive eligible offers.',
+  };
 
   String _availabilityActionLabel(RiderAvailability availability) {
     if (availability.intendsToBeOnline) return 'Rider availability. Go offline';

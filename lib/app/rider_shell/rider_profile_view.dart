@@ -83,7 +83,8 @@ class _RiderProfileViewState extends State<RiderProfileView> {
                     riderSnapshot.hasError ||
                     earningsSnapshot.hasError) {
                   return _ProfileError(
-                      onRetry: () => setState(() => _reload++));
+                    onRetry: () => setState(() => _reload++),
+                  );
                 }
                 if (!profileSnapshot.hasData && !riderSnapshot.hasData) {
                   return const _ProfileLoading();
@@ -130,8 +131,11 @@ class _RiderProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final data =
-        _RiderProfileData(user: user, profile: profile, earnings: earnings);
+    final data = _RiderProfileData(
+      user: user,
+      profile: profile,
+      earnings: earnings,
+    );
 
     return CustomScrollView(
       key: const PageStorageKey('rider-profile-screen'),
@@ -240,8 +244,9 @@ class _RiderProfileScreen extends StatelessWidget {
                               title: 'Complete payout setup',
                               description:
                                   'Secure setup with Stripe before payouts can be received',
-                              onTap:
-                                  openingPayoutSetup ? null : onOpenPayoutSetup,
+                              onTap: openingPayoutSetup
+                                  ? null
+                                  : onOpenPayoutSetup,
                             ),
                           _ProfileRow(
                             icon: Icons.savings_outlined,
@@ -309,7 +314,8 @@ class _RiderProfileScreen extends StatelessWidget {
                             onTap: () => _open(
                               context,
                               RiderNotificationsView(
-                                  onNavigateTab: onSelectTab),
+                                onNavigateTab: onSelectTab,
+                              ),
                             ),
                           ),
                           _ProfileRow(
@@ -326,17 +332,21 @@ class _RiderProfileScreen extends StatelessWidget {
                             icon: Icons.lock_outline,
                             title: 'Privacy',
                             description: 'Your data and account controls',
-                            onTap: () => _open(context,
-                                const RiderLegalView(initial: 'Privacy')),
+                            onTap: () => _open(
+                              context,
+                              const RiderLegalView(initial: 'Privacy'),
+                            ),
                           ),
                           _ProfileRow(
                             icon: Icons.assignment_outlined,
                             title: 'Circum Rider Agreement',
                             description: 'Your Rider operating agreement',
                             onTap: () => _open(
-                                context,
-                                const RiderLegalView(
-                                    initial: 'Circum Rider Agreement')),
+                              context,
+                              const RiderLegalView(
+                                initial: 'Circum Rider Agreement',
+                              ),
+                            ),
                           ),
                           _ProfileRow(
                             icon: Icons.help_outline_rounded,
@@ -391,8 +401,8 @@ class _RiderProfileData {
     required this.user,
     required this.profile,
     required this.earnings,
-  })  : rankSnapshot = RiderRankSnapshot.from(profile),
-        earningsSummary = RiderEarningsSummary.from(earnings);
+  }) : rankSnapshot = RiderRankSnapshot.from(profile),
+       earningsSummary = RiderEarningsSummary.from(earnings);
 
   final User user;
   final Map<String, dynamic> profile;
@@ -423,17 +433,18 @@ class _RiderProfileData {
   }
 
   String get photoUrl => textAny([
-        'profileThumbnailUrl',
-        'profilePhotoUrl',
-        'profilePhoto',
-        'photoURL',
-        'photoUrl',
-      ], fallback: user.photoURL ?? '');
+    'profileThumbnailUrl',
+    'profilePhotoUrl',
+    'profilePhoto',
+    'photoURL',
+    'photoUrl',
+  ], fallback: user.photoURL ?? '');
 
   String get verifiedLabel {
-    final value = text('verificationStatus',
-            fallback: text('approvalStatus', fallback: text('accountStatus')))
-        .toLowerCase();
+    final value = text(
+      'verificationStatus',
+      fallback: text('approvalStatus', fallback: text('accountStatus')),
+    ).toLowerCase();
     if (profile['documentsVerified'] == true ||
         profile['identityVerified'] == true ||
         value == 'verified' ||
@@ -461,16 +472,21 @@ class _RiderProfileData {
   String get trustPointsLabel => hasTrustPoints ? '$trustPoints' : '—';
 
   String get memberSince {
-    final created = timestamp('createdAt') ??
+    final created =
+        timestamp('createdAt') ??
         timestamp('submittedAt') ??
         user.metadata.creationTime;
     if (created == null) return 'Member since —';
     return 'Member since ${_monthYear(created)}';
   }
 
-  String get deliveriesCompleted => whole('completedDeliveries',
-      fallback: whole('deliveriesCompleted',
-          fallback: whole('completedJobs', fallback: '—')));
+  String get deliveriesCompleted => whole(
+    'completedDeliveries',
+    fallback: whole(
+      'deliveriesCompleted',
+      fallback: whole('completedJobs', fallback: '—'),
+    ),
+  );
 
   String get customerRating {
     final rating = number('rating', fallback: number('customerRating'));
@@ -482,8 +498,10 @@ class _RiderProfileData {
       percent('onTimeRate', fallbackKey: 'onTimeDeliveryRate');
 
   String get contactSummary {
-    final phone = text('phoneNumber',
-        fallback: text('phone', fallback: user.phoneNumber ?? ''));
+    final phone = text(
+      'phoneNumber',
+      fallback: text('phone', fallback: user.phoneNumber ?? ''),
+    );
     final email = text('email', fallback: user.email ?? '');
     if (phone.isNotEmpty && email.isNotEmpty) return 'Phone and email saved';
     if (phone.isNotEmpty) return 'Phone saved';
@@ -502,8 +520,10 @@ class _RiderProfileData {
 
   String get documentSummary {
     if (profile['documentsVerified'] == true) return 'Fully verified';
-    final status = text('documentStatus',
-        fallback: text('verificationStatus', fallback: text('identityStatus')));
+    final status = text(
+      'documentStatus',
+      fallback: text('verificationStatus', fallback: text('identityStatus')),
+    );
     final normalised = status.toLowerCase();
     if (normalised.contains('review') || normalised.contains('pending')) {
       return 'Verification in progress';
@@ -524,8 +544,10 @@ class _RiderProfileData {
   }
 
   String get rothSummary {
-    final status = text('rothOnboardingStatus',
-        fallback: profile['rothWalletId'] == null ? '' : 'connected');
+    final status = text(
+      'rothOnboardingStatus',
+      fallback: profile['rothWalletId'] == null ? '' : 'connected',
+    );
     if (status.isEmpty) return 'Separate from cash earnings';
     return '${_prettyStatus(status)} · separate from payouts';
   }
@@ -553,15 +575,18 @@ class _RiderProfileData {
       _money(earningsSummary?.available ?? moneyValue('availableBalance'));
 
   String get nextPayout {
-    final value = timestampFromAny(earnings['nextEstimatedPayoutAt'] ??
-        earnings['nextPayoutAt'] ??
-        profile['nextEstimatedPayoutAt']);
+    final value = timestampFromAny(
+      earnings['nextEstimatedPayoutAt'] ??
+          earnings['nextPayoutAt'] ??
+          profile['nextEstimatedPayoutAt'],
+    );
     if (value == null) return 'Estimated by Stripe Connect';
     return _shortDate(value);
   }
 
   String get rankProgress {
     if (rankSnapshot == null) return 'Build trust to unlock rank progress';
+    if (rankSnapshot!.isAssigned) return 'Assigned rank';
     final current = rankSnapshot!.trustPoints;
     const thresholds = RiderRankSnapshot.thresholds;
     const ranks = RiderRankSnapshot.ranks;
@@ -671,11 +696,7 @@ class _ProfileHero extends StatelessWidget {
           }
           return Column(
             crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              photo,
-              const SizedBox(height: 18),
-              text,
-            ],
+            children: [photo, const SizedBox(height: 18), text],
           );
         },
       ),
@@ -740,8 +761,11 @@ class _ProfilePhoto extends StatelessWidget {
                         imageUrl: imageUrl,
                         fit: BoxFit.cover,
                         errorWidget: (_, __, ___) => const Center(
-                          child: Icon(Icons.person_rounded,
-                              color: RiderPalette.muted, size: 56),
+                          child: Icon(
+                            Icons.person_rounded,
+                            color: RiderPalette.muted,
+                            size: 56,
+                          ),
                         ),
                       ),
               ),
@@ -757,8 +781,11 @@ class _ProfilePhoto extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: Border.all(color: RiderPalette.background, width: 3),
                 ),
-                child: const Icon(Icons.edit_rounded,
-                    color: RiderPalette.paper, size: 18),
+                child: const Icon(
+                  Icons.edit_rounded,
+                  color: RiderPalette.paper,
+                  size: 18,
+                ),
               ),
             ),
           ],
@@ -818,8 +845,9 @@ class _HeroText extends StatelessWidget {
             ),
             _HeroPill(
               icon: Icons.auto_awesome_rounded,
-              label:
-                  data.hasTrustPoints ? '${data.trustPoints} trust' : '— trust',
+              label: data.hasTrustPoints
+                  ? '${data.trustPoints} trust'
+                  : '— trust',
               color: RiderPalette.purple,
             ),
             for (final recognition in data.recognitionLabels)
@@ -844,8 +872,9 @@ class _HeroText extends StatelessWidget {
             backgroundColor: RiderPalette.blue,
             foregroundColor: RiderPalette.paper,
             minimumSize: const Size(150, 48),
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
         ),
       ],
@@ -866,28 +895,28 @@ class _HeroPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: .13),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: color.withValues(alpha: .28)),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+    decoration: BoxDecoration(
+      color: color.withValues(alpha: .13),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: color.withValues(alpha: .28)),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: color, size: 15),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 12,
+            fontWeight: FontWeight.w900,
+          ),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: color, size: 15),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: color,
-                fontSize: 12,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
-        ),
-      );
+      ],
+    ),
+  );
 }
 
 class _StatsRow extends StatelessWidget {
@@ -917,8 +946,8 @@ class _StatsRow extends StatelessWidget {
                 width: constraints.maxWidth >= 760
                     ? (constraints.maxWidth - 32) / 5
                     : constraints.maxWidth >= 520
-                        ? (constraints.maxWidth - 16) / 3
-                        : (constraints.maxWidth - 8) / 2,
+                    ? (constraints.maxWidth - 16) / 3
+                    : (constraints.maxWidth - 8) / 2,
                 child: _StatTile(label: stat.$1, value: stat.$2),
               ),
           ],
@@ -936,43 +965,43 @@ class _StatTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        constraints: const BoxConstraints(minHeight: 82),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: .035),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: .07)),
+    constraints: const BoxConstraints(minHeight: 82),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: .035),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: Colors.white.withValues(alpha: .07)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: RiderPalette.paper,
+            fontFamily: RiderTypography.mono,
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+          ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: RiderPalette.paper,
-                fontFamily: RiderTypography.mono,
-                fontSize: 18,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(
-              label,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: RiderPalette.muted,
-                fontSize: 11.5,
-                height: 1.2,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
+        const SizedBox(height: 5),
+        Text(
+          label,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: RiderPalette.muted,
+            fontSize: 11.5,
+            height: 1.2,
+            fontWeight: FontWeight.w700,
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _ProfileSection extends StatelessWidget {
@@ -983,37 +1012,37 @@ class _ProfileSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 10),
-              child: Text(
-                title.toUpperCase(),
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: .42),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1,
-                ),
-              ),
+    padding: const EdgeInsets.only(bottom: 20),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 10),
+          child: Text(
+            title.toUpperCase(),
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: .42),
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1,
             ),
-            RiderGlassSurface(
-              radius: 24,
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  for (var i = 0; i < rows.length; i++) ...[
-                    rows[i],
-                    if (i != rows.length - 1) const _ProfileDivider(),
-                  ],
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
-      );
+        RiderGlassSurface(
+          radius: 24,
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              for (var i = 0; i < rows.length; i++) ...[
+                rows[i],
+                if (i != rows.length - 1) const _ProfileDivider(),
+              ],
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 enum _ProfileRowTone { normal, danger }
@@ -1095,8 +1124,11 @@ class _ProfileRow extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                Icon(Icons.chevron_right_rounded,
-                    color: Colors.white.withValues(alpha: .42), size: 24),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: Colors.white.withValues(alpha: .42),
+                  size: 24,
+                ),
               ],
             ),
           ),
@@ -1111,21 +1143,20 @@ class _ProfileDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Divider(
-        height: 1,
-        thickness: 1,
-        indent: 16,
-        endIndent: 16,
-        color: Colors.white.withValues(alpha: .07),
-      );
+    height: 1,
+    thickness: 1,
+    indent: 16,
+    endIndent: 16,
+    color: Colors.white.withValues(alpha: .07),
+  );
 }
 
 class _ProfileLoading extends StatelessWidget {
   const _ProfileLoading();
 
   @override
-  Widget build(BuildContext context) => const Center(
-        child: CircularProgressIndicator(color: RiderPalette.blue),
-      );
+  Widget build(BuildContext context) =>
+      const Center(child: CircularProgressIndicator(color: RiderPalette.blue));
 }
 
 class _ProfileError extends StatelessWidget {
@@ -1135,12 +1166,12 @@ class _ProfileError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => RiderEmptyState(
-        icon: Icons.error_outline_rounded,
-        title: 'Profile unavailable',
-        message: 'We could not load your Circum Rider profile.',
-        actionLabel: 'Retry',
-        onAction: onRetry,
-      );
+    icon: Icons.error_outline_rounded,
+    title: 'Profile unavailable',
+    message: 'We could not load your Circum Rider profile.',
+    actionLabel: 'Retry',
+    onAction: onRetry,
+  );
 }
 
 class RiderLegalView extends StatelessWidget {
@@ -1150,48 +1181,46 @@ class RiderLegalView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: RiderPalette.background,
-        appBar: AppBar(
-          title: Text(initial ?? 'Legal'),
-          backgroundColor: RiderPalette.background,
-          foregroundColor: RiderPalette.paper,
-        ),
-        body: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
-            children: [
-              _ProfileSection(
-                title: 'Legal',
-                rows: [
-                  _ProfileRow(
-                    icon: Icons.description_outlined,
-                    title: 'Terms',
-                    description: 'Circum terms of service',
-                    onTap: () =>
-                        launchUrl(Uri.parse('https://circumuk.com/terms')),
-                  ),
-                  _ProfileRow(
-                    icon: Icons.privacy_tip_outlined,
-                    title: 'Privacy',
-                    description: 'Privacy policy and data controls',
-                    statusColor: RiderPalette.green,
-                    onTap: () =>
-                        launchUrl(Uri.parse('https://circumuk.com/privacy')),
-                  ),
-                  _ProfileRow(
-                    icon: Icons.assignment_outlined,
-                    title: 'Circum Rider Agreement',
-                    description: 'Rider operating agreement',
-                    statusColor: RiderPalette.amber,
-                    onTap: () =>
-                        launchUrl(Uri.parse('https://circumuk.com/terms')),
-                  ),
-                ],
+    backgroundColor: RiderPalette.background,
+    appBar: AppBar(
+      title: Text(initial ?? 'Legal'),
+      backgroundColor: RiderPalette.background,
+      foregroundColor: RiderPalette.paper,
+    ),
+    body: SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 32),
+        children: [
+          _ProfileSection(
+            title: 'Legal',
+            rows: [
+              _ProfileRow(
+                icon: Icons.description_outlined,
+                title: 'Terms',
+                description: 'Circum terms of service',
+                onTap: () => launchUrl(Uri.parse('https://circumuk.com/terms')),
+              ),
+              _ProfileRow(
+                icon: Icons.privacy_tip_outlined,
+                title: 'Privacy',
+                description: 'Privacy policy and data controls',
+                statusColor: RiderPalette.green,
+                onTap: () =>
+                    launchUrl(Uri.parse('https://circumuk.com/privacy')),
+              ),
+              _ProfileRow(
+                icon: Icons.assignment_outlined,
+                title: 'Circum Rider Agreement',
+                description: 'Rider operating agreement',
+                statusColor: RiderPalette.amber,
+                onTap: () => launchUrl(Uri.parse('https://circumuk.com/terms')),
               ),
             ],
           ),
-        ),
-      );
+        ],
+      ),
+    ),
+  );
 }
 
 Future<void> _confirmSignOut(BuildContext context) async {
@@ -1307,9 +1336,9 @@ Future<void> _confirmCloseAccount(BuildContext context) async {
     if (!context.mounted) return;
     final confirmed = await _showRiderDeleteConfirmation(context);
     if (confirmed != true || !context.mounted) return;
-    await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('closeCircumAccount')
-        .call({'accountType': 'rider'});
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('closeCircumAccount').call({'accountType': 'rider'});
     if (context.mounted) {
       context.read<AuthBloc>().add(SignOut());
     }
@@ -1456,8 +1485,9 @@ String _prettyStatus(String value) {
   return text
       .split(' ')
       .where((part) => part.isNotEmpty)
-      .map((part) =>
-          '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}')
+      .map(
+        (part) => '${part[0].toUpperCase()}${part.substring(1).toLowerCase()}',
+      )
       .join(' ');
 }
 
@@ -1474,7 +1504,7 @@ String _monthYear(DateTime value) {
     'Sep',
     'Oct',
     'Nov',
-    'Dec'
+    'Dec',
   ];
   return '${months[value.month - 1]} ${value.year}';
 }
@@ -1492,7 +1522,7 @@ String _shortDate(DateTime value) {
     'Sep',
     'Oct',
     'Nov',
-    'Dec'
+    'Dec',
   ];
   return '${value.day} ${months[value.month - 1]} ${value.year}';
 }
