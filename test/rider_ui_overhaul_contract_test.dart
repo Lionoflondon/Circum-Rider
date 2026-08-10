@@ -145,8 +145,10 @@ void main() {
     });
 
     test('jobs expose Taken state and scheduled handoff', () {
-      expect(offers, contains("matchingStatus', whereIn: ["));
-      expect(offers, contains("'broadcasted'"));
+      expect(offers, contains("httpsCallable('getAvailableRequests')"));
+      expect(offers, contains("payload['nearestRequests']"));
+      expect(offers, isNot(contains(".collection('deliveryRequests')\n"
+          "                        .where('status', isEqualTo: 'requested')")));
       expect(offers, contains('Job no longer available'));
       expect(offers, contains('Back to job feed'));
       expect(offers, contains('RiderAcceptStatus.alreadyTaken'));
