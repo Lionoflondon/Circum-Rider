@@ -13,7 +13,8 @@ void main() {
     expect(webMain, contains('RiderWebBootstrapGate'));
     expect(webMain, contains('runApp(const RiderWebBootstrapGate())'));
     expect(webMain, contains('RiderWebSecurityGate'));
-    expect(webMain, contains('AbsorbPointer'));
+    expect(webMain, contains('if (ready) return widget.child'));
+    expect(webMain, contains('theme: ThemeData.dark(useMaterial3: true)'));
     expect(webMain, contains('RiderWebSecurityStatus.initializing'));
     expect(webMain, contains('RiderWebSecurityStatus.ready'));
     expect(webMain, contains('RiderWebSecurityStatus.retryableFailure'));
