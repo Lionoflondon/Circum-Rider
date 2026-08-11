@@ -32,7 +32,8 @@ void main() {
     expect(source, contains("_field(_phone, 'Phone',"));
     expect(source, contains("_field(_email, 'Email',"));
     expect(source, contains('readOnly: true'));
-    expect(source, isNot(contains("'phoneNumber': _phone.text")));
+    expect(source, contains("httpsCallable('updateRiderProfile')"));
+    expect(source, contains("'phoneNumber': _phone.text"));
     expect(source, isNot(contains("'email': _email.text")));
   });
 
@@ -90,18 +91,16 @@ void main() {
     expect(homeBloc, contains(r"'photoURL': '$riderPhoto'"));
   });
 
-  test('Rider username is editable and persisted to backend profile documents',
-      () {
+  test('Rider username uses the global backend authority', () {
     final details = File('lib/app/rider_shell/rider_profile_details_view.dart')
         .readAsStringSync();
     final profile =
         File('lib/app/rider_shell/rider_profile_view.dart').readAsStringSync();
 
     expect(details, contains("_username.text"));
-    expect(details, contains("'handle': handle"));
-    expect(details, contains("'username': handle"));
-    expect(details, contains("collection('riders')"));
-    expect(details, contains("collection('riderProfiles')"));
+    expect(details, contains("httpsCallable('claimCircumUsername')"));
+    expect(details, isNot(contains("'handle': handle")));
+    expect(details, isNot(contains("httpsCallable('claimSenderUsername')")));
     expect(details, contains('Your Rider username is saved'));
     expect(profile, contains("'handle'"));
     expect(profile, contains("'riderHandle'"));

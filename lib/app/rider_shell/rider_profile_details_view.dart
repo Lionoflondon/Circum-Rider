@@ -53,9 +53,10 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
     final first = '${data['firstName'] ?? ''}'.trim();
     final last = '${data['lastName'] ?? ''}'.trim();
     _name.text = '${data['fullName'] ?? data['name'] ?? '$first $last'}'.trim();
-    _username.text = '${data['handle'] ?? data['username'] ?? ''}'
-        .trim()
-        .replaceFirst('@', '');
+    _username.text =
+        '${data['username'] ?? data['canonicalUsername'] ?? data['handle'] ?? ''}'
+            .trim()
+            .replaceFirst('@', '');
     _dob.text = '${data['dateOfBirth'] ?? data['dob'] ?? ''}'.trim();
     _gender.text = '${data['gender'] ?? ''}'.trim();
     _phone.text =
@@ -76,8 +77,6 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
         'name': _name.text.trim(),
         'firstName': parts.first,
         'lastName': parts.length > 1 ? parts.sublist(1).join(' ') : '',
-        'handle': handle,
-        'username': handle,
         'dateOfBirth': _dob.text.trim(),
         'gender': _gender.text.trim(),
         'homeAddress': _address.text.trim(),
@@ -88,7 +87,7 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
         ...patch,
         'phoneNumber': _phone.text.trim(),
       });
-      await functions.httpsCallable('claimSenderUsername').call({
+      await functions.httpsCallable('claimCircumUsername').call({
         'username': handle,
       });
       if (mounted) {
