@@ -755,14 +755,10 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
                 BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueCyan),
           ),
       },
-      polylines: {
-        Polyline(
-          polylineId: const PolylineId('route'),
-          points: [pickup, dropoff],
-          color: const Color(0xFF60A5FA),
-          width: 5,
-        ),
-      },
+      // Offer projections currently provide endpoints and backend-authored
+      // distance/time, but no route geometry. Never imply a route with a
+      // fabricated straight line; markers and the textual summary remain
+      // useful while acceptance stays independent of map readiness.
       circles: {
         if (riderLatLng != null)
           Circle(
