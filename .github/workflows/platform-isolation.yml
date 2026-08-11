@@ -1,0 +1,20 @@
+name: Platform isolation guard
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'release/**'
+      - 'fix/**'
+
+jobs:
+  platform-isolation-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/check_platform_isolation.js
+      - run: node --test test/platform_isolation_guard_test.js test/rider_deployment_workflow_contract_test.js
