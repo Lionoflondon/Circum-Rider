@@ -13,3 +13,15 @@ test('incident guard rejects the mobile entrypoint as a Web root', () => {
     path.join(__dirname, '..', 'lib', 'main_rider_web.dart'), 'utf8');
   assert.equal(source.includes("package:circum_rider/main.dart"), false);
 });
+
+test('App Check provider ownership is platform-local', () => {
+  const fs = require('node:fs');
+  const web = fs.readFileSync(path.join(__dirname, '..', 'lib', 'app',
+    'security', 'rider_app_check.dart'), 'utf8');
+  const mobile = fs.readFileSync(path.join(__dirname, '..', 'lib', 'app',
+    'security', 'circum_app_check.dart'), 'utf8');
+  assert.equal(web.includes('AndroidProvider'), false);
+  assert.equal(web.includes('AppleProvider'), false);
+  assert.equal(mobile.includes('ReCaptchaEnterpriseProvider'), false);
+  assert.equal(mobile.includes('webProvider'), false);
+});

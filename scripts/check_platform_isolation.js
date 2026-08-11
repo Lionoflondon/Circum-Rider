@@ -16,6 +16,8 @@ const expect = (condition, reason) => {
 const manifest = JSON.parse(read('platform-ownership.json'));
 const web = read(manifest.products.rider_web.entrypoint);
 const mobile = read(manifest.products.rider_mobile.entrypoint);
+const webAppCheck = read('lib/app/security/rider_app_check.dart');
+const mobileAppCheck = read('lib/app/security/circum_app_check.dart');
 
 expect(!web.includes("package:circum_rider/main.dart"),
   'Rider Web imports the mobile main entrypoint');
@@ -33,8 +35,14 @@ expect(read('lib/app/security/rider_app_check.dart')
   .includes('RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY'),
   'Rider Web App Check key is not owned by the Web security module');
 expect(read('lib/app/security/circum_app_check.dart')
-  .includes('CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY'),
-  'Rider Mobile App Check module contract changed unexpectedly');
+  .includes('AndroidProvider'),
+  'Rider Mobile App Check module lost its mobile provider');
+expect(!webAppCheck.includes('AndroidProvider') && !webAppCheck.includes('AppleProvider'),
+  'Rider Web App Check module contains mobile providers');
+expect(!mobileAppCheck.includes('ReCaptchaEnterpriseProvider') &&
+  !mobileAppCheck.includes('RECAPTCHA_ENTERPRISE_SITE_KEY') &&
+  !mobileAppCheck.includes('webProvider'),
+  'Rider Mobile App Check module contains Web provider/configuration');
 
 if (failures.length) {
   console.error('Platform isolation guard FAILED');
