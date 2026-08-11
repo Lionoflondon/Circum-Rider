@@ -13,14 +13,12 @@ void main() {
     final service = File('lib/app/onboarding/rider_roth_onboarding.dart')
         .readAsStringSync();
 
-    test('wallet onboarding service is present and idempotent by rider UID',
-        () {
+    test('wallet onboarding delegates idempotent authority by rider UID', () {
       expect(RiderRothOnboarding.walletCollection, 'riderRothWallets');
       expect(RiderRothOnboarding.ledgerCollection, 'riderRothLedger');
-      expect(service, contains("doc(riderId)"));
-      expect(service, contains('runTransaction'));
-      expect(service, contains('wallet.exists'));
-      expect(service, contains('rothWalletConnectedAt'));
+      expect(service, contains("httpsCallable('ensureRiderRothWallet')"));
+      expect(service, contains("'riderId': riderId"));
+      expect(service, isNot(contains('runTransaction')));
       expect(service, isNot(contains('FieldValue.increment')));
     });
 
