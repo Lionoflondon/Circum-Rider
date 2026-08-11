@@ -13,7 +13,8 @@ void main() {
     expect(webMain, contains('initializeRiderAppCheck'));
     expect(appCheck, contains('ReCaptchaEnterpriseProvider'));
     expect(appCheck, contains('RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY'));
-    expect(appCheck, contains('RiderStartupBlocked'));
+    expect(appCheck, contains('RiderAppCheckStartup.blocked'));
+    expect(appCheck, contains('blockStartup'));
     expect(appCheck, isNot(contains('debugProvider')));
   });
 }
