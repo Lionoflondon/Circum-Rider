@@ -87,6 +87,10 @@ class _RiderWebBootstrapGateState extends State<RiderWebBootstrapGate> {
       if (!mounted) return;
       setState(() => _firebaseReady = true);
     } catch (error) {
+      final summary = error is FirebaseException
+          ? '${error.plugin}:${error.code}'
+          : error.runtimeType.toString();
+      debugPrint('[RDR_WEB_FIREBASE_FAILED] type=$summary');
       if (!mounted) return;
       setState(() => _error = error);
     }
