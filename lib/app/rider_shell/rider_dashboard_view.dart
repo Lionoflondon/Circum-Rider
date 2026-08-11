@@ -36,6 +36,7 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
   @override
   Widget build(BuildContext context) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
+    debugPrint('[RDR_WEB_DASHBOARD] build authenticated=${uid != null}');
     if (uid == null) {
       return const RiderEmptyState(
         icon: Icons.lock_outline_rounded,
