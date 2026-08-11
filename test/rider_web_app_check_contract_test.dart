@@ -11,6 +11,8 @@ void main() {
     expect(webMain, contains('DefaultFirebaseOptions.web'));
     expect(webMain, contains('RiderWebStartupApp'));
     expect(webMain, contains('initializeRiderAppCheck'));
+    expect(webMain, contains('ErrorWidget.builder'));
+    expect(webMain, contains('RiderWebRuntimeFailure'));
     expect(appCheck, contains('ReCaptchaEnterpriseProvider'));
     expect(appCheck, contains('RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY'));
     expect(appCheck, contains('RiderAppCheckStartup.blocked'));

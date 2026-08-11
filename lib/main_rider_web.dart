@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:html' as html;
 import 'dart:ui';
 
 import 'package:circum_rider/rider_app.dart';
@@ -26,6 +27,7 @@ void _installRiderWebDiagnostics() {
   FlutterError.onError = (details) {
     _reportRiderWebError(details.exception, details.stack);
   };
+  ErrorWidget.builder = (_) => const RiderWebRuntimeFailure();
   PlatformDispatcher.instance.onError = (error, stack) {
     _reportRiderWebError(error, stack);
     return true;
@@ -223,4 +225,88 @@ class _RiderWebStartupHold extends StatelessWidget {
       ),
     );
   }
+}
+
+class RiderWebRuntimeFailure extends StatelessWidget {
+  const RiderWebRuntimeFailure({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark(useMaterial3: true),
+      home: Scaffold(
+        backgroundColor: const Color(0xFF07090F),
+        body: SafeArea(
+          child: Center(
+            child: Semantics(
+              liveRegion: true,
+              label: 'Circum Rider Web could not render',
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.error_outline_rounded,
+                        color: Color(0xFFF87171),
+                        size: 34,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Something went wrong.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFFF5F7FB),
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'We could not render Rider Web. Please reload and try again.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFF9CA8B8),
+                          height: 1.45,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Reference: RDR-WEB-START-002',
+                        style: TextStyle(
+                          color: Color(0xFF6B7280),
+                          fontSize: 12,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                      const SizedBox(height: 22),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 48,
+                        child: FilledButton.icon(
+                          onPressed: () => _reloadPage(),
+                          icon: const Icon(Icons.refresh_rounded),
+                          label: const Text('Reload'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFF3B82F6),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+void _reloadPage() {
+  html.window.location.reload();
 }
