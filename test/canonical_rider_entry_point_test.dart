@@ -8,7 +8,7 @@ void main() {
     final appSource = File('lib/app.dart').readAsStringSync();
 
     test('launches the committed CircumRider root', () {
-      expect(mainSource, contains('runApp(const CircumRider())'));
+      expect(mainSource, contains('runApp(CircumRider(homeBloc: homeBloc))'));
       expect(mainSource, isNot(contains('CanonicalRiderApp')));
       expect(mainSource, isNot(contains("import 'canonical_rider/")));
     });

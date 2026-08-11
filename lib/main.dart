@@ -1,31 +1,19 @@
 import 'dart:convert';
 import 'dart:async';
 
-import 'package:circum_rider/app/account/bloc/account_bloc.dart';
-// import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
-
-import 'app.dart';
-import 'app/authentication/bloc/auth_bloc.dart';
-import 'app/security/circum_app_check.dart';
-import 'app/bottom_nav/bloc/navbar_bloc.dart';
-import 'app/home/bloc/home_bloc.dart';
-import 'app/history/bloc/history_bloc.dart';
-import 'app/rider_jobs/rider_job_offer_screen.dart';
-import 'app/support/bloc/support_bloc.dart';
-import 'app/verification/bloc/verification_bloc.dart';
-import 'helper/notifications_helper.dart';
-import 'firebase_options.dart';
-import 'utils/nav/nav_key.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:bot_toast/bot_toast.dart';
+
+import 'app/security/circum_app_check.dart';
+import 'app/home/bloc/home_bloc.dart';
+import 'helper/notifications_helper.dart';
+import 'rider_app.dart';
 
 part './messaging.dart';
 
@@ -40,19 +28,6 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
-
-  if (kIsWeb) {
-    runApp(RiderStartupApp(
-      initializer: () async {
-        await _initializeRiderWeb();
-        if (!await initializeCircumAppCheck()) {
-          throw StateError('Security verification is unavailable.');
-        }
-      },
-      appBuilder: (_) => const CircumRider(),
-    ));
-    return;
-  }
 
   // Initialize notification settings
   const AndroidInitializationSettings initializationSettingsAndroid =
@@ -77,7 +52,7 @@ void main() async {
     FlutterNativeSplash.remove();
     runApp(RiderStartupApp(
       initializer: initializeCircumAppCheck,
-      appBuilder: (_) => const CircumRider(),
+      appBuilder: (_) => CircumRider(homeBloc: homeBloc),
     ));
     return;
   }
@@ -113,16 +88,8 @@ void main() async {
           [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown])
       .then((value) {
     Bloc.observer = SimpleBlocObserver();
-    runApp(const CircumRider());
+    runApp(CircumRider(homeBloc: homeBloc));
   });
-}
-
-Future<void> _initializeRiderWeb() async {
-  try {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
-  } on FirebaseException catch (error) {
-    if (error.code != 'duplicate-app') rethrow;
-  }
 }
 
 class RiderStartupApp extends StatefulWidget {
@@ -301,78 +268,6 @@ class RiderStartupFailure extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-class CircumRider extends StatelessWidget {
-  const CircumRider({super.key});
-
-  // This widget is the root of your application.
-  @override
-  Widget build(BuildContext context) {
-    return ScreenUtilInit(
-        designSize: const Size(375, 812),
-        minTextAdapt: true,
-        builder: (_, __) {
-          final botToastBuilder = BotToastInit();
-          return MaterialApp(
-              // navigatorKey: NavKey.navKey,
-              // onGenerateRoute: (_) => null,
-              debugShowCheckedModeBanner: false,
-              title: 'Circum Rider',
-              builder: (context, child) {
-                child = botToastBuilder(context, child);
-                return child;
-              },
-              themeMode: ThemeMode.dark,
-              theme: ThemeData(
-                brightness: Brightness.dark,
-                scaffoldBackgroundColor: const Color(0xFF07090F),
-                colorScheme: const ColorScheme.dark(
-                  primary: Color(0xFF3B82F6),
-                  surface: Color(0xFF0D111C),
-                  error: Color(0xFFF87171),
-                ),
-                fontFamily: 'Inter',
-                navigationBarTheme: const NavigationBarThemeData(
-                  labelTextStyle: WidgetStatePropertyAll(TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  )),
-                ),
-              ),
-              navigatorObservers: [BotToastNavigatorObserver()],
-              routes: {
-                RiderJobOfferScreen.routeName: (_) =>
-                    const RiderJobOfferScreen(),
-              },
-              home: WillPopScope(
-                onWillPop: () async =>
-                    !await NavKey.navKey.currentState!.maybePop(),
-                child: MultiBlocProvider(providers: [
-                  BlocProvider<AuthBloc>(
-                    create: (BuildContext context) =>
-                        AuthBloc()..add(SortSessionState()),
-                  ),
-                  BlocProvider(
-                    create: (context) => NavbarBloc(),
-                  ),
-                  BlocProvider(
-                    create: (context) => VerificationBloc(),
-                  ),
-                  BlocProvider<HomeBloc>.value(value: homeBloc),
-                  BlocProvider<HistoryBloc>(
-                    create: (BuildContext context) => HistoryBloc(),
-                  ),
-                  BlocProvider<SupportBloc>(
-                    create: (BuildContext context) => SupportBloc(),
-                  ),
-                  BlocProvider<AccountBloc>(
-                    create: (BuildContext context) => AccountBloc(),
-                  ),
-                ], child: const App()),
-              ));
-        });
   }
 }
 
