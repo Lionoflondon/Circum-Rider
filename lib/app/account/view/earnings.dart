@@ -66,6 +66,7 @@ class _EarningsViewState extends State<EarningsView> {
               stream: FirebaseFirestore.instance
                   .collection('payoutRequests')
                   .where('riderId', isEqualTo: uid)
+                  .orderBy('createdAt', descending: true)
                   .limit(30)
                   .snapshots(),
               builder: (context, payoutSnapshot) {
@@ -73,6 +74,7 @@ class _EarningsViewState extends State<EarningsView> {
                   stream: FirebaseFirestore.instance
                       .collection('riderWalletTransactions')
                       .where('riderId', isEqualTo: uid)
+                      .orderBy('createdAt', descending: true)
                       .limit(40)
                       .snapshots(),
                   builder: (context, transactionSnapshot) {
@@ -152,6 +154,7 @@ class _EarningsContent extends StatelessWidget {
         summary['pendingBalance'] ??
         storedEarnings['pendingBalance']);
     final delivery = _number(totals['delivery_earning']);
+    final roadReimbursements = _number(totals['road_reimbursement']);
     final tips = _number(totals['tip']);
     final waiting =
         _number(totals['waiting_fee']) + _number(totals['no_show_fee']);
@@ -174,6 +177,7 @@ class _EarningsContent extends StatelessWidget {
           available,
           pending,
           delivery,
+          roadReimbursements,
           tips,
           waiting,
           adjustments,
@@ -217,6 +221,7 @@ class _EarningsContent extends StatelessWidget {
               const SizedBox(height: 24),
               _BreakdownGrid(
                 delivery: delivery,
+                roadReimbursements: roadReimbursements,
                 tips: tips,
                 waiting: waiting,
                 adjustments: adjustments,
@@ -492,12 +497,14 @@ class _BalanceHero extends StatelessWidget {
 class _BreakdownGrid extends StatelessWidget {
   const _BreakdownGrid({
     required this.delivery,
+    required this.roadReimbursements,
     required this.tips,
     required this.waiting,
     required this.adjustments,
   });
 
   final double delivery;
+  final double roadReimbursements;
   final double tips;
   final double waiting;
   final double adjustments;
@@ -521,6 +528,12 @@ class _BreakdownGrid extends StatelessWidget {
                 color: RiderPalette.blue,
                 value: _money(delivery),
                 label: 'Deliveries',
+              ),
+              _BreakdownTile(
+                icon: Icons.route_outlined,
+                color: RiderPalette.green,
+                value: _money(roadReimbursements),
+                label: 'Road costs',
               ),
               _BreakdownTile(
                 icon: Icons.payments_outlined,

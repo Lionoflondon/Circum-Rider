@@ -26,4 +26,11 @@ void main() {
     expect(view, isNot(contains('GetEarnings()')));
     expect(view, contains("httpsCallable('getRiderEarningsSummary')"));
   });
+
+  test('earnings history is newest-first and presents road reimbursements', () {
+    final view = File('lib/app/account/view/earnings.dart').readAsStringSync();
+    expect(view, contains(".orderBy('createdAt', descending: true)"));
+    expect(view, contains("totals['road_reimbursement']"));
+    expect(view, contains("label: 'Road costs'"));
+  });
 }
