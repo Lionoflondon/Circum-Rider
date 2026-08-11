@@ -10,6 +10,8 @@ void main() {
 
     expect(webMain, contains('DefaultFirebaseOptions.web'));
     expect(webMain, contains('RiderWebStartupApp'));
+    expect(webMain, contains('RiderWebBootstrapGate'));
+    expect(webMain, contains('runApp(const RiderWebBootstrapGate())'));
     expect(webMain, contains('RiderWebSecurityGate'));
     expect(webMain, contains('AbsorbPointer'));
     expect(webMain, contains('RiderWebSecurityStatus.initializing'));

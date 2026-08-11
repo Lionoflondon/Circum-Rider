@@ -13,12 +13,7 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
   _installRiderWebDiagnostics();
   runZonedGuarded(
-    () => runApp(
-      RiderWebStartupApp(
-        initializer: _initializeFirebase,
-        appBuilder: (_) => const RiderWebSecurityGate(child: CircumRider()),
-      ),
-    ),
+    () => runApp(const RiderWebBootstrapGate()),
     _reportRiderWebError,
   );
 }
@@ -63,6 +58,48 @@ class RiderWebStartupApp extends StatefulWidget {
 
   @override
   State<RiderWebStartupApp> createState() => _RiderWebStartupAppState();
+}
+
+class RiderWebBootstrapGate extends StatefulWidget {
+  const RiderWebBootstrapGate({super.key});
+
+  @override
+  State<RiderWebBootstrapGate> createState() => _RiderWebBootstrapGateState();
+}
+
+class _RiderWebBootstrapGateState extends State<RiderWebBootstrapGate> {
+  Object? _error;
+  bool _firebaseReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startFirebase();
+  }
+
+  Future<void> _startFirebase() async {
+    setState(() {
+      _error = null;
+      _firebaseReady = false;
+    });
+    try {
+      await _initializeFirebase().timeout(const Duration(seconds: 20));
+      if (!mounted) return;
+      setState(() => _firebaseReady = true);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null) {
+      return _RiderWebStartupFailure(onRetry: _startFirebase);
+    }
+    if (!_firebaseReady) return const _RiderWebStartupHold();
+    return const RiderWebSecurityGate(child: CircumRider());
+  }
 }
 
 class _RiderWebStartupAppState extends State<RiderWebStartupApp> {
@@ -214,6 +251,74 @@ class _RiderWebStartupHold extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RiderWebStartupFailure extends StatelessWidget {
+  const _RiderWebStartupFailure({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark(useMaterial3: true),
+      home: Scaffold(
+        backgroundColor: const Color(0xFF07090F),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline_rounded,
+                      color: Color(0xFFF87171),
+                      size: 34,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Something went wrong.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFFF5F7FB),
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'We could not start Rider Web. Check your connection and try again.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Color(0xFF9CA8B8), height: 1.45),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Reference: RDR-WEB-BOOT-001',
+                      style: TextStyle(
+                        color: Color(0xFF6B7280),
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    FilledButton.icon(
+                      onPressed: onRetry,
+                      icon: const Icon(Icons.refresh_rounded),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
