@@ -18,22 +18,11 @@ class App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-      debugPrint(
-        '[RDR_WEB_ROUTE] session=${state.currentState} '
-        'account=${state.riderAccountState.name} '
-        'auth=${state.authenticatedStatus.name}',
-      );
       if (state.currentState == AppState.authenticated) {
         return FutureBuilder<bool>(
             future: RiderInternalAccess.enabled(forceRefresh: true),
-            builder: (context, internalAccess) {
-              debugPrint(
-                '[RDR_WEB_ROUTE_ACCESS] ready=${internalAccess.hasData} '
-                'enabled=${internalAccess.data == true} '
-                'error=${internalAccess.hasError}',
-              );
-              return _buildNavigator(state, internalAccess.data == true);
-            });
+            builder: (context, internalAccess) =>
+                _buildNavigator(state, internalAccess.data == true));
       }
       return _buildNavigator(state, false);
     });
@@ -83,9 +72,10 @@ class App extends StatelessWidget {
 
         // Authenticated app state
         if (state.currentState == AppState.authenticated &&
-            state.authenticatedStatus == AuthenticatedStatus.authenticated &&
             (internalAccess ||
-                state.riderAccountState == RiderAccountState.approved))
+                (state.authenticatedStatus ==
+                        AuthenticatedStatus.authenticated &&
+                    state.riderAccountState == RiderAccountState.approved)))
           const MaterialPage(child: AppNavView()),
       ],
       onPopPage: (route, result) {

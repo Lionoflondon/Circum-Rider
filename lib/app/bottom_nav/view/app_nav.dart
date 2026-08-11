@@ -22,12 +22,8 @@ class AppNavView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint(
-      '[RDR_WEB_SHELL] build viewport=${MediaQuery.sizeOf(context)}',
-    );
     return BlocBuilder<NavbarBloc, NavbarState>(
       builder: (context, nav) {
-        debugPrint('[RDR_WEB_SHELL] tab=${nav.currentNavIndex}');
         void select(int index) =>
             context.read<NavbarBloc>().add(ChangeTabIndex(index: index));
 
