@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../rider_jobs/rider_job_offer_screen.dart';
 import '../rider_jobs/rider_offer_card.dart';
 import '../rider_design/rider_ui.dart';
+import '../rider_truth/rider_truth.dart';
 
 enum _ScheduleFilter { all, today, week, vanguard }
 
@@ -418,7 +419,7 @@ class _ScheduledJobCard extends StatelessWidget {
                 data: job.raw,
               ),
               riderId: uid,
-              riderRank: 'Agent',
+              riderRank: RiderRankSnapshot.from(job.raw)?.rank ?? 'Rank unavailable',
             ),
           ),
         );

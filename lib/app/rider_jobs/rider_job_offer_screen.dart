@@ -1268,9 +1268,15 @@ class RiderDeliveryStagePolicy {
       case 'delivered':
         return RiderDeliveryStage.delivered;
       case 'issue_reported':
+      case 'awaiting_adjustment_review':
+      case 'awaiting_admin_review':
+      case 'more_evidence_requested':
+      case 'awaiting_sender_adjustment':
+      case 'rejected_by_admin':
         return RiderDeliveryStage.issueReported;
       default:
-        return RiderDeliveryStage.accepted;
+        // Unknown backend states must never expose an actionable lifecycle step.
+        return RiderDeliveryStage.issueReported;
     }
   }
 
