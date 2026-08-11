@@ -20,7 +20,9 @@ Future<RiderAppCheckStartup> initializeRiderAppCheck() async {
   const siteKey =
       String.fromEnvironment('RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY');
   if (kIsWeb && siteKey.trim().isEmpty) {
-    return const RiderAppCheckStartup.ready();
+    return const RiderAppCheckStartup.blocked(
+      'Rider security verification is not configured for this version.',
+    );
   }
   try {
     await FirebaseAppCheck.instance.activate(
@@ -30,6 +32,11 @@ Future<RiderAppCheckStartup> initializeRiderAppCheck() async {
     );
     return const RiderAppCheckStartup.ready();
   } catch (_) {
+    if (kIsWeb) {
+      return const RiderAppCheckStartup.blocked(
+        'Rider security verification could not start. Please try again.',
+      );
+    }
     return const RiderAppCheckStartup.ready();
   }
 }
