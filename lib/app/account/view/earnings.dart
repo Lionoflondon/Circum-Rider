@@ -25,9 +25,7 @@ class _EarningsViewState extends State<EarningsView> {
   void initState() {
     super.initState();
     _summary = _loadSummary();
-    context.read<AccountBloc>()
-      ..add(GetEarnings())
-      ..add(GetRequests());
+    context.read<AccountBloc>().add(GetRequests());
   }
 
   Future<Map<String, dynamic>> _loadSummary() async {

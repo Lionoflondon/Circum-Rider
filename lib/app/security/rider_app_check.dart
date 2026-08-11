@@ -30,6 +30,14 @@ Future<RiderAppCheckStartup> initializeRiderAppCheck() async {
       appleProvider: AppleProvider.appAttest,
       webProvider: kIsWeb ? ReCaptchaEnterpriseProvider(siteKey) : null,
     );
+    if (kIsWeb) {
+      final token = await FirebaseAppCheck.instance.getToken(true);
+      if (token == null || token.trim().isEmpty) {
+        return const RiderAppCheckStartup.blocked(
+          'Rider security verification could not start. Please try again.',
+        );
+      }
+    }
     return const RiderAppCheckStartup.ready();
   } catch (_) {
     if (kIsWeb) {
