@@ -10,6 +10,13 @@ void main() {
 
     expect(webMain, contains('DefaultFirebaseOptions.web'));
     expect(webMain, contains('RiderWebStartupApp'));
+    expect(webMain, contains('RiderWebSecurityGate'));
+    expect(webMain, contains('AbsorbPointer'));
+    expect(webMain, contains('RiderWebSecurityStatus.initializing'));
+    expect(webMain, contains('RiderWebSecurityStatus.ready'));
+    expect(webMain, contains('RiderWebSecurityStatus.retryableFailure'));
+    expect(webMain, contains('Security verification unavailable'));
+    expect(webMain, contains('Retry'));
     expect(webMain, contains('initializeRiderAppCheck'));
     expect(webMain, contains('ErrorWidget.builder'));
     expect(webMain, contains('RiderWebRuntimeFailure'));

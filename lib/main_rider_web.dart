@@ -15,8 +15,8 @@ void main() {
   runZonedGuarded(
     () => runApp(
       RiderWebStartupApp(
-        initializer: _initializeRiderWeb,
-        appBuilder: (_) => const CircumRider(),
+        initializer: _initializeFirebase,
+        appBuilder: (_) => const RiderWebSecurityGate(child: CircumRider()),
       ),
     ),
     _reportRiderWebError,
@@ -41,15 +41,11 @@ void _reportRiderWebError(Object error, StackTrace? stack) {
   }
 }
 
-Future<void> _initializeRiderWeb() async {
+Future<void> _initializeFirebase() async {
   try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
   } on FirebaseException catch (error) {
     if (error.code != 'duplicate-app') rethrow;
-  }
-  final appCheckStartup = await initializeRiderAppCheck();
-  if (appCheckStartup.blockStartup) {
-    throw StateError(appCheckStartup.message);
   }
 }
 
@@ -223,6 +219,120 @@ class _RiderWebStartupHold extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+enum RiderWebSecurityStatus { initializing, ready, retryableFailure }
+
+class RiderWebSecurityGate extends StatefulWidget {
+  const RiderWebSecurityGate({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  State<RiderWebSecurityGate> createState() => _RiderWebSecurityGateState();
+}
+
+class _RiderWebSecurityGateState extends State<RiderWebSecurityGate> {
+  RiderWebSecurityStatus _status = RiderWebSecurityStatus.initializing;
+
+  @override
+  void initState() {
+    super.initState();
+    _activateAppCheck();
+  }
+
+  Future<void> _activateAppCheck() async {
+    if (mounted) {
+      setState(() => _status = RiderWebSecurityStatus.initializing);
+    }
+    final startup = await initializeRiderAppCheck();
+    if (!mounted) return;
+    setState(
+      () => _status = startup.blockStartup
+          ? RiderWebSecurityStatus.retryableFailure
+          : RiderWebSecurityStatus.ready,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ready = _status == RiderWebSecurityStatus.ready;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        AbsorbPointer(absorbing: !ready, child: widget.child),
+        if (!ready)
+          Positioned.fill(
+            child: ColoredBox(
+              color: const Color(0xCC07090F),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_status == RiderWebSecurityStatus.initializing)
+                          const SizedBox(
+                            width: 30,
+                            height: 30,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3,
+                              color: Color(0xFF60A5FA),
+                            ),
+                          )
+                        else
+                          const Icon(
+                            Icons.shield_outlined,
+                            color: Color(0xFFFBBF24),
+                            size: 34,
+                          ),
+                        const SizedBox(height: 16),
+                        Text(
+                          _status == RiderWebSecurityStatus.initializing
+                              ? 'Preparing secure Rider access'
+                              : 'Security verification unavailable',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFFF5F7FB),
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _status == RiderWebSecurityStatus.initializing
+                              ? 'Your Rider workspace is loading.'
+                              : 'Retry to restore protected Rider actions.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFF9CA8B8),
+                            height: 1.45,
+                          ),
+                        ),
+                        if (_status == RiderWebSecurityStatus.retryableFailure)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 20),
+                            child: FilledButton.icon(
+                              onPressed: _activateAppCheck,
+                              icon: const Icon(Icons.refresh_rounded),
+                              label: const Text('Retry'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF3B82F6),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
