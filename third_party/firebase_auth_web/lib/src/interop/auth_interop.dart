@@ -299,6 +299,7 @@ extension AuthJsImplExtension on AuthJsImpl {
     JSFunction? opt_error,
     JSFunction? opt_completed,
   ]);
+  external JSPromise authStateReady();
   external JSFunction onIdTokenChanged(
     JSFunction nextOrObserver, [
     JSFunction? opt_error,

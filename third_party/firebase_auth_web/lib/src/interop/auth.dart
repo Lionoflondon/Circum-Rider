@@ -372,19 +372,8 @@ class Auth extends JsObjectWrapper<auth_interop.AuthJsImpl> {
   /// To preserve behavior on web and mobile we store the initial user
   /// in `_initUser` and add it manually to the `_changeController`.
   Future<void> onWaitInitState() async {
-    final completer = Completer();
-    final nextWrapper = (auth_interop.UserJsImpl? user) {
-      _initUser = User.getInstance(user);
-      completer.complete();
-    };
-
-    final errorWrapper = (JSAny e) => _changeController!.addError(e);
-
-    final unsubscribe =
-        jsObject.onAuthStateChanged(nextWrapper.toJS, errorWrapper.toJS);
-
-    await completer.future;
-    unsubscribe.callAsFunction();
+    await jsObject.authStateReady().toDart;
+    _initUser = User.getInstance(jsObject.currentUser);
   }
 
   JSFunction? _onAuthUnsubscribe;
