@@ -113,6 +113,7 @@ function prepare(root = process.cwd(), now = new Date()) {
   if (!fs.existsSync(files.index) || !fs.existsSync(files.bundle) || !fs.existsSync(files.bootstrap)) {
     fail(`${CONFIG.outputDirectory} is not a complete Rider web build`);
   }
+  validateRuntimeAssets(files.output);
   validateBundle(
     fs.readFileSync(files.bundle, 'utf8'),
     fs.readFileSync(files.bootstrap, 'utf8'),
@@ -134,6 +135,7 @@ function verify(root = process.cwd(), now = new Date()) {
   for (const file of [files.index, files.bundle, files.bootstrap, files.identity, files.manifest]) {
     if (!fs.existsSync(file)) fail(`required artifact is missing: ${file}`);
   }
+  validateRuntimeAssets(files.output);
   validateIdentity(fs.readFileSync(files.identity, 'utf8'));
   validateBundle(
     fs.readFileSync(files.bundle, 'utf8'),
@@ -143,6 +145,20 @@ function verify(root = process.cwd(), now = new Date()) {
   const manifest = readJson(files.manifest);
   validateManifest(manifest, expectedManifest(root), now, checksum);
   return manifest;
+}
+
+function validateRuntimeAssets(output) {
+  const required = [
+    'canvaskit/canvaskit.js',
+    'canvaskit/canvaskit.wasm',
+    'assets/AssetManifest.bin.json',
+  ];
+  for (const relative of required) {
+    const file = path.join(output, relative);
+    if (!fs.existsSync(file) || fs.statSync(file).size < 100) {
+      fail(`required Flutter runtime asset is missing or empty: ${relative}`);
+    }
+  }
 }
 
 if (require.main === module) {
@@ -168,4 +184,5 @@ module.exports = {
   validateFirebaseConfiguration,
   validateIdentity,
   validateManifest,
+  validateRuntimeAssets,
 };
