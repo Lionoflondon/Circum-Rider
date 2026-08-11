@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/foundation.dart';
 import '../app/authentication/bloc/auth_bloc.dart';
 import '../app/onboarding/onboarding.dart';
 import 'app/authentication/view/add_details.dart';
@@ -20,9 +21,17 @@ class App extends StatelessWidget {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       if (state.currentState == AppState.authenticated) {
         return FutureBuilder<bool>(
-            future: RiderInternalAccess.enabled(forceRefresh: true),
-            builder: (context, internalAccess) =>
-                _buildNavigator(state, internalAccess.data == true));
+          future: RiderInternalAccess.enabled(forceRefresh: !kIsWeb),
+          builder: (context, internalAccess) {
+            if (internalAccess.connectionState != ConnectionState.done) {
+              return _buildNavigator(
+                state.copyWith(currentState: AppState.unknownSessionState),
+                false,
+              );
+            }
+            return _buildNavigator(state, internalAccess.data == true);
+          },
+        );
       }
       return _buildNavigator(state, false);
     });
