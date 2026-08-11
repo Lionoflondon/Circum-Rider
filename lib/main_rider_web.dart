@@ -3,6 +3,7 @@ import 'dart:html' as html;
 import 'dart:ui';
 
 import 'package:circum_rider/rider_app.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
@@ -42,6 +43,9 @@ Future<void> _initializeFirebase() async {
   } on FirebaseException catch (error) {
     if (error.code != 'duplicate-app') rethrow;
   }
+  // Avoid the IndexedDB-first persistence chain that can stall the initial
+  // auth-state event in affected browsers. Mobile keeps its native path.
+  await FirebaseAuth.instance.setPersistence(Persistence.SESSION);
 }
 
 class RiderWebStartupApp extends StatefulWidget {
