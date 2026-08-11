@@ -216,9 +216,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           _startPresenceHeartbeat();
           emit(state.copyWith(
               rideStatus: RideStatus.online, canGoOnline: true, message: null));
-          if (locationPayload != null) {
-            add(GetAvailableRequests());
-          }
+          add(GetAvailableRequests());
           add(SetDrawerHeight(
               minDrawerHeight: state.minDrawerHeight,
               maxDrawerHeight: 0.75.sh));
