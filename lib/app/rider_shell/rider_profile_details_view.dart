@@ -672,14 +672,15 @@ class RiderVehicleManagerView extends StatelessWidget {
       vehicle = Map<String, dynamic>.from(data['vehicle'] as Map);
     }
     vehicle ??= <String, dynamic>{};
+    final resolvedVehicle = vehicle;
 
     void useFallback(String key, Object? value) {
-      final current = '${vehicle[key] ?? ''}'.trim();
+      final current = '${resolvedVehicle[key] ?? ''}'.trim();
       final fallback = '${value ?? ''}'.trim();
       if ((current.isEmpty || current == 'null') &&
           fallback.isNotEmpty &&
           fallback != 'null') {
-        vehicle[key] = value;
+        resolvedVehicle[key] = value;
       }
     }
 
@@ -689,14 +690,14 @@ class RiderVehicleManagerView extends StatelessWidget {
     useFallback('model', data['vehicleMakeModel']);
     useFallback('colour', data['vehicleColour']);
     useFallback('verificationStatus', data['vehicleVerificationStatus']);
-    if ('${vehicle['verificationStatus'] ?? ''}'.trim().isEmpty &&
+    if ('${resolvedVehicle['verificationStatus'] ?? ''}'.trim().isEmpty &&
         data['documentsVerified'] == true) {
-      vehicle['verificationStatus'] = 'Verified';
+      resolvedVehicle['verificationStatus'] = 'Verified';
     }
-    if ('${vehicle['type'] ?? ''}'.trim().isEmpty) return [];
-    vehicle['primary'] = true;
-    vehicle['active'] = true;
-    return [vehicle];
+    if ('${resolvedVehicle['type'] ?? ''}'.trim().isEmpty) return [];
+    resolvedVehicle['primary'] = true;
+    resolvedVehicle['active'] = true;
+    return [resolvedVehicle];
   }
 
   Future<void> _persist(List<Map<String, dynamic>> vehicles) async {

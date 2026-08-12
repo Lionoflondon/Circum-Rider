@@ -9,8 +9,8 @@ void main() {
 
     expect(source, contains("useFallback('type', data['vehicleType']"));
     expect(source, contains("'registration', data['vehicleRegistration']"));
-    expect(source, contains("vehicle['primary'] = true"));
-    expect(source, contains("vehicle['active'] = true"));
+    expect(source, contains("resolvedVehicle['primary'] = true"));
+    expect(source, contains("resolvedVehicle['active'] = true"));
     expect(source, contains("text == 'null' ? '' : text"));
     expect(source, isNot(contains("title: const Text('Delete vehicle?')")));
   });
