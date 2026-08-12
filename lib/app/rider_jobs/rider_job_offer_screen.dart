@@ -6,6 +6,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -776,7 +777,10 @@ class _OfferMapBackgroundState extends State<_OfferMapBackground> {
     final dropoff = _latLng(
         widget.offer.raw['dropoffDetails'] ?? widget.offer.raw['dropoff']);
 
-    if (pickup == null || dropoff == null) {
+    // The Rider web build intentionally does not load the Google Maps JS SDK.
+    // Rendering GoogleMap here otherwise dereferences MapTypeId and replaces
+    // the operational panel with the global contained error surface.
+    if (kIsWeb || pickup == null || dropoff == null) {
       return const _MapFallback();
     }
 

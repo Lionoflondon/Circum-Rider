@@ -42,4 +42,27 @@ void main() {
     expect(offer.pickupAddress, 'Address pending');
     expect(offer.pickupAddress, isNot(contains('{')));
   });
+
+  test('canonical address maps and paid weight restore accepted delivery', () {
+    final offer = RiderJobOffer.fromFirestore(
+      docId: 'delivery-paid',
+      data: {
+        'pickupAddressCanonical': {
+          'postcode': 'SW1A 2AA',
+          'formattedAddress': 'SW1A 2AA, London, United Kingdom',
+        },
+        'dropoffAddressCanonical': {
+          'postcode': 'SW1A 1AA',
+          'formattedAddress': 'SW1A 1AA, London, United Kingdom',
+        },
+        'paidWeightKg': 0.6,
+      },
+    );
+
+    expect(offer.pickupArea, 'SW1A 2AA');
+    expect(offer.dropoffArea, 'SW1A 1AA');
+    expect(offer.pickupAddress, 'SW1A 2AA, London, United Kingdom');
+    expect(offer.dropoffAddress, 'SW1A 1AA, London, United Kingdom');
+    expect(offer.weightText, '0.6kg');
+  });
 }

@@ -48,8 +48,12 @@ class RiderJobOffer {
   }) {
     final pickupDetails = data['pickupDetails'] ?? data['pickup'];
     final dropoffDetails = data['dropoffDetails'] ?? data['dropoff'];
-    final pickup = _areaSummary(pickupDetails);
-    final dropoff = _areaSummary(dropoffDetails);
+    final pickupCanonical = data['pickupAddressCanonical'];
+    final dropoffCanonical = data['dropoffAddressCanonical'];
+    final pickup = _areaSummary(pickupDetails,
+        fallback: pickupCanonical ?? data['pickupAddress']);
+    final dropoff = _areaSummary(dropoffDetails,
+        fallback: dropoffCanonical ?? data['dropoffAddress']);
     final requestId = '${data['requestId'] ?? data['code'] ?? docId}'.trim();
     final price =
         (data['riderEarning'] ?? data['riderPay'] ?? data['price'] ?? 0);
@@ -72,13 +76,13 @@ class RiderJobOffer {
       dropoffArea: dropoff,
       pickupAddress: _fullAddress(
         pickupDetails,
-        fallback: data['pickupAddress'] ?? data['pickupAddressCanonical'],
+        fallback: data['pickupAddress'] ?? pickupCanonical,
       ),
       dropoffAddress: _fullAddress(
         dropoffDetails,
         fallback: data['dropoffAddress'] ??
             data['dropOffAddress'] ??
-            data['dropoffAddressCanonical'],
+            dropoffCanonical,
       ),
       earnings: price is num ? price.toDouble() : 0,
       currency: '${data['currency'] ?? 'GBP'}',
@@ -100,7 +104,7 @@ class RiderJobOffer {
 
   RiderPointsResult get points => RiderPointsRules.resolve(raw);
 
-  static String _areaSummary(dynamic value) {
+  static String _areaSummary(dynamic value, {dynamic fallback}) {
     if (value is Map) {
       final candidates = [
         value['area'],
@@ -116,7 +120,18 @@ class RiderJobOffer {
     }
     final text = _scalarText(value);
     if (text.isNotEmpty) return text;
-    return 'Location pending';
+    if (fallback is Map) {
+      for (final candidate in [
+        fallback['postcode'],
+        fallback['city'],
+        fallback['formattedAddress'],
+      ]) {
+        final candidateText = _scalarText(candidate);
+        if (candidateText.isNotEmpty) return candidateText;
+      }
+    }
+    final fallbackText = _scalarText(fallback);
+    return fallbackText.isEmpty ? 'Location pending' : fallbackText;
   }
 
   static String _fullAddress(dynamic value, {dynamic fallback}) {
@@ -145,6 +160,16 @@ class RiderJobOffer {
     }
     final text = _scalarText(value);
     if (text.isNotEmpty) return text;
+    if (fallback is Map) {
+      for (final candidate in [
+        fallback['formattedAddress'],
+        fallback['address'],
+        fallback['displayAddress'],
+      ]) {
+        final candidateText = _scalarText(candidate);
+        if (candidateText.isNotEmpty) return candidateText;
+      }
+    }
     final fallbackText = _scalarText(fallback);
     if (fallbackText.isNotEmpty) return fallbackText;
     return 'Address pending';
@@ -174,6 +199,7 @@ class RiderJobOffer {
 
   static String _weightText(Map<String, dynamic> data) {
     final value = data['weightKg'] ??
+        data['paidWeightKg'] ??
         data['finalPricingWeightKg'] ??
         data['irisEstimatedWeightKg'] ??
         data['estimatedWeightKg'];
