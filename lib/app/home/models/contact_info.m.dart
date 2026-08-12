@@ -19,14 +19,21 @@ class ContactInfo {
       this.subAddress});
 
   factory ContactInfo.fromJson(dynamic json) {
+    final source = json is Map ? json : const <String, dynamic>{};
+    String? scalar(dynamic value) {
+      if (value == null || value is Map || value is Iterable) return null;
+      final text = '$value'.trim();
+      return text.isEmpty || text.toLowerCase() == 'null' ? null : text;
+    }
+
     return ContactInfo(
-      fullname: json['fullname'],
-      position: PositionData.fromJson(json['position']),
-      phoneNumber: json['phone'],
-      moreInformation: json['moreInformation'],
-      locality: json['locality'],
-      address: json['address'],
-      subAddress: json['subAddress'],
+      fullname: scalar(source['fullname'] ?? source['name']),
+      position: PositionData.fromJson(source['position']),
+      phoneNumber: scalar(source['phone'] ?? source['phoneNumber']),
+      moreInformation: scalar(source['moreInformation']),
+      locality: scalar(source['locality'] ?? source['city']),
+      address: scalar(source['address'] ?? source['formattedAddress']),
+      subAddress: scalar(source['subAddress'] ?? source['displayAddress']),
     );
   }
 

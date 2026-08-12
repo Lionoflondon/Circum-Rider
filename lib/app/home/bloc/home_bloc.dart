@@ -632,7 +632,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       if (data['status'] == 'accepted') {
         status = RideStatus.userConfirmedRide;
-        pickupCoordinates = PlaceCoordinate(lat: riderLat!, lng: riderLng!);
+        pickupCoordinates = PlaceCoordinate(
+            lat:
+                riderLat ?? activeRequest.pickupData.position.geopoint.latitude,
+            lng: riderLng ??
+                activeRequest.pickupData.position.geopoint.longitude);
         desinationCoordinate = PlaceCoordinate(
             lat: activeRequest.pickupData.position.geopoint.latitude,
             lng: activeRequest.pickupData.position.geopoint.longitude);
