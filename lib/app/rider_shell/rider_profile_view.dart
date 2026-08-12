@@ -15,6 +15,7 @@ import '../ratings/rider_appreciation.dart';
 import '../support/view/support.dart';
 import '../verification/view/verification.dart';
 import 'rider_accessibility_settings_view.dart';
+import 'rider_roth_referral_view.dart';
 import 'rider_profile_details_view.dart';
 
 class RiderProfileView extends StatefulWidget {
@@ -196,7 +197,7 @@ class _RiderProfileScreen extends StatelessWidget {
                             title: 'Roth Wallet',
                             description: data.rothSummary,
                             onTap: () =>
-                                _open(context, const RiderApplicationCentre()),
+                                _open(context, const RiderRothReferralView()),
                           ),
                           _ProfileRow(
                             icon: Icons.verified_outlined,
@@ -984,7 +985,7 @@ class _ProfileRow extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.description,
-    required this.onTap,
+    this.onTap,
     this.statusColor,
     this.tone = _ProfileRowTone.normal,
   });
@@ -992,7 +993,7 @@ class _ProfileRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String description;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final Color? statusColor;
   final _ProfileRowTone tone;
 
@@ -1002,7 +1003,7 @@ class _ProfileRow extends StatelessWidget {
         ? RiderPalette.red
         : statusColor ?? RiderPalette.blue;
     return Semantics(
-      button: true,
+      button: onTap != null,
       label: '$title. $description',
       child: InkWell(
         onTap: onTap,
