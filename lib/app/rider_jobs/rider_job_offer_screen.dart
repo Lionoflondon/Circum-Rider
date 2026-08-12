@@ -144,7 +144,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                     stream: _firestore
                         .collection('deliveryRequests')
                         .where('riderId', isEqualTo: user.uid)
-                        .limit(20)
+                        .limit(50)
                         .snapshots(),
                     builder: (context, assignedSnapshot) {
                       final active = _activeAssignedDelivery(
@@ -258,6 +258,8 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       'delivered',
       'disputed',
     };
+    QueryDocumentSnapshot<Map<String, dynamic>>? newest;
+    var newestTime = -1;
     for (final doc in docs) {
       final data = doc.data();
       final status =
@@ -267,10 +269,30 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       if (status.isNotEmpty &&
           status != 'requested' &&
           !terminal.contains(status)) {
-        return doc;
+        final time = _assignmentTime(data);
+        if (newest == null || time > newestTime) {
+          newest = doc;
+          newestTime = time;
+        }
       }
     }
-    return null;
+    return newest;
+  }
+
+  int _assignmentTime(Map<String, dynamic> data) {
+    for (final value in [
+      data['assignmentTimestamp'],
+      data['assignedAt'],
+      data['acceptedAt'],
+      data['updatedAt'],
+      data['createdAt'],
+    ]) {
+      if (value is Timestamp) return value.millisecondsSinceEpoch;
+      if (value is num) return value.toInt();
+      final parsed = int.tryParse('$value');
+      if (parsed != null) return parsed;
+    }
+    return 0;
   }
 
   RiderProfileSnapshot _riderProfile(String uid, Map<String, dynamic> riderData,

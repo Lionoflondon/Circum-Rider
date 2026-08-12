@@ -59,6 +59,8 @@ void main() {
       expect(offers, contains("where('status', isEqualTo: 'requested')"));
       expect(offers, contains("where('riderId', isEqualTo: user.uid)"));
       expect(offers, contains('_activeAssignedDelivery'));
+      expect(offers, contains('_assignmentTime'));
+      expect(offers, contains("data['assignmentTimestamp']"));
       expect(offers, contains('return RiderAcceptedJobScreen('));
       expect(offers, contains('No offers nearby'));
       expect(
