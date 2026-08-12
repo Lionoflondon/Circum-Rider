@@ -22,7 +22,9 @@ void main() {
     expect(webMain, contains('Retry'));
     expect(webMain, contains('initializeRiderAppCheck'));
     expect(webMain, contains('ErrorWidget.builder'));
-    expect(webMain, contains('RiderWebRuntimeFailure'));
+    expect(webMain, contains('RiderWebRenderFailure'));
+    expect(webMain, isNot(contains('RDR-WEB-START-002')));
+    expect(webMain, contains('RDR-WEB-RENDER-001'));
     expect(appCheck, contains('ReCaptchaEnterpriseProvider'));
     expect(appCheck, contains('RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY'));
     expect(appCheck, contains('activation.timeout'));
