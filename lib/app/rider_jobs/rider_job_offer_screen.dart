@@ -101,7 +101,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       );
     }
 
-    context.watch<HomeBloc>().state;
+    final homeState = context.watch<HomeBloc>().state;
     return FutureBuilder<bool>(
         future: RiderInternalAccess.enabled(),
         builder: (context, internalAccessSnapshot) {
@@ -149,6 +149,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                     builder: (context, assignedSnapshot) {
                       final active = _activeAssignedDelivery(
                         assignedSnapshot.data?.docs ?? const [],
+                        preferredId: homeState.activeRequest?.requestId,
                       );
                       if (active != null) {
                         final offer = RiderJobOffer.fromFirestore(
@@ -248,8 +249,9 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
   }
 
   QueryDocumentSnapshot<Map<String, dynamic>>? _activeAssignedDelivery(
-    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-  ) {
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs, {
+    String? preferredId,
+  }) {
     const terminal = {
       'cancelled',
       'canceled',
@@ -269,6 +271,11 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       if (status.isNotEmpty &&
           status != 'requested' &&
           !terminal.contains(status)) {
+        if (preferredId != null &&
+            preferredId.isNotEmpty &&
+            doc.id == preferredId) {
+          return doc;
+        }
         final time = _assignmentTime(data);
         if (newest == null || time > newestTime) {
           newest = doc;
