@@ -144,7 +144,6 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                     stream: _firestore
                         .collection('deliveryRequests')
                         .where('riderId', isEqualTo: user.uid)
-                        .limit(50)
                         .snapshots(),
                     builder: (context, assignedSnapshot) {
                       final active = _activeAssignedDelivery(

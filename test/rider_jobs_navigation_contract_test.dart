@@ -58,6 +58,10 @@ void main() {
       expect(offerCard, contains('Accept Delivery'));
       expect(offers, contains("where('status', isEqualTo: 'requested')"));
       expect(offers, contains("where('riderId', isEqualTo: user.uid)"));
+      expect(
+          offers,
+          isNot(contains("where('riderId', isEqualTo: user.uid)\n"
+              '                        .limit(')));
       expect(offers, contains('_activeAssignedDelivery'));
       expect(offers,
           contains('RiderLiveTrackingPolicy.isActiveDeliveryStatus(status)'));
