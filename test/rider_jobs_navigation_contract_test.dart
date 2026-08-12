@@ -57,6 +57,9 @@ void main() {
       expect(offers, contains("import 'rider_offer_card.dart'"));
       expect(offerCard, contains('Accept Delivery'));
       expect(offers, contains("where('status', isEqualTo: 'requested')"));
+      expect(offers, contains("where('riderId', isEqualTo: user.uid)"));
+      expect(offers, contains('_activeAssignedDelivery'));
+      expect(offers, contains('return RiderAcceptedJobScreen('));
       expect(offers, contains('No offers nearby'));
       expect(
           offers,
