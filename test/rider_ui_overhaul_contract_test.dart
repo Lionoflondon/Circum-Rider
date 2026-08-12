@@ -108,6 +108,8 @@ void main() {
       expect(homeBloc, contains('updateRiderPresence'));
       expect(homeBloc, contains("'gpsSignalQuality'"));
       expect(homeBloc, contains("'backgroundTracking'"));
+      expect(homeBloc, contains('Geolocator.requestPermission()'));
+      expect(homeBloc, contains("clean.toLowerCase() == 'internal'"));
       expect(dashboard, contains('_InternalDiagnosticsCard'));
       expect(dashboard, contains('Internal dispatch diagnostics'));
       expect(dashboard, contains('Dispatch eligibility'));
@@ -249,6 +251,7 @@ void main() {
       expect(File('lib/app/support/view/faq.dart').existsSync(), isFalse);
       expect(profileDetails, contains('Add vehicle'));
       expect(profileDetails, contains('Set active'));
+      expect(profileDetails, contains('vehicles.length == 1'));
       expect(profileDetails, contains("'vehicles': vehicles"));
       expect(profileDetails, contains("'vehicle': active"));
       expect(profileDetails, contains("_field(_phone, 'Phone',"));

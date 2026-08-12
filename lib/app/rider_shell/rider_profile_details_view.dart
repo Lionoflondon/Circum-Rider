@@ -610,8 +610,9 @@ class RiderVehicleManagerView extends StatelessWidget {
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final vehicle = vehicles[index];
-                final active =
-                    vehicle['primary'] == true || vehicle['active'] == true;
+                final active = vehicles.length == 1 ||
+                    vehicle['primary'] == true ||
+                    vehicle['active'] == true;
                 return RiderGlassSurface(
                   radius: 22,
                   child: Column(
