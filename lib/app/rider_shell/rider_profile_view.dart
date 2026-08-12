@@ -786,7 +786,7 @@ class _HeroText extends StatelessWidget {
             _HeroPill(
               icon: Icons.auto_awesome_rounded,
               label:
-                  data.hasTrustPoints ? '${data.trustPoints} trust' : '— trust',
+                  data.hasTrustPoints ? '${data.trustPoints} TP' : '— TP',
               color: RiderPalette.purple,
             ),
           ],
@@ -863,7 +863,7 @@ class _StatsRow extends StatelessWidget {
       ('Customer Rating', data.customerRating),
       ('Acceptance Rate', data.acceptanceRate),
       ('On-Time Rate', data.onTimeRate),
-      ('Trust Points', data.trustPointsLabel),
+      ('Trust Points', data.hasTrustPoints ? '${data.trustPoints} TP' : '— TP'),
     ];
     return RiderGlassSurface(
       radius: 24,

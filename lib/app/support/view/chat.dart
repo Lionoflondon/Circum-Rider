@@ -162,13 +162,13 @@ class _ChatPageViewState extends State<ChatPageView> {
               minLines: 1,
               maxLines: 4,
               style:
-                  const TextStyle(fontFamily: 'OpenSans', color: Colors.white),
+                  const TextStyle(fontFamily: 'Montserrat', color: Colors.white),
               decoration: InputDecoration(
                   filled: true,
                   fillColor: AppColors.input,
                   hintText: 'Enter your message',
                   hintStyle: TextStyle(
-                      color: Colors.grey[600], fontFamily: 'OpenSans'),
+                      color: Colors.grey[600], fontFamily: 'Montserrat'),
                   focusedBorder: InputBorder.none,
                   enabledBorder: InputBorder.none),
               onChanged: (value) {

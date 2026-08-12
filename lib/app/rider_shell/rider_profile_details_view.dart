@@ -917,7 +917,7 @@ class RiderPerformanceView extends StatelessWidget {
                             fontFamily: RiderTypography.heading,
                             fontSize: 34)),
                     const SizedBox(height: 6),
-                    Text('$current trust points',
+                    Text('$current TP',
                         style: const TextStyle(
                             color: RiderPalette.blue,
                             fontFamily: RiderTypography.mono,

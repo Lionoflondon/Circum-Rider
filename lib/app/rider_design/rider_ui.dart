@@ -15,9 +15,150 @@ abstract final class RiderPalette {
 }
 
 abstract final class RiderTypography {
-  static const heading = 'DM Serif Display';
-  static const body = 'Inter';
+  static const heading = 'Montserrat';
+  static const body = 'Montserrat';
   static const mono = 'JetBrains Mono';
+
+  static TextStyle display({
+    double fontSize = 24,
+    Color color = RiderPalette.paper,
+    double? letterSpacing,
+  }) =>
+      TextStyle(
+        color: color,
+        fontFamily: heading,
+        fontSize: fontSize,
+        fontWeight: FontWeight.w600,
+        height: 1.15,
+        letterSpacing: letterSpacing ?? displayLetterSpacing(fontSize),
+      );
+
+  static TextStyle section({
+    double fontSize = 18,
+    Color color = RiderPalette.paper,
+  }) =>
+      TextStyle(
+        color: color,
+        fontFamily: body,
+        fontSize: fontSize,
+        fontWeight: FontWeight.w600,
+        letterSpacing: .35,
+      );
+
+  static TextStyle label({
+    double fontSize = 14,
+    Color color = RiderPalette.paper,
+  }) =>
+      TextStyle(
+        color: color,
+        fontFamily: body,
+        fontSize: fontSize,
+        fontWeight: FontWeight.w600,
+        letterSpacing: .2,
+      );
+
+  static TextStyle bodyStyle({
+    double fontSize = 14,
+    Color color = RiderPalette.paper,
+  }) =>
+      TextStyle(
+        color: color,
+        fontFamily: body,
+        fontSize: fontSize,
+        fontWeight: FontWeight.w400,
+      );
+
+  static TextStyle metric({
+    double fontSize = 18,
+    Color color = RiderPalette.paper,
+  }) =>
+      TextStyle(
+        color: color,
+        fontFamily: body,
+        fontSize: fontSize,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0,
+      );
+
+  static double displayLetterSpacing(double fontSize) =>
+      (fontSize * .08).clamp(1.2, 2.0);
+
+  static ThemeData theme() {
+    final base = ThemeData.dark(useMaterial3: true);
+    return base.copyWith(
+      scaffoldBackgroundColor: RiderPalette.background,
+      colorScheme: base.colorScheme.copyWith(
+        primary: RiderPalette.blue,
+        surface: RiderPalette.panel,
+        error: RiderPalette.red,
+      ),
+      textTheme: base.textTheme.apply(
+        fontFamily: body,
+        bodyColor: RiderPalette.paper,
+        displayColor: RiderPalette.paper,
+      ),
+      primaryTextTheme: base.primaryTextTheme.apply(fontFamily: body),
+      appBarTheme: const AppBarTheme(
+        titleTextStyle: TextStyle(
+          color: RiderPalette.paper,
+          fontFamily: heading,
+          fontSize: 19,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.3,
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(textStyle: label(fontSize: 14)),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(textStyle: label(fontSize: 14)),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(textStyle: label(fontSize: 14)),
+      ),
+    );
+  }
+}
+
+class RiderCinematicHeading extends StatelessWidget {
+  const RiderCinematicHeading(
+    this.text, {
+    super.key,
+    this.fontSize = 24,
+    this.color = RiderPalette.paper,
+    this.textAlign = TextAlign.start,
+    this.maxLines = 2,
+  });
+
+  final String text;
+  final double fontSize;
+  final Color color;
+  final TextAlign textAlign;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.hasBoundedWidth
+              ? constraints.maxWidth
+              : MediaQuery.sizeOf(context).width;
+          final scale =
+              MediaQuery.textScalerOf(context).scale(fontSize) / fontSize;
+          final spacing = RiderTypography.displayLetterSpacing(fontSize) *
+              ((width < 340 || scale > 1.25) ? .62 : 1);
+          return Text(
+            text.toUpperCase(),
+            textAlign: textAlign,
+            maxLines: maxLines,
+            overflow: TextOverflow.ellipsis,
+            style: RiderTypography.display(
+              fontSize: fontSize,
+              color: color,
+              letterSpacing: spacing,
+            ),
+          );
+        },
+      );
 }
 
 class RiderMobileFrame extends StatelessWidget {
@@ -200,7 +341,7 @@ class RiderMoney extends StatelessWidget {
                   color: RiderPalette.paper,
                   fontSize: size,
                   fontWeight: FontWeight.w700,
-                  fontFamily: 'OpenSans')),
+                  fontFamily: RiderTypography.body)),
           if (label != null) ...[
             const SizedBox(height: 4),
             Text(label!,
@@ -220,11 +361,7 @@ class RiderSectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(children: [
         Expanded(
-            child: Text(title,
-                style: const TextStyle(
-                    color: RiderPalette.paper,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700))),
+            child: RiderCinematicHeading(title, fontSize: 22)),
         if (action != null)
           TextButton(onPressed: onAction, child: Text(action!)),
       ]);
@@ -359,12 +496,7 @@ class RiderRankProgress extends StatelessWidget {
         RiderStatusBadge(_ranks[index].toUpperCase(),
             color: _rankColor(_ranks[index])),
         const Spacer(),
-        Text('$trustPoints TRUST',
-            style: const TextStyle(
-                color: RiderPalette.paper,
-                fontFamily: RiderTypography.mono,
-                fontSize: 12,
-                fontWeight: FontWeight.w700)),
+        Text('$trustPoints TP', style: RiderTypography.metric(fontSize: 12)),
       ]),
       const SizedBox(height: 11),
       ClipRRect(

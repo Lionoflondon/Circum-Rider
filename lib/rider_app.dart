@@ -5,6 +5,7 @@ import 'package:circum_rider/app/bottom_nav/bloc/navbar_bloc.dart';
 import 'package:circum_rider/app/history/bloc/history_bloc.dart';
 import 'package:circum_rider/app/home/bloc/home_bloc.dart';
 import 'package:circum_rider/app/rider_jobs/rider_job_offer_screen.dart';
+import 'package:circum_rider/app/rider_design/rider_ui.dart';
 import 'package:circum_rider/app/support/bloc/support_bloc.dart';
 import 'package:circum_rider/app/verification/bloc/verification_bloc.dart';
 import 'package:circum_rider/utils/nav/nav_key.dart';
@@ -30,15 +31,7 @@ class CircumRider extends StatelessWidget {
           title: 'Circum Rider',
           builder: (context, child) => botToastBuilder(context, child),
           themeMode: ThemeMode.dark,
-          theme: ThemeData(
-            brightness: Brightness.dark,
-            scaffoldBackgroundColor: const Color(0xFF07090F),
-            colorScheme: const ColorScheme.dark(
-              primary: Color(0xFF3B82F6),
-              surface: Color(0xFF0D111C),
-              error: Color(0xFFF87171),
-            ),
-            fontFamily: 'Inter',
+          theme: RiderTypography.theme().copyWith(
             navigationBarTheme: const NavigationBarThemeData(
               labelTextStyle: WidgetStatePropertyAll(TextStyle(
                 fontSize: 10,

@@ -90,7 +90,7 @@ class RiderOnboardingShell extends StatelessWidget {
                                 textAlign: TextAlign.left,
                                 style: const TextStyle(
                                   color: Colors.white,
-                                  fontFamily: 'OpenSans',
+                                  fontFamily: 'Montserrat',
                                   fontSize: 34,
                                   height: 1.05,
                                   fontWeight: FontWeight.w800,
@@ -102,7 +102,7 @@ class RiderOnboardingShell extends StatelessWidget {
                                 subtitle,
                                 style: const TextStyle(
                                   color: AppColors.textGrey,
-                                  fontFamily: 'OpenSans',
+                                  fontFamily: 'Montserrat',
                                   fontSize: 15,
                                   height: 1.45,
                                   fontWeight: FontWeight.w500,
@@ -263,7 +263,7 @@ class RiderGlassTextField extends StatelessWidget {
           onChanged: onChanged,
           keyboardType: keyboardType,
           obscureText: obscureText,
-          style: const TextStyle(color: Colors.white, fontFamily: 'OpenSans'),
+          style: const TextStyle(color: Colors.white, fontFamily: 'Montserrat'),
           decoration: riderInputDecoration(suffix: suffix),
         ),
       ],
@@ -349,7 +349,7 @@ class RiderPrimaryButton extends StatelessWidget {
               : Text(
                   label,
                   style: const TextStyle(
-                    fontFamily: 'OpenSans',
+                    fontFamily: 'Montserrat',
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
                   ),
@@ -383,7 +383,7 @@ class RiderSecondaryButton extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
-          fontFamily: 'OpenSans',
+          fontFamily: 'Montserrat',
           fontSize: 14,
           fontWeight: FontWeight.w800,
         ),

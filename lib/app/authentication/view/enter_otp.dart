@@ -151,7 +151,7 @@ class EnterOTPViewState extends State<EnterOTPView> {
       textStyle: const TextStyle(
         color: Colors.white,
         fontWeight: FontWeight.w800,
-        fontFamily: 'OpenSans',
+        fontFamily: 'Montserrat',
         fontSize: 19,
       ),
       decoration: BoxDecoration(

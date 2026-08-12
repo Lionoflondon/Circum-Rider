@@ -333,8 +333,10 @@ class RiderOfferCard extends StatelessWidget {
                     : Text(
                         accepted ? 'Accepted ✓' : 'Accept Delivery',
                         style: const TextStyle(
+                          fontFamily: RiderTypography.body,
                           fontSize: 16,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: .35,
                         ),
                       ),
               ),
@@ -397,10 +399,11 @@ class _RankTrustColumn extends StatelessWidget {
           Text(rank,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900)),
+              style: RiderTypography.display(
+                color: Colors.white,
+                fontSize: 13,
+                letterSpacing: 1.15,
+              )),
           const SizedBox(height: 2),
           Text('+$trustPoints Trust Points',
               style: TextStyle(
