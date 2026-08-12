@@ -2145,7 +2145,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                     onReportDifference:
                         _transitioning || irisConfirmed || differenceReported
                             ? null
-                            : _reportIssue,
+                            : _reportIrisDifference,
                     onConfirmIris: irisConfirmed ||
                             differenceReported ||
                             _confirmingIris ||
@@ -2193,6 +2193,110 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       }
     } finally {
       if (mounted) setState(() => _confirmingIris = false);
+    }
+  }
+
+  Future<void> _reportIrisDifference() async {
+    final notes = TextEditingController();
+    final weight = TextEditingController();
+    var reason = 'item_differs_from_booking';
+    final submit = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Request IRIS review'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Your evidence pauses collection and enters Circum adjudication.',
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: reason,
+                decoration: const InputDecoration(labelText: 'Difference'),
+                items: const {
+                  'item_differs_from_booking': 'Item or category differs',
+                  'weight_differs_from_booking': 'Weight differs',
+                  'dimensions_exceeded': 'Size or vehicle requirement differs',
+                  'condition_differs': 'Condition differs',
+                }
+                    .entries
+                    .map((entry) => DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ))
+                    .toList(),
+                onChanged: (value) => setDialogState(
+                  () => reason = value ?? reason,
+                ),
+              ),
+              if (reason == 'weight_differs_from_booking')
+                TextField(
+                  controller: weight,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration:
+                      const InputDecoration(labelText: 'Observed weight (kg)'),
+                ),
+              TextField(
+                controller: notes,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Rider notes'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Add evidence'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final detail = notes.text.trim();
+    final observedWeight = double.tryParse(weight.text.trim());
+    notes.dispose();
+    weight.dispose();
+    if (submit != true) return;
+
+    setState(() => _transitioning = true);
+    try {
+      final photoUrl =
+          await (_evidenceUploader ??= RiderEvidenceUploader()).capture(
+        deliveryId: widget.offer.id,
+        stage: 'iris_adjudication',
+      );
+      if (photoUrl == null) return;
+      await (widget.deliveryController ?? CallableRiderDeliveryController())
+          .reportDiscrepancy(
+        deliveryId: widget.offer.id,
+        reason: reason,
+        evidencePhotos: [photoUrl],
+        observedWeightKg: observedWeight,
+        notes: detail,
+      );
+      if (mounted) {
+        setState(() => _transitionError =
+            'IRIS review submitted. Collection is paused for adjudication.');
+      }
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted) {
+        setState(() => _transitionError =
+            error.message ?? 'IRIS review submission failed. Retry.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+            () => _transitionError = 'IRIS review submission failed. Retry.');
+      }
+    } finally {
+      if (mounted) setState(() => _transitioning = false);
     }
   }
 
