@@ -80,6 +80,12 @@ void main() {
 
     test('active and terminal delivery states are clearly separated', () {
       expect(RiderLiveTrackingPolicy.isActiveDeliveryStatus('accepted'), true);
+      expect(RiderLiveTrackingPolicy.isActiveDeliveryStatus('outForDelivery'),
+          true);
+      expect(RiderLiveTrackingPolicy.isActiveDeliveryStatus('archived_stale'),
+          false);
+      expect(RiderLiveTrackingPolicy.isActiveDeliveryStatus('cancelled_admin'),
+          false);
       expect(
           RiderLiveTrackingPolicy.isActiveDeliveryStatus('completed'), false);
       expect(

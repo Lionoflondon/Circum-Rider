@@ -252,14 +252,6 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     List<QueryDocumentSnapshot<Map<String, dynamic>>> docs, {
     String? preferredId,
   }) {
-    const terminal = {
-      'cancelled',
-      'canceled',
-      'failed',
-      'completed',
-      'delivered',
-      'disputed',
-    };
     QueryDocumentSnapshot<Map<String, dynamic>>? newest;
     var newestTime = -1;
     for (final doc in docs) {
@@ -268,9 +260,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
           '${data['deliveryStage'] ?? data['deliveryStatus'] ?? data['status'] ?? ''}'
               .trim()
               .toLowerCase();
-      if (status.isNotEmpty &&
-          status != 'requested' &&
-          !terminal.contains(status)) {
+      if (RiderLiveTrackingPolicy.isActiveDeliveryStatus(status)) {
         if (preferredId != null &&
             preferredId.isNotEmpty &&
             doc.id == preferredId) {

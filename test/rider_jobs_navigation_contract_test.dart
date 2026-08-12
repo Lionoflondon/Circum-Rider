@@ -59,7 +59,10 @@ void main() {
       expect(offers, contains("where('status', isEqualTo: 'requested')"));
       expect(offers, contains("where('riderId', isEqualTo: user.uid)"));
       expect(offers, contains('_activeAssignedDelivery'));
-      expect(offers, contains('preferredId: homeState.activeRequest?.requestId'));
+      expect(offers,
+          contains('RiderLiveTrackingPolicy.isActiveDeliveryStatus(status)'));
+      expect(
+          offers, contains('preferredId: homeState.activeRequest?.requestId'));
       expect(offers, contains('doc.id == preferredId'));
       expect(offers, contains('_assignmentTime'));
       expect(offers, contains("data['assignmentTimestamp']"));

@@ -180,6 +180,8 @@ class RiderLiveTrackingPolicy {
       'pickup_verified',
       'collected',
       'in_transit',
+      'out_for_delivery',
+      'outfordelivery',
       'navigating_to_dropoff',
       'travelling_to_dropoff',
       'arrived_at_dropoff',

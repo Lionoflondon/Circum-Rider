@@ -16,6 +16,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../tracking/rider_live_tracking_controller.dart';
+
 import '../../../helper/bitmap_descriptor_helper.dart';
 import '../../../helper/formatted_string_after_seconds.dart';
 import '../../../helper/messaging_server.dart';
@@ -623,8 +625,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     final docResponse = await documentReference.get();
     // final doc = docResponse.docs.firstOrNull;
 
+    var foundActiveRequest = false;
     for (final doc in docResponse.docs) {
       final data = doc.data();
+      final persistedStatus =
+          data['deliveryStage'] ?? data['deliveryStatus'] ?? data['status'];
+      if (!RiderLiveTrackingPolicy.isActiveDeliveryStatus(persistedStatus)) {
+        continue;
+      }
+      foundActiveRequest = true;
       final activeRequest = DispatchRequest.fromJson(data);
 
       PlaceCoordinate pickupCoordinates;
@@ -674,7 +683,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       }
     }
 
-    if (docResponse.docs.isEmpty) {
+    if (!foundActiveRequest) {
       add(CancelRequest());
     }
   }
