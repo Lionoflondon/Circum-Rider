@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -647,7 +648,8 @@ class RiderVehicleManagerView extends StatelessWidget {
                       Wrap(spacing: 8, children: [
                         if (!active)
                           TextButton(
-                              onPressed: () => _setActive(vehicles, index),
+                              onPressed: () =>
+                                  _setActive(context, vehicles, index),
                               child: const Text('Set active')),
                         TextButton(
                             onPressed: () =>
@@ -685,29 +687,33 @@ class RiderVehicleManagerView extends StatelessWidget {
     final active = vehicles.cast<Map<String, dynamic>?>().firstWhere(
         (v) => v?['primary'] == true,
         orElse: () => vehicles.isEmpty ? null : vehicles.first);
-    final patch = <String, dynamic>{
-      'vehicles': vehicles,
-      if (active != null) 'vehicle': active,
-      if (active != null) 'vehicleType': active['type'],
-      if (active != null) 'vehicleRegistration': active['registration'],
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-    final batch = FirebaseFirestore.instance.batch();
-    batch.set(FirebaseFirestore.instance.collection('riders').doc(userId),
-        patch, SetOptions(merge: true));
-    batch.set(
-        FirebaseFirestore.instance.collection('riderProfiles').doc(userId),
-        patch,
-        SetOptions(merge: true));
-    await batch.commit();
+    if (active == null) return;
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('updateRiderProfile')
+        .call(<String, dynamic>{
+      'vehicleType': active['type'],
+      'vehicleRegistration': active['registration'],
+      'vehicleMakeModel': [active['manufacturer'] ?? active['make'], active['model']]
+          .map((value) => '${value ?? ''}'.trim())
+          .where((value) => value.isNotEmpty)
+          .join(' '),
+      'vehicleColour': active['colour'] ?? active['color'],
+    });
   }
 
-  Future<void> _setActive(
+  Future<void> _setActive(BuildContext context,
       List<Map<String, dynamic>> vehicles, int index) async {
-    await _persist([
-      for (var i = 0; i < vehicles.length; i++)
-        {...vehicles[i], 'primary': i == index, 'active': i == index}
-    ]);
+    try {
+      await _persist([
+        for (var i = 0; i < vehicles.length; i++)
+          {...vehicles[i], 'primary': i == index, 'active': i == index}
+      ]);
+    } on FirebaseFunctionsException catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error.message ?? 'Could not activate this vehicle.'),
+      ));
+    }
   }
 
   Future<void> _delete(BuildContext context,

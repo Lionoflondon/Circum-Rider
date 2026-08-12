@@ -225,7 +225,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
           _stopPresenceHeartbeat();
           emit(state.copyWith(
               rideStatus: RideStatus.offline,
-              message: error.message ?? 'Could not go online. Try again.'));
+              message: _publicPresenceError(
+                  error.message, 'Could not go online. Try again.')));
         } catch (_) {
           _stopPresenceHeartbeat();
           emit(state.copyWith(
@@ -721,7 +722,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     try {
       final servicesEnabled = await Geolocator.isLocationServiceEnabled();
       if (!servicesEnabled) return null;
-      final permission = await Geolocator.checkPermission();
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         return null;
@@ -751,6 +755,16 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     if (accuracyMeters <= 25) return 'high';
     if (accuracyMeters <= 80) return 'medium';
     return 'reduced';
+  }
+
+  String _publicPresenceError(String? message, String fallback) {
+    final clean = '${message ?? ''}'.trim();
+    if (clean.isEmpty ||
+        clean.toLowerCase() == 'internal' ||
+        clean.toLowerCase() == 'internal error') {
+      return fallback;
+    }
+    return clean;
   }
 
   @override
