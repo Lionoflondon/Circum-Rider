@@ -576,13 +576,6 @@ class RiderVehicleManagerView extends StatelessWidget {
           backgroundColor: RiderPalette.background,
           foregroundColor: RiderPalette.paper,
         ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: () => _editVehicle(context, null),
-          backgroundColor: RiderPalette.blue,
-          foregroundColor: RiderPalette.paper,
-          icon: const Icon(Icons.add_rounded),
-          label: const Text('Add vehicle'),
-        ),
         body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
           stream: FirebaseFirestore.instance
               .collection('riderProfiles')
@@ -650,10 +643,6 @@ class RiderVehicleManagerView extends StatelessWidget {
                             onPressed: () =>
                                 _editVehicle(context, vehicle, index: index),
                             child: const Text('Edit')),
-                        TextButton(
-                            onPressed: () => _delete(context, vehicles, index),
-                            child: const Text('Delete',
-                                style: TextStyle(color: RiderPalette.red))),
                       ]),
                     ],
                   ),
@@ -665,17 +654,49 @@ class RiderVehicleManagerView extends StatelessWidget {
       );
 
   List<Map<String, dynamic>> _vehicles(Map<String, dynamic> data) {
+    Map<String, dynamic>? vehicle;
     final value = data['vehicles'];
     if (value is Iterable) {
-      return value
+      final values = value
           .whereType<Map>()
           .map((e) => Map<String, dynamic>.from(e))
           .toList();
+      if (values.isNotEmpty) {
+        vehicle = values.firstWhere(
+          (item) => item['primary'] == true || item['active'] == true,
+          orElse: () => values.first,
+        );
+      }
     }
-    if (data['vehicle'] is Map) {
-      return [Map<String, dynamic>.from(data['vehicle'] as Map)];
+    if (vehicle == null && data['vehicle'] is Map) {
+      vehicle = Map<String, dynamic>.from(data['vehicle'] as Map);
     }
-    return [];
+    vehicle ??= <String, dynamic>{};
+
+    void useFallback(String key, Object? value) {
+      final current = '${vehicle[key] ?? ''}'.trim();
+      final fallback = '${value ?? ''}'.trim();
+      if ((current.isEmpty || current == 'null') &&
+          fallback.isNotEmpty &&
+          fallback != 'null') {
+        vehicle[key] = value;
+      }
+    }
+
+    useFallback('type', data['vehicleType'] ?? data['typeOfVehicle']);
+    useFallback(
+        'registration', data['vehicleRegistration'] ?? data['plateNumber']);
+    useFallback('model', data['vehicleMakeModel']);
+    useFallback('colour', data['vehicleColour']);
+    useFallback('verificationStatus', data['vehicleVerificationStatus']);
+    if ('${vehicle['verificationStatus'] ?? ''}'.trim().isEmpty &&
+        data['documentsVerified'] == true) {
+      vehicle['verificationStatus'] = 'Verified';
+    }
+    if ('${vehicle['type'] ?? ''}'.trim().isEmpty) return [];
+    vehicle['primary'] = true;
+    vehicle['active'] = true;
+    return [vehicle];
   }
 
   Future<void> _persist(List<Map<String, dynamic>> vehicles) async {
@@ -701,34 +722,6 @@ class RiderVehicleManagerView extends StatelessWidget {
     ]);
   }
 
-  Future<void> _delete(BuildContext context,
-      List<Map<String, dynamic>> vehicles, int index) async {
-    final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-              backgroundColor: RiderPalette.panel,
-              title: const Text('Delete vehicle?',
-                  style: TextStyle(color: RiderPalette.paper)),
-              content: const Text(
-                  'This removes the vehicle from your Rider profile. Existing delivery records are unchanged.',
-                  style: TextStyle(color: RiderPalette.muted)),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: const Text('Cancel')),
-                TextButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Delete'))
-              ],
-            ));
-    if (confirmed != true) return;
-    final next = [...vehicles]..removeAt(index);
-    if (next.isNotEmpty && !next.any((v) => v['primary'] == true)) {
-      next[0] = {...next[0], 'primary': true, 'active': true};
-    }
-    await _persist(next);
-  }
-
   Future<void> _editVehicle(BuildContext context, Map<String, dynamic>? source,
       {int? index}) async {
     final result = await showModalBottomSheet<Map<String, dynamic>>(
@@ -752,13 +745,18 @@ class RiderVehicleManagerView extends StatelessWidget {
     await _persist(vehicles);
   }
 
+  String _cleanVehicleValue(Object? value) {
+    final text = '${value ?? ''}'.trim();
+    return text == 'null' ? '' : text;
+  }
+
   String _vehicleName(Map<String, dynamic> v) => [
         v['manufacturer'] ?? v['make'],
         v['model']
-      ].map((e) => '$e'.trim()).where((e) => e.isNotEmpty).join(' ').isEmpty
-          ? '${v['type'] ?? 'Vehicle'}'
+      ].map(_cleanVehicleValue).where((e) => e.isNotEmpty).join(' ').isEmpty
+          ? _cleanVehicleValue(v['type'])
           : [v['manufacturer'] ?? v['make'], v['model']]
-              .map((e) => '$e'.trim())
+              .map(_cleanVehicleValue)
               .where((e) => e.isNotEmpty)
               .join(' ');
   String _vehicleDetails(Map<String, dynamic> v) => [
@@ -766,7 +764,7 @@ class RiderVehicleManagerView extends StatelessWidget {
         v['colour'],
         v['registration'],
         v['capacity']
-      ].map((e) => '$e'.trim()).where((e) => e.isNotEmpty).join(' · ');
+      ].map(_cleanVehicleValue).where((e) => e.isNotEmpty).join(' · ');
   String _status(Map<String, dynamic> v) =>
       '${v['verificationStatus'] ?? 'Pending Review'}';
   Color _statusColor(Map<String, dynamic> v) {

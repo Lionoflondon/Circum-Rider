@@ -25,6 +25,8 @@ class RiderDashboardView extends StatefulWidget {
 }
 
 class _RiderDashboardViewState extends State<RiderDashboardView> {
+  bool _presenceRecoveryRequested = false;
+
   @override
   void initState() {
     super.initState();
@@ -116,6 +118,24 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                             return BlocBuilder<HomeBloc, HomeState>(
                               builder: (context, homeState) {
                                 final online = data.isOnline;
+                                if (online &&
+                                    homeState.rideStatus ==
+                                        RideStatus.offline &&
+                                    !_presenceRecoveryRequested) {
+                                  _presenceRecoveryRequested = true;
+                                  WidgetsBinding.instance
+                                      .addPostFrameCallback((_) {
+                                    if (!mounted) return;
+                                    context.read<HomeBloc>().add(
+                                          SetRideStatus(
+                                            status: RideStatus.online,
+                                          ),
+                                        );
+                                  });
+                                } else if (!online ||
+                                    homeState.rideStatus == RideStatus.online) {
+                                  _presenceRecoveryRequested = false;
+                                }
                                 final mergedHome = homeState.copyWith(
                                   rideStatus: online
                                       ? RideStatus.online

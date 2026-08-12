@@ -1320,6 +1320,11 @@ class RiderDeliveryStagePolicy {
   static RiderDeliveryStage fromRaw(dynamic value) {
     final text = '$value'.trim().toLowerCase();
     switch (text) {
+      case 'accepted':
+      case 'assigned':
+      case 'rider_assigned':
+      case 'confirmed':
+        return RiderDeliveryStage.accepted;
       case 'navigating_to_pickup':
         return RiderDeliveryStage.navigatingToPickup;
       case 'arrived_at_pickup':
