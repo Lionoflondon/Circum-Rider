@@ -25,6 +25,8 @@ void main() {
     expect(webMain, contains('RiderWebRuntimeFailure'));
     expect(appCheck, contains('ReCaptchaEnterpriseProvider'));
     expect(appCheck, contains('RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY'));
+    expect(appCheck, contains('activation.timeout'));
+    expect(appCheck, isNot(contains('getToken(true)')));
     expect(appCheck, contains('RiderAppCheckStartup.blocked'));
     expect(appCheck, contains('blockStartup'));
     expect(appCheck, isNot(contains('debugProvider')));

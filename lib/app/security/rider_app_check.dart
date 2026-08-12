@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
 
@@ -25,18 +27,15 @@ Future<RiderAppCheckStartup> initializeRiderAppCheck() async {
     );
   }
   try {
-    await FirebaseAppCheck.instance.activate(
+    final activation = FirebaseAppCheck.instance.activate(
       androidProvider: AndroidProvider.playIntegrity,
       appleProvider: AppleProvider.appAttest,
       webProvider: kIsWeb ? ReCaptchaEnterpriseProvider(siteKey) : null,
     );
     if (kIsWeb) {
-      final token = await FirebaseAppCheck.instance.getToken(true);
-      if (token == null || token.trim().isEmpty) {
-        return const RiderAppCheckStartup.blocked(
-          'Rider security verification could not start. Please try again.',
-        );
-      }
+      await activation.timeout(const Duration(seconds: 5));
+    } else {
+      await activation;
     }
     return const RiderAppCheckStartup.ready();
   } catch (_) {
