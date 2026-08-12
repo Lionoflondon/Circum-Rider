@@ -70,8 +70,16 @@ class RiderJobOffer {
       requestId: requestId.isEmpty ? docId : requestId,
       pickupArea: pickup,
       dropoffArea: dropoff,
-      pickupAddress: _fullAddress(pickupDetails),
-      dropoffAddress: _fullAddress(dropoffDetails),
+      pickupAddress: _fullAddress(
+        pickupDetails,
+        fallback: data['pickupAddress'] ?? data['pickupAddressCanonical'],
+      ),
+      dropoffAddress: _fullAddress(
+        dropoffDetails,
+        fallback: data['dropoffAddress'] ??
+            data['dropOffAddress'] ??
+            data['dropoffAddressCanonical'],
+      ),
       earnings: price is num ? price.toDouble() : 0,
       currency: '${data['currency'] ?? 'GBP'}',
       distanceText: distance == null || '$distance'.trim().isEmpty
@@ -100,22 +108,24 @@ class RiderJobOffer {
         value['postcode'],
       ];
       for (final candidate in candidates) {
-        final text = '$candidate'.trim();
-        if (candidate != null && text.isNotEmpty && text != 'null') {
+        final text = _scalarText(candidate);
+        if (text.isNotEmpty) {
           return text;
         }
       }
     }
-    final text = '$value'.trim();
-    if (text.isNotEmpty && text != 'null') return text;
+    final text = _scalarText(value);
+    if (text.isNotEmpty) return text;
     return 'Location pending';
   }
 
-  static String _fullAddress(dynamic value) {
+  static String _fullAddress(dynamic value, {dynamic fallback}) {
     if (value is Map) {
       final candidates = [
         value['formattedAddress'],
         value['address'],
+        value['subAddress'],
+        value['displayAddress'],
         [
           value['addressLine1'],
           value['addressLine2'],
@@ -127,15 +137,23 @@ class RiderJobOffer {
         }).join(', '),
       ];
       for (final candidate in candidates) {
-        final text = '$candidate'.trim();
-        if (candidate != null && text.isNotEmpty && text != 'null') {
+        final text = _scalarText(candidate);
+        if (text.isNotEmpty) {
           return text;
         }
       }
     }
-    final text = '$value'.trim();
-    if (text.isNotEmpty && text != 'null') return text;
+    final text = _scalarText(value);
+    if (text.isNotEmpty) return text;
+    final fallbackText = _scalarText(fallback);
+    if (fallbackText.isNotEmpty) return fallbackText;
     return 'Address pending';
+  }
+
+  static String _scalarText(dynamic value) {
+    if (value == null || value is Map || value is Iterable) return '';
+    final text = '$value'.trim();
+    return text.isEmpty || text.toLowerCase() == 'null' ? '' : text;
   }
 
   static List<String> _warningChips(Map<String, dynamic> data) {
