@@ -14,6 +14,7 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 import 'app.dart';
 import 'app/authentication/bloc/auth_bloc.dart';
+import 'app/authentication/view/index_page.dart';
 import 'app/security/circum_app_check.dart';
 import 'app/bottom_nav/bloc/navbar_bloc.dart';
 import 'app/home/bloc/home_bloc.dart';
@@ -254,19 +255,7 @@ class _RiderStartupHold extends StatelessWidget {
   Widget build(BuildContext context) {
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: Color(0xFF131313),
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Starting Rider'),
-            ],
-          ),
-        ),
-      ),
+      home: IndexPage(),
     );
   }
 }

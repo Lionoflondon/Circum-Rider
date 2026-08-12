@@ -6,7 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'dart:io';
 
 void main() {
-  testWidgets('Rider startup renders loading before initialization completes',
+  testWidgets(
+      'Rider startup renders the canonical splash before initialization completes',
       (tester) async {
     final completer = Completer<void>();
 
@@ -15,8 +16,7 @@ void main() {
       appBuilder: (_) => const MaterialApp(home: Text('Rider ready')),
     ));
 
-    expect(find.text('Starting Rider'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
 
     completer.complete();
     await tester.pumpAndSettle();
