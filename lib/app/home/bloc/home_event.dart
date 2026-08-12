@@ -10,6 +10,8 @@ class SetRideStatus extends HomeEvent {
   SetRideStatus({required this.status});
 }
 
+class ResumePresenceHeartbeat extends HomeEvent {}
+
 class GetAvailableRequests extends HomeEvent {}
 
 class SetHomeLocationData extends HomeEvent {

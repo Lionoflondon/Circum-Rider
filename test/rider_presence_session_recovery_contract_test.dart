@@ -9,9 +9,9 @@ void main() {
     final home = File('lib/app/home/bloc/home_bloc.dart').readAsStringSync();
 
     expect(dashboard, contains('_presenceRecoveryRequested'));
-    expect(dashboard, contains('homeState.rideStatus =='));
-    expect(dashboard, contains('RideStatus.offline &&'));
-    expect(dashboard, contains('SetRideStatus('));
+    expect(dashboard, contains('ResumePresenceHeartbeat()'));
+    expect(home, contains('on<ResumePresenceHeartbeat>'));
+    expect(home, contains('_handleResumePresenceHeartbeat'));
     expect(home, contains('_startPresenceHeartbeat()'));
     expect(home, contains("httpsCallable('updateRiderPresence')"));
   });

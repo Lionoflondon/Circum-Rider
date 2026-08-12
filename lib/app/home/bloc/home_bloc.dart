@@ -104,6 +104,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   HomeBloc() : super(HomeState()) {
     on<CheckForPushToken>(_handleCheckForPushToken);
     on<SetRideStatus>(_handleSetRideStatus);
+    on<ResumePresenceHeartbeat>(_handleResumePresenceHeartbeat);
     on<GetAvailableRequests>(_handleGetAvailableRequests);
     on<SetHomeLocationData>(_handleSetHomeLocationData);
     on<AcceptRide>(_handleAcceptRide);
@@ -241,6 +242,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         return;
       }
     }
+  }
+
+  void _handleResumePresenceHeartbeat(
+      ResumePresenceHeartbeat event, Emitter emit) {
+    if (auth.currentUser == null) return;
+    emit(state.copyWith(rideStatus: RideStatus.online));
+    _startPresenceHeartbeat();
   }
 
   void _handleGetAvailableRequests(event, emit) async {

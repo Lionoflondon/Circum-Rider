@@ -118,22 +118,16 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                             return BlocBuilder<HomeBloc, HomeState>(
                               builder: (context, homeState) {
                                 final online = data.isOnline;
-                                if (online &&
-                                    homeState.rideStatus ==
-                                        RideStatus.offline &&
-                                    !_presenceRecoveryRequested) {
+                                if (online && !_presenceRecoveryRequested) {
                                   _presenceRecoveryRequested = true;
                                   WidgetsBinding.instance
                                       .addPostFrameCallback((_) {
                                     if (!mounted) return;
-                                    context.read<HomeBloc>().add(
-                                          SetRideStatus(
-                                            status: RideStatus.online,
-                                          ),
-                                        );
+                                    context
+                                        .read<HomeBloc>()
+                                        .add(ResumePresenceHeartbeat());
                                   });
-                                } else if (!online ||
-                                    homeState.rideStatus == RideStatus.online) {
+                                } else if (!online) {
                                   _presenceRecoveryRequested = false;
                                 }
                                 final mergedHome = homeState.copyWith(
