@@ -11,7 +11,7 @@ class RiderRankSnapshot {
 
   static RiderRankSnapshot? from(Map<String, dynamic> data) {
     final canonicalTrust = data['trustPoints'];
-    final legacyTrust = data['riderTrustPoints'];
+    final legacyTrust = data['riderTrustPoints'] ?? data['trust'];
     final rawTrust = canonicalTrust is num && canonicalTrust > 0
         ? canonicalTrust
         : legacyTrust is num
@@ -54,8 +54,10 @@ Map<String, dynamic> mergeRiderAuthorityData(
   final trustValues = [
     rider['trustPoints'],
     rider['riderTrustPoints'],
+    rider['trust'],
     profile['trustPoints'],
     profile['riderTrustPoints'],
+    profile['trust'],
   ].whereType<num>();
   if (trustValues.isNotEmpty) {
     merged['trustPoints'] = trustValues.reduce((a, b) => a > b ? a : b);

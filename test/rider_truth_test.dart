@@ -35,6 +35,15 @@ void main() {
     expect(value?.rank, 'Agent');
   });
 
+  test('legacy trust field remains a supported backend projection', () {
+    final value = RiderRankSnapshot.from({
+      'trustPoints': 0,
+      'trust': 3,
+    });
+
+    expect(value?.trustPoints, 3);
+  });
+
   test('admin assignment metadata preserves assigned Veteran truth', () {
     final value = RiderRankSnapshot.from({
       'trustPoints': 0,
