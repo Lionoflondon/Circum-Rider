@@ -21,6 +21,16 @@ void main() {
           screenSource, contains('store: CallableRiderJobTransactionStore()'));
     });
 
+    test('legacy HomeBloc acceptance also routes through backend authority',
+        () {
+      final source =
+          File('lib/app/home/bloc/home_bloc.dart').readAsStringSync();
+      expect(source, contains("httpsCallable('acceptRideRequests')"));
+      expect(
+          source, contains("call({'requestId': selectedRequest.requestId})"));
+      expect(source, isNot(contains("'status': 'accepted'")));
+    });
+
     test('blocks riders who are not eligible to accept jobs', () async {
       final store = _MemoryStore({
         'job-1': {'status': 'requested'},

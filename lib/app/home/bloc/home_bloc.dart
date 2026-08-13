@@ -287,11 +287,25 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       final documentSnapshot = await documentReference.get();
 
       final riderData = documentSnapshot.data();
+      final riderValues = riderData ?? <String, dynamic>{};
+
+      final selectedRequest =
+          state.dispatchRequests?[event.selectedRequestIndex];
+      if (selectedRequest == null || selectedRequest.requestId.isEmpty) {
+        emit(state.copyWith(
+          requestStatus: RequestStatus.failure,
+          message: 'This delivery is no longer available. Please refresh.',
+        ));
+        return;
+      }
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('acceptRideRequests')
+          .call({'requestId': selectedRequest.requestId});
 
       emit(state.copyWith(
           rideStatus: RideStatus.acceptedARide,
           selectedRequestIndex: event.selectedRequestIndex,
-          activeRequest: state.dispatchRequests![event.selectedRequestIndex]));
+          activeRequest: selectedRequest));
 
       final double? riderLng = prefs.getDouble('longitude');
       final double? riderLat = prefs.getDouble('latitude');
@@ -345,40 +359,14 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
       final formattedDeliveryTime = formattedTimeAfterSeconds(totalTime);
       final riderPhone = riderData?['phone'] ?? user?.phoneNumber ?? '';
-      final riderPhoto =
-          '${riderData?['profileThumbnailUrl'] ?? riderData?['profilePhotoUrl'] ?? riderData?['photoURL'] ?? riderData?['photoUrl'] ?? user?.photoURL ?? ''}';
-
-      // final userData = await firebaseMessaging
-      //     .subscribeToTopic('your_topic_name')
-      //         'Successfully subscribed to your_topic_name')); // Replace with your topic name
-      await MessagingServer().sendMessage(
-          data: {
-            'type': 'connection',
-            'status': 'accepted',
-            'data': '''{
-                'courierName': '${user?.displayName}',
-                'photoURL': '$riderPhoto',
-                'rating': '${riderData?['rating'] ?? '0'}',
-                'plateNumber': '${riderData!['plateNumber']}',
-                'typeOfVehicle': '${riderData['typeOfVehicle']}',
-                'estimatedDeliveryTime': '$formattedDeliveryTime',
-                'phoneNumber': '$riderPhone',
-                'riderId': '${user?.uid}',
-                'code': '${riderData['fcmToken']}'
-              }'''
-          },
-          code: event.code,
-          message:
-              '${user?.displayName!.split(' ').first.trim()} will be picking up your parcel soon.');
-
       await prefs.setString('courierName', '${user?.displayName}');
-      await prefs.setString('rating', '${riderData['rating']}');
-      await prefs.setString('plateNumber', '${riderData['plateNumber']}');
-      await prefs.setString('typeOfVehicle', '${riderData['typeOfVehicle']}');
+      await prefs.setString('rating', '${riderValues['rating']}');
+      await prefs.setString('plateNumber', '${riderValues['plateNumber']}');
+      await prefs.setString('typeOfVehicle', '${riderValues['typeOfVehicle']}');
       await prefs.setString('estimatedDeliveryTime', formattedDeliveryTime);
       await prefs.setString('phoneNumber', '$riderPhone');
       await prefs.setString('riderId', '${user?.uid}');
-      await prefs.setString('code', '${riderData['fcmToken']}');
+      await prefs.setString('code', '${riderValues['fcmToken']}');
       await prefs.setString('userCode', event.code);
 
       // Verify that the ride was assigned to this rider
