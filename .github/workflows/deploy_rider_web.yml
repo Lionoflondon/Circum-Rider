@@ -24,6 +24,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Enforce Rider platform and Stripe return ownership
+        run: node scripts/check_platform_isolation.js
       - run: flutter pub get
       - name: Certify Rider startup, identity, trust, and Roth contracts
         run: >-
@@ -35,7 +37,13 @@ jobs:
           test/rider_founder_route_contract_test.dart
           test/rider_truth_test.dart
           test/rider_roth_wallet_referral_contract_test.dart
-      - run: node --test test/rider_deployment_manifest_test.js
+          test/rider_platform_isolation_contract_test.dart
+          test/rider_stripe_return_routing_test.dart
+      - run: >-
+          node --test
+          test/rider_deployment_manifest_test.js
+          test/platform_isolation_guard_test.js
+          test/rider_deployment_workflow_contract_test.js
       - run: RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_rider_web.sh
       - run: node scripts/rider_deployment_manifest.js verify
       - uses: google-github-actions/auth@v2

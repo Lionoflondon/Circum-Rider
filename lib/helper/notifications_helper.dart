@@ -1,12 +1,11 @@
 // lib/services/notification_service.dart
-import 'dart:ui';
-
-import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import '../main.dart';
-import '../utils/theme/theme.dart';
 
 class NotificationService {
+  const NotificationService(this.plugin);
+
+  final FlutterLocalNotificationsPlugin plugin;
+
   Future<void> showNotification(
       {required String title, required String body}) async {
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
@@ -26,7 +25,7 @@ class NotificationService {
       presentSound: true,
     );
 
-    NotificationDetails platformChannelSpecifics = NotificationDetails(
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
       iOS: iOSPlatformChannelSpecifics,
     );
@@ -34,7 +33,7 @@ class NotificationService {
     // String notificationContent =
     //     _createStageIndicators(currentStage, totalStages);
 
-    await flutterLocalNotificationsPlugin.show(
+    await plugin.show(
       0,
       title,
       body,

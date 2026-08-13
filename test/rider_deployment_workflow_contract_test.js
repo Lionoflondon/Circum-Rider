@@ -17,4 +17,8 @@ test('Rider deployment checks out the approved ref and authenticates Firebase', 
   );
   assert.match(workflow, /npm install -g firebase-tools/);
   assert.match(workflow, /firebase deploy --only hosting --project circum-2797c/);
+  assert.match(workflow, /node scripts\/check_platform_isolation\.js/);
+  assert.match(workflow, /test\/rider_platform_isolation_contract_test\.dart/);
+  assert.match(workflow, /test\/rider_stripe_return_routing_test\.dart/);
+  assert.match(workflow, /test\/platform_isolation_guard_test\.js/);
 });

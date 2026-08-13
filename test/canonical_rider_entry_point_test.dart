@@ -5,10 +5,13 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('canonical Rider application entry point', () {
     final mainSource = File('lib/main.dart').readAsStringSync();
+    final riderAppSource = File('lib/rider_app.dart').readAsStringSync();
     final appSource = File('lib/app.dart').readAsStringSync();
 
     test('launches the committed CircumRider root', () {
-      expect(mainSource, contains('runApp(const CircumRider())'));
+      expect(mainSource, contains("import 'rider_app.dart'"));
+      expect(mainSource, contains('runApp(CircumRider(homeBloc: homeBloc))'));
+      expect(riderAppSource, contains('class CircumRider'));
       expect(mainSource, isNot(contains('CanonicalRiderApp')));
       expect(mainSource, isNot(contains("import 'canonical_rider/")));
     });

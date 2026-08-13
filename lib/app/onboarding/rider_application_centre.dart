@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import '../communication/rider_conversation_view.dart';
 import '../rider_account/rider_account_state.dart';
 import '../rider_design/rider_ui.dart';
+import '../stripe/rider_stripe_onboarding_launcher.dart';
 import 'rider_roth_onboarding.dart';
 
 enum RiderApplicationSectionStatus {
@@ -469,7 +469,8 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
             section.key,
             RiderApplicationSectionStatus.inProgress,
           );
-        }, success: 'Payout setup status will update from Stripe Connect.');
+          await RiderStripeOnboardingLauncher.open();
+        }, success: 'Opening Stripe Connect payout setup.');
       case 'review_status':
         await _submitApplication(uid);
     }

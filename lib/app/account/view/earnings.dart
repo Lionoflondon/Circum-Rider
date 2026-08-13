@@ -8,6 +8,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../rider_design/rider_ui.dart';
 import '../../rider_shell/rider_roth_referral_view.dart';
+import '../../stripe/rider_stripe_onboarding_launcher.dart';
 import '../bloc/account_bloc.dart';
 
 class EarningsView extends StatefulWidget {
@@ -36,6 +37,21 @@ class _EarningsViewState extends State<EarningsView> {
         .httpsCallable('getRiderEarningsSummary')
         .call();
     return Map<String, dynamic>.from(result.data as Map);
+  }
+
+  Future<void> _openStripePayoutSetup() async {
+    try {
+      await RiderStripeOnboardingLauncher.open();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.toString().replaceFirst('Bad state: ', ''),
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -109,6 +125,7 @@ class _EarningsViewState extends State<EarningsView> {
                       transactions: transactions,
                       onRefresh: () =>
                           setState(() => _summary = _loadSummary()),
+                      onPayoutSetup: _openStripePayoutSetup,
                     );
                   },
                 );
@@ -136,6 +153,7 @@ class _EarningsContent extends StatelessWidget {
     required this.payouts,
     required this.transactions,
     required this.onRefresh,
+    required this.onPayoutSetup,
   });
 
   final Map<String, dynamic> summary;
@@ -143,6 +161,7 @@ class _EarningsContent extends StatelessWidget {
   final List<Map<String, dynamic>> payouts;
   final List<Map<String, dynamic>> transactions;
   final VoidCallback onRefresh;
+  final Future<void> Function() onPayoutSetup;
 
   @override
   Widget build(BuildContext context) {
@@ -163,6 +182,11 @@ class _EarningsContent extends StatelessWidget {
     final unexplained = _number(summary['unexplained']);
     final reconciled = summary['reconciled'] == true;
     final readiness = '${summary['connectReadiness'] ?? 'setup_required'}';
+    final setupRequired = const {
+      'setup_required',
+      'restricted',
+      'disabled',
+    }.contains(readiness.toLowerCase());
     final activityCount = summary['activityCount'] is num
         ? (summary['activityCount'] as num).toInt()
         : transactions.length;
@@ -197,7 +221,9 @@ class _EarningsContent extends StatelessWidget {
             const RiderRothWalletSummaryCard(),
             const SizedBox(height: 24),
             if (!hasEarnings) ...[
-              const _NoEarningsState(),
+              _NoEarningsState(
+                onPayoutSetup: setupRequired ? onPayoutSetup : null,
+              ),
             ] else ...[
               _BalanceHero(
                 available: available,
@@ -208,12 +234,14 @@ class _EarningsContent extends StatelessWidget {
                 unexplained: unexplained,
                 activePayout: activePayout,
                 busy: account.status == AccountStatus.loading,
-                onWithdraw: pendingPayout ||
-                        available <= 0 ||
-                        readiness != 'ready' ||
-                        !reconciled
-                    ? null
-                    : () => _requestWithdrawal(context, available),
+                onWithdraw: setupRequired
+                    ? () => onPayoutSetup()
+                    : pendingPayout ||
+                            available <= 0 ||
+                            readiness != 'ready' ||
+                            !reconciled
+                        ? null
+                        : () => _requestWithdrawal(context, available),
                 payouts: sortedPayouts,
                 reviewRequired: _requiresPayoutReview(summary, activePayout),
                 reviewMessage:
@@ -819,20 +847,22 @@ class _PayoutStatusCard extends StatelessWidget {
 }
 
 class _NoEarningsState extends StatelessWidget {
-  const _NoEarningsState();
+  const _NoEarningsState({this.onPayoutSetup});
+
+  final Future<void> Function()? onPayoutSetup;
 
   @override
-  Widget build(BuildContext context) => const _EarningsGlass(
+  Widget build(BuildContext context) => _EarningsGlass(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _IconBox(
+            const _IconBox(
               icon: Icons.account_balance_wallet_outlined,
               color: RiderPalette.blue,
               size: 42,
             ),
-            SizedBox(height: 16),
-            Text(
+            const SizedBox(height: 16),
+            const Text(
               'No earnings yet',
               style: TextStyle(
                 color: RiderPalette.paper,
@@ -840,8 +870,8 @@ class _NoEarningsState extends StatelessWidget {
                 fontSize: 26,
               ),
             ),
-            SizedBox(height: 8),
-            Text(
+            const SizedBox(height: 8),
+            const Text(
               'Completed delivery earnings, tips, waiting payments and adjustments will appear here.',
               style: TextStyle(
                 color: RiderPalette.muted,
@@ -849,6 +879,14 @@ class _NoEarningsState extends StatelessWidget {
                 height: 1.45,
               ),
             ),
+            if (onPayoutSetup != null) ...[
+              const SizedBox(height: 18),
+              RiderPrimaryButton(
+                label: 'Complete payout setup',
+                icon: Icons.open_in_new_rounded,
+                onPressed: () => onPayoutSetup!(),
+              ),
+            ],
           ],
         ),
       );

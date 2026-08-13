@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "repository": "Circum-Rider",
+  "products": {
+    "rider_web": {
+      "entrypoint": "lib/main_rider_web.dart",
+      "compositionRoot": "lib/rider_app.dart",
+      "deploymentTarget": "circum-rider-2797c",
+      "appCheckModule": "lib/app/security/rider_app_check.dart",
+      "appCheckProvider": "ReCaptchaEnterpriseProvider",
+      "stripeReturnPaths": [
+        "/rider/stripe/return",
+        "/rider/stripe/refresh"
+      ],
+      "forbiddenImports": [
+        "package:circum_rider/main.dart"
+      ]
+    },
+    "rider_mobile": {
+      "entrypoint": "lib/main.dart",
+      "compositionRoot": "lib/rider_app.dart",
+      "deploymentTarget": "Rider Android/iOS",
+      "appCheckModule": "lib/app/security/circum_app_check.dart",
+      "appCheckProvider": "PlayIntegrity/AppAttest",
+      "forbiddenSymbols": [
+        "main_rider_web.dart",
+        "RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY",
+        "ReCaptchaEnterpriseProvider",
+        "kIsWeb"
+      ]
+    },
+    "sender": {
+      "ownership": "external repository/target; never imported here"
+    },
+    "website": {
+      "ownership": "external repository/target; never imported here"
+    },
+    "admin": {
+      "ownership": "external repository/target; never imported here"
+    },
+    "backend": {
+      "ownership": "external server repository/target; never imported here"
+    },
+    "shared_pure_code": {
+      "policy": "models, domain logic, pure utilities and projection adapters only; no startup or App Check ownership"
+    }
+  }
+}

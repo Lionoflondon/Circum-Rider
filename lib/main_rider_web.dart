@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:circum_rider/main.dart' show CircumRider;
+import 'package:circum_rider/app/stripe/rider_stripe_return.dart';
+import 'package:circum_rider/rider_app.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
@@ -15,7 +16,9 @@ void main() {
     () => runApp(
       RiderWebStartupApp(
         initializer: _initializeRiderWeb,
-        appBuilder: (_) => const CircumRider(),
+        appBuilder: (_) => CircumRider(
+          stripeReturnIntent: RiderStripeReturnIntent.fromUri(Uri.base),
+        ),
       ),
     ),
     _reportRiderWebError,

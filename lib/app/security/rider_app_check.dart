@@ -1,5 +1,4 @@
 import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:flutter/foundation.dart';
 
 class RiderAppCheckStartup {
   const RiderAppCheckStartup._({
@@ -17,19 +16,22 @@ class RiderAppCheckStartup {
 }
 
 Future<RiderAppCheckStartup> initializeRiderAppCheck() async {
-  const siteKey =
-      String.fromEnvironment('RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY');
-  if (kIsWeb && siteKey.trim().isEmpty) {
-    return const RiderAppCheckStartup.ready();
+  const siteKey = String.fromEnvironment(
+    'RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY',
+  );
+  if (siteKey.trim().isEmpty) {
+    return const RiderAppCheckStartup.blocked(
+      'Rider security verification is not configured for this version.',
+    );
   }
   try {
     await FirebaseAppCheck.instance.activate(
-      androidProvider: AndroidProvider.playIntegrity,
-      appleProvider: AppleProvider.appAttest,
-      webProvider: kIsWeb ? ReCaptchaEnterpriseProvider(siteKey) : null,
+      webProvider: ReCaptchaEnterpriseProvider(siteKey),
     );
     return const RiderAppCheckStartup.ready();
   } catch (_) {
-    return const RiderAppCheckStartup.ready();
+    return const RiderAppCheckStartup.blocked(
+      'Rider security verification could not start. Please try again.',
+    );
   }
 }
