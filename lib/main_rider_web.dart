@@ -5,7 +5,6 @@ import 'package:circum_rider/main.dart' show CircumRider;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 
-import 'app/authentication/view/index_page.dart';
 import 'app/security/rider_app_check.dart';
 import 'firebase_options.dart';
 
@@ -179,7 +178,23 @@ class _RiderWebStartupHold extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: const IndexPage(),
+      home: Scaffold(
+        backgroundColor: const Color(0xFF07090F),
+        body: Center(
+          child: Semantics(
+            liveRegion: true,
+            label: 'Circum Rider is starting',
+            child: const SizedBox(
+              width: 34,
+              height: 34,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: Color(0xFF60A5FA),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
