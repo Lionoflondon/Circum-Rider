@@ -61,6 +61,19 @@
       document.getElementById("startup-shell")?.remove();
     }
   </script>
+  <script>
+    // Preserve sessions created by the short-lived session-persistence release.
+    try {
+      for (let index = 0; index < sessionStorage.length; index += 1) {
+        const key = sessionStorage.key(index);
+        if (key?.startsWith('firebase:authUser:') && !localStorage.getItem(key)) {
+          localStorage.setItem(key, sessionStorage.getItem(key));
+        }
+      }
+    } catch (_) {
+      // Firebase Auth will present the normal sign-in flow if storage is blocked.
+    }
+  </script>
 </head>
 <body>
   <div id="startup-shell" role="status" aria-live="polite">
