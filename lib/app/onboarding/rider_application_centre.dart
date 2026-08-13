@@ -173,7 +173,8 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
                                 )) ...[
                                   _ApplicationSectionRow(
                                     section: section,
-                                    onTap: () => _openSection(uid, section),
+                                    onTap: () =>
+                                        _openSection(uid, section, documents),
                                   ),
                                   const SizedBox(height: 10),
                                 ],
@@ -451,7 +452,11 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
         : RiderApplicationSectionStatus.notStarted;
   }
 
-  Future<void> _openSection(String uid, _ApplicationSection section) async {
+  Future<void> _openSection(
+    String uid,
+    _ApplicationSection section,
+    List<Map<String, dynamic>> documents,
+  ) async {
     switch (section.key) {
       case 'personal_details':
       case 'home_address':
@@ -487,8 +492,13 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
           MaterialPageRoute(
             builder: (_) => _DocumentUploadSection(
               section: section,
-              upload: (type, file) =>
-                  _uploadDocument(uid, section.key, type, file),
+              upload: (type, file) => _uploadDocument(
+                uid,
+                section.key,
+                type,
+                file,
+                _latestDocumentId(documents, type),
+              ),
             ),
           ),
         );
@@ -527,6 +537,22 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
       case 'review_status':
         await _submitApplication(uid);
     }
+  }
+
+  String? _latestDocumentId(
+    List<Map<String, dynamic>> documents,
+    String documentType,
+  ) {
+    final matches = documents.where((document) {
+      final raw =
+          document['documentType'] ?? document['idType'] ?? document['type'];
+      return _normalise(raw) == _normalise(documentType) &&
+          document['status'] != 'superseded';
+    }).toList();
+    if (matches.isEmpty) return null;
+    return '${matches.last['id'] ?? ''}'.trim().isEmpty
+        ? null
+        : '${matches.last['id']}';
   }
 
   Future<void> _saveApplicationPatch(
@@ -573,6 +599,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     String section,
     String documentType,
     XFile file,
+    String? replacesDocumentId,
   ) async {
     await _runGuard(() async {
       final name = file.name;
@@ -595,6 +622,8 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
         'fileBase64': base64Encode(bytes),
         'fileName': name,
         'notes': section,
+        if (replacesDocumentId != null)
+          'replacesDocumentId': replacesDocumentId,
       });
       await _saveSectionStatus(
         uid,
