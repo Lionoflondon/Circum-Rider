@@ -1,6 +1,6 @@
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
 
 class RiderDeliveryTransitionResult {
   final String status;
@@ -20,7 +20,7 @@ abstract class RiderDeliveryController {
   Future<Map<String, dynamic>> reportDiscrepancy({
     required String deliveryId,
     required String reason,
-    required List<String> evidencePhotos,
+    required List<String> evidenceIds,
     double? observedWeightKg,
     String? notes,
   });
@@ -85,14 +85,14 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
   Future<Map<String, dynamic>> reportDiscrepancy({
     required String deliveryId,
     required String reason,
-    required List<String> evidencePhotos,
+    required List<String> evidenceIds,
     double? observedWeightKg,
     String? notes,
   }) async {
     final result = await functions.httpsCallable('reportLoadDiscrepancy').call({
       'requestId': deliveryId,
       'reason': reason,
-      'evidencePhotos': evidencePhotos,
+      'evidenceIds': evidenceIds,
       if (observedWeightKg != null) 'observedWeightKg': observedWeightKg,
       if (notes != null) 'riderNotes': notes,
     });
@@ -134,32 +134,36 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
 }
 
 class RiderEvidenceUploader {
-  final FirebaseStorage storage;
   final ImagePicker picker;
+  final FirebaseFunctions functions;
 
-  RiderEvidenceUploader({FirebaseStorage? storage, ImagePicker? picker})
-      : storage = storage ?? FirebaseStorage.instance,
-        picker = picker ?? ImagePicker();
+  RiderEvidenceUploader({ImagePicker? picker, FirebaseFunctions? functions})
+      : picker = picker ?? ImagePicker(),
+        functions =
+            functions ?? FirebaseFunctions.instanceFor(region: 'us-central1');
 
   Future<String?> capture({
     required String deliveryId,
     required String stage,
+    ImageSource source = ImageSource.camera,
   }) async {
     final image = await picker.pickImage(
-      source: ImageSource.camera,
+      source: source,
       imageQuality: 82,
       maxWidth: 1600,
     );
     if (image == null) return null;
     final bytes = await image.readAsBytes();
-    final safeStage = stage.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-    final ref = storage.ref(
-      'delivery_weight_evidence/$deliveryId/$safeStage/${DateTime.now().millisecondsSinceEpoch}.jpg',
-    );
-    await ref.putData(
-      bytes,
-      SettableMetadata(contentType: 'image/jpeg'),
-    );
-    return ref.getDownloadURL();
+    final result =
+        await functions.httpsCallable('submitDeliveryEvidence').call({
+      'deliveryId': deliveryId,
+      'stage': stage,
+      'contentType': image.mimeType ?? 'image/jpeg',
+      'imageBase64': base64Encode(bytes),
+    });
+    final data = Map<String, dynamic>.from(result.data as Map);
+    final evidenceId = '${data['evidenceId'] ?? ''}'.trim();
+    if (evidenceId.isEmpty) throw StateError('Evidence was not verified.');
+    return evidenceId;
   }
 }

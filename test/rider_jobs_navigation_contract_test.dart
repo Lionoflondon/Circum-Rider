@@ -56,7 +56,9 @@ void main() {
       expect(offers, contains('RiderOfferStack'));
       expect(offers, contains("import 'rider_offer_card.dart'"));
       expect(offerCard, contains('Accept Delivery'));
-      expect(offers, contains("where('status', isEqualTo: 'requested')"));
+      expect(offers, contains("httpsCallable('getNearbyRequests')"));
+      expect(
+          offers, isNot(contains("where('status', isEqualTo: 'requested')")));
       expect(offers, contains('No offers nearby'));
       expect(
           offers,

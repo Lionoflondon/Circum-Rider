@@ -76,20 +76,15 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
         'name': _name.text.trim(),
         'firstName': parts.first,
         'lastName': parts.length > 1 ? parts.sublist(1).join(' ') : '',
-        'handle': handle,
-        'username': handle,
         'dateOfBirth': _dob.text.trim(),
         'gender': _gender.text.trim(),
         'homeAddress': _address.text.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-      await functions.httpsCallable('updateRiderProfile').call({
-        ...patch,
-        'phoneNumber': _phone.text.trim(),
-      });
-      await functions.httpsCallable('claimSenderUsername').call({
-        'username': handle,
+      await functions.httpsCallable('updateRiderProfile').call(patch);
+      await functions.httpsCallable('claimCircumUsername').call({
+        'requestedUsername': handle,
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

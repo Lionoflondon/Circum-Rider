@@ -46,6 +46,9 @@ class RiderJobOffer {
     required String docId,
     required Map<String, dynamic> data,
   }) {
+    if ('${data['authority']}'.startsWith('backend_rider_')) {
+      return _fromCanonicalProjection(docId, data);
+    }
     final pickupDetails = data['pickupDetails'] ?? data['pickup'];
     final dropoffDetails = data['dropoffDetails'] ?? data['dropoff'];
     final pickup = _areaSummary(pickupDetails);
@@ -86,6 +89,58 @@ class RiderJobOffer {
       weightText: _weightText(data),
       pickupTiming: _pickupTiming(data),
       warningChips: _warningChips(data),
+      raw: data,
+    );
+  }
+
+  static RiderJobOffer _fromCanonicalProjection(
+      String docId, Map<String, dynamic> data) {
+    final item = data['item'] is Map
+        ? Map<String, dynamic>.from(data['item'] as Map)
+        : const <String, dynamic>{};
+    final flags = data['warningFlags'] is Map
+        ? Map<String, dynamic>.from(data['warningFlags'] as Map)
+        : const <String, dynamic>{};
+    final warnings = <String>[
+      if (flags['vanguard'] == true) 'Vanguard',
+      if (flags['healthPlus'] == true) 'Health+',
+      if (flags['gift'] == true) 'Gift',
+      if (flags['business'] == true) 'Business',
+      if (flags['heavyDuty'] == true) 'Heavy Duty',
+      if (flags['scheduled'] == true) 'Scheduled',
+    ];
+    if (warnings.isEmpty) warnings.add('Standard');
+    final chargeable = data['item'] is Map ? item['chargeableWeightKg'] : null;
+    final weight = chargeable is num
+        ? '${chargeable.toStringAsFixed(chargeable < 1 ? 1 : 0)}kg (${item['weightBand']})'
+        : '${item['weightBand'] ?? 'Weight review required'}';
+    final canonicalItem = '${item['canonicalItem'] ?? 'Parcel'}'.trim();
+    final quantity = item['quantity'] is num ? item['quantity'] as num : 1;
+    final guidance =
+        quantity > 1 ? '$quantity × $canonicalItem' : canonicalItem;
+    return RiderJobOffer(
+      id: docId,
+      requestId: '${data['requestId'] ?? docId}',
+      pickupArea: '${data['pickupLocality'] ?? 'Location pending'}',
+      dropoffArea: '${data['dropoffLocality'] ?? 'Location pending'}',
+      // Exact addresses remain unavailable until the backend assigns the Rider.
+      pickupAddress:
+          '${data['pickupAddress'] ?? data['pickupLocality'] ?? 'Location pending'}',
+      dropoffAddress:
+          '${data['dropoffAddress'] ?? data['dropoffLocality'] ?? 'Location pending'}',
+      earnings: data['riderEarning'] is num
+          ? (data['riderEarning'] as num).toDouble()
+          : 0,
+      currency: '${data['currency'] ?? 'GBP'}',
+      distanceText: '${data['distanceText'] ?? 'Calculating route'}',
+      timeText: '${data['durationText'] ?? 'Calculating arrival time'}',
+      parcelGuidance: guidance,
+      minimumVehicle: '${item['requiredVehicle'] ?? 'Vehicle review required'}',
+      weightText: weight,
+      pickupTiming: _pickupTiming({
+        'scheduledTime': data['scheduledCollectionTime'],
+      }),
+      warningChips: warnings,
       raw: data,
     );
   }
@@ -300,6 +355,11 @@ class RiderOfferCard extends StatelessWidget {
                       weight: offer.weightText,
                       timing: offer.pickupTiming,
                     ),
+                    if (offer.raw['authority'] ==
+                        'backend_rider_offer_projection') ...[
+                      const SizedBox(height: 12),
+                      _DecisionDetails(offer: offer),
+                    ],
                   ],
                 ),
               ),
@@ -373,6 +433,84 @@ class RiderOfferCard extends StatelessWidget {
   static String _money(double value, String currency) {
     final symbol = currency.toUpperCase() == 'GBP' ? '£' : '$currency ';
     return '$symbol${value.toStringAsFixed(2)}';
+  }
+}
+
+class _DecisionDetails extends StatelessWidget {
+  const _DecisionDetails({required this.offer});
+
+  final RiderJobOffer offer;
+
+  @override
+  Widget build(BuildContext context) {
+    final item = offer.raw['item'] is Map
+        ? Map<String, dynamic>.from(offer.raw['item'] as Map)
+        : const <String, dynamic>{};
+    final rows = <(String, String)>[
+      ('Category', '${item['category'] ?? 'General parcel'}'),
+      ('Quantity', '${item['quantity'] ?? 1}'),
+      if (item['declaredWeightKg'] != null)
+        ('Sender declared', '${item['declaredWeightKg']} kg'),
+      if (item['ascribedWeightKg'] != null)
+        ('CIRCUM ascribed', '${item['ascribedWeightKg']} kg'),
+      ('Chargeable band', '${item['weightBand'] ?? 'Review required'}'),
+      if ('${item['sizeClass'] ?? ''}'.isNotEmpty)
+        ('Size / bulk', '${item['sizeClass']}'),
+      ('Evidence', '${item['photoEvidenceStatus'] ?? 'Not supplied'}'),
+      ('Review', '${item['reviewState'] ?? 'Canonical'}'),
+      ('Contact', 'CIRCUM relay after acceptance'),
+    ];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF081B2B).withValues(alpha: .7),
+        borderRadius: BorderRadius.circular(16),
+        border:
+            Border.all(color: const Color(0xFF38BDF8).withValues(alpha: .2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.fact_check_outlined,
+                  color: Color(0xFF60A5FA), size: 18),
+              SizedBox(width: 8),
+              Text('DELIVERY DECISION DETAILS',
+                  style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 7),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 112,
+                    child: Text(row.$1,
+                        style: TextStyle(
+                            color: Colors.white.withValues(alpha: .55),
+                            fontSize: 11)),
+                  ),
+                  Expanded(
+                    child: Text(row.$2,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 

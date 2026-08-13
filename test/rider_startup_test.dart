@@ -16,7 +16,10 @@ void main() {
       appBuilder: (_) => const MaterialApp(home: Text('Rider ready')),
     ));
 
-    expect(find.byType(Image), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.bySemanticsLabel('Circum Rider is restoring your session'),
+        findsOneWidget);
 
     completer.complete();
     await tester.pumpAndSettle();

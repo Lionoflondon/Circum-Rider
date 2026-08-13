@@ -34,7 +34,7 @@ class _BackendStageController implements RiderDeliveryController {
   Future<Map<String, dynamic>> reportDiscrepancy({
     required String deliveryId,
     required String reason,
-    required List<String> evidencePhotos,
+    required List<String> evidenceIds,
     double? observedWeightKg,
     String? notes,
   }) async =>

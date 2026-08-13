@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../communication/rider_conversation_view.dart';
@@ -56,6 +57,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
   bool _accepted = false;
   String? _statusMessage;
   RiderAcceptStatus? _acceptStatus;
+  Future<List<RiderJobOffer>>? _offersFuture;
 
   @override
   void initState() {
@@ -67,6 +69,24 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
         RiderAcceptController(
           store: CallableRiderJobTransactionStore(),
         );
+    _offersFuture = _loadCanonicalOffers();
+  }
+
+  Future<List<RiderJobOffer>> _loadCanonicalOffers() async {
+    final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('getNearbyRequests')
+        .call(const <String, dynamic>{});
+    final data = Map<String, dynamic>.from(result.data as Map);
+    final records = data['nearestRequests'] is Iterable
+        ? data['nearestRequests'] as Iterable
+        : const [];
+    return records.map((record) {
+      final map = Map<String, dynamic>.from(record as Map);
+      return RiderJobOffer.fromFirestore(
+        docId: '${map['id'] ?? map['requestId']}',
+        data: map,
+      );
+    }).toList(growable: false);
   }
 
   @override
@@ -140,12 +160,8 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                             .read<HomeBloc>()
                             .add(SetRideStatus(status: RideStatus.online)));
 
-                  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: _firestore
-                        .collection('deliveryRequests')
-                        .where('status', isEqualTo: 'requested')
-                        .limit(20)
-                        .snapshots(),
+                  return FutureBuilder<List<RiderJobOffer>>(
+                    future: _offersFuture,
                     builder: (context, snapshot) {
                       if (snapshot.hasError) {
                         return const _JobsStateScaffold(
@@ -167,12 +183,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                         );
                       }
 
-                      final offers = _filterOffers(
-                        docs: snapshot.data!.docs,
-                        riderId: user.uid,
-                        riderVehicle: rider.riderVehicle,
-                        internalAccess: internalAccess,
-                      );
+                      final offers = snapshot.data ?? const <RiderJobOffer>[];
 
                       if (_activeIndex >= offers.length && offers.isNotEmpty) {
                         scheduleMicrotask(() {
@@ -242,60 +253,6 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     );
   }
 
-  List<RiderJobOffer> _filterOffers({
-    required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-    required String riderId,
-    required String? riderVehicle,
-    bool internalAccess = false,
-  }) {
-    return docs
-        .where((doc) => _isVisibleToRider(doc.data(), riderId, riderVehicle,
-            internalAccess: internalAccess))
-        .map((doc) =>
-            RiderJobOffer.fromFirestore(docId: doc.id, data: doc.data()))
-        .toList();
-  }
-
-  bool _isVisibleToRider(
-      Map<String, dynamic> data, String riderId, String? riderVehicle,
-      {bool internalAccess = false}) {
-    final ignored = _stringList(data['ignoredRiders']);
-    final rejected = _stringList(data['rejectedRiders']);
-    if (ignored.contains(riderId) || rejected.contains(riderId)) return false;
-
-    final matchingStatus =
-        '${data['matchingStatus'] ?? 'available'}'.trim().toLowerCase();
-    if (matchingStatus != 'available' && matchingStatus != 'requested') {
-      return false;
-    }
-
-    final minimumVehicle =
-        '${data['minimumVehicle'] ?? data['recommendedVehicle'] ?? 'Bike'}';
-    return internalAccess ||
-        _vehicleMeetsMinimum(riderVehicle ?? 'Bike', minimumVehicle);
-  }
-
-  List<String> _stringList(dynamic value) {
-    if (value is Iterable) {
-      return value
-          .map((item) => '$item'.trim())
-          .where((v) => v.isNotEmpty)
-          .toList();
-    }
-    return const [];
-  }
-
-  bool _vehicleMeetsMinimum(String riderVehicle, String minimumVehicle) {
-    int rank(String value) {
-      final normalized = value.trim().toLowerCase();
-      if (normalized.contains('van')) return 3;
-      if (normalized.contains('car')) return 2;
-      return 1;
-    }
-
-    return rank(riderVehicle) >= rank(minimumVehicle);
-  }
-
   Future<void> _accept(
     RiderJobOffer offer,
     RiderProfileSnapshot rider,
@@ -332,10 +289,17 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
         });
         return;
       }
+      final assignedData = result.patch?['assignedDelivery'];
+      final assignedOffer = assignedData is Map
+          ? RiderJobOffer.fromFirestore(
+              docId: offer.id,
+              data: Map<String, dynamic>.from(assignedData),
+            )
+          : offer;
       Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => RiderAcceptedJobScreen(
-            offer: offer,
+            offer: assignedOffer,
             firestore: _firestore,
             riderId: rider.riderId,
             riderRank: rider.riderRank ?? 'Agent',
@@ -1469,7 +1433,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       if (pin == null) return;
     }
     if ((action == 'verify_collection_pin' && _verificationRequired) ||
-        (action == 'verify_receiver_pin' && _pinRequired)) {
+        (action == 'verify_receiver_pin' && (_pinRequired || _photoRequired))) {
       evidence = await _captureEvidence(
         pickup: action == 'verify_collection_pin',
       );
@@ -1511,12 +1475,15 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
   Future<Map<String, dynamic>?> _captureEvidence({required bool pickup}) async {
     setState(() => _transitioning = true);
     try {
-      final photoUrl =
+      final source = await _chooseEvidenceSource();
+      if (source == null) return null;
+      final evidenceId =
           await (_evidenceUploader ??= RiderEvidenceUploader()).capture(
         deliveryId: widget.offer.id,
         stage: pickup ? 'pickup' : 'handover',
+        source: source,
       );
-      if (photoUrl == null || !mounted) return null;
+      if (evidenceId == null || !mounted) return null;
       final recipient = TextEditingController();
       final actualWeight = TextEditingController();
       var conditionConfirmed = false;
@@ -1587,7 +1554,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       actualWeight.dispose();
       if (confirmed != true) return null;
       return {
-        'photoUrl': photoUrl,
+        'evidenceId': evidenceId,
         if (pickup) 'conditionConfirmed': conditionConfirmed,
         if (pickup) 'riderDeclarationAccepted': declarationAccepted,
         if (pickup && actualWeightKg != null) 'actualWeightKg': actualWeightKg,
@@ -1605,8 +1572,31 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     }
   }
 
+  Future<ImageSource?> _chooseEvidenceSource() =>
+      showModalBottomSheet<ImageSource>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Take photo'),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Choose approved photo'),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      );
+
   Future<void> _reportIssue() async {
     final notes = TextEditingController();
+    final observedWeight = TextEditingController();
     var category = 'other';
     final submit = await showDialog<bool>(
       context: context,
@@ -1629,6 +1619,14 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                   'access_problem': 'Unable to access property',
                   'address_problem': 'Address problem',
                   'parcel_mismatch': 'Parcel mismatch',
+                  'wrong_quantity': 'Wrong quantity',
+                  'weight_exceeded': 'Materially understated weight band',
+                  'dimensions_exceeded': 'Oversized or bulky parcel',
+                  'undeclared_fragility': 'Undeclared fragility',
+                  'prohibited_or_restricted_item':
+                      'Prohibited or restricted item',
+                  'unsafe_lifting_condition': 'Unsafe lifting condition',
+                  'photo_mismatch': 'Photo mismatch',
                   'unsafe_situation': 'Unsafe situation',
                   'damaged_parcel': 'Damaged parcel',
                   'vehicle_suitability': 'Vehicle suitability problem',
@@ -1649,6 +1647,14 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                 maxLines: 3,
                 decoration: const InputDecoration(labelText: 'Notes'),
               ),
+              if (category == 'weight_exceeded')
+                TextField(
+                  controller: observedWeight,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  decoration:
+                      const InputDecoration(labelText: 'Observed weight (kg)'),
+                ),
             ],
           ),
           actions: [
@@ -1665,25 +1671,40 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       ),
     );
     final detail = notes.text.trim();
+    final observedWeightKg = double.tryParse(observedWeight.text.trim());
     notes.dispose();
+    observedWeight.dispose();
     if (submit != true) return;
     setState(() => _transitioning = true);
     try {
       final controller =
           widget.deliveryController ?? CallableRiderDeliveryController();
-      if (category == 'parcel_mismatch' || category == 'vehicle_suitability') {
-        final photoUrl =
+      const discrepancyReasons = {
+        'parcel_mismatch': 'item_differs_from_booking',
+        'wrong_quantity': 'wrong_quantity',
+        'weight_exceeded': 'weight_exceeded',
+        'dimensions_exceeded': 'dimensions_exceeded',
+        'undeclared_fragility': 'undeclared_fragility',
+        'prohibited_or_restricted_item': 'prohibited_or_restricted_item',
+        'unsafe_lifting_condition': 'unsafe_lifting_condition',
+        'vehicle_suitability': 'vehicle_incompatibility',
+        'photo_mismatch': 'photo_mismatch',
+      };
+      if (discrepancyReasons.containsKey(category)) {
+        final source = await _chooseEvidenceSource();
+        if (source == null) return;
+        final evidenceId =
             await (_evidenceUploader ??= RiderEvidenceUploader()).capture(
           deliveryId: widget.offer.id,
           stage: 'discrepancy',
+          source: source,
         );
-        if (photoUrl == null) return;
+        if (evidenceId == null) return;
         await controller.reportDiscrepancy(
           deliveryId: widget.offer.id,
-          reason: category == 'vehicle_suitability'
-              ? 'dimensions_exceeded'
-              : 'item_differs_from_booking',
-          evidencePhotos: [photoUrl],
+          reason: discrepancyReasons[category]!,
+          evidenceIds: [evidenceId],
+          observedWeightKg: observedWeightKg,
           notes: detail,
         );
         if (mounted) {

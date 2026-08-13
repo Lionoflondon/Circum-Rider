@@ -249,8 +249,8 @@ void main() {
       expect(File('lib/app/support/view/faq.dart').existsSync(), isFalse);
       expect(profileDetails, contains('Add vehicle'));
       expect(profileDetails, contains('Set active'));
-      expect(profileDetails, contains("'vehicles': vehicles"));
-      expect(profileDetails, contains("'vehicle': active"));
+      expect(profileDetails, contains("httpsCallable('updateRiderProfile')"));
+      expect(profileDetails, contains("'vehicleType': active['type']"));
       expect(profileDetails, contains("_field(_phone, 'Phone',"));
       expect(profileDetails, contains('readOnly: true'));
       expect(profileDetails, isNot(contains("'phoneNumber': _phone.text")));

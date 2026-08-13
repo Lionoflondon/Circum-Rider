@@ -90,16 +90,17 @@ void main() {
     expect(homeBloc, contains(r"'photoURL': '$riderPhoto'"));
   });
 
-  test('Rider username is editable and persisted to backend profile documents',
-      () {
+  test('Rider username is editable through global username authority', () {
     final details = File('lib/app/rider_shell/rider_profile_details_view.dart')
         .readAsStringSync();
     final profile =
         File('lib/app/rider_shell/rider_profile_view.dart').readAsStringSync();
 
     expect(details, contains("_username.text"));
-    expect(details, contains("'handle': handle"));
-    expect(details, contains("'username': handle"));
+    expect(details, contains("httpsCallable('claimCircumUsername')"));
+    expect(details, contains("'requestedUsername': handle"));
+    expect(details, isNot(contains("'handle': handle")));
+    expect(details, isNot(contains("'username': handle")));
     expect(details, contains("collection('riders')"));
     expect(details, contains("collection('riderProfiles')"));
     expect(details, contains('Your Rider username is saved'));

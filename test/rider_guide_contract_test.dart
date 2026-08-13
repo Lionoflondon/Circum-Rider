@@ -127,12 +127,11 @@ void main() {
     });
 
     test('Application Centre stores documents securely for Admin review', () {
-      expect(applicationCentre, contains("storageRoot = 'rider-applications'"));
-      expect(applicationCentre, contains('storagePath'));
-      expect(applicationCentre, contains('riderDocuments'));
-      expect(applicationCentre, contains('statusHistory'));
-      expect(applicationCentre, contains('archivedVersions'));
-      expect(applicationCentre, contains('under_review'));
+      expect(
+          applicationCentre, contains("httpsCallable('submitRiderDocument')"));
+      expect(applicationCentre, contains('fileBase64'));
+      expect(
+          applicationCentre, contains('Document uploaded for Admin review.'));
       expect(applicationCentre, isNot(contains('publicDownloadUrl')));
     });
 
@@ -150,8 +149,9 @@ void main() {
       expect(
           applicationCentre, isNot(contains("'approvalStatus': 'approved'")));
       expect(applicationCentre, isNot(contains("'approvedAt'")));
-      expect(applicationCentre, contains('application_submitted'));
-      expect(applicationCentre, contains('riderApplicationAudit'));
+      expect(applicationCentre,
+          contains("httpsCallable('submitRiderApplication')"));
+      expect(applicationCentre, contains('idempotencyKey'));
     });
   });
 }
