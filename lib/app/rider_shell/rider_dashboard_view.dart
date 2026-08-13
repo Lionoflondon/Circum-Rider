@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -347,7 +348,7 @@ class _DashboardSurface extends StatelessWidget {
                   const SizedBox(height: 10),
                   _RecentActivityCard(
                     items: data.recent.take(2).toList(),
-                    onTap: () => onSelectTab(3),
+                    onTap: (item) => _showActivityDetail(context, item),
                   ),
                   const SizedBox(height: 24),
                   _QuickActions(onSelectTab: onSelectTab),
@@ -1147,7 +1148,7 @@ class _RecentActivityCard extends StatelessWidget {
   const _RecentActivityCard({required this.items, required this.onTap});
 
   final List<Map<String, dynamic>> items;
-  final VoidCallback onTap;
+  final ValueChanged<Map<String, dynamic>> onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1165,7 +1166,7 @@ class _RecentActivityCard extends StatelessWidget {
       child: Column(
         children: [
           for (var i = 0; i < items.length; i++) ...[
-            _RecentRow(item: items[i], onTap: onTap),
+            _RecentRow(item: items[i], onTap: () => onTap(items[i])),
             if (i != items.length - 1)
               Divider(color: Colors.white.withValues(alpha: .07), height: 1),
           ],
@@ -1183,6 +1184,7 @@ class _RecentRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final evidenceId = _handoverEvidenceId(item);
     return InkWell(
       onTap: onTap,
       child: Padding(
@@ -1224,6 +1226,19 @@ class _RecentRow extends StatelessWidget {
                       fontSize: 11.5,
                     ),
                   ),
+                  if (evidenceId.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Proof available',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: RiderPalette.blue,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -1238,6 +1253,215 @@ class _RecentRow extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+String _handoverEvidenceId(Map<String, dynamic> item) {
+  final handover = item['handoverEvidence'];
+  if (handover is Map) {
+    final id = '${handover['evidenceId'] ?? ''}'.trim();
+    if (id.isNotEmpty && id != 'null') return id;
+  }
+  final completion = item['completionEvidence'];
+  if (completion is Map) {
+    final id = '${completion['evidenceId'] ?? ''}'.trim();
+    if (id.isNotEmpty && id != 'null') return id;
+  }
+  for (final key in [
+    'handoverEvidenceId',
+    'completionEvidenceId',
+    'proofEvidenceId',
+    'evidenceId',
+  ]) {
+    final id = '${item[key] ?? ''}'.trim();
+    if (id.isNotEmpty && id != 'null') return id;
+  }
+  return '';
+}
+
+Future<void> _showActivityDetail(
+  BuildContext context,
+  Map<String, dynamic> item,
+) =>
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _ActivityDetailSheet(item: item),
+    );
+
+class _ActivityDetailSheet extends StatefulWidget {
+  const _ActivityDetailSheet({required this.item});
+
+  final Map<String, dynamic> item;
+
+  @override
+  State<_ActivityDetailSheet> createState() => _ActivityDetailSheetState();
+}
+
+class _ActivityDetailSheetState extends State<_ActivityDetailSheet> {
+  Future<String?>? _proofFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    final evidenceId = _handoverEvidenceId(widget.item);
+    if (evidenceId.isNotEmpty) _proofFuture = _loadProof(evidenceId);
+  }
+
+  Future<String?> _loadProof(String evidenceId) async {
+    final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('getDeliveryEvidenceAccess')
+        .call({'evidenceId': evidenceId});
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return '${data['url'] ?? ''}'.trim();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final evidenceId = _handoverEvidenceId(item);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: RiderGlassSurface(
+          padding: const EdgeInsets.all(18),
+          radius: 24,
+          opacity: .78,
+          blur: 20,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Delivery activity',
+                        style: TextStyle(
+                          color: RiderPalette.paper,
+                          fontFamily: RiderTypography.heading,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close_rounded,
+                          color: RiderPalette.muted),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                _ActivityLine('Reference',
+                    '${item['requestId'] ?? item['id'] ?? 'Delivery'}'),
+                _ActivityLine('Route',
+                    '${item['pickupArea'] ?? item['pickupPostcode'] ?? 'Pickup'} to ${item['dropoffArea'] ?? item['dropoffPostcode'] ?? 'Drop-off'}'),
+                _ActivityLine(
+                  'Earnings',
+                  _money(item['riderEarning'] ?? item['riderPay']),
+                ),
+                _ActivityLine(
+                  'Trust Points',
+                  '${item['trustPointsAwarded'] ?? item['trustPoints'] ?? 0} TP',
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  evidenceId.isEmpty
+                      ? 'No delivery proof attached'
+                      : 'Delivery proof',
+                  style: const TextStyle(
+                    color: RiderPalette.paper,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                if (evidenceId.isEmpty)
+                  const Text(
+                    'This completed delivery does not have viewable proof on its record.',
+                    style: TextStyle(color: RiderPalette.muted, height: 1.35),
+                  )
+                else
+                  FutureBuilder<String?>(
+                    future: _proofFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 18),
+                          child: Center(child: CircularProgressIndicator()),
+                        );
+                      }
+                      final url = snapshot.data ?? '';
+                      if (snapshot.hasError || url.isEmpty) {
+                        return const Text(
+                          'Proof could not be opened. Pull to refresh or contact Support.',
+                          style: TextStyle(
+                              color: RiderPalette.muted, height: 1.35),
+                        );
+                      }
+                      return ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Image.network(
+                          url,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: Text(
+                              'Proof image could not be displayed.',
+                              style: TextStyle(color: RiderPalette.muted),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActivityLine extends StatelessWidget {
+  const _ActivityLine(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 104,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: RiderPalette.muted,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                color: RiderPalette.paper,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

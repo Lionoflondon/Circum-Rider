@@ -1,5 +1,6 @@
 import 'package:circum_rider/app/rider_jobs/rider_delivery_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:io';
 
 class _RecordingController implements RiderDeliveryController {
   int calls = 0;
@@ -89,5 +90,16 @@ void main() {
     expect(result['success'], true);
     expect((result['acknowledgement'] as Map)['acknowledgementStatus'],
         'confirmed');
+  });
+
+  test('Rider Activity retrieves proof through canonical evidence access', () {
+    final dashboard = File('lib/app/rider_shell/rider_dashboard_view.dart')
+        .readAsStringSync();
+
+    expect(dashboard, contains("httpsCallable('getDeliveryEvidenceAccess')"));
+    expect(dashboard, contains('Proof available'));
+    expect(dashboard, contains('Delivery proof'));
+    expect(dashboard, contains('_handoverEvidenceId'));
+    expect(dashboard, isNot(contains('storagePath')));
   });
 }
