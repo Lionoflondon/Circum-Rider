@@ -23,7 +23,7 @@ Auth getAuthInstance(App app) {
   // Default persistence can be seen here
   // https://github.com/firebase/firebase-js-sdk/blob/main/packages/auth/src/platform_browser/index.ts#L47
   final List<JSAny?> persistences = [
-    auth_interop.browserSessionPersistence as JSAny,
+    auth_interop.browserLocalPersistence as JSAny,
   ];
   return Auth.getInstance(
     auth_interop.initializeAuth(

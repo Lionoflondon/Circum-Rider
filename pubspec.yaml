@@ -93,8 +93,8 @@ dev_dependencies:
     sdk: flutter
 
 dependency_overrides:
-  # Rider Web uses session persistence because IndexedDB auth restoration can
-  # indefinitely withhold the initial Firebase Auth state in supported browsers.
+  # Rider Web uses persistent browser storage because IndexedDB auth restoration
+  # can indefinitely withhold the initial Firebase Auth state in supported browsers.
   firebase_auth_web:
     path: packages/firebase_auth_web_session
 
