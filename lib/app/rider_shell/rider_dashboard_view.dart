@@ -866,7 +866,7 @@ class _RankCard extends StatelessWidget {
               ),
               const Spacer(),
               Text(
-                '${rank.trustPoints} TRUST',
+                '${rank.trustPoints} TP',
                 style: const TextStyle(
                   color: RiderPalette.paper,
                   fontFamily: RiderTypography.mono,

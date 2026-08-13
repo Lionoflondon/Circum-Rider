@@ -786,8 +786,7 @@ class _HeroText extends StatelessWidget {
             ),
             _HeroPill(
               icon: Icons.auto_awesome_rounded,
-              label:
-                  data.hasTrustPoints ? '${data.trustPoints} trust' : '— trust',
+              label: data.hasTrustPoints ? '${data.trustPoints} TP' : '— TP',
               color: RiderPalette.purple,
             ),
           ],

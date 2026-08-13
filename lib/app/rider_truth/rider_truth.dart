@@ -10,7 +10,13 @@ class RiderRankSnapshot {
   static const thresholds = [0, 100, 300, 700, 1500];
 
   static RiderRankSnapshot? from(Map<String, dynamic> data) {
-    final rawTrust = data['trustPoints'] ?? data['riderTrustPoints'];
+    final canonicalTrust = data['trustPoints'];
+    final legacyTrust = data['riderTrustPoints'];
+    final rawTrust = canonicalTrust is num && canonicalTrust > 0
+        ? canonicalTrust
+        : legacyTrust is num
+            ? legacyTrust
+            : canonicalTrust;
     if (rawTrust is! num) return null;
     final trust = rawTrust.toInt();
     final calculated = rankForTrust(trust);
@@ -19,12 +25,14 @@ class RiderRankSnapshot {
         .where((rank) => rank.toLowerCase() == rawRank.toLowerCase())
         .firstOrNull;
     final override = data['rankOverride'] == true ||
-        '${data['rankSource'] ?? ''}'.toLowerCase() == 'manual';
+        '${data['rankSource'] ?? ''}'.toLowerCase() == 'manual' ||
+        '${data['rankUpdatedBy'] ?? ''}'.trim().isNotEmpty ||
+        '${data['rankReason'] ?? ''}'.trim().isNotEmpty;
     return RiderRankSnapshot(
       rank: override && validRank != null ? validRank : calculated,
       trustPoints: trust,
       overrideReason: override && validRank != null
-          ? '${data['rankOverrideReason'] ?? 'Manual rank override'}'
+          ? '${data['rankOverrideReason'] ?? data['rankReason'] ?? 'Manual rank override'}'
           : null,
     );
   }

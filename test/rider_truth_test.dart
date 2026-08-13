@@ -24,6 +24,31 @@ void main() {
     expect(value?.overrideReason, 'Founding Rider');
   });
 
+  test('legacy trust projection remains authoritative when canonical is zero',
+      () {
+    final value = RiderRankSnapshot.from({
+      'trustPoints': 0,
+      'riderTrustPoints': 3,
+    });
+
+    expect(value?.trustPoints, 3);
+    expect(value?.rank, 'Agent');
+  });
+
+  test('admin assignment metadata preserves assigned Veteran truth', () {
+    final value = RiderRankSnapshot.from({
+      'trustPoints': 0,
+      'riderTrustPoints': 3,
+      'riderRank': 'Veteran',
+      'rankUpdatedBy': 'admin-1',
+      'rankReason': 'Assigned Veteran',
+    });
+
+    expect(value?.trustPoints, 3);
+    expect(value?.rank, 'Veteran');
+    expect(value?.overrideReason, 'Assigned Veteran');
+  });
+
   test('highest applicable trust award wins once', () {
     final value = RiderPointsRules.resolve(
         {'isBusiness': true, 'isGift': true, 'isHealthPlus': true});
