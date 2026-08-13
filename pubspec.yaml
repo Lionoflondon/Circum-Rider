@@ -92,6 +92,12 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
+dependency_overrides:
+  # Rider Web uses session persistence because IndexedDB auth restoration can
+  # indefinitely withhold the initial Firebase Auth state in supported browsers.
+  firebase_auth_web:
+    path: packages/firebase_auth_web_session
+
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
   # activated in the `analysis_options.yaml` file located at the root of your
