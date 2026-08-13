@@ -46,6 +46,55 @@ class RiderRankSnapshot {
   }
 }
 
+Map<String, dynamic> mergeRiderAuthorityData(
+  Map<String, dynamic> rider,
+  Map<String, dynamic> profile,
+) {
+  final merged = <String, dynamic>{...rider, ...profile};
+  final trustValues = [
+    rider['trustPoints'],
+    rider['riderTrustPoints'],
+    profile['trustPoints'],
+    profile['riderTrustPoints'],
+  ].whereType<num>();
+  if (trustValues.isNotEmpty) {
+    merged['trustPoints'] = trustValues.reduce((a, b) => a > b ? a : b);
+  }
+
+  final assignedRiderRank = _assignedRank(rider);
+  final assignedProfileRank = _assignedRank(profile);
+  final assigned = assignedRiderRank ?? assignedProfileRank;
+  if (assigned != null) {
+    merged
+      ..['rank'] = assigned
+      ..['riderRank'] = assigned
+      ..['rankOverride'] = true
+      ..['rankSource'] = 'manual';
+    for (final key in [
+      'rankUpdatedBy',
+      'rankReason',
+      'rankOverrideReason',
+      'rankUpdatedAt',
+    ]) {
+      final value = rider[key] ?? profile[key];
+      if (value != null) merged[key] = value;
+    }
+  }
+  return merged;
+}
+
+String? _assignedRank(Map<String, dynamic> source) {
+  final assigned = source['rankOverride'] == true ||
+      '${source['rankSource'] ?? ''}'.toLowerCase() == 'manual' ||
+      '${source['rankUpdatedBy'] ?? ''}'.trim().isNotEmpty ||
+      '${source['rankReason'] ?? ''}'.trim().isNotEmpty;
+  if (!assigned) return null;
+  final raw = '${source['riderRank'] ?? source['rank'] ?? ''}'.trim();
+  return RiderRankSnapshot.ranks
+      .where((rank) => rank.toLowerCase() == raw.toLowerCase())
+      .firstOrNull;
+}
+
 class RiderEarningsSummary {
   const RiderEarningsSummary(
       {required this.available,

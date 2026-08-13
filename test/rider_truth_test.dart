@@ -49,6 +49,29 @@ void main() {
     expect(value?.overrideReason, 'Assigned Veteran');
   });
 
+  test('Rider authority assignment and highest trust projection win stale data',
+      () {
+    final merged = mergeRiderAuthorityData(
+      {
+        'riderTrustPoints': 3,
+        'riderRank': 'Veteran',
+        'rankUpdatedBy': 'admin-1',
+        'rankReason': 'Assigned Veteran',
+      },
+      {
+        'trustPoints': 0,
+        'riderRank': 'Agent',
+        'rankUpdatedBy': 'legacy-admin',
+        'rankReason': 'test',
+      },
+    );
+    final value = RiderRankSnapshot.from(merged);
+
+    expect(value?.trustPoints, 3);
+    expect(value?.rank, 'Veteran');
+    expect(value?.overrideReason, 'Assigned Veteran');
+  });
+
   test('highest applicable trust award wins once', () {
     final value = RiderPointsRules.resolve(
         {'isBusiness': true, 'isGift': true, 'isHealthPlus': true});

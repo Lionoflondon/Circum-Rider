@@ -71,10 +71,10 @@ class _RiderProfileViewState extends State<RiderProfileView> {
                 if (!profileSnapshot.hasData && !riderSnapshot.hasData) {
                   return const _ProfileLoading();
                 }
-                final profile = <String, dynamic>{
-                  ...?riderSnapshot.data?.data(),
-                  ...?profileSnapshot.data?.data(),
-                };
+                final profile = mergeRiderAuthorityData(
+                  riderSnapshot.data?.data() ?? const {},
+                  profileSnapshot.data?.data() ?? const {},
+                );
                 final earnings =
                     earningsSnapshot.data?.data() ?? const <String, dynamic>{};
                 return _RiderProfileScreen(

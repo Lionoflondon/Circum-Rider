@@ -182,7 +182,7 @@ Map<String, dynamic> _dashboardProfileData(
   Map<String, dynamic> rider,
   Map<String, dynamic> profile,
 ) {
-  final data = <String, dynamic>{...rider, ...profile};
+  final data = mergeRiderAuthorityData(rider, profile);
   for (final key in [
     'profileThumbnailUrl',
     'profilePhotoUrl',
