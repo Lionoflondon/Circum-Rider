@@ -164,6 +164,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
                                     ),
                                   ),
                                 ],
+                                ..._needsInformation(application, rider),
                                 const SizedBox(height: 18),
                                 for (final section in _sections(
                                   rider: rider,
@@ -206,6 +207,59 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
       RiderAccountState.suspended => 'Suspended review',
       _ => 'Continue application',
     };
+  }
+
+  List<Widget> _needsInformation(
+    Map<String, dynamic> application,
+    Map<String, dynamic> rider,
+  ) {
+    final raw = application['needsInformationFields'] ??
+        rider['needsInformationFields'];
+    if (raw is! List || raw.isEmpty) return const [];
+    final fields = raw
+        .map((value) => '$value'.trim())
+        .where((value) => value.isNotEmpty)
+        .toList();
+    if (fields.isEmpty) return const [];
+    return [
+      const SizedBox(height: 12),
+      RiderGlassSurface(
+        opacity: .58,
+        edgeColor: RiderPalette.amber,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'ACTION REQUIRED',
+              style: TextStyle(
+                color: RiderPalette.amber,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: .5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Please update these items before review can continue:',
+              style: TextStyle(color: RiderPalette.paper, fontSize: 13),
+            ),
+            const SizedBox(height: 6),
+            for (final field in fields)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  '• $field',
+                  style: const TextStyle(
+                    color: RiderPalette.muted,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ];
   }
 
   List<_ApplicationSection> _sections({
