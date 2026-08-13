@@ -72,9 +72,10 @@ class App extends StatelessWidget {
 
         // Authenticated app state
         if (state.currentState == AppState.authenticated &&
-            state.authenticatedStatus == AuthenticatedStatus.authenticated &&
             (internalAccess ||
-                state.riderAccountState == RiderAccountState.approved))
+                (state.authenticatedStatus ==
+                        AuthenticatedStatus.authenticated &&
+                    state.riderAccountState == RiderAccountState.approved)))
           const MaterialPage(child: AppNavView()),
       ],
       onPopPage: (route, result) {
