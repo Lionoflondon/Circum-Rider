@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../rider_design/rider_ui.dart';
+import '../../rider_shell/rider_roth_referral_view.dart';
 import '../bloc/account_bloc.dart';
 
 class EarningsView extends StatefulWidget {
@@ -193,6 +194,8 @@ class _EarningsContent extends StatelessWidget {
           children: [
             const _TopBar(),
             const SizedBox(height: 18),
+            const RiderRothWalletSummaryCard(),
+            const SizedBox(height: 24),
             if (!hasEarnings) ...[
               const _NoEarningsState(),
             ] else ...[
