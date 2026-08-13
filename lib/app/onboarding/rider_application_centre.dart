@@ -469,7 +469,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
             section.key,
             RiderApplicationSectionStatus.inProgress,
           );
-        }, success: 'Payout setup status will update from Stripe Connect.');
+        }, success: 'Your payout account status will update automatically.');
       case 'review_status':
         await _submitApplication(uid);
     }

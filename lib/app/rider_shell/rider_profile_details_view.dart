@@ -269,7 +269,7 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
                             const Align(
                               alignment: Alignment.centerLeft,
                               child: Text(
-                                'Your Rider username is saved to your backend profile.',
+                                'Your Rider username is saved to your CIRCUM profile.',
                                 style: TextStyle(
                                     color: RiderPalette.muted, height: 1.35),
                               ),

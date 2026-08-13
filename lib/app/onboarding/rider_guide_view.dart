@@ -718,7 +718,7 @@ const _slides = [
     bullets: [
       'Roth cannot be withdrawn to a bank account.',
       'Roth is not wages, delivery earnings, tips, or pending cash.',
-      'Roth uses its own server-authorised wallet ledger.',
+      'Roth is kept separately from your cash earnings.',
     ],
   ),
 ];

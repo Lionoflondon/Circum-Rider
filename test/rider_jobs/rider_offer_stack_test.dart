@@ -242,7 +242,7 @@ void main() {
       expect(find.text('Report Difference'), findsOneWidget);
       expect(
           find.text(
-              'Gift verification: photo required. Requirements are read from backend state.'),
+              'Gift verification: photo required. CIRCUM sets these requirements for this delivery.'),
           findsOneWidget);
       expect(find.textContaining('Vanguard Protection'), findsNothing);
     });

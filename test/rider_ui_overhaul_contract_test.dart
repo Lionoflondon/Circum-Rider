@@ -109,7 +109,7 @@ void main() {
       expect(homeBloc, contains("'gpsSignalQuality'"));
       expect(homeBloc, contains("'backgroundTracking'"));
       expect(dashboard, contains('_InternalDiagnosticsCard'));
-      expect(dashboard, contains('Internal dispatch diagnostics'));
+      expect(dashboard, contains('Location and availability'));
       expect(dashboard, contains('Dispatch eligibility'));
     });
 
@@ -172,8 +172,8 @@ void main() {
       expect(earnings, contains('Transactions'));
       expect(earnings, contains('Waiting & No-show'));
       expect(earnings, contains('Adjustment'));
-      expect(earnings, contains('Payout processing'));
-      expect(earnings, contains('Payout failed'));
+      expect(earnings, contains('Payout in progress'));
+      expect(earnings, contains('Try payout again'));
       expect(earnings, contains('Review required'));
       expect(earnings, contains('_requiresPayoutReview'));
       expect(earnings, contains('_NoEarningsState'));
@@ -347,7 +347,7 @@ void main() {
     });
 
     test('profile keeps Stripe payouts and Roth wallet separate', () {
-      expect(profile, contains('Stripe Connect'));
+      expect(profile, contains('Your bank payout records'));
       expect(profile, contains('Roth Wallet'));
       expect(profile, contains('Separate from cash earnings'));
       expect(profile, contains('separate from payouts'));

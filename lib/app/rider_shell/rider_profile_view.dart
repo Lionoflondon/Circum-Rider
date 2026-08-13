@@ -221,7 +221,7 @@ class _RiderProfileScreen extends StatelessWidget {
                           _ProfileRow(
                             icon: Icons.receipt_long_outlined,
                             title: 'Payout History',
-                            description: 'Stripe Connect payout records',
+                            description: 'Your bank payout records',
                             onTap: () => onSelectTab(3),
                           ),
                           _ProfileRow(
@@ -533,7 +533,7 @@ class _RiderProfileData {
     final value = timestampFromAny(earnings['nextEstimatedPayoutAt'] ??
         earnings['nextPayoutAt'] ??
         profile['nextEstimatedPayoutAt']);
-    if (value == null) return 'Estimated by Stripe Connect';
+    if (value == null) return 'Schedule updates automatically';
     return _shortDate(value);
   }
 

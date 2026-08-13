@@ -147,13 +147,18 @@ class _EarningsContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final totals = _map(summary['totals']);
-    final available = _number(summary['storedAvailable'] ??
+    final available = _number(storedEarnings['availableBalance'] ??
+        storedEarnings['availableEarnings'] ??
+        storedEarnings['accountBalance'] ??
+        summary['storedAvailable'] ??
         summary['available'] ??
-        summary['availableBalance'] ??
-        storedEarnings['availableBalance']);
-    final pending = _number(summary['pending'] ??
+        summary['availableBalance']);
+    final pending = _number(storedEarnings['pendingWithdrawal'] ??
+        storedEarnings['pendingBalance'] ??
+        storedEarnings['pendingEarnings'] ??
+        summary['pending'] ??
         summary['pendingBalance'] ??
-        storedEarnings['pendingBalance']);
+        summary['pendingWithdrawal']);
     final delivery = _number(totals['delivery_earning']);
     final tips = _number(totals['tip']);
     final waiting =
@@ -233,8 +238,7 @@ class _EarningsContent extends StatelessWidget {
                 empty: const RiderEmptyState(
                   icon: Icons.account_balance_outlined,
                   title: 'No payouts yet',
-                  message:
-                      'Requested and completed Stripe payouts will appear here.',
+                  message: 'Your bank payouts will appear here.',
                 ),
                 rows: sortedPayouts.take(6).map(_PayoutRow.new).toList(),
               ),
@@ -281,7 +285,7 @@ class _EarningsContent extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const Text(
-                  'Request withdrawal',
+                  'Request payout',
                   style: TextStyle(
                     color: RiderPalette.paper,
                     fontFamily: RiderTypography.heading,
@@ -316,7 +320,7 @@ class _EarningsContent extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 RiderPrimaryButton(
-                  label: 'Continue with Stripe',
+                  label: 'Send to my bank',
                   icon: Icons.arrow_forward_rounded,
                   onPressed: () {
                     final value = double.tryParse(controller.text.trim());
@@ -334,8 +338,84 @@ class _EarningsContent extends StatelessWidget {
     );
     controller.dispose();
     if (amount == null || !context.mounted) return;
+    Map<String, dynamic> quote;
+    try {
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('getRiderPayoutQuote')
+          .call({'amount': amount});
+      quote = Map<String, dynamic>.from(result.data as Map);
+    } catch (_) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'We could not prepare this payout. Check your payout account and try again.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (!context.mounted) return;
+    final requested = _number(quote['requestedAmount']);
+    final processingCost = _number(quote['processingCost']);
+    final bankReceives = _number(quote['bankReceives']);
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: _EarningsGlass(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Confirm payout',
+                  style: TextStyle(
+                    color: RiderPalette.paper,
+                    fontFamily: RiderTypography.heading,
+                    fontSize: 25,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _PayoutQuoteRow(
+                  label: 'Requested',
+                  value: _money(requested),
+                ),
+                _PayoutQuoteRow(
+                  label: 'Processing cost',
+                  value: _money(processingCost),
+                ),
+                _PayoutQuoteRow(
+                  label: 'Bank receives',
+                  value: _money(bankReceives),
+                  emphasized: true,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Stripe will process this payout to your verified bank account.',
+                  style: TextStyle(
+                    color: RiderPalette.muted,
+                    fontSize: 12,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                RiderPrimaryButton(
+                  label: 'Confirm payout',
+                  icon: Icons.lock_outline_rounded,
+                  onPressed: () => Navigator.pop(sheetContext, true),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
     context.read<AccountBloc>().add(RequestWithdrawal(
-          amount: amount.toStringAsFixed(2),
+          amount: requested.toStringAsFixed(2),
           sortCode: '',
           bankName: '',
           accountNumber: '',
@@ -343,6 +423,41 @@ class _EarningsContent extends StatelessWidget {
           saveAccountDetails: false,
         ));
   }
+}
+
+class _PayoutQuoteRow extends StatelessWidget {
+  const _PayoutQuoteRow({
+    required this.label,
+    required this.value,
+    this.emphasized = false,
+  });
+
+  final String label;
+  final String value;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(color: RiderPalette.muted),
+              ),
+            ),
+            Text(
+              value,
+              style: TextStyle(
+                color: emphasized ? RiderPalette.green : RiderPalette.paper,
+                fontFamily: RiderTypography.mono,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class _TopBar extends StatelessWidget {
@@ -481,7 +596,7 @@ class _BalanceHero extends StatelessWidget {
                 ),
               ),
               child: const Text(
-                'Cash payouts use your approved Stripe Connect account. Roth remains separate and cannot be withdrawn.',
+                'Cash payouts are processed securely by Stripe and sent to your verified bank account. Roth remains separate and cannot be withdrawn.',
                 style: TextStyle(
                   color: RiderPalette.muted,
                   fontSize: 11.5,
@@ -670,17 +785,18 @@ class _PayoutRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = '${item['status'] ?? item['payoutStatus'] ?? 'pending'}';
-    final failed = status.toLowerCase().contains('fail') ||
-        status.toLowerCase().contains('reject');
-    final paid = status.toLowerCase().contains('paid') ||
-        status.toLowerCase().contains('complete');
+    final rawStatus = '${item['status'] ?? item['payoutStatus'] ?? 'pending'}';
+    final status = _payoutStatusLabel(item);
+    final failed = rawStatus.toLowerCase().contains('fail') ||
+        rawStatus.toLowerCase().contains('reject') ||
+        status == 'Not sent';
+    final paid = rawStatus.toLowerCase().contains('paid') ||
+        rawStatus.toLowerCase().contains('complete');
     final amount = _number(item['amount'] ?? item['riderGrossShare']);
-    final reason =
-        '${item['failureReason'] ?? item['reviewReason'] ?? ''}'.trim();
+    final detail = _payoutDetail(item);
     final subtitle = [
       _date(item),
-      if (reason.isNotEmpty) reason,
+      if (detail != null) detail,
     ].join(' · ');
 
     return _LedgerRow(
@@ -694,10 +810,10 @@ class _PayoutRow extends StatelessWidget {
           : paid
               ? RiderPalette.green
               : RiderPalette.blue,
-      title: _title(status).isEmpty ? 'Processing' : _title(status),
+      title: status,
       subtitle: subtitle,
       amount: _money(amount),
-      status: _title(status).toUpperCase(),
+      status: status.toUpperCase(),
       statusColor: failed
           ? RiderPalette.red
           : paid
@@ -770,6 +886,7 @@ class _PayoutStatusCard extends StatelessWidget {
     final amount = _number(payout['amount'] ?? payout['riderGrossShare']);
     final status = _payoutStatusLabel(payout);
     final arrival = _estimatedArrival(payout);
+    final detail = _payoutDetail(payout);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(13),
@@ -800,9 +917,9 @@ class _PayoutStatusCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  arrival == null
-                      ? 'Payout status updates automatically.'
-                      : 'Estimated arrival $arrival',
+                  arrival != null
+                      ? 'Estimated arrival $arrival'
+                      : detail ?? 'We will update you as your payout moves.',
                   style: const TextStyle(
                     color: RiderPalette.muted,
                     fontSize: 11.5,
@@ -1206,7 +1323,13 @@ double _number(Object? value) => value is num ? value.toDouble() : 0;
 bool _isActivePayout(Map<String, dynamic> item) {
   final status =
       '${item['status'] ?? item['payoutStatus'] ?? ''}'.toLowerCase();
-  return {'requested', 'pending', 'approved', 'processing'}.contains(status);
+  return {
+    'requested',
+    'pending',
+    'reserved',
+    'processing',
+    'scheduled',
+  }.contains(status);
 }
 
 bool _requiresPayoutReview(
@@ -1227,19 +1350,50 @@ bool _requiresPayoutReview(
 
 String _reviewMessage(Map<String, dynamic> summary,
     Map<String, dynamic>? activePayout, double unexplained) {
-  final reason =
-      '${activePayout?['reviewReason'] ?? summary['reviewReason'] ?? summary['payoutHoldReason'] ?? ''}'
-          .trim();
-  if (reason.isNotEmpty) return reason;
   if (unexplained.abs() > 0.009) {
-    return '${_money(unexplained.abs())} is under payout review.';
+    return '${_money(unexplained.abs())} is being checked before payout.';
   }
-  return 'Your payout is under review. We will update this status automatically.';
+  return 'Your payout needs a quick check. We will update you here.';
 }
 
 String _payoutStatusLabel(Map<String, dynamic> item) {
-  final status = _title('${item['status'] ?? item['payoutStatus'] ?? ''}');
-  return status.isEmpty ? 'Processing' : status;
+  final status =
+      '${item['status'] ?? item['payoutStatus'] ?? ''}'.trim().toLowerCase();
+  if (status == 'approved' &&
+      item['stripeTransferId'] == null &&
+      item['stripePayoutId'] == null &&
+      item['fundsReserved'] != true) {
+    return 'Not sent';
+  }
+  return switch (status) {
+    'requested' || 'pending' || 'reserved' => 'Starting payout',
+    'processing' => 'Payment in progress',
+    'scheduled' => 'On the way',
+    'paid' || 'completed' || 'complete' => 'Paid',
+    'failed' => 'Not sent',
+    'cancelled' || 'canceled' => 'Cancelled',
+    'rejected' => 'Not approved',
+    'admin_review_required' || 'blocked_admin_review' => 'Needs review',
+    _ => status.isEmpty ? 'Updating' : _title(status),
+  };
+}
+
+String? _payoutDetail(Map<String, dynamic> item) {
+  final status = _payoutStatusLabel(item);
+  if (status == 'Not sent') {
+    return 'Your available cash was not reduced';
+  }
+  if (status == 'Needs review' || status == 'Not approved') {
+    return 'Contact support if you need help';
+  }
+  final fee = _number(
+      item['stripeFeeDeductedFromRider'] ?? item['estimatedStripeFees']);
+  final net = _number(item['riderNetPayout'] ?? item['netPayout']);
+  if (net > 0 && fee > 0) {
+    return 'Bank receives ${_money(net)} after a ${_money(fee)} processing cost';
+  }
+  if (status == 'Paid') return 'Paid to your verified bank account';
+  return null;
 }
 
 String? _estimatedArrival(Map<String, dynamic> item) {
@@ -1287,6 +1441,9 @@ Color _statusColor(String status) {
   if (value.contains('fail') || value.contains('reject')) {
     return RiderPalette.red;
   }
+  if (value.contains('not sent') || value.contains('not approved')) {
+    return RiderPalette.red;
+  }
   if (value.contains('review') || value.contains('hold')) {
     return RiderPalette.amber;
   }
@@ -1314,15 +1471,15 @@ String _withdrawalLabel(String readiness, Map<String, dynamic>? active,
   if (active != null) {
     final amount = _number(active['amount']);
     return amount > 0
-        ? 'Payout processing — ${_money(amount)}'
-        : 'Payout processing';
+        ? 'Payout in progress — ${_money(amount)}'
+        : 'Payout in progress';
   }
   final failed = _firstWhereOrNull(
     payouts,
     (p) => '${p['status'] ?? p['payoutStatus']}'.toLowerCase() == 'failed',
   );
-  if (failed != null) return 'Payout failed';
-  return 'Request withdrawal';
+  if (failed != null) return 'Try payout again';
+  return 'Request payout';
 }
 
 String _money(double value) => '£${value.toStringAsFixed(2)}';

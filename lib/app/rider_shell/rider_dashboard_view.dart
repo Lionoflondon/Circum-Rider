@@ -685,7 +685,7 @@ class _InternalDiagnosticsCard extends StatelessWidget {
         label: 'Battery optimisation',
         value: _clean(presence['batteryOptimisation'], fallback: 'Unknown')
       ),
-      (label: 'Last backend upload', value: _age(presence['lastHeartbeatAt'])),
+      (label: 'Last location update', value: _age(presence['lastHeartbeatAt'])),
       (
         label: 'Dispatch eligibility',
         value: presence['dispatchEligible'] == true
@@ -705,7 +705,7 @@ class _InternalDiagnosticsCard extends StatelessWidget {
                   color: RiderPalette.blue, size: 18),
               SizedBox(width: 8),
               Text(
-                'Internal dispatch diagnostics',
+                'Location and availability',
                 style: TextStyle(
                   color: RiderPalette.paper,
                   fontFamily: RiderTypography.body,

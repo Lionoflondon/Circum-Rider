@@ -41,7 +41,7 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
           final data = Map<String, dynamic>.from(response.data as Map);
           final request = WithdrawRequestModel(
             accountNumber: '',
-            bankName: 'Stripe Connect',
+            bankName: 'Verified bank account',
             amount: '${data['amount'] ?? event.amount}',
             saveAccountDetails: false,
             riderId: user!.uid,
@@ -69,8 +69,13 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
             final data = doc.data();
             final status =
                 '${data['status'] ?? data['payoutStatus'] ?? ''}'.toLowerCase();
-            if (!{'requested', 'pending', 'approved', 'processing'}
-                .contains(status)) {
+            if (!{
+              'requested',
+              'pending',
+              'reserved',
+              'processing',
+              'scheduled',
+            }.contains(status)) {
               continue;
             }
             final req = WithdrawRequestModel.fromJson(data);
@@ -94,7 +99,18 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
 
           final docRes = await docRef.get();
 
-          final doc = docRes.docs.firstOrNull;
+          final doc = docRes.docs.where((candidate) {
+            final data = candidate.data();
+            final status =
+                '${data['status'] ?? data['payoutStatus'] ?? ''}'.toLowerCase();
+            return {
+              'requested',
+              'pending',
+              'reserved',
+              'processing',
+              'scheduled',
+            }.contains(status);
+          }).firstOrNull;
 
           if (doc != null) {
             await FirebaseFunctions.instanceFor(region: 'us-central1')

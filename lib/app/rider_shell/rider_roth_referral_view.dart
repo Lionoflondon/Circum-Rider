@@ -658,7 +658,7 @@ class _RothBalanceCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               const Text(
-                'Roth is separate from cash earnings. The balance and activity below come from the canonical CIRCUM Roth ledger.',
+                'Roth is separate from cash earnings. Your available balance and recent activity appear below.',
                 style: TextStyle(color: RiderPalette.muted, height: 1.45),
               ),
               if (wallet.frozen) ...[
@@ -864,18 +864,18 @@ class _ReferralFlowCard extends StatelessWidget {
               number: '2',
               title: 'Activity verified',
               detail:
-                  'The backend verifies an approved qualifying activity. The client cannot approve it.',
+                  'CIRCUM checks that your referral completed an eligible activity.',
             ),
             _ReferralFlowStep(
               number: '3',
               title: 'Roth credited',
               detail:
-                  'One deterministic ledger transaction updates the canonical Roth balance exactly once.',
+                  'The reward is added to your Roth Wallet once after approval.',
               last: true,
             ),
             SizedBox(height: 12),
             Text(
-              'Pending referral value is not part of your available Roth until the wallet ledger records the credit.',
+              'Pending rewards become available after they are approved and added to your Roth Wallet.',
               style: TextStyle(color: RiderPalette.muted, height: 1.4),
             ),
           ],

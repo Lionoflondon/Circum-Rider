@@ -73,7 +73,7 @@ void main() {
       expect(guide, contains('Roth cannot be withdrawn to a bank account'));
       expect(guide, contains('Roth is not wages'));
       expect(
-          guide, contains('Roth uses its own server-authorised wallet ledger'));
+          guide, contains('Roth is kept separately from your cash earnings'));
       expect(guide, isNot(contains('£ Roth')));
     });
 

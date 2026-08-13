@@ -29,7 +29,9 @@ void main() {
       expect(referral, contains("httpsCallable('ensureReferralCode')"));
       expect(referral, contains("httpsCallable('getReferralDashboard')"));
       expect(referral, contains('How referral rewards move'));
-      expect(referral, contains('canonical CIRCUM Roth ledger'));
+      expect(referral, contains('Your available balance'));
+      expect(referral, isNot(contains('The backend')));
+      expect(referral, isNot(contains('canonical Roth')));
       expect(onboarding, contains("httpsCallable('ensureRiderRothWallet')"));
       expect(onboarding, isNot(contains("collection('riderRothWallets')")));
     },

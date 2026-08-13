@@ -15,11 +15,11 @@ class WithdrawRequestModel {
 
   factory WithdrawRequestModel.fromJson(data) {
     return WithdrawRequestModel(
-      accountNumber: data['accountNumber'].toString(),
-      bankName: data['bankName'].toString(),
-      amount: data['amount'].toString(),
-      saveAccountDetails: data['saveAccountDetails'],
-      riderId: data['riderId'].toString(),
+      accountNumber: '${data['accountNumber'] ?? ''}',
+      bankName: '${data['bankName'] ?? 'Verified bank account'}',
+      amount: '${data['amount'] ?? 0}',
+      saveAccountDetails: data['saveAccountDetails'] == true,
+      riderId: '${data['riderId'] ?? ''}',
     );
   }
 }
