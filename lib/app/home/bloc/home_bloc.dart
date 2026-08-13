@@ -45,6 +45,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   List<DirectionStep> _currentRoute = [];
   int _currentStepIndex = 0;
   Timer? _presenceHeartbeatTimer;
+  Timer? _offerRefreshTimer;
 
   List<String> _remainingVerificationItems(Map<String, dynamic>? riderData) {
     final remaining = <String>[];
@@ -170,6 +171,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     if (event.status == RideStatus.offline) {
       try {
         _stopPresenceHeartbeat();
+        _stopOfferRefresh();
         await FirebaseFunctions.instanceFor(region: 'us-central1')
             .httpsCallable('goOffline')
             .call();
@@ -214,6 +216,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
                   ? null
                   : <String, dynamic>{'location': locationPayload});
           _startPresenceHeartbeat();
+          _startOfferRefresh();
           emit(state.copyWith(
               rideStatus: RideStatus.online, canGoOnline: true, message: null));
           add(GetAvailableRequests());
@@ -255,6 +258,18 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     } catch (e) {
       emit(state.copyWith(requestStatus: RequestStatus.failure));
     }
+  }
+
+  void _startOfferRefresh() {
+    _offerRefreshTimer?.cancel();
+    _offerRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (state.rideStatus == RideStatus.online) add(GetAvailableRequests());
+    });
+  }
+
+  void _stopOfferRefresh() {
+    _offerRefreshTimer?.cancel();
+    _offerRefreshTimer = null;
   }
 
   void _handleSetHomeLocationData(SetHomeLocationData event, Emitter emit) {
@@ -383,9 +398,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
         if (doc != null) {
           final data = doc.data();
           if (data['riderId'] != null && data['riderId'] == user!.uid) {
-            // Set user as the active delivery;
-            await documentReference.update(
-                {'activeDelivery': doc.id, 'updatedAt': DateTime.now()});
             rideAssigned.complete(true);
 
             timer.cancel();
@@ -755,6 +767,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   @override
   Future<void> close() {
+    _stopOfferRefresh();
     _stopPresenceHeartbeat();
     return super.close();
   }

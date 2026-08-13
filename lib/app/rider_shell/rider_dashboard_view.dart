@@ -78,14 +78,8 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                           .limit(24)
                           .snapshots(),
                       builder: (context, assignedSnapshot) {
-                        return StreamBuilder<
-                            QuerySnapshot<Map<String, dynamic>>>(
-                          stream: FirebaseFirestore.instance
-                              .collection('deliveryRequests')
-                              .where('status', isEqualTo: 'requested')
-                              .limit(8)
-                              .snapshots(),
-                          builder: (context, offersSnapshot) {
+                        return BlocBuilder<HomeBloc, HomeState>(
+                          builder: (context, homeState) {
                             final assigned = _docs(assignedSnapshot);
                             final data = _DashboardData(
                               profile: profile,
@@ -93,7 +87,12 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                                   earningsSnapshot.data?.data() ?? const {},
                               presence:
                                   presenceSnapshot.data?.data() ?? const {},
-                              eligibleOffers: _docs(offersSnapshot),
+                              // Offers come only from the backend eligibility
+                              // callable. Never read unassigned delivery data
+                              // directly from the dashboard.
+                              eligibleOffers: homeState.dispatchRequests
+                                  .map((_) => <String, dynamic>{})
+                                  .toList(),
                               scheduled: assigned
                                   .where((item) =>
                                       _isScheduled(item) && !_isFinished(item))
@@ -109,32 +108,27 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                                   riderSnapshot.hasError ||
                                   earningsSnapshot.hasError ||
                                   presenceSnapshot.hasError ||
-                                  assignedSnapshot.hasError ||
-                                  offersSnapshot.hasError,
+                                  assignedSnapshot.hasError,
                               notificationsUnavailable: false,
                             );
-                            return BlocBuilder<HomeBloc, HomeState>(
-                              builder: (context, homeState) {
-                                final online = data.isOnline;
-                                final mergedHome = homeState.copyWith(
-                                  rideStatus: online
-                                      ? RideStatus.online
-                                      : RideStatus.offline,
-                                );
-                                return _DashboardSurface(
-                                  data: data,
-                                  home: mergedHome,
-                                  onSelectTab: widget.onSelectTab,
-                                  onToggleAvailability: () =>
-                                      context.read<HomeBloc>().add(
-                                            SetRideStatus(
-                                              status: online
-                                                  ? RideStatus.offline
-                                                  : RideStatus.online,
-                                            ),
-                                          ),
-                                );
-                              },
+                            final online = data.isOnline;
+                            final mergedHome = homeState.copyWith(
+                              rideStatus: online
+                                  ? RideStatus.online
+                                  : RideStatus.offline,
+                            );
+                            return _DashboardSurface(
+                              data: data,
+                              home: mergedHome,
+                              onSelectTab: widget.onSelectTab,
+                              onToggleAvailability: () =>
+                                  context.read<HomeBloc>().add(
+                                        SetRideStatus(
+                                          status: online
+                                              ? RideStatus.offline
+                                              : RideStatus.online,
+                                        ),
+                                      ),
                             );
                           },
                         );
