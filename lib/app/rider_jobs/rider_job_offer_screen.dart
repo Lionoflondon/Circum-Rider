@@ -2454,7 +2454,13 @@ class _DeliveryCompleteView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     num value(String key) => delivery[key] is num ? delivery[key] as num : 0;
-    final total = value('riderEarning');
+    final total = delivery['riderEarning'] is num
+        ? delivery['riderEarning'] as num
+        : delivery['riderPayout'] is num
+            ? delivery['riderPayout'] as num
+            : delivery['driverPayout'] is num
+                ? delivery['driverPayout'] as num
+                : value('riderPay');
     final breakdown = delivery['riderEarningBreakdown'] is Map
         ? Map<String, dynamic>.from(delivery['riderEarningBreakdown'] as Map)
         : const <String, dynamic>{};

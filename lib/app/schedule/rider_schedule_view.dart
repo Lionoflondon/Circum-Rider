@@ -623,7 +623,10 @@ class _ScheduleJob {
   }
 
   String get earningLabel {
-    final earning = raw['riderEarning'] ?? raw['riderPay'];
+    final earning = raw['riderEarning'] ??
+        raw['riderPayout'] ??
+        raw['driverPayout'] ??
+        raw['riderPay'];
     return earning is num ? '£${earning.toStringAsFixed(2)}' : '—';
   }
 

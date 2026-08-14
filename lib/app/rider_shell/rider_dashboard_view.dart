@@ -1394,7 +1394,10 @@ class _RecentRow extends StatelessWidget {
               ),
             ),
             Text(
-              _money(item['riderEarning'] ?? item['riderPay']),
+              _money(item['riderEarning'] ??
+                  item['riderPayout'] ??
+                  item['driverPayout'] ??
+                  item['riderPay']),
               style: const TextStyle(
                 color: RiderPalette.paper,
                 fontFamily: RiderTypography.mono,

@@ -63,9 +63,17 @@ void main() async {
   }
 
   if (Firebase.apps.isEmpty) {
-    await Firebase.initializeApp(
-      options: kIsWeb ? DefaultFirebaseOptions.web : null,
-    );
+    try {
+      await Firebase.initializeApp(
+        options: kIsWeb ? DefaultFirebaseOptions.web : null,
+      );
+    } catch (error, stackTrace) {
+      debugPrint(
+          '[RIDER_FIREBASE_INIT] Firebase initialization failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      FlutterNativeSplash.remove();
+      rethrow;
+    }
   }
 
   final appCheckStartup = await initializeRiderAppCheck();

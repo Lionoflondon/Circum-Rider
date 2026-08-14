@@ -60,8 +60,12 @@ class RiderJobOffer {
     final requestId =
         '${data['requestId'] ?? data['deliveryId'] ?? data['bookingId'] ?? docId}'
             .trim();
-    final price =
-        (data['riderEarning'] ?? data['riderPay'] ?? data['price'] ?? 0);
+    final price = (data['riderEarning'] ??
+        data['riderPayout'] ??
+        data['driverPayout'] ??
+        data['riderPay'] ??
+        data['price'] ??
+        0);
     final distance = data['distanceText'] ??
         data['estimatedDistanceText'] ??
         data['distance'];
