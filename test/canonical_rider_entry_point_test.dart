@@ -9,7 +9,7 @@ void main() {
 
     test('launches the committed CircumRider root', () {
       expect(mainSource, contains('runApp(const CircumRider())'));
-      expect(mainSource, isNot(contains('DefaultFirebaseOptions.web')));
+      expect(mainSource, contains('DefaultFirebaseOptions.web'));
       expect(mainSource, isNot(contains('RiderWebStartupApp')));
       expect(mainSource, isNot(contains('CanonicalRiderApp')));
       expect(mainSource, isNot(contains("import 'canonical_rider/")));

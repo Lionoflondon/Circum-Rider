@@ -40,13 +40,18 @@ extension on DirectionsService {
 class DirectionsService {
   final Dio _dio;
   final FlutterTts flutterTts = FlutterTts();
-  static const _mapsApiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+  static const _directionsApiKey =
+      String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY');
 
   DirectionsService() : _dio = Dio();
 
   Future<List<DirectionStep>> getDetailedDirections(
       LatLng origin, LatLng destination) async {
     final String url = 'https://maps.googleapis.com/maps/api/directions/json';
+    if (_directionsApiKey.isEmpty) {
+      debugPrint('Rider Directions API key is not configured.');
+      return [];
+    }
 
     try {
       final response = await _dio.get(
@@ -54,7 +59,7 @@ class DirectionsService {
         queryParameters: {
           'origin': '${origin.latitude},${origin.longitude}',
           'destination': '${destination.latitude},${destination.longitude}',
-          if (_mapsApiKey.isNotEmpty) 'key': _mapsApiKey,
+          if (_directionsApiKey.isNotEmpty) 'key': _directionsApiKey,
           'polyline': 'true'
         },
       );

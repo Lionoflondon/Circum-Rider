@@ -21,6 +21,7 @@ import 'app/rider_jobs/rider_job_offer_screen.dart';
 import 'app/security/rider_app_check.dart';
 import 'app/support/bloc/support_bloc.dart';
 import 'app/verification/bloc/verification_bloc.dart';
+import 'firebase_options.dart';
 import 'helper/notifications_helper.dart';
 import 'utils/nav/nav_key.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -40,33 +41,40 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
 
-  if (kIsWeb) {
-    runApp(const RiderStartupBlocked(
-      message:
-          'Open Rider in the supported Rider Web experience, or continue on Android or iOS.',
-    ));
-    return;
+  if (!kIsWeb) {
+    // Initialize notification settings
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/launcher_icon');
+
+    const DarwinInitializationSettings initializationSettingsIOS =
+        DarwinInitializationSettings();
+
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
+      android: initializationSettingsAndroid,
+      iOS: initializationSettingsIOS,
+    );
+
+    await flutterLocalNotificationsPlugin.initialize(
+      initializationSettings,
+    );
+
+    FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   }
 
-  // Initialize notification settings
-  const AndroidInitializationSettings initializationSettingsAndroid =
-      AndroidInitializationSettings('@mipmap/launcher_icon');
-
-  const DarwinInitializationSettings initializationSettingsIOS =
-      DarwinInitializationSettings();
-
-  const InitializationSettings initializationSettings = InitializationSettings(
-    android: initializationSettingsAndroid,
-    iOS: initializationSettingsIOS,
-  );
-
-  await flutterLocalNotificationsPlugin.initialize(
-    initializationSettings,
-  );
-
-  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
-
-  await Firebase.initializeApp();
+  if (Firebase.apps.isEmpty) {
+    try {
+      await Firebase.initializeApp(
+        options: kIsWeb ? DefaultFirebaseOptions.web : null,
+      );
+    } catch (error, stackTrace) {
+      debugPrint(
+          '[RIDER_FIREBASE_INIT] Firebase initialization failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      FlutterNativeSplash.remove();
+      rethrow;
+    }
+  }
 
   final appCheckStartup = await initializeRiderAppCheck();
   if (appCheckStartup.blockStartup) {
@@ -75,11 +83,14 @@ void main() async {
     return;
   }
 
-  await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-    alert: true, // Required to display a heads up notification
-    badge: true,
-    sound: true,
-  );
+  if (!kIsWeb) {
+    await FirebaseMessaging.instance
+        .setForegroundNotificationPresentationOptions(
+      alert: true, // Required to display a heads up notification
+      badge: true,
+      sound: true,
+    );
+  }
   // var status = await Permission.appTrackingTransparency.status;
   // if (status.isDenied || status.isPermanentlyDenied) {
   //   // We didn't ask for permission yet or the permission has been denied before but not permanently.
@@ -91,10 +102,12 @@ void main() async {
   //   }
   // }
 
-  foregoundMessage();
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  if (!kIsWeb) {
+    foregoundMessage();
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  }
 
-  FlutterNativeSplash.remove();
+  if (!kIsWeb) FlutterNativeSplash.remove();
 
   // Lock app in portrait mode
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
