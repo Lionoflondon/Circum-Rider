@@ -89,7 +89,10 @@ void main() {
       expect(dashboard, contains("collection('riderEarnings')"));
       expect(dashboard, contains("collection('deliveryRequests')"));
       expect(dashboard, contains('watchUnreadNotificationCount'));
-      expect(dashboard, contains("where('status', isEqualTo: 'requested')"));
+      expect(dashboard, contains("where('dispatchStatus', whereIn: ["));
+      expect(dashboard, contains("'broadcasted'"));
+      expect(dashboard, contains('dispatchOpen'));
+      expect(dashboard, contains("'queued'"));
       expect(dashboard, contains('Good '));
       expect(dashboard, contains('Go online'));
       expect(dashboard, contains('Available deliveries'));

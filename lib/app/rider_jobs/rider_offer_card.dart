@@ -64,6 +64,7 @@ class RiderJobOffer {
         data['parcelDescription'] ??
         data['packageType'] ??
         'Parcel';
+    final guidance = _irisGuidance(data, item);
 
     return RiderJobOffer(
       id: docId,
@@ -80,7 +81,7 @@ class RiderJobOffer {
       timeText: duration == null || '$duration'.trim().isEmpty
           ? 'Calculating arrival time'
           : '$duration',
-      parcelGuidance: '$item',
+      parcelGuidance: guidance,
       minimumVehicle:
           '${data['minimumVehicle'] ?? data['recommendedVehicle'] ?? data['vehicleType'] ?? 'Bike'}',
       weightText: _weightText(data),
@@ -173,6 +174,27 @@ class RiderJobOffer {
     final text = '$scheduled'.trim();
     if (scheduled != null && text.isNotEmpty && text != 'null') return text;
     return 'ASAP';
+  }
+
+  static String _irisGuidance(Map<String, dynamic> data, Object? item) {
+    final iris = data['irisRecommendation'] is Map
+        ? Map<String, dynamic>.from(data['irisRecommendation'] as Map)
+        : data['iris'] is Map
+            ? Map<String, dynamic>.from(data['iris'] as Map)
+            : const <String, dynamic>{};
+    final detected = '${iris['detectedItem'] ?? item ?? 'Parcel'}'.trim();
+    final category =
+        '${iris['suggestedCategory'] ?? iris['category'] ?? data['suggestedCategory'] ?? ''}'
+            .trim();
+    final weightBand =
+        '${iris['weightBand'] ?? iris['suggestedWeightBand'] ?? data['weightBand'] ?? ''}'
+            .trim();
+    final parts = <String>[
+      detected.isEmpty ? 'Parcel' : detected,
+      if (category.isNotEmpty && category != 'null') category,
+      if (weightBand.isNotEmpty && weightBand != 'null') weightBand,
+    ];
+    return parts.join(' - ');
   }
 }
 
@@ -274,6 +296,18 @@ class RiderOfferCard extends StatelessWidget {
                       pickup: offer.pickupArea,
                       dropoff: offer.dropoffArea,
                     ),
+                    const SizedBox(height: 10),
+                    _OperationalAddressLine(
+                      icon: Icons.my_location_rounded,
+                      label: 'Pickup',
+                      value: offer.pickupAddress,
+                    ),
+                    const SizedBox(height: 6),
+                    _OperationalAddressLine(
+                      icon: Icons.flag_rounded,
+                      label: 'Drop-off',
+                      value: offer.dropoffAddress,
+                    ),
                     const SizedBox(height: 14),
                     Row(
                       children: [
@@ -373,6 +407,53 @@ class RiderOfferCard extends StatelessWidget {
   static String _money(double value, String currency) {
     final symbol = currency.toUpperCase() == 'GBP' ? '£' : '$currency ';
     return '$symbol${value.toStringAsFixed(2)}';
+  }
+}
+
+class _OperationalAddressLine extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _OperationalAddressLine({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: const Color(0xFF60A5FA), size: 16),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 58,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.58),
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.82),
+              fontSize: 12,
+              height: 1.22,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

@@ -82,8 +82,13 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                             QuerySnapshot<Map<String, dynamic>>>(
                           stream: FirebaseFirestore.instance
                               .collection('deliveryRequests')
-                              .where('status', isEqualTo: 'requested')
-                              .where('matchingStatus', isEqualTo: 'available')
+                              .where('dispatchStatus', whereIn: [
+                                'requested',
+                                'available',
+                                'broadcasted',
+                                'queued',
+                                'waiting',
+                              ])
                               .limit(80)
                               .snapshots(),
                           builder: (context, offersSnapshot) {
@@ -199,9 +204,16 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
     };
     if (values.any(terminal.contains)) return false;
     final matching = '${item['matchingStatus'] ?? ''}'.trim().toLowerCase();
-    if (matching.isNotEmpty &&
-        matching != 'available' &&
-        matching != 'requested') {
+    final dispatch = '${item['dispatchStatus'] ?? ''}'.trim().toLowerCase();
+    final matchingOpen =
+        {'', 'available', 'requested', 'broadcasted'}.contains(matching);
+    final dispatchOpen =
+        {'requested', 'available', 'broadcasted', 'queued', 'waiting'}
+            .contains(dispatch);
+    if (!matchingOpen && !dispatchOpen) {
+      return false;
+    }
+    if (dispatch.isNotEmpty && !dispatchOpen && matching.isEmpty) {
       return false;
     }
     final assigned = [

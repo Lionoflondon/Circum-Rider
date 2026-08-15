@@ -86,6 +86,47 @@ void main() {
     expect(deliverySource, isNot(contains('Backend pending')));
   });
 
+  test('Rider feed follows canonical dispatch broadcast status', () {
+    final deliverySource = File(
+      'lib/app/rider_jobs/rider_job_offer_screen.dart',
+    ).readAsStringSync();
+    expect(deliverySource, contains(".where('dispatchStatus', whereIn: ["));
+    expect(deliverySource, contains("'broadcasted'"));
+    expect(deliverySource, contains("'queued'"));
+    expect(deliverySource, contains("'waiting'"));
+  });
+
+  test('offer model projects backend IRIS guidance for Rider clarity', () {
+    final offer = RiderJobOffer.fromFirestore(
+      docId: 'delivery-1',
+      data: {
+        'requestId': 'CIR-IRIS',
+        'pickupDetails': {
+          'address': 'Flat 4, 29 St Fillans Road, London SE6 1DQ',
+        },
+        'dropoffDetails': {
+          'address': '282 Lewisham High Street, London SE13 6JZ',
+        },
+        'riderEarning': 8.45,
+        'itemName': 'Small speaker',
+        'iris': {
+          'detectedItem': 'Bluetooth speaker',
+          'suggestedCategory': 'Electronics',
+          'weightBand': 'Small Parcel',
+        },
+        'weightKg': 1.2,
+        'dispatchStatus': 'broadcasted',
+        'paymentStatus': 'paid',
+      },
+    );
+
+    expect(offer.parcelGuidance,
+        'Bluetooth speaker - Electronics - Small Parcel');
+    expect(offer.weightText, '1kg');
+    expect(offer.pickupAddress, contains('Flat 4'));
+    expect(offer.dropoffAddress, contains('282 Lewisham High Street'));
+  });
+
   group('RiderOfferStack', () {
     setUp(() {
       TestWidgetsFlutterBinding.ensureInitialized()
@@ -179,8 +220,8 @@ void main() {
       expect(find.text('Weight: 0.2kg'), findsOneWidget);
       expect(find.text('Pickup: Scheduled'), findsOneWidget);
       expect(find.text('Accept Delivery'), findsOneWidget);
-      expect(find.text(_offers.first.pickupAddress), findsNothing);
-      expect(find.text(_offers.first.dropoffAddress), findsNothing);
+      expect(find.text(_offers.first.pickupAddress), findsOneWidget);
+      expect(find.text(_offers.first.dropoffAddress), findsOneWidget);
       expect(find.textContaining('Roth bonus'), findsNothing);
       expect(find.textContaining('Roth Bonus'), findsNothing);
     });
