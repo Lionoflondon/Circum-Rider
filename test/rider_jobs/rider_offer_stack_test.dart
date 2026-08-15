@@ -79,11 +79,26 @@ void main() {
       'lib/app/rider_jobs/rider_job_offer_screen.dart',
     ).readAsStringSync();
     expect(source, contains('Calculating route'));
-    expect(source, contains('Calculating arrival time'));
+    expect(source, contains('Updating ETA'));
     expect(deliverySource, contains('Awaiting parcel check'));
     expect(source, isNot(contains('Distance pending')));
     expect(source, isNot(contains('ETA pending')));
     expect(deliverySource, isNot(contains('Backend pending')));
+  });
+
+  test('offer ETA is projected from backend fields without local calculation', () {
+    final offer = RiderJobOffer.fromFirestore(
+      docId: 'delivery-eta',
+      data: {
+        'requestId': 'CIR-ETA',
+        'pickupDetails': {'address': '12 Harley Street, London W1G 9PG'},
+        'dropoffDetails': {'address': "41 King's Road, London SW3 4NB"},
+        'riderEarning': 9.5,
+        'estimatedDurationMinutes': 18,
+      },
+    );
+
+    expect(offer.timeText, 'ETA 18 min');
   });
 
   test('Rider feed follows canonical dispatch broadcast status', () {
@@ -125,6 +140,40 @@ void main() {
     expect(offer.weightText, '1kg');
     expect(offer.pickupAddress, contains('Flat 4'));
     expect(offer.dropoffAddress, contains('282 Lewisham High Street'));
+  });
+
+  test('offer model preserves estimated weight and duplicate-safe addresses', () {
+    final offer = RiderJobOffer.fromFirestore(
+      docId: 'delivery-address',
+      data: {
+        'requestId': 'CIR-ADDRESS',
+        'pickupDetails': {
+          'formattedAddress':
+              '124 City Road, 124 City Road, London, EC1V 2NX',
+        },
+        'dropoffDetails': {
+          'unit': 'Flat 190',
+          'buildingNumber': '4',
+          'street': 'Edridge Road',
+          'locality': 'Croydon',
+          'postcode': 'CR0 1GD',
+        },
+        'riderEarning': 8.45,
+        'estimatedWeightKg': 8,
+        'irisRecommendation': {
+          'detectedItem': 'Shoeboxes',
+          'suggestedCategory': 'Fashion',
+          'handlingGuidance': 'Keep upright',
+        },
+        'estimatedDurationText': '19 min',
+      },
+    );
+
+    expect(offer.pickupAddress, '124 City Road, London, EC1V 2NX');
+    expect(offer.dropoffAddress, 'Flat 190, 4, Edridge Road, Croydon, CR0 1GD');
+    expect(offer.weightText, '~8kg');
+    expect(offer.timeText, 'ETA 19 min');
+    expect(offer.parcelGuidance, 'Shoeboxes - Fashion - Keep upright');
   });
 
   group('RiderOfferStack', () {
@@ -263,7 +312,7 @@ void main() {
       expect(find.text('Pickup Verification'), findsOneWidget);
       expect(find.text('Photo verification'), findsOneWidget);
       expect(find.text('Verification'), findsOneWidget);
-      expect(find.text('Call'), findsOneWidget);
+      expect(find.text('Call'), findsNothing);
       expect(find.text('Message'), findsOneWidget);
       expect(find.textContaining('Vanguard Priority'), findsOneWidget);
     });

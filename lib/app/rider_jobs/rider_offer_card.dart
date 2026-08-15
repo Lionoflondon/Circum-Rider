@@ -56,9 +56,7 @@ class RiderJobOffer {
     final distance = data['distanceText'] ??
         data['estimatedDistanceText'] ??
         data['distance'];
-    final duration = data['durationText'] ??
-        data['estimatedDurationText'] ??
-        data['duration'];
+    final eta = _etaText(data);
     final item = data['itemName'] ??
         data['itemDescription'] ??
         data['parcelDescription'] ??
@@ -78,9 +76,7 @@ class RiderJobOffer {
       distanceText: distance == null || '$distance'.trim().isEmpty
           ? 'Calculating route'
           : '$distance',
-      timeText: duration == null || '$duration'.trim().isEmpty
-          ? 'Calculating arrival time'
-          : '$duration',
+      timeText: eta,
       parcelGuidance: guidance,
       minimumVehicle:
           '${data['minimumVehicle'] ?? data['recommendedVehicle'] ?? data['vehicleType'] ?? 'Bike'}',
@@ -115,12 +111,21 @@ class RiderJobOffer {
   static String _fullAddress(dynamic value) {
     if (value is Map) {
       final candidates = [
+        value['canonicalAddress'],
+        value['displayAddress'],
         value['formattedAddress'],
         value['address'],
+        value['fullAddress'],
         [
+          value['unit'],
+          value['flat'],
+          value['apartment'],
+          value['buildingNumber'],
           value['addressLine1'],
           value['addressLine2'],
+          value['street'],
           value['city'],
+          value['locality'],
           value['postcode'],
         ].where((part) {
           final text = '$part'.trim();
@@ -128,15 +133,32 @@ class RiderJobOffer {
         }).join(', '),
       ];
       for (final candidate in candidates) {
-        final text = '$candidate'.trim();
+        final text = _dedupeAddress('$candidate'.trim());
         if (candidate != null && text.isNotEmpty && text != 'null') {
           return text;
         }
       }
     }
-    final text = '$value'.trim();
+    final text = _dedupeAddress('$value'.trim());
     if (text.isNotEmpty && text != 'null') return text;
     return 'Address pending';
+  }
+
+  static String _dedupeAddress(String value) {
+    final parts = value
+        .split(',')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty && part != 'null')
+        .toList();
+    final result = <String>[];
+    for (final part in parts) {
+      final normalized = part.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+      final previous = result.isEmpty
+          ? ''
+          : result.last.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+      if (normalized != previous) result.add(part);
+    }
+    return result.join(', ');
   }
 
   static List<String> _warningChips(Map<String, dynamic> data) {
@@ -156,14 +178,31 @@ class RiderJobOffer {
   }
 
   static String _weightText(Map<String, dynamic> data) {
-    final value = data['weightKg'] ??
-        data['finalPricingWeightKg'] ??
+    final actual = data['actualWeightKg'] ??
+        data['verifiedWeightKg'] ??
+        data['finalWeightKg'] ??
+        data['weightKg'];
+    if (actual is num && actual.isFinite) return _kg(actual);
+    final estimated = data['estimatedWeightKg'] ??
         data['irisEstimatedWeightKg'] ??
-        data['estimatedWeightKg'];
-    if (value is num) return '${value.toStringAsFixed(value < 1 ? 1 : 0)}kg';
-    final text = '$value'.trim();
-    if (value != null && text.isNotEmpty && text != 'null') return text;
+        data['photoEstimatedWeightKg'] ??
+        data['declaredWeightKg'];
+    if (estimated is num && estimated.isFinite) return '~${_kg(estimated)}';
+    final band = data['weightBand'] ??
+        data['irisWeightBand'] ??
+        data['suggestedWeightBand'] ??
+        data['pricingWeightBand'];
+    final bandText = '$band'.trim();
+    if (band != null && bandText.isNotEmpty && bandText != 'null') {
+      return bandText;
+    }
+    final text = '$actual'.trim();
+    if (actual != null && text.isNotEmpty && text != 'null') return text;
     return 'Weight pending';
+  }
+
+  static String _kg(num value) {
+    return '${value.toStringAsFixed(value < 1 ? 1 : 0)}kg';
   }
 
   static String _pickupTiming(Map<String, dynamic> data) {
@@ -176,23 +215,54 @@ class RiderJobOffer {
     return 'ASAP';
   }
 
+  static String _etaText(Map<String, dynamic> data) {
+    final candidates = [
+      data['etaText'],
+      data['riderEtaText'],
+      data['pickupEtaText'],
+      data['estimatedArrivalText'],
+      data['durationText'],
+      data['estimatedDurationText'],
+      data['duration'],
+    ];
+    for (final candidate in candidates) {
+      final text = '$candidate'.trim();
+      if (candidate != null && text.isNotEmpty && text != 'null') {
+        return text.toLowerCase().startsWith('eta') ? text : 'ETA $text';
+      }
+    }
+    final minutes = data['estimatedDurationMinutes'] ??
+        data['routeDurationMinutes'] ??
+        data['durationMinutes'];
+    if (minutes is num && minutes.isFinite && minutes > 0) {
+      return 'ETA ${minutes.round()} min';
+    }
+    return 'Updating ETA';
+  }
+
   static String _irisGuidance(Map<String, dynamic> data, Object? item) {
     final iris = data['irisRecommendation'] is Map
         ? Map<String, dynamic>.from(data['irisRecommendation'] as Map)
         : data['iris'] is Map
             ? Map<String, dynamic>.from(data['iris'] as Map)
             : const <String, dynamic>{};
-    final detected = '${iris['detectedItem'] ?? item ?? 'Parcel'}'.trim();
+    final detected =
+        '${iris['detectedItem'] ?? iris['itemName'] ?? data['detectedItem'] ?? item ?? 'Parcel'}'
+            .trim();
     final category =
-        '${iris['suggestedCategory'] ?? iris['category'] ?? data['suggestedCategory'] ?? ''}'
+        '${iris['suggestedCategory'] ?? iris['category'] ?? data['suggestedCategory'] ?? data['parcelCategory'] ?? ''}'
             .trim();
     final weightBand =
-        '${iris['weightBand'] ?? iris['suggestedWeightBand'] ?? data['weightBand'] ?? ''}'
+        '${iris['weightBand'] ?? iris['suggestedWeightBand'] ?? data['weightBand'] ?? data['irisWeightBand'] ?? ''}'
+            .trim();
+    final handling =
+        '${iris['handling'] ?? iris['handlingGuidance'] ?? iris['operationalGuidance'] ?? data['handlingGuidance'] ?? ''}'
             .trim();
     final parts = <String>[
       detected.isEmpty ? 'Parcel' : detected,
       if (category.isNotEmpty && category != 'null') category,
       if (weightBand.isNotEmpty && weightBand != 'null') weightBand,
+      if (handling.isNotEmpty && handling != 'null') handling,
     ];
     return parts.join(' - ');
   }

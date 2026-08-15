@@ -4501,12 +4501,6 @@ class _SecondaryContactRow extends StatelessWidget {
       children: [
         Expanded(
             child: _SecondaryButton(
-                icon: Icons.call_rounded,
-                label: 'Call',
-                onTap: () => _call(offer.raw))),
-        const SizedBox(width: 8),
-        Expanded(
-            child: _SecondaryButton(
                 icon: Icons.chat_bubble_rounded,
                 label: 'Message',
                 onTap: () => Navigator.push(
@@ -4532,13 +4526,6 @@ class _SecondaryContactRow extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  Future<void> _call(Map<String, dynamic> raw) async {
-    final number = '${raw['senderPhone'] ?? raw['contactPhone'] ?? ''}'
-        .replaceAll(RegExp(r'[^0-9+]'), '');
-    if (number.isEmpty) return;
-    await launchUrl(Uri.parse('tel:$number'));
   }
 }
 
