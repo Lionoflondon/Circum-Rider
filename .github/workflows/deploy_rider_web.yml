@@ -26,4 +26,7 @@ jobs:
       - run: node --test test/rider_deployment_manifest_test.js
       - run: RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_rider_web.sh
       - run: node scripts/rider_deployment_manifest.js verify
+      - run: npm install --no-save playwright
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/rider_web_render_smoke.js
       - run: firebase deploy --only hosting --project circum-2797c
