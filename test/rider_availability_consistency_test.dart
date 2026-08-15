@@ -85,6 +85,12 @@ void main() {
     expect(availability.intendsToBeOnline, isTrue);
   });
 
+  test('online and heartbeat paths never submit cached location fallback', () {
+    final source = File('lib/app/home/bloc/home_bloc.dart').readAsStringSync();
+    expect('allowCachedFallback: false'.allMatches(source), hasLength(2));
+    expect(source, isNot(contains('if (kIsWeb && webFallback != null) return webFallback;')));
+  });
+
   test('offline wins over a stale online status field', () {
     final now = DateTime.utc(2026, 8, 4, 12);
     final availability = RiderAvailability.fromPresence({

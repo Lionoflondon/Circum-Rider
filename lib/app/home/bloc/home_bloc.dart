@@ -968,7 +968,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
     }
     try {
       final locationPayload =
-          await _currentPresenceLocationPayload(highAccuracy: false);
+          await _currentPresenceLocationPayload(
+            highAccuracy: false,
+            allowCachedFallback: false,
+          );
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('updateRiderPresence')
           .call(locationPayload == null
@@ -987,6 +990,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   Future<Map<String, dynamic>?> _currentPresenceLocationPayload({
     required bool highAccuracy,
     bool requestPermission = false,
+    bool allowCachedFallback = true,
   }) async {
     try {
       final servicesEnabled = await Geolocator.isLocationServiceEnabled();
@@ -1033,6 +1037,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
     } on _RiderLocationUnavailable {
       rethrow;
     } catch (_) {
+      if (!allowCachedFallback) rethrow;
       final fallback = await _freshWebPresenceLocationPayload();
       if (fallback != null) return fallback;
       if (requestPermission) {
@@ -1045,11 +1050,12 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   }
 
   Future<Map<String, dynamic>?> _onlinePresenceLocationPayload() async {
-    final webFallback = await _freshWebPresenceLocationPayload();
-    if (kIsWeb && webFallback != null) return webFallback;
     return _currentPresenceLocationPayload(
       highAccuracy: true,
       requestPermission: true,
+      // A cached fix can restore the map, but it cannot establish live
+      // dispatch eligibility. The backend rejects fixes older than two minutes.
+      allowCachedFallback: false,
     );
   }
 
