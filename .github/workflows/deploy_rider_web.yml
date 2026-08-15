@@ -23,4 +23,4 @@ jobs:
       - run: node --test test/rider_deployment_manifest_test.js
       - run: RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_rider_web.sh
       - run: node scripts/rider_deployment_manifest.js verify
-      - run: firebase deploy --only hosting:rider --project circum-2797c
+      - run: firebase deploy --only hosting --project circum-2797c
