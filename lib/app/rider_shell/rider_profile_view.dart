@@ -4,12 +4,12 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../authentication/bloc/auth_bloc.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../onboarding/rider_application_centre.dart';
 import '../onboarding/rider_stripe_payout_onboarding.dart';
+import '../platform/rider_external_navigation.dart';
 import '../recognitions/rider_recognitions.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
@@ -1167,24 +1167,30 @@ class RiderLegalView extends StatelessWidget {
                     icon: Icons.description_outlined,
                     title: 'Terms',
                     description: 'Circum terms of service',
-                    onTap: () =>
-                        launchUrl(Uri.parse('https://circumuk.com/terms')),
+                    onTap: () => openRiderLegalLink(
+                      context,
+                      uri: Uri.parse('https://circumuk.com/terms'),
+                    ),
                   ),
                   _ProfileRow(
                     icon: Icons.privacy_tip_outlined,
                     title: 'Privacy',
                     description: 'Privacy policy and data controls',
                     statusColor: RiderPalette.green,
-                    onTap: () =>
-                        launchUrl(Uri.parse('https://circumuk.com/privacy')),
+                    onTap: () => openRiderLegalLink(
+                      context,
+                      uri: Uri.parse('https://circumuk.com/privacy'),
+                    ),
                   ),
                   _ProfileRow(
                     icon: Icons.assignment_outlined,
                     title: 'Circum Rider Agreement',
                     description: 'Rider operating agreement',
                     statusColor: RiderPalette.amber,
-                    onTap: () =>
-                        launchUrl(Uri.parse('https://circumuk.com/terms')),
+                    onTap: () => openRiderLegalLink(
+                      context,
+                      uri: Uri.parse('https://circumuk.com/terms'),
+                    ),
                   ),
                 ],
               ),

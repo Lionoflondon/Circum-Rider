@@ -77,11 +77,7 @@ class _RideChatPageViewState extends State<RideChatPageView> {
                 icon: const Icon(Icons.arrow_back, color: Colors.white)),
             AppText.text('Live Chat',
                 fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-            Opacity(
-                opacity: 0,
-                child: IconButton(
-                    onPressed: () {},
-                    icon: const Icon(Icons.arrow_back, color: Colors.white)))
+            const SizedBox(width: 48)
           ],
         ),
       );
