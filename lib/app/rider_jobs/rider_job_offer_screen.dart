@@ -1600,6 +1600,53 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     }
   }
 
+  Future<void> _requestCancellation() async {
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          for (final entry in const {
+            'vehicle_breakdown': 'Vehicle breakdown',
+            'unsafe_pickup': 'Unsafe pickup',
+            'sender_unavailable': 'Sender unavailable',
+            'item_mismatch': 'Item mismatch',
+            'prohibited_item': 'Prohibited item',
+            'emergency': 'Emergency',
+            'cannot_complete': 'Cannot complete',
+            'other': 'Other',
+          }.entries)
+            ListTile(title: Text(entry.value), onTap: () => Navigator.of(sheetContext).pop(entry.key)),
+        ]),
+      ),
+    );
+    if (!mounted || reason == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cancel delivery?'),
+        content: const Text('The delivery will be released for another Rider. Cancellation is unavailable after collection.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Keep delivery')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Cancel delivery')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() { _transitioning = true; _transitionError = null; });
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('requestRiderCancellation')
+          .call({'deliveryId': widget.offer.id, 'reason': reason});
+      if (mounted) Navigator.of(context).pop();
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted) setState(() => _transitionError = error.message ?? 'Cancellation failed.');
+    } catch (_) {
+      if (mounted) setState(() => _transitionError = 'Cancellation is temporarily unavailable.');
+    } finally {
+      if (mounted) setState(() => _transitioning = false);
+    }
+  }
+
   Future<Map<String, dynamic>?> _captureEvidence({required bool pickup}) async {
     setState(() => _transitioning = true);
     try {
@@ -2136,6 +2183,12 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                     ),
                   ],
                   const Spacer(),
+                  if (_stage.index < RiderDeliveryStage.collected.index)
+                    TextButton.icon(
+                      onPressed: _transitioning ? null : _requestCancellation,
+                      icon: const Icon(Icons.close, size: 18),
+                      label: const Text('Cancel delivery'),
+                    ),
                   _AcceptedBottomPanel(
                     offer: widget.offer,
                     riderRank: widget.riderRank,
