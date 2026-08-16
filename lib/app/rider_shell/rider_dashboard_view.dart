@@ -95,7 +95,7 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                                   earningsSnapshot.data?.data() ?? const {},
                               presence:
                                   presenceSnapshot.data?.data() ?? const {},
-                              eligibleOffers: _docs(offersSnapshot),
+                              eligibleOffers: _activeDeliveryDocs(offersSnapshot),
                               scheduled: assigned
                                   .where((item) =>
                                       _isScheduled(item) && !_isFinished(item))
@@ -170,6 +170,30 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
           .map((doc) => {'id': doc.id, ...doc.data()})
           .toList() ??
       const <Map<String, dynamic>>[];
+
+  static List<Map<String, dynamic>> _activeDeliveryDocs(
+      AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot) {
+    final docs = snapshot.data?.docs ?? const [];
+    final result = <Map<String, dynamic>>[];
+    for (final doc in docs) {
+      final data = doc.data();
+      final status = '${data['status'] ?? data['deliveryStatus'] ?? ''}'
+          .trim()
+          .toLowerCase();
+      if ({'cancelled', 'canceled', 'completed', 'delivered', 'failed',
+              'expired', 'archived'}
+          .contains(status)) {
+        continue;
+      }
+      if (data['requestId'] == null && data['code'] == null &&
+          data['pickupDetails'] == null && data['pickup'] == null) {
+        debugPrint('[RIDER_OFFER_QUARANTINE] id=${doc.id} missing delivery identity');
+        continue;
+      }
+      result.add({'id': doc.id, ...data});
+    }
+    return result;
+  }
 
   static bool _isScheduled(Map<String, dynamic> item) =>
       item['scheduled'] == true ||

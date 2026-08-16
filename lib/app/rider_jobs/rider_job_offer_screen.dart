@@ -321,12 +321,21 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     required String? riderVehicle,
     bool internalAccess = false,
   }) {
-    return docs
-        .where((doc) => _isVisibleToRider(doc.data(), riderId, riderVehicle,
-            internalAccess: internalAccess))
-        .map((doc) =>
-            RiderJobOffer.fromFirestore(docId: doc.id, data: doc.data()))
-        .toList();
+    final offers = <RiderJobOffer>[];
+    for (final doc in docs) {
+      final data = doc.data();
+      if (!_isVisibleToRider(data, riderId, riderVehicle,
+          internalAccess: internalAccess)) {
+        continue;
+      }
+      try {
+        offers.add(RiderJobOffer.fromFirestore(docId: doc.id, data: data));
+      } catch (error, stack) {
+        // One corrupt legacy offer must never take down the whole Rider feed.
+        debugPrint('[RIDER_OFFER_QUARANTINE] id=${doc.id} error=$error\n$stack');
+      }
+    }
+    return offers;
   }
 
   bool _isVisibleToRider(
