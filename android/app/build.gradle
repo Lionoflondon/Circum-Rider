@@ -56,10 +56,11 @@ android {
         // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
         multiDexEnabled true
         minSdkVersion flutter.minSdkVersion
-        targetSdkVersion 34
+        targetSdkVersion 36
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         manifestPlaceholders = [
+            applicationName: "android.app.Application",
             googleMapsApiKey: project.findProperty("GOOGLE_MAPS_API_KEY") ?: System.getenv("GOOGLE_MAPS_API_KEY") ?: ""
         ]
     }
