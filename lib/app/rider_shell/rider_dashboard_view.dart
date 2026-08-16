@@ -180,8 +180,9 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
       final status = '${data['status'] ?? data['deliveryStatus'] ?? ''}'
           .trim()
           .toLowerCase();
-      if ({'cancelled', 'canceled', 'completed', 'delivered', 'failed',
-              'expired', 'archived'}
+      if ({'cancelled', 'canceled', 'cancelled_by_sender', 'cancelled_admin',
+              'admin_removed_stale', 'accepted', 'completed', 'delivered',
+              'failed', 'expired', 'archived'}
           .contains(status)) {
         continue;
       }
