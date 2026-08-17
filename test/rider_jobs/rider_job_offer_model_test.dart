@@ -1,0 +1,130 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
+import 'package:circum_rider/app/rider_jobs/rider_offer_card.dart';
+
+Map<String, dynamic> _realisticDeliveryDoc() {
+  return {
+    'requestId': 'request-123',
+    'pickupDetails': {
+      'locality': 'Lewisham',
+      'formattedAddress': '282 Lewisham High Street, London SE13 6JZ',
+      'position': {'latitude': 51.46, 'longitude': -0.01},
+    },
+    'dropoffDetails': {
+      'locality': 'Croydon',
+      'formattedAddress': '4 Edridge Road, Croydon CR0 1GD',
+      'position': {'latitude': 51.37, 'longitude': -0.10},
+    },
+    'pickupLocality': 'Lewisham',
+    'dropoffLocality': 'Croydon',
+    'normalizedItemName': 'MacBook',
+    'packageDescription': 'Laptop in protective sleeve',
+    'riderEarning': 8.50,
+    'currency': 'GBP',
+    'minimumVehicle': 'Car',
+    'weightKg': 3,
+  };
+}
+
+void main() {
+  test('parses backend locality and item fields without exposing raw maps', () {
+    final offer = RiderJobOffer.fromFirestore(
+      docId: 'delivery-123',
+      data: _realisticDeliveryDoc(),
+    );
+
+    expect(offer.pickupArea, 'Lewisham');
+    expect(offer.dropoffArea, 'Croydon');
+    expect(offer.pickupArea, isNot(contains('latitude')));
+    expect(offer.dropoffArea, isNot(contains('longitude')));
+    expect(offer.parcelGuidance, 'MacBook');
+    expect(offer.pickupAddress, contains('282 Lewisham High Street'));
+  });
+
+  test('uses flattened locality when nested locality is absent', () {
+    final data = _realisticDeliveryDoc()
+      ..['pickupDetails'] = {
+        'position': {'latitude': 0, 'longitude': 0},
+      }
+      ..['dropoffDetails'] = {
+        'position': {'latitude': 0, 'longitude': 0},
+      };
+
+    final offer = RiderJobOffer.fromFirestore(
+      docId: 'delivery-123',
+      data: data,
+    );
+
+    expect(offer.pickupArea, 'Lewisham');
+    expect(offer.dropoffArea, 'Croydon');
+  });
+
+  test('never stringifies missing detail maps', () {
+    final offer = RiderJobOffer.fromFirestore(
+      docId: 'delivery-123',
+      data: {'pickupDetails': {}, 'dropoffDetails': {}},
+    );
+
+    expect(offer.pickupArea, 'Location pending');
+    expect(offer.dropoffArea, 'Location pending');
+    expect(offer.pickupAddress, 'Address pending');
+    expect(offer.dropoffAddress, 'Address pending');
+  });
+
+  test('legacy item field remains supported', () {
+    final offer = RiderJobOffer.fromFirestore(
+      docId: 'delivery-123',
+      data: {'itemName': 'Books'},
+    );
+
+    expect(offer.parcelGuidance, 'Books');
+  });
+
+  testWidgets('shows an overflow chip instead of silently dropping badges',
+      (tester) async {
+    const offer = RiderJobOffer(
+      id: 'delivery-123',
+      requestId: 'request-123',
+      pickupArea: 'Lewisham',
+      dropoffArea: 'Croydon',
+      pickupAddress: 'Pickup',
+      dropoffAddress: 'Drop-off',
+      earnings: 8.50,
+      currency: 'GBP',
+      distanceText: '3 km',
+      timeText: '15 min',
+      parcelGuidance: 'MacBook',
+      minimumVehicle: 'Van',
+      weightText: '10kg',
+      pickupTiming: 'ASAP',
+      warningChips: [
+        'Vanguard',
+        'Gift',
+        'Scheduled',
+        'Business',
+        'Heavy',
+        'Marketplace',
+      ],
+      raw: {},
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 844,
+            child: RiderOfferCard(
+              offer: offer,
+              riderRank: 'Rider',
+              accepting: false,
+              onAccept: () {},
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.textContaining('more'), findsOneWidget);
+  });
+}
