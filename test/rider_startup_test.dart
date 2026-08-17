@@ -6,7 +6,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'dart:io';
 
 void main() {
-  testWidgets('Rider startup renders loading before initialization completes',
+  testWidgets(
+      'Rider startup keeps the HTML shell while initialization completes',
       (tester) async {
     final completer = Completer<void>();
 
@@ -15,11 +16,9 @@ void main() {
       appBuilder: (_) => const MaterialApp(home: Text('Rider ready')),
     ));
 
-    final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
-    expect(scaffold.backgroundColor, const Color(0xFF07090F));
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    expect(find.text('Starting Circum Rider'), findsOneWidget);
-    expect(find.text('Preparing your Rider workspace.'), findsOneWidget);
+    expect(find.byType(SizedBox), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('Starting Circum Rider'), findsNothing);
 
     completer.complete();
     await tester.pumpAndSettle();
@@ -60,7 +59,7 @@ void main() {
     expect(bootstrap, isNot(contains('registration.unregister')));
     expect(bootstrap, contains('showRiderBootstrapError'));
     expect(index, contains('id="startup-shell"'));
-    expect(index, contains('flutter-first-frame'));
+    expect(index, contains('circum-rider-ready'));
     expect(index, contains('RDR-WEB-BOOT-001'));
   });
 }

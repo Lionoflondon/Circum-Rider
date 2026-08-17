@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 
 import 'app/security/rider_app_check.dart';
 import 'firebase_options.dart';
+import 'rider_web_ready_stub.dart'
+    if (dart.library.html) 'rider_web_ready_html.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -86,6 +88,7 @@ class _RiderWebStartupAppState extends State<RiderWebStartupApp> {
       await widget.initializer().timeout(widget.timeout);
       if (!mounted) return;
       setState(() => _ready = true);
+      signalRiderWebReady();
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error);
@@ -95,7 +98,7 @@ class _RiderWebStartupAppState extends State<RiderWebStartupApp> {
   @override
   Widget build(BuildContext context) {
     if (_ready) return widget.appBuilder(context);
-    if (_error == null) return const _RiderWebStartupHold();
+    if (_error == null) return const SizedBox.shrink();
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(useMaterial3: true),
@@ -162,60 +165,6 @@ class _RiderWebStartupAppState extends State<RiderWebStartupApp> {
                     ],
                   ),
                 ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RiderWebStartupHold extends StatelessWidget {
-  const _RiderWebStartupHold();
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: const Color(0xFF07090F),
-        body: SafeArea(
-          child: Center(
-            child: Semantics(
-              liveRegion: true,
-              label: 'Circum Rider is starting',
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(
-                    width: 34,
-                    height: 34,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 3,
-                      color: Color(0xFF60A5FA),
-                    ),
-                  ),
-                  SizedBox(height: 18),
-                  Text(
-                    'Starting Circum Rider',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Color(0xFFF5F7FB),
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Preparing your Rider workspace.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Color(0xFF9CA8B8),
-                      height: 1.45,
-                    ),
-                  ),
-                ],
               ),
             ),
           ),

@@ -72,8 +72,8 @@ void main() {
     });
 
     test('startup uses one branded splash without rotating boot copy', () {
-      expect(webMainSource, contains('_RiderWebStartupHold'));
-      expect(mainSource, isNot(contains('_RiderWebStartupHold')));
+      expect(webMainSource, isNot(contains('_RiderWebStartupHold')));
+      expect(webMainSource, contains('signalRiderWebReady'));
       expect(mainSource,
           isNot(contains("AssetImage('assets/images/splash.png')")));
       expect(mainSource, isNot(contains('Starting Rider')));
@@ -81,6 +81,7 @@ void main() {
       expect(webIndex, contains('startup-logo'));
       expect(webIndex, contains('splash/img/dark-3x.png'));
       expect(webIndex, isNot(contains('startup-spinner')));
+      expect(webIndex, contains('circum-rider-ready'));
       expect(webIndex, isNot(contains('Starting Rider')));
     });
 
@@ -89,8 +90,10 @@ void main() {
       expect(dashboard, contains("collection('riderEarnings')"));
       expect(dashboard, contains("collection('deliveryRequests')"));
       expect(dashboard, contains('watchUnreadNotificationCount'));
-      expect(dashboard, contains("where('status', isEqualTo: 'requested')"));
-      expect(dashboard, contains("matching != 'broadcasted'"));
+      expect(dashboard, contains("where('dispatchStatus', whereIn: ["));
+      expect(dashboard, contains("'broadcasted'"));
+      expect(dashboard, contains('dispatchOpen'));
+      expect(dashboard, contains("'queued'"));
       expect(dashboard, contains('Good '));
       expect(dashboard, contains('Go online'));
       expect(dashboard, contains('Available deliveries'));
@@ -145,8 +148,9 @@ void main() {
     });
 
     test('jobs expose Taken state and scheduled handoff', () {
-      expect(offers, contains("matchingStatus', whereIn: ["));
+      expect(offers, contains("dispatchStatus', whereIn: ["));
       expect(offers, contains("'broadcasted'"));
+      expect(offers, contains("'queued'"));
       expect(offers, contains('Job no longer available'));
       expect(offers, contains('Back to job feed'));
       expect(offers, contains('RiderAcceptStatus.alreadyTaken'));
