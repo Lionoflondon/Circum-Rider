@@ -23,6 +23,8 @@ import 'app/verification/bloc/verification_bloc.dart';
 import 'helper/notifications_helper.dart';
 import 'firebase_options.dart';
 import 'utils/nav/nav_key.dart';
+import 'rider_web_ready_stub.dart'
+    if (dart.library.html) 'rider_web_ready_html.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:bot_toast/bot_toast.dart';
 
@@ -41,10 +43,12 @@ void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
 
   if (kIsWeb) {
-    runApp(RiderStartupApp(
-      initializer: _initializeRiderWeb,
-      appBuilder: (_) => const CircumRider(),
-    ));
+    runApp(
+      RiderStartupApp(
+        initializer: _initializeRiderWeb,
+        appBuilder: (_) => const CircumRider(),
+      ),
+    );
     return;
   }
 
@@ -60,9 +64,7 @@ void main() async {
     iOS: initializationSettingsIOS,
   );
 
-  await flutterLocalNotificationsPlugin.initialize(
-    initializationSettings,
-  );
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
@@ -100,14 +102,18 @@ void main() async {
   FlutterNativeSplash.remove();
 
   // Lock app in portrait mode
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
       // statusBarColor: Colors.transparent,
       statusBarBrightness: Brightness.dark,
-      statusBarIconBrightness: Brightness.light));
+      statusBarIconBrightness: Brightness.light,
+    ),
+  );
 
-  SystemChrome.setPreferredOrientations(
-          [DeviceOrientation.portraitUp, DeviceOrientation.portraitDown])
-      .then((value) {
+  SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+  ]).then((value) {
     Bloc.observer = SimpleBlocObserver();
     runApp(const CircumRider());
   });
@@ -156,6 +162,7 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
       await widget.initializer().timeout(widget.timeout);
       if (!mounted) return;
       setState(() => _ready = true);
+      if (kIsWeb) signalRiderWebReady();
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error);
@@ -165,7 +172,7 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
   @override
   Widget build(BuildContext context) {
     if (_ready) return widget.appBuilder(context);
-    if (_error == null) return const _RiderStartupHold();
+    if (_error == null) return const SizedBox.shrink();
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(useMaterial3: true),
@@ -243,20 +250,6 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
   }
 }
 
-class _RiderStartupHold extends StatelessWidget {
-  const _RiderStartupHold();
-
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: Color(0xFF131313),
-      ),
-    );
-  }
-}
-
 class CircumRider extends StatelessWidget {
   const CircumRider({super.key});
 
@@ -264,68 +257,67 @@ class CircumRider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ScreenUtilInit(
-        designSize: const Size(375, 812),
-        minTextAdapt: true,
-        builder: (_, __) {
-          final botToastBuilder = BotToastInit();
-          return MaterialApp(
-              // navigatorKey: NavKey.navKey,
-              // onGenerateRoute: (_) => null,
-              debugShowCheckedModeBanner: false,
-              title: 'Circum Rider',
-              builder: (context, child) {
-                child = botToastBuilder(context, child);
-                return child;
-              },
-              themeMode: ThemeMode.dark,
-              theme: ThemeData(
-                brightness: Brightness.dark,
-                scaffoldBackgroundColor: const Color(0xFF07090F),
-                colorScheme: const ColorScheme.dark(
-                  primary: Color(0xFF3B82F6),
-                  surface: Color(0xFF0D111C),
-                  error: Color(0xFFF87171),
-                ),
-                fontFamily: 'Inter',
-                navigationBarTheme: const NavigationBarThemeData(
-                  labelTextStyle: WidgetStatePropertyAll(TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  )),
-                ),
+      designSize: const Size(375, 812),
+      minTextAdapt: true,
+      builder: (_, __) {
+        final botToastBuilder = BotToastInit();
+        return MaterialApp(
+          // navigatorKey: NavKey.navKey,
+          // onGenerateRoute: (_) => null,
+          debugShowCheckedModeBanner: false,
+          title: 'Circum Rider',
+          builder: (context, child) {
+            child = botToastBuilder(context, child);
+            return child;
+          },
+          themeMode: ThemeMode.dark,
+          theme: ThemeData(
+            brightness: Brightness.dark,
+            scaffoldBackgroundColor: const Color(0xFF07090F),
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFF3B82F6),
+              surface: Color(0xFF0D111C),
+              error: Color(0xFFF87171),
+            ),
+            fontFamily: 'Inter',
+            navigationBarTheme: const NavigationBarThemeData(
+              labelTextStyle: WidgetStatePropertyAll(
+                TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
               ),
-              navigatorObservers: [BotToastNavigatorObserver()],
-              routes: {
-                RiderJobOfferScreen.routeName: (_) =>
-                    const RiderJobOfferScreen(),
-              },
-              home: WillPopScope(
-                onWillPop: () async =>
-                    !await NavKey.navKey.currentState!.maybePop(),
-                child: MultiBlocProvider(providers: [
-                  BlocProvider<AuthBloc>(
-                    create: (BuildContext context) =>
-                        AuthBloc()..add(SortSessionState()),
-                  ),
-                  BlocProvider(
-                    create: (context) => NavbarBloc(),
-                  ),
-                  BlocProvider(
-                    create: (context) => VerificationBloc(),
-                  ),
-                  BlocProvider<HomeBloc>.value(value: homeBloc),
-                  BlocProvider<HistoryBloc>(
-                    create: (BuildContext context) => HistoryBloc(),
-                  ),
-                  BlocProvider<SupportBloc>(
-                    create: (BuildContext context) => SupportBloc(),
-                  ),
-                  BlocProvider<AccountBloc>(
-                    create: (BuildContext context) => AccountBloc(),
-                  ),
-                ], child: const App()),
-              ));
-        });
+            ),
+          ),
+          navigatorObservers: [BotToastNavigatorObserver()],
+          routes: {
+            RiderJobOfferScreen.routeName: (_) => const RiderJobOfferScreen(),
+          },
+          home: WillPopScope(
+            onWillPop: () async =>
+                !await NavKey.navKey.currentState!.maybePop(),
+            child: MultiBlocProvider(
+              providers: [
+                BlocProvider<AuthBloc>(
+                  create: (BuildContext context) =>
+                      AuthBloc()..add(SortSessionState()),
+                ),
+                BlocProvider(create: (context) => NavbarBloc()),
+                BlocProvider(create: (context) => VerificationBloc()),
+                BlocProvider<HomeBloc>.value(value: homeBloc),
+                BlocProvider<HistoryBloc>(
+                  create: (BuildContext context) => HistoryBloc(),
+                ),
+                BlocProvider<SupportBloc>(
+                  create: (BuildContext context) => SupportBloc(),
+                ),
+                BlocProvider<AccountBloc>(
+                  create: (BuildContext context) => AccountBloc(),
+                ),
+              ],
+              child: const App(),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 
