@@ -6,35 +6,43 @@ import 'package:flutter_test/flutter_test.dart';
 import 'dart:io';
 
 void main() {
-  testWidgets('Rider startup renders loading before initialization completes',
-      (tester) async {
-    final completer = Completer<void>();
+  testWidgets(
+    'Rider startup keeps the HTML shell while initialization completes',
+    (tester) async {
+      final completer = Completer<void>();
 
-    await tester.pumpWidget(RiderStartupApp(
-      initializer: () => completer.future,
-      appBuilder: (_) => const MaterialApp(home: Text('Rider ready')),
-    ));
+      await tester.pumpWidget(
+        RiderStartupApp(
+          initializer: () => completer.future,
+          appBuilder: (_) => const MaterialApp(home: Text('Rider ready')),
+        ),
+      );
 
-    expect(find.text('Starting Rider'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(SizedBox), findsOneWidget);
+      expect(find.text('Starting Rider'), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
 
-    completer.complete();
-    await tester.pumpAndSettle();
-    expect(find.text('Rider ready'), findsOneWidget);
-  });
+      completer.complete();
+      await tester.pumpAndSettle();
+      expect(find.text('Rider ready'), findsOneWidget);
+    },
+  );
 
-  testWidgets('Rider startup shows a retryable dark error state',
-      (tester) async {
+  testWidgets('Rider startup shows a retryable dark error state', (
+    tester,
+  ) async {
     var attempts = 0;
 
-    await tester.pumpWidget(RiderStartupApp(
-      timeout: const Duration(milliseconds: 10),
-      initializer: () async {
-        attempts += 1;
-        if (attempts == 1) throw StateError('startup failed');
-      },
-      appBuilder: (_) => const MaterialApp(home: Text('Rider ready')),
-    ));
+    await tester.pumpWidget(
+      RiderStartupApp(
+        timeout: const Duration(milliseconds: 10),
+        initializer: () async {
+          attempts += 1;
+          if (attempts == 1) throw StateError('startup failed');
+        },
+        appBuilder: (_) => const MaterialApp(home: Text('Rider ready')),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('Something went wrong.'), findsOneWidget);
@@ -57,7 +65,7 @@ void main() {
     expect(bootstrap, isNot(contains('registration.unregister')));
     expect(bootstrap, contains('showRiderBootstrapError'));
     expect(index, contains('id="startup-shell"'));
-    expect(index, contains('flutter-first-frame'));
+    expect(index, contains('circum-rider-ready'));
     expect(index, contains('RDR-WEB-BOOT-001'));
   });
 }

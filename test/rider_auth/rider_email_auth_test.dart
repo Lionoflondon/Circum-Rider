@@ -55,7 +55,7 @@ void main() {
     expect(bootstrap, contains("CIRCUM_RIDER_BUILD = 'rider-web-cache-v2'"));
     expect(bootstrap, contains('showRiderBootstrapError()'));
     expect(index, contains('id="startup-shell"'));
-    expect(index, contains('flutter-first-frame'));
+    expect(index, contains('circum-rider-ready'));
     expect(index, contains('Reference: RDR-WEB-BOOT-001'));
   });
 

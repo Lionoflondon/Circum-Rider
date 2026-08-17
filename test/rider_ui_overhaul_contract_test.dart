@@ -73,7 +73,8 @@ void main() {
     });
 
     test('startup uses one branded splash without rotating boot copy', () {
-      expect(mainSource, contains('_RiderStartupHold'));
+      expect(mainSource, isNot(contains('_RiderStartupHold')));
+      expect(mainSource, contains('signalRiderWebReady'));
       expect(mainSource,
           isNot(contains("AssetImage('assets/images/splash.png')")));
       expect(mainSource, isNot(contains('Starting Rider')));
