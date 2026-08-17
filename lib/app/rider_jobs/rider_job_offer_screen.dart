@@ -1469,7 +1469,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       if (pin == null) return;
     }
     if ((action == 'verify_collection_pin' && _verificationRequired) ||
-        (action == 'verify_receiver_pin' && _pinRequired)) {
+        (action == 'verify_receiver_pin' && (_pinRequired || _photoRequired))) {
       evidence = await _captureEvidence(
         pickup: action == 'verify_collection_pin',
       );
@@ -1729,7 +1729,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
         return 'arrived_at_dropoff';
       case RiderDeliveryStage.arrivedAtDropoff:
       case RiderDeliveryStage.waiting:
-        return _pinRequired ? 'verify_receiver_pin' : 'verify_receiver_pin';
+        return 'verify_receiver_pin';
       case RiderDeliveryStage.pinRequired:
         return 'verify_receiver_pin';
       case RiderDeliveryStage.issueReported:
