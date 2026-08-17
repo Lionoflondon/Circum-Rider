@@ -2185,6 +2185,11 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                   const Spacer(),
                   if (_stage.index < RiderDeliveryStage.collected.index)
                     TextButton.icon(
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      ),
                       onPressed: _transitioning ? null : _requestCancellation,
                       icon: const Icon(Icons.close, size: 18),
                       label: const Text('Cancel delivery'),

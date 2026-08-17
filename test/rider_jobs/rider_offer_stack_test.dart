@@ -424,7 +424,12 @@ const _offers = [
     weightText: '0.2kg',
     pickupTiming: 'Scheduled',
     warningChips: ['Health+', 'Vanguard', 'Scheduled'],
-    raw: {'isHealthPlus': true, 'requiresVanguard': true, 'isScheduled': true},
+    raw: {
+      'isHealthPlus': true,
+      'requiresVanguard': true,
+      'isScheduled': true,
+      'deliveryStage': 'accepted',
+    },
   ),
   RiderJobOffer(
     id: 'two',
