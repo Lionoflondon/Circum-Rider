@@ -48,8 +48,14 @@ class RiderJobOffer {
   }) {
     final pickupDetails = data['pickupDetails'] ?? data['pickup'];
     final dropoffDetails = data['dropoffDetails'] ?? data['dropoff'];
-    final pickup = _areaSummary(pickupDetails);
-    final dropoff = _areaSummary(dropoffDetails);
+    final pickup = _areaSummary(
+      pickupDetails,
+      fallback: data['pickupLocality'],
+    );
+    final dropoff = _areaSummary(
+      dropoffDetails,
+      fallback: data['dropoffLocality'],
+    );
     final requestId = '${data['requestId'] ?? data['code'] ?? docId}'.trim();
     final price =
         (data['riderEarning'] ?? data['riderPay'] ?? data['price'] ?? 0);
@@ -59,7 +65,10 @@ class RiderJobOffer {
     final duration = data['durationText'] ??
         data['estimatedDurationText'] ??
         data['duration'];
-    final item = data['itemName'] ??
+    final item = data['normalizedItemName'] ??
+        data['packageDescription'] ??
+        data['originalDescription'] ??
+        data['itemName'] ??
         data['itemDescription'] ??
         data['parcelDescription'] ??
         data['packageType'] ??
@@ -70,8 +79,14 @@ class RiderJobOffer {
       requestId: requestId.isEmpty ? docId : requestId,
       pickupArea: pickup,
       dropoffArea: dropoff,
-      pickupAddress: _fullAddress(pickupDetails),
-      dropoffAddress: _fullAddress(dropoffDetails),
+      pickupAddress: _fullAddress(
+        pickupDetails,
+        fallback: data['pickupAddress'],
+      ),
+      dropoffAddress: _fullAddress(
+        dropoffDetails,
+        fallback: data['dropoffAddress'],
+      ),
       earnings: price is num ? price.toDouble() : 0,
       currency: '${data['currency'] ?? 'GBP'}',
       distanceText: distance == null || '$distance'.trim().isEmpty
@@ -92,30 +107,30 @@ class RiderJobOffer {
 
   RiderPointsResult get points => RiderPointsRules.resolve(raw);
 
-  static String _areaSummary(dynamic value) {
+  static String _areaSummary(dynamic value, {dynamic fallback}) {
+    final candidates = <dynamic>[fallback];
     if (value is Map) {
-      final candidates = [
+      candidates.insertAll(0, [
+        value['locality'],
         value['area'],
         value['city'],
         value['postcode'],
-      ];
-      for (final candidate in candidates) {
-        final text = '$candidate'.trim();
-        if (candidate != null && text.isNotEmpty && text != 'null') {
-          return text;
-        }
-      }
+      ]);
     }
-    final text = '$value'.trim();
-    if (text.isNotEmpty && text != 'null') return text;
+    for (final candidate in candidates) {
+      final text = '$candidate'.trim();
+      if (candidate != null && text.isNotEmpty && text != 'null') return text;
+    }
     return 'Location pending';
   }
 
-  static String _fullAddress(dynamic value) {
+  static String _fullAddress(dynamic value, {dynamic fallback}) {
+    final candidates = <dynamic>[fallback];
     if (value is Map) {
-      final candidates = [
+      candidates.insertAll(0, [
         value['formattedAddress'],
         value['address'],
+        value['locality'],
         [
           value['addressLine1'],
           value['addressLine2'],
@@ -125,16 +140,12 @@ class RiderJobOffer {
           final text = '$part'.trim();
           return part != null && text.isNotEmpty && text != 'null';
         }).join(', '),
-      ];
-      for (final candidate in candidates) {
-        final text = '$candidate'.trim();
-        if (candidate != null && text.isNotEmpty && text != 'null') {
-          return text;
-        }
-      }
+      ]);
     }
-    final text = '$value'.trim();
-    if (text.isNotEmpty && text != 'null') return text;
+    for (final candidate in candidates) {
+      final text = '$candidate'.trim();
+      if (candidate != null && text.isNotEmpty && text != 'null') return text;
+    }
     return 'Address pending';
   }
 
@@ -195,7 +206,10 @@ class RiderOfferCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final points = offer.points;
-    final chips = _orderedChips(points.label);
+    final allChips = _orderedChips(points.label);
+    final chips = allChips.take(5).toList();
+    final hiddenChipCount = allChips.length - chips.length;
+    if (hiddenChipCount > 0) chips.add('+$hiddenChipCount more');
     return AnimatedContainer(
       duration: const Duration(milliseconds: 420),
       curve: Curves.easeOutCubic,
@@ -263,10 +277,12 @@ class RiderOfferCard extends StatelessWidget {
                       spacing: 7,
                       runSpacing: 7,
                       children: chips
-                          .map((chip) => _Chip(
-                                label: chip,
-                                highlighted: chip == points.label,
-                              ))
+                          .map(
+                            (chip) => _Chip(
+                              label: chip,
+                              highlighted: chip == points.label,
+                            ),
+                          )
                           .toList(),
                     ),
                     const SizedBox(height: 18),
@@ -312,8 +328,9 @@ class RiderOfferCard extends StatelessWidget {
                 onPressed: accepting ? null : onAccept,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF3B82F6),
-                  disabledBackgroundColor:
-                      const Color(0xFF3B82F6).withValues(alpha: 0.42),
+                  disabledBackgroundColor: const Color(
+                    0xFF3B82F6,
+                  ).withValues(alpha: 0.42),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -326,8 +343,9 @@ class RiderOfferCard extends StatelessWidget {
                         width: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.4,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : Text(
@@ -367,7 +385,7 @@ class RiderOfferCard extends StatelessWidget {
       ...preferred.where(source.contains),
       ...source.where((chip) => !preferred.contains(chip)),
     ];
-    return ordered.take(5).toList();
+    return ordered;
   }
 
   static String _money(double value, String currency) {
@@ -389,24 +407,31 @@ class _RankTrustColumn extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(16),
-        border:
-            Border.all(color: const Color(0xFF60A5FA).withValues(alpha: 0.38)),
+        border: Border.all(
+          color: const Color(0xFF60A5FA).withValues(alpha: 0.38),
+        ),
       ),
       child: Column(
         children: [
-          Text(rank,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900)),
+          Text(
+            rank,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text('+$trustPoints Trust Points',
-              style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.74),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700)),
+          Text(
+            '+$trustPoints Trust Points',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.74),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -488,12 +513,15 @@ class _InfoTile extends StatelessWidget {
           Icon(icon, color: const Color(0xFF60A5FA), size: 18),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(label,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700)),
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.8),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -518,17 +546,23 @@ class _ParcelGuidance extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.inventory_2_outlined,
-              color: Color(0xFF60A5FA), size: 19),
+          const Icon(
+            Icons.inventory_2_outlined,
+            color: Color(0xFF60A5FA),
+            size: 19,
+          ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(text,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.82),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600)),
+            child: Text(
+              text,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.82),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
