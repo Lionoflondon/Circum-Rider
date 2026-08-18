@@ -606,9 +606,20 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     final String? riderId = prefs.getString('riderId');
     String? statusString = prefs.getString('status');
     RideStatus? status;
-    if (statusString == 'online') {
+    final presenceSnapshot = user == null
+        ? null
+        : await db.collection('riderPresence').doc(user.uid).get();
+    final presence = presenceSnapshot?.data();
+    final presenceOnline = presence?['isOnline'] == true &&
+        '${presence?['availabilityStatus'] ?? ''}'.toLowerCase() != 'offline';
+    if (presenceOnline || statusString == 'online') {
       status = RideStatus.online;
-      add(SetRideStatus(status: RideStatus.online));
+      _startPresenceHeartbeat();
+      emit(state.copyWith(
+        rideStatus: RideStatus.online,
+        canGoOnline: true,
+        message: null,
+      ));
       add(GetAvailableRequests());
       add(SetDrawerHeight(
           minDrawerHeight: state.minDrawerHeight, maxDrawerHeight: 0.75.sh));
@@ -628,7 +639,16 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
       PlaceCoordinate pickupCoordinates;
       PlaceCoordinate desinationCoordinate;
 
-      if (data['status'] == 'accepted') {
+      final deliveryStatus = '${data['status'] ?? ''}';
+      final activeDelivery = deliveryStatus == 'accepted' ||
+          deliveryStatus == 'outForDelivery' ||
+          deliveryStatus == 'arrivedAtPickup' ||
+          deliveryStatus == 'arrived_at_pickup' ||
+          deliveryStatus == 'arrivedAtDropoff' ||
+          deliveryStatus == 'arrived_at_dropoff';
+      if (!activeDelivery) continue;
+
+      if (deliveryStatus == 'accepted') {
         status = RideStatus.userConfirmedRide;
         pickupCoordinates = PlaceCoordinate(lat: riderLat!, lng: riderLng!);
         desinationCoordinate = PlaceCoordinate(
@@ -641,7 +661,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             actionButtonStatus: ActionButtonStatus.goingToPickupLocation));
       }
 
-      if (data['status'] == 'outForDelivery') {
+      if (deliveryStatus == 'outForDelivery') {
         status = RideStatus.outForDelivery;
         pickupCoordinates = PlaceCoordinate(
             lat: activeRequest.pickupData.position.geopoint.latitude,
@@ -656,7 +676,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
             actionButtonStatus: ActionButtonStatus.outForDelivery));
       }
 
-      add(SetRideStatus(status: status ?? RideStatus.offline));
+      if (status != null) add(SetRideStatus(status: status));
 
       emit(state.copyWith(rideStatus: status));
 
