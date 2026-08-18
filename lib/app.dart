@@ -20,7 +20,10 @@ class App extends StatelessWidget {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       if (state.currentState == AppState.authenticated) {
         return FutureBuilder<bool>(
-            future: RiderInternalAccess.enabled(forceRefresh: true),
+            future: RiderInternalAccess.enabled(forceRefresh: true).timeout(
+              const Duration(seconds: 5),
+              onTimeout: () => false,
+            ),
             builder: (context, internalAccess) =>
                 _buildNavigator(state, internalAccess.data == true));
       }
