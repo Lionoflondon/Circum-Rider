@@ -18,6 +18,7 @@ class RiderBootDiagnostics {
     final prefs = await SharedPreferences.getInstance();
     previous = prefs.getString(_checkpointKey);
     previousTime = prefs.getInt(_timeKey);
+    errorCategory = prefs.getString(_errorKey);
   }
 
   Future<void> mark(String checkpoint) async {
@@ -73,7 +74,8 @@ class RiderBootDiagnosticOverlay extends StatelessWidget {
                   ),
                   child: Text(
                     'CIRCUM RIDER DIAGNOSTIC\n${diagnostics.current}'
-                    '${diagnostics.previous == null ? '' : '\nLAST: ${diagnostics.previous}'}',
+                    '${diagnostics.previous == null ? '' : '\nLAST: ${diagnostics.previous}'}'
+                    '${diagnostics.errorCategory == null ? '' : '\nERROR: ${diagnostics.errorCategory}'}',
                     style: const TextStyle(color: Colors.white, fontSize: 11),
                   ),
                 ),

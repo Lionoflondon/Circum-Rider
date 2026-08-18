@@ -43,6 +43,15 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
 void main() async {
   WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
 
+  FlutterError.onError = (details) {
+    unawaited(RiderBootDiagnostics.instance.fail(details.exception));
+    FlutterError.presentError(details);
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    unawaited(RiderBootDiagnostics.instance.fail(error));
+    return false;
+  };
+
   if (kIsWeb) {
     runApp(
       RiderStartupApp(
