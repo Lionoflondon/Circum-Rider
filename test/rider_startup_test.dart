@@ -75,7 +75,7 @@ void main() {
 
     expect(app, contains('pages.isEmpty'));
     expect(app, contains('const Duration(seconds: 5)'));
-    expect(app, contains('const AddDetailsView()'));
+    expect(app, contains('const RiderApplicationCentre()'));
     expect(app,
         isNot(contains('pages.add(const MaterialPage(child: IndexPage()))')));
   });

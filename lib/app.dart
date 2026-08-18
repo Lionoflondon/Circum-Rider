@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../app/authentication/bloc/auth_bloc.dart';
 import '../app/onboarding/onboarding.dart';
-import 'app/authentication/view/add_details.dart';
 import 'app/authentication/view/application_submitted.dart';
+import 'app/onboarding/rider_application_centre.dart';
 import 'app/rider_account/rider_account_state.dart';
 import 'app/rider_account/rider_account_status_view.dart';
 import 'app/rider_internal_access/rider_internal_access.dart';
@@ -47,7 +47,7 @@ class App extends StatelessWidget {
           (state.riderAccountState == RiderAccountState.onboardingNotStarted ||
               state.riderAccountState ==
                   RiderAccountState.onboardingInProgress))
-        const MaterialPage(child: AddDetailsView()),
+        const MaterialPage(child: RiderApplicationCentre()),
 
       if (!internalAccess &&
           state.currentState == AppState.authenticated &&
@@ -80,7 +80,7 @@ class App extends StatelessWidget {
     if (pages.isEmpty) {
       pages.add(MaterialPage(
         child: state.currentState == AppState.authenticated
-            ? const AddDetailsView()
+            ? const RiderApplicationCentre()
             : const OnboardingView(),
       ));
     }
