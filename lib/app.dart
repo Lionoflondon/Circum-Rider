@@ -29,54 +29,59 @@ class App extends StatelessWidget {
   }
 
   Widget _buildNavigator(AuthState state, bool internalAccess) {
+    final pages = <Page<void>>[
+      // Unknown app state
+      if (state.currentState == AppState.unknownSessionState)
+        const MaterialPage(child: IndexPage()),
+
+      // Unauthenticated app state
+      if (state.currentState == AppState.unauthenticated)
+        const MaterialPage(
+          child: OnboardingView(),
+        ),
+
+      if (!internalAccess &&
+          state.currentState == AppState.authenticated &&
+          (state.riderAccountState == RiderAccountState.onboardingNotStarted ||
+              state.riderAccountState ==
+                  RiderAccountState.onboardingInProgress))
+        const MaterialPage(child: AddDetailsView()),
+
+      if (!internalAccess &&
+          state.currentState == AppState.authenticated &&
+          (state.riderAccountState == RiderAccountState.submitted ||
+              state.riderAccountState == RiderAccountState.pendingReview))
+        const MaterialPage(child: ApplicationSubmittedView()),
+
+      if (!internalAccess &&
+          state.currentState == AppState.authenticated &&
+          (state.riderAccountState ==
+                  RiderAccountState.moreInformationRequired ||
+              state.riderAccountState == RiderAccountState.rejected ||
+              state.riderAccountState == RiderAccountState.suspended ||
+              state.riderAccountState == RiderAccountState.frozen ||
+              state.riderAccountState == RiderAccountState.closed))
+        MaterialPage(
+          child: RiderAccountStatusView(
+            accountState: state.riderAccountState,
+          ),
+        ),
+
+      // Authenticated app state
+      if (state.currentState == AppState.authenticated &&
+          state.authenticatedStatus == AuthenticatedStatus.authenticated &&
+          (internalAccess ||
+              state.riderAccountState == RiderAccountState.approved))
+        const MaterialPage(child: AppNavView()),
+    ];
+
+    if (pages.isEmpty) {
+      pages.add(const MaterialPage(child: IndexPage()));
+    }
+
     return Navigator(
       key: NavKey.navKey,
-      pages: [
-        // Unknown app state
-        if (state.currentState == AppState.unknownSessionState)
-          const MaterialPage(child: IndexPage()),
-
-        // Unauthenticated app state
-        if (state.currentState == AppState.unauthenticated)
-          const MaterialPage(
-            child: OnboardingView(),
-          ),
-
-        if (!internalAccess &&
-            state.currentState == AppState.authenticated &&
-            (state.riderAccountState ==
-                    RiderAccountState.onboardingNotStarted ||
-                state.riderAccountState ==
-                    RiderAccountState.onboardingInProgress))
-          const MaterialPage(child: AddDetailsView()),
-
-        if (!internalAccess &&
-            state.currentState == AppState.authenticated &&
-            (state.riderAccountState == RiderAccountState.submitted ||
-                state.riderAccountState == RiderAccountState.pendingReview))
-          const MaterialPage(child: ApplicationSubmittedView()),
-
-        if (!internalAccess &&
-            state.currentState == AppState.authenticated &&
-            (state.riderAccountState ==
-                    RiderAccountState.moreInformationRequired ||
-                state.riderAccountState == RiderAccountState.rejected ||
-                state.riderAccountState == RiderAccountState.suspended ||
-                state.riderAccountState == RiderAccountState.frozen ||
-                state.riderAccountState == RiderAccountState.closed))
-          MaterialPage(
-            child: RiderAccountStatusView(
-              accountState: state.riderAccountState,
-            ),
-          ),
-
-        // Authenticated app state
-        if (state.currentState == AppState.authenticated &&
-            state.authenticatedStatus == AuthenticatedStatus.authenticated &&
-            (internalAccess ||
-                state.riderAccountState == RiderAccountState.approved))
-          const MaterialPage(child: AppNavView()),
-      ],
+      pages: pages,
       onPopPage: (route, result) {
         // route.didPop(result);
 
