@@ -174,9 +174,11 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
     if (_ready) {
       if (kIsWeb && !_webReadySignalled) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted || _webReadySignalled) return;
-          _webReadySignalled = true;
-          signalRiderWebReady();
+          Future<void>.delayed(const Duration(milliseconds: 500), () {
+            if (!mounted || _webReadySignalled) return;
+            _webReadySignalled = true;
+            signalRiderWebReady();
+          });
         });
       }
       return widget.appBuilder(context);
