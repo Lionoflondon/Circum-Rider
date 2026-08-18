@@ -79,7 +79,11 @@ class App extends StatelessWidget {
     ];
 
     if (pages.isEmpty) {
-      pages.add(const MaterialPage(child: IndexPage()));
+      pages.add(MaterialPage(
+        child: state.currentState == AppState.authenticated
+            ? const AddDetailsView()
+            : const OnboardingView(),
+      ));
     }
 
     return Navigator(
