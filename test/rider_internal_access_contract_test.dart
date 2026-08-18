@@ -21,5 +21,7 @@ void main() {
     expect(source, contains('!internalAccess'));
     expect(source, contains('internalAccess ||'));
     expect(source, contains('RiderAccountState.approved'));
+    expect(source, contains('if (!internalAccess.hasData)'));
+    expect(source, isNot(contains('onTimeout: () => false')));
   });
 }

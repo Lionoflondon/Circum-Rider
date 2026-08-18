@@ -74,7 +74,8 @@ void main() {
     final app = File('lib/app.dart').readAsStringSync();
 
     expect(app, contains('pages.isEmpty'));
-    expect(app, contains('const Duration(seconds: 5)'));
+    expect(app, contains('if (!internalAccess.hasData)'));
+    expect(app, isNot(contains('onTimeout: () => false')));
     expect(app, contains('const RiderApplicationCentre()'));
     expect(app,
         isNot(contains('pages.add(const MaterialPage(child: IndexPage()))')));

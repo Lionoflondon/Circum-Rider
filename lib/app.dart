@@ -19,12 +19,13 @@ class App extends StatelessWidget {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       if (state.currentState == AppState.authenticated) {
         return FutureBuilder<bool>(
-            future: RiderInternalAccess.enabled(forceRefresh: true).timeout(
-              const Duration(seconds: 5),
-              onTimeout: () => false,
-            ),
-            builder: (context, internalAccess) =>
-                _buildNavigator(state, internalAccess.data == true));
+            future: RiderInternalAccess.enabled(forceRefresh: true),
+            builder: (context, internalAccess) {
+              if (!internalAccess.hasData) {
+                return const ColoredBox(color: Color(0xFF05070D));
+              }
+              return _buildNavigator(state, internalAccess.data == true);
+            });
       }
       return _buildNavigator(state, false);
     });
