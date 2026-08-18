@@ -68,4 +68,16 @@ void main() {
     expect(index, contains('circum-rider-ready'));
     expect(index, contains('RDR-WEB-BOOT-001'));
   });
+
+  test('Rider ready signal is deferred until after the first app frame', () {
+    final source = File('lib/main.dart').readAsStringSync();
+    final readyBlock = source.substring(
+      source.indexOf('if (_ready) {'),
+      source.indexOf('if (_error == null)', source.indexOf('if (_ready) {')),
+    );
+
+    expect(readyBlock, contains('addPostFrameCallback'));
+    expect(readyBlock.indexOf('addPostFrameCallback'),
+        lessThan(readyBlock.indexOf('signalRiderWebReady')));
+  });
 }

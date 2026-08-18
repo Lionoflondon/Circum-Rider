@@ -146,6 +146,7 @@ class RiderStartupApp extends StatefulWidget {
 class _RiderStartupAppState extends State<RiderStartupApp> {
   Object? _error;
   bool _ready = false;
+  bool _webReadySignalled = false;
 
   @override
   void initState() {
@@ -162,7 +163,6 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
       await widget.initializer().timeout(widget.timeout);
       if (!mounted) return;
       setState(() => _ready = true);
-      if (kIsWeb) signalRiderWebReady();
     } catch (error) {
       if (!mounted) return;
       setState(() => _error = error);
@@ -171,7 +171,16 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
 
   @override
   Widget build(BuildContext context) {
-    if (_ready) return widget.appBuilder(context);
+    if (_ready) {
+      if (kIsWeb && !_webReadySignalled) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _webReadySignalled) return;
+          _webReadySignalled = true;
+          signalRiderWebReady();
+        });
+      }
+      return widget.appBuilder(context);
+    }
     if (_error == null) return const SizedBox.shrink();
     return MaterialApp(
       debugShowCheckedModeBanner: false,
