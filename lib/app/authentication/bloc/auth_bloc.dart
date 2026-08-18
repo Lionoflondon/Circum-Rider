@@ -146,16 +146,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               vehicleRegistrationDocumentStatus: vehicleDocStatus,
               riderAccountState: riderAccountState,
               authenticatedStatus: authenticatedStatus));
-
-          await Future.delayed(const Duration(seconds: 3));
-
-          final creationDate = DateTime.parse('${user.metadata.creationTime}');
-
-          final authChangeDate = DateTime.parse('2024-05-15');
-
-          if (authChangeDate.isAfter(creationDate)) {
-            add(SignOut());
-          }
         } else {
           emit(state.copyWith(currentState: AppState.unauthenticated));
         }

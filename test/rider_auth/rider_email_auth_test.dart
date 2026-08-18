@@ -118,4 +118,17 @@ void main() {
     expect(handler, isNot(contains('.set(')));
     expect(handler, isNot(contains('createUserWithEmailAndPassword')));
   });
+
+  test('session restore never force-signs-out authenticated Riders on a timer',
+      () {
+    final source =
+        File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
+
+    expect(source, contains('currentState: AppState.authenticated'));
+    expect(source, isNot(contains('authChangeDate')));
+    expect(source,
+        isNot(contains("DateTime.parse('\${user.metadata.creationTime}')")));
+    expect(source,
+        isNot(contains('await Future.delayed(const Duration(seconds: 3))')));
+  });
 }
