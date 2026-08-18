@@ -15,7 +15,7 @@ void main() {
 
     test('uses the existing auth session gate and onboarding routes', () {
       expect(appSource, contains('child: OnboardingView()'));
-      expect(appSource, contains('child: AddDetailsView()'));
+      expect(appSource, contains('child: RiderApplicationCentre()'));
       expect(appSource, contains('child: ApplicationSubmittedView()'));
       expect(appSource, contains('MaterialPage(child: AppNavView())'));
     });
