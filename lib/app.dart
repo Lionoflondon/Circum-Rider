@@ -9,7 +9,6 @@ import 'app/rider_account/rider_account_status_view.dart';
 import 'app/rider_internal_access/rider_internal_access.dart';
 import 'utils/nav/nav_key.dart';
 
-import '../app/authentication/view/index.dart';
 import '../app/bottom_nav/view/app_nav.dart';
 import 'utils/app_state/index.dart';
 
@@ -35,7 +34,7 @@ class App extends StatelessWidget {
     final pages = <Page<void>>[
       // Unknown app state
       if (state.currentState == AppState.unknownSessionState)
-        const MaterialPage(child: IndexPage()),
+        const MaterialPage(child: OnboardingView()),
 
       // Unauthenticated app state
       if (state.currentState == AppState.unauthenticated)
