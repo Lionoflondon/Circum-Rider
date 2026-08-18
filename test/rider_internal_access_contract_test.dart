@@ -18,10 +18,11 @@ void main() {
       'session gate preserves normal account states while allowing claim override',
       () {
     final source = File('lib/app.dart').readAsStringSync();
-    expect(source, contains('!internalAccess'));
-    expect(source, contains('internalAccess ||'));
-    expect(source, contains('RiderAccountState.approved'));
-    expect(source, contains('if (!internalAccess.hasData)'));
-    expect(source, isNot(contains('onTimeout: () => false')));
+    expect(
+        source, contains('if (state.currentState == AppState.authenticated)'));
+    expect(source,
+        contains('const MaterialPage(child: RiderApplicationCentre())'));
+    expect(source, isNot(contains('RiderInternalAccess.enabled')));
+    expect(source, isNot(contains('internalAccess ||')));
   });
 }
