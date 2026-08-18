@@ -13,6 +13,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 import 'app.dart';
+import 'diagnostics/rider_boot_diagnostics.dart';
 import 'app/authentication/bloc/auth_bloc.dart';
 import 'app/bottom_nav/bloc/navbar_bloc.dart';
 import 'app/home/bloc/home_bloc.dart';
@@ -120,10 +121,17 @@ void main() async {
 }
 
 Future<void> _initializeRiderWeb() async {
+  final diagnostics = RiderBootDiagnostics.instance;
+  unawaited(diagnostics.load());
+  unawaited(diagnostics.mark('FIREBASE_START'));
   try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
+    unawaited(diagnostics.mark('FIREBASE_READY'));
   } on FirebaseException catch (error) {
-    if (error.code != 'duplicate-app') rethrow;
+    if (error.code != 'duplicate-app') {
+      unawaited(diagnostics.fail(error));
+      rethrow;
+    }
   }
 }
 
@@ -146,6 +154,7 @@ class RiderStartupApp extends StatefulWidget {
 class _RiderStartupAppState extends State<RiderStartupApp> {
   Object? _error;
   bool _ready = false;
+  bool _webReadySignalled = false;
 
   @override
   void initState() {
@@ -154,16 +163,20 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
   }
 
   Future<void> _start() async {
+    final diagnostics = RiderBootDiagnostics.instance;
+    unawaited(diagnostics.mark('APP_MOUNTED'));
     setState(() {
       _error = null;
       _ready = false;
     });
     try {
+      unawaited(diagnostics.mark('AUTH_LISTENER_START'));
       await widget.initializer().timeout(widget.timeout);
+      unawaited(diagnostics.mark('AUTH_USER_RESOLVED'));
       if (!mounted) return;
       setState(() => _ready = true);
-      if (kIsWeb) signalRiderWebReady();
     } catch (error) {
+      unawaited(diagnostics.fail(error));
       if (!mounted) return;
       setState(() => _error = error);
     }
@@ -171,8 +184,19 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
 
   @override
   Widget build(BuildContext context) {
-    if (_ready) return widget.appBuilder(context);
-    if (_error == null) return const SizedBox.shrink();
+    if (_ready) {
+      if (kIsWeb && !_webReadySignalled) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _webReadySignalled) return;
+          _webReadySignalled = true;
+          signalRiderWebReady();
+        });
+      }
+      return RiderBootDiagnosticOverlay(child: widget.appBuilder(context));
+    }
+    if (_error == null) {
+      return const RiderBootDiagnosticOverlay(child: SizedBox.expand());
+    }
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(useMaterial3: true),
