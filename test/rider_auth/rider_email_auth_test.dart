@@ -48,7 +48,7 @@ void main() {
     expect(hosting, contains('"source": "/main.dart.js"'));
     expect(hosting, contains('"source": "/flutter_service_worker.js"'));
     expect(hosting, contains('no-cache, no-store, must-revalidate'));
-    expect(index, contains('src="flutter_bootstrap.js"'));
+    expect(index, contains("script.src = 'flutter_bootstrap.js'"));
     expect(index, isNot(contains('loadEntrypoint')));
     expect(index, isNot(contains('manifest.json')));
     expect(bootstrap, contains('serviceWorkerSettings: null'));
@@ -57,6 +57,13 @@ void main() {
     expect(index, contains('id="startup-shell"'));
     expect(index, contains('circum-rider-ready'));
     expect(index, contains('Reference: RDR-WEB-BOOT-001'));
+    expect(index, contains('serviceWorker.getRegistrations'));
+    expect(index, contains('registration.unregister'));
+    expect(index, contains('caches.delete'));
+    expect(index, contains("sessionStorage.getItem(recoveryKey)"));
+    expect(index, contains("sessionStorage.setItem(recoveryKey, '1')"));
+    expect(index, contains("script.src = 'flutter_bootstrap.js'"));
+    expect(index, isNot(contains('<script src="flutter_bootstrap.js" async>')));
   });
 
   test('new sign-in form exposes email, password, reset and account navigation',

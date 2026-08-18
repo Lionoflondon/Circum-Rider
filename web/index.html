@@ -87,7 +87,47 @@
       document.getElementById('startup-error').style.display = 'block';
     }, 20000);
   </script>
-  <script src="flutter_bootstrap.js" async></script>
+  <script>
+    (async function bootRiderAfterLegacyCleanup() {
+      const recoveryKey = 'circum-rider-sw-recovery-v1';
+      let hadController = false;
+      try {
+        if ('serviceWorker' in navigator) {
+          hadController = navigator.serviceWorker.controller != null;
+          const registrations =
+              await navigator.serviceWorker.getRegistrations();
+          await Promise.all(
+              registrations.map((registration) => registration.unregister()));
+        }
+        if ('caches' in window) {
+          const cacheNames = await caches.keys();
+          await Promise.all(cacheNames.map((name) => caches.delete(name)));
+        }
+      } catch (_) {
+        // Flutter still gets a chance to render if browser cleanup is unavailable.
+      }
+
+      let recoveryAttempted = false;
+      let reloadRequested = false;
+      try {
+        recoveryAttempted = sessionStorage.getItem(recoveryKey) === '1';
+        if (hadController && !recoveryAttempted) {
+          sessionStorage.setItem(recoveryKey, '1');
+          reloadRequested = true;
+          location.reload();
+          return;
+        }
+      } catch (_) {
+        // A restricted storage context cannot safely participate in recovery.
+      }
+
+      if (!reloadRequested) {
+        const script = document.createElement('script');
+        script.src = 'flutter_bootstrap.js';
+        document.body.appendChild(script);
+      }
+    })();
+  </script>
 
 
 </body></html>
