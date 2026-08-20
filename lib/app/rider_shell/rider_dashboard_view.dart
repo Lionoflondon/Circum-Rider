@@ -170,12 +170,30 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
           '${item['deliveryState'] ?? item['status'] ?? ''}'.toLowerCase());
 
   static int _time(Map<String, dynamic> item) {
-    final value = item['scheduledAt'] ??
-        item['collectionStart'] ??
-        item['completedAt'] ??
-        item['updatedAt'] ??
-        item['createdAt'];
+    final deliveryTime = item['deliveryTime'];
+    final value = deliveryTime is Map
+        ? deliveryTime['scheduledAt'] ??
+            deliveryTime['scheduledTime'] ??
+            deliveryTime['scheduledDate']
+        : item['scheduledAt'] ?? item['collectionStart'];
     return value is Timestamp ? value.millisecondsSinceEpoch : 0;
+  }
+
+  static String _scheduledTiming(Map<String, dynamic> item) {
+    final deliveryTime = item['deliveryTime'];
+    if (deliveryTime is Map) {
+      final summary = '${deliveryTime['summary'] ?? ''}'.trim();
+      if (summary.isNotEmpty && summary != 'null') return summary;
+      final date = '${deliveryTime['scheduledDate'] ?? ''}'.trim();
+      final window = '${deliveryTime['scheduledWindow'] ?? ''}'.trim();
+      if (date.isNotEmpty && date != 'null') {
+        return window.isNotEmpty && window != 'null' ? '$date · $window' : date;
+      }
+    }
+    final legacy = item['pickupWindow'] ??
+        item['scheduledTime'] ??
+        _formatTime(item['scheduledAt']);
+    return '$legacy' == 'null' ? 'Collection time pending' : '$legacy';
   }
 }
 
@@ -1141,7 +1159,7 @@ class _ScheduleCard extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(
-            '${job!['pickupWindow'] ?? job!['scheduledTime'] ?? _formatTime(job!['scheduledAt']) ?? 'Collection time pending'}',
+            _RiderDashboardViewState._scheduledTiming(job!),
             style: const TextStyle(color: RiderPalette.muted, fontSize: 12),
           ),
         ],
