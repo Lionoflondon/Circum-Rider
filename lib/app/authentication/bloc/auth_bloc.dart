@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:circum_rider/extension/email_validation.dart';
@@ -7,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -21,7 +23,6 @@ import 'package:permission_handler/permission_handler.dart'
     as permission_handler;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../onboarding/rider_roth_onboarding.dart';
 import '../../rider_account/rider_account_state.dart';
@@ -40,6 +41,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     LocationHelper locationHelper = LocationHelper();
 
     FirebaseFirestore db = FirebaseFirestore.instance;
+    final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
     const rothOnboarding = RiderRothOnboarding();
 
     void logRiderAuthError({
@@ -53,12 +55,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       required User user,
       required Map<String, dynamic> data,
     }) async {
-      await db.collection('riders').doc(user.uid).set({
-        'uid': user.uid,
-        'email': user.email,
-        'updatedAt': FieldValue.serverTimestamp(),
-        ...data,
-      }, SetOptions(merge: true));
+      await functions.httpsCallable('advanceRiderOnboarding').call({
+        'stage': data['onboardingStatus'] ?? data['stage'] ?? 'profile_started',
+        if (data['name'] != null) 'name': data['name'],
+        if (data['locationEnabled'] != null) 'locationEnabled': data['locationEnabled'],
+        if (data['position'] != null) 'position': data['position'],
+      });
     }
 
     Future<String?> vehicleRegistrationDocumentStatus(String uid) async {
@@ -884,104 +886,36 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
     }
 
-    String documentDisplayName(String idType) {
-      switch (idType) {
-        case 'drivers license':
-          return 'Driving licence';
-        case 'international passport':
-          return 'Identity document';
-        case 'work permit':
-          return 'Right to work';
-        case 'vehicle registration':
-          return 'Vehicle Registration (V5C/MOT)';
-        default:
-          return idType;
-      }
-    }
-
-    String riderStatusFieldForDocumentKey(String key) {
-      switch (key) {
-        case 'driving_licence':
-          return 'drivingLicenceStatus';
-        case 'identity_document':
-          return 'identityDocumentStatus';
-        case 'right_to_work':
-          return 'rightToWorkStatus';
-        case 'vehicle_registration':
-          return 'vehicleRegistrationDocumentStatus';
-        default:
-          return '${key}Status';
-      }
-    }
-
     Future<void> writeRiderDocumentRecord({
       required String uid,
       required String idType,
-      String? frontImageURL,
-      String? backImageURL,
-      String? imageURL,
+      required List<Map<String, dynamic>> files,
     }) async {
-      final key = documentKeyForIdType(idType);
-      final documentRef = db.collection('riderDocuments').doc('${uid}_$key');
-      final existing = await documentRef.get();
-      final existingData = existing.data();
-      final archivedVersion = existingData == null
-          ? null
-          : {
-              'frontImageURL': existingData['frontImageURL'],
-              'backImageURL': existingData['backImageURL'],
-              'downloadUrl': existingData['downloadUrl'],
-              'imageURL': existingData['imageURL'],
-              'status': existingData['status'],
-              'verificationStatus': existingData['verificationStatus'],
-              'uploadedAt': existingData['uploadedAt'],
-              'reviewedAt': existingData['reviewedAt'],
-              'reviewedBy': existingData['reviewedBy'],
-              'reviewer': existingData['reviewer'],
-              'rejectionReason': existingData['rejectionReason'],
-              'expiryDate': existingData['expiryDate'],
-              'archivedAt': Timestamp.now(),
-            };
-      final displayName = documentDisplayName(idType);
-      final statusEntry = {
-        'status': 'under_review',
-        'timestamp': Timestamp.now(),
-        'actor': uid,
-        'note': '$displayName uploaded by rider.',
+      await functions.httpsCallable('submitRiderDocument').call({
+        'documentType': documentKeyForIdType(idType),
+        'files': files,
+      });
+    }
+
+    Future<Map<String, dynamic>> documentFile(String path, String side) async {
+      final bytes = await File(path).readAsBytes();
+      if (bytes.isEmpty || bytes.length > 8 * 1024 * 1024) {
+        throw StateError('Document file must be between 1 byte and 8MB.');
+      }
+      final lowerPath = path.toLowerCase();
+      final mimeType = lowerPath.endsWith('.png')
+          ? 'image/png'
+          : lowerPath.endsWith('.webp')
+              ? 'image/webp'
+              : lowerPath.endsWith('.pdf')
+                  ? 'application/pdf'
+                  : 'image/jpeg';
+      return {
+        'side': side,
+        'base64': base64Encode(bytes),
+        'mimeType': mimeType,
+        'fileName': path.split(Platform.pathSeparator).last,
       };
-      await documentRef.set({
-        'riderId': uid,
-        'uid': uid,
-        'documentType': key,
-        'type': displayName,
-        'displayName': displayName,
-        if (frontImageURL != null) 'frontImageURL': frontImageURL,
-        if (backImageURL != null) 'backImageURL': backImageURL,
-        if (imageURL != null) 'downloadUrl': imageURL,
-        if (imageURL != null) 'imageURL': imageURL,
-        'status': 'under_review',
-        'verificationStatus': 'under_review',
-        'active': true,
-        'uploadedAt': FieldValue.serverTimestamp(),
-        'uploadTimestamp': FieldValue.serverTimestamp(),
-        'reviewedAt': null,
-        'reviewTimestamp': null,
-        'reviewedBy': null,
-        'reviewer': null,
-        'rejectionReason': null,
-        'expiryDate': null,
-        'statusHistory': FieldValue.arrayUnion([statusEntry]),
-        if (archivedVersion != null)
-          'archivedVersions': FieldValue.arrayUnion([archivedVersion]),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      final statusField = riderStatusFieldForDocumentKey(key);
-      await db.collection('riders').doc(uid).set({
-        statusField: 'under_review',
-        'documentChecklist.$key': 'under_review',
-        'verificationStatus': 'under_review',
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
     }
 
     on<SubmitVerificationDocuments>(
@@ -993,29 +927,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           try {
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.loading));
-            final frontImageURL =
-                await uploadImage(imagePath: event.frontImagePath!);
-            final backImageURL =
-                await uploadImage(imagePath: event.backImagePath!);
-
-            final verificationData = {
-              'frontImageURL': frontImageURL,
-              'backImageURL': backImageURL,
-              'idType': event.idType,
-              'updateAt': DateTime.now()
-            };
-
-            await db.collection("riders").doc(user?.uid).update({
-              'verificationData': verificationData,
-              'verificationStatus': 'under_review'
-            });
             final uid = user?.uid;
             if (uid != null) {
               await writeRiderDocumentRecord(
                 uid: uid,
                 idType: event.idType!,
-                frontImageURL: frontImageURL,
-                backImageURL: backImageURL,
+                files: [
+                  await documentFile(event.frontImagePath!, 'front'),
+                  await documentFile(event.backImagePath!, 'back'),
+                ],
               );
             }
 
@@ -1031,25 +951,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           try {
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.loading));
-            final imageURL =
-                await uploadImage(imagePath: event.workPermitPath!);
-
-            final verificationData = {
-              'imageURL': imageURL,
-              'idType': event.idType,
-              'updateAt': DateTime.now()
-            };
-
-            await db.collection("riders").doc(user?.uid).update({
-              'verificationData': verificationData,
-              'verificationStatus': 'under_review'
-            });
             final uid = user?.uid;
             if (uid != null) {
               await writeRiderDocumentRecord(
                 uid: uid,
                 idType: event.idType!,
-                imageURL: imageURL,
+                files: [await documentFile(event.workPermitPath!, 'primary')],
               );
             }
             emit(state.copyWith(
@@ -1064,77 +971,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           try {
             emit(state.copyWith(
                 verificationUploadStatus: VerificationUploadStatus.loading));
-            final imageURL =
-                await uploadImage(imagePath: event.workPermitPath!);
             final uid = user?.uid;
             if (uid == null) {
               emit(state.copyWith(
                   verificationUploadStatus: VerificationUploadStatus.failure));
               return;
             }
-            final documentRef = db
-                .collection('riderDocuments')
-                .doc('${uid}_vehicle_registration');
-            final existing = await documentRef.get();
-            final existingData = existing.data();
-            final archivedVersion = existingData == null
-                ? null
-                : {
-                    'downloadUrl': existingData['downloadUrl'],
-                    'imageURL': existingData['imageURL'],
-                    'status': existingData['status'],
-                    'verificationStatus': existingData['verificationStatus'],
-                    'uploadedAt': existingData['uploadedAt'],
-                    'reviewedAt': existingData['reviewedAt'],
-                    'reviewedBy': existingData['reviewedBy'],
-                    'reviewer': existingData['reviewer'],
-                    'rejectionReason': existingData['rejectionReason'],
-                    'expiryDate': existingData['expiryDate'],
-                    'archivedAt': Timestamp.now(),
-                  };
-            final statusEntry = {
-              'status': 'under_review',
-              'timestamp': Timestamp.now(),
-              'actor': uid,
-              'note': 'Vehicle registration document uploaded by rider.',
-            };
-            final data = {
-              'riderId': uid,
-              'uid': uid,
-              'documentType': 'vehicle_registration',
-              'type': 'Vehicle Registration (V5C/MOT)',
-              'displayName': 'Vehicle Registration (V5C/MOT)',
-              'downloadUrl': imageURL,
-              'imageURL': imageURL,
-              'status': 'under_review',
-              'verificationStatus': 'under_review',
-              'active': true,
-              'uploadedAt': FieldValue.serverTimestamp(),
-              'uploadTimestamp': FieldValue.serverTimestamp(),
-              'reviewedAt': null,
-              'reviewTimestamp': null,
-              'reviewedBy': null,
-              'reviewer': null,
-              'rejectionReason': null,
-              'expiryDate': null,
-              'statusHistory': FieldValue.arrayUnion([statusEntry]),
-              if (archivedVersion != null)
-                'archivedVersions': FieldValue.arrayUnion([archivedVersion]),
-              'updatedAt': FieldValue.serverTimestamp(),
-            };
-            await documentRef.set(data, SetOptions(merge: true));
-            await db.collection('riders').doc(uid).set({
-              'vehicleRegistrationDocument': {
-                'documentId': documentRef.id,
-                'downloadUrl': imageURL,
-                'status': 'under_review',
-                'uploadedAt': FieldValue.serverTimestamp(),
-              },
-              'vehicleRegistrationDocumentStatus': 'under_review',
-              'documentChecklist.vehicle_registration': 'under_review',
-              'verificationStatus': 'under_review',
-              'updatedAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
+            await writeRiderDocumentRecord(
+              uid: uid,
+              idType: event.idType!,
+              files: [await documentFile(event.workPermitPath!, 'primary')],
+            );
             emit(state.copyWith(
                 vehicleRegistrationDocumentStatus: 'under_review',
                 verificationUploadStatus: VerificationUploadStatus.uploaded));
@@ -1629,22 +1476,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     );
   }
 
-  Future<String> uploadImage({required String imagePath}) async {
-    try {
-      final fileName = Uuid();
-      File imageFile = File(imagePath);
-
-      final storageRef = FirebaseStorage.instance;
-      await storageRef.ref('verification-photos/$fileName').putFile(imageFile);
-      final downloadUrl = await storageRef
-          .ref('verification-photos/$fileName')
-          .getDownloadURL();
-
-      return downloadUrl;
-    } catch (_) {
-      throw 'Something went wrong uploading image';
-    }
-  }
 }
 
 class _ProcessedRiderProfilePhoto {
