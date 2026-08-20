@@ -8,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 // import 'package:geoflutterfire2/geoflutterfire2.dart';
@@ -30,7 +31,7 @@ import '../repo/direction_service.dart';
 part 'home_event.dart';
 part 'home_state.dart';
 
-class HomeBloc extends Bloc<HomeEvent, HomeState> {
+class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   static const _mapsApiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
   static const _presenceHeartbeatInterval = Duration(seconds: 45);
 
@@ -45,6 +46,20 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   List<DirectionStep> _currentRoute = [];
   int _currentStepIndex = 0;
   Timer? _presenceHeartbeatTimer;
+
+  bool get _isLogicallyOnline {
+    switch (state.rideStatus) {
+      case RideStatus.online:
+      case RideStatus.acceptedARide:
+      case RideStatus.userConfirmedRide:
+      case RideStatus.arrivedAtPickupLocation:
+      case RideStatus.outForDelivery:
+        return true;
+      case RideStatus.offline:
+      case RideStatus.delivered:
+        return false;
+    }
+  }
 
   List<String> _remainingVerificationItems(Map<String, dynamic>? riderData) {
     final remaining = <String>[];
@@ -100,6 +115,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   }
 
   HomeBloc() : super(HomeState()) {
+    WidgetsBinding.instance.addObserver(this);
     on<CheckForPushToken>(_handleCheckForPushToken);
     on<SetRideStatus>(_handleSetRideStatus);
     on<GetAvailableRequests>(_handleGetAvailableRequests);
@@ -118,6 +134,22 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     on<SetNewMessage>(_handleSetNewMessage);
     on<LoadChatMessages>(_handleLoadChatMessages);
     on<MessageUser>(_handleMessageUser);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    switch (lifecycleState) {
+      case AppLifecycleState.resumed:
+        if (_isLogicallyOnline) _startPresenceHeartbeat();
+        break;
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        _stopPresenceHeartbeat();
+        break;
+      case AppLifecycleState.inactive:
+        break;
+    }
   }
 
   void _handleCheckForPushToken(CheckForPushToken event, Emitter emit) async {
@@ -708,7 +740,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
     unawaited(_sendPresenceHeartbeat());
     _presenceHeartbeatTimer = Timer.periodic(
       _presenceHeartbeatInterval,
-      (_) => unawaited(_sendPresenceHeartbeat()),
+      (_) {
+        if (_isLogicallyOnline) unawaited(_sendPresenceHeartbeat());
+      },
     );
   }
 
@@ -718,7 +752,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
   }
 
   Future<void> _sendPresenceHeartbeat() async {
-    if (auth.currentUser == null || state.rideStatus != RideStatus.online) {
+    if (auth.currentUser == null || !_isLogicallyOnline) {
       _stopPresenceHeartbeat();
       return;
     }
@@ -775,6 +809,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> {
 
   @override
   Future<void> close() {
+    WidgetsBinding.instance.removeObserver(this);
     _stopPresenceHeartbeat();
     return super.close();
   }
