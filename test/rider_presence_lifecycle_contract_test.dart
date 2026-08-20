@@ -32,4 +32,26 @@ void main() {
     expect(source,
         contains('if (auth.currentUser == null || !_isLogicallyOnline)'));
   });
+
+  test('explicit online intent persists and restores after recreation', () {
+    expect(source,
+        contains("const _desiredOnlineStateKey = 'desiredOnlineState';"));
+    expect(source, contains('setBool(_desiredOnlineStateKey, true)'));
+    expect(source, contains('setBool(_desiredOnlineStateKey, false)'));
+    expect(source, contains("prefs.getBool(_desiredOnlineStateKey) == true"));
+    expect(
+        source,
+        contains(
+            'if (desiredOnline || presenceOnline || statusString == \'online\')'));
+    expect(source, contains('if (desiredOnline && !presenceOnline)'));
+  });
+
+  test('offline intent is not changed by lifecycle transitions', () {
+    final lifecycleStart = source.indexOf('void didChangeAppLifecycleState');
+    final lifecycleEnd =
+        source.indexOf('void _handleCheckForPushToken', lifecycleStart);
+    final lifecycleSource = source.substring(lifecycleStart, lifecycleEnd);
+    expect(lifecycleSource, isNot(contains('_desiredOnlineStateKey')));
+    expect(lifecycleSource, isNot(contains('setBool')));
+  });
 }

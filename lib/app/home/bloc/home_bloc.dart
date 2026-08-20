@@ -34,6 +34,7 @@ part 'home_state.dart';
 class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   static const _mapsApiKey = String.fromEnvironment('GOOGLE_MAPS_API_KEY');
   static const _presenceHeartbeatInterval = Duration(seconds: 45);
+  static const _desiredOnlineStateKey = 'desiredOnlineState';
 
   FirebaseAuth auth = FirebaseAuth.instance;
   FirebaseFirestore db = FirebaseFirestore.instance;
@@ -205,6 +206,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         await FirebaseFunctions.instanceFor(region: 'us-central1')
             .httpsCallable('goOffline')
             .call();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(_desiredOnlineStateKey, false);
         emit(state.copyWith(
             rideStatus: RideStatus.offline,
             message: null,
@@ -245,6 +248,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
               .call(locationPayload == null
                   ? null
                   : <String, dynamic>{'location': locationPayload});
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool(_desiredOnlineStateKey, true);
           _startPresenceHeartbeat();
           emit(state.copyWith(
               rideStatus: RideStatus.online, canGoOnline: true, message: null));
@@ -632,6 +637,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       CheckForActiveRequest event, Emitter emit) async {
     User? user = auth.currentUser;
     final SharedPreferences prefs = await SharedPreferences.getInstance();
+    final desiredOnline = prefs.getBool(_desiredOnlineStateKey) == true;
     final String? activeRequest = prefs.getString('activeRequest');
     final double? riderLng = prefs.getDouble('longitude');
     final double? riderLat = prefs.getDouble('latitude');
@@ -644,8 +650,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
     final presence = presenceSnapshot?.data();
     final presenceOnline = presence?['isOnline'] == true &&
         '${presence?['availabilityStatus'] ?? ''}'.toLowerCase() != 'offline';
-    if (presenceOnline || statusString == 'online') {
+    if (desiredOnline || presenceOnline || statusString == 'online') {
       status = RideStatus.online;
+      if (desiredOnline && !presenceOnline) {
+        add(SetRideStatus(status: RideStatus.online));
+      }
       _startPresenceHeartbeat();
       emit(state.copyWith(
         rideStatus: RideStatus.online,
