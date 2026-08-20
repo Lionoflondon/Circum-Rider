@@ -26,8 +26,11 @@ void main() {
   test('authenticated startup never falls through to an empty surface', () {
     final source = File('lib/app.dart').readAsStringSync();
     expect(source, contains('_RiderBootSurface'));
-    expect(source, contains('Preparing your Rider workspace'));
-    expect(source, contains('We could not confirm your Rider access yet.'));
+    expect(source, contains('_AuthenticatedStartupGate'));
+    expect(source, contains('Duration(seconds: 5)'));
+    expect(source, contains('_internalAccessFuture'));
+    expect(source, isNot(contains('authenticatedStatus ==')));
     expect(source, contains('pages.isEmpty'));
+    expect(source, contains('onRetry: _retry'));
   });
 }
