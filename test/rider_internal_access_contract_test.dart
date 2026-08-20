@@ -22,4 +22,12 @@ void main() {
     expect(source, contains('internalAccess ||'));
     expect(source, contains('RiderAccountState.approved'));
   });
+
+  test('authenticated startup never falls through to an empty surface', () {
+    final source = File('lib/app.dart').readAsStringSync();
+    expect(source, contains('_RiderBootSurface'));
+    expect(source, contains('Preparing your Rider workspace'));
+    expect(source, contains('We could not confirm your Rider access yet.'));
+    expect(source, contains('pages.isEmpty'));
+  });
 }
