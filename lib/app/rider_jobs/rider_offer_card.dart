@@ -160,7 +160,14 @@ class RiderJobOffer {
     addIf(data['isGift'] ?? data['giftDelivery'], 'Gift');
     addIf(data['isBusiness'] ?? data['businessDelivery'], 'Business');
     addIf(data['isHeavyDuty'] ?? data['heavyDuty'] ?? data['heavy'], 'Heavy');
-    addIf(data['isScheduled'] ?? data['scheduled'], 'Scheduled');
+    final deliveryTime = data['deliveryTime'] is Map
+        ? Map<String, dynamic>.from(data['deliveryTime'] as Map)
+        : <String, dynamic>{};
+    final canonicalType = '${deliveryTime['type'] ?? ''}'.trim().toLowerCase();
+    final scheduled = canonicalType.isNotEmpty
+        ? canonicalType == 'scheduled'
+        : data['isScheduled'] == true || data['scheduled'] == true;
+    addIf(scheduled, 'Scheduled');
     if (chips.isEmpty) chips.add('Standard');
     return chips;
   }
@@ -177,6 +184,26 @@ class RiderJobOffer {
   }
 
   static String _pickupTiming(Map<String, dynamic> data) {
+    final hasCanonicalDeliveryTime = data['deliveryTime'] is Map;
+    final deliveryTime = hasCanonicalDeliveryTime
+        ? Map<String, dynamic>.from(data['deliveryTime'] as Map)
+        : <String, dynamic>{};
+    final canonicalType = '${deliveryTime['type'] ?? ''}'.trim().toLowerCase();
+    if (hasCanonicalDeliveryTime && canonicalType == 'now') return 'ASAP';
+    if (canonicalType == 'scheduled') {
+      final summary = '${deliveryTime['summary'] ?? ''}'.trim();
+      if (summary.isNotEmpty && summary != 'null') return summary;
+      final date = '${deliveryTime['scheduledDate'] ?? ''}'.trim();
+      final window = '${deliveryTime['scheduledWindow'] ?? ''}'.trim();
+      if (date.isNotEmpty &&
+          date != 'null' &&
+          window.isNotEmpty &&
+          window != 'null') {
+        return '$date · $window';
+      }
+      if (date.isNotEmpty && date != 'null') return date;
+    }
+    if (hasCanonicalDeliveryTime && canonicalType.isNotEmpty) return 'ASAP';
     final scheduled = data['scheduledTime'] ??
         data['pickupWindow'] ??
         data['pickupTiming'] ??

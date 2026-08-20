@@ -604,9 +604,10 @@ class _ScheduleJob {
 
   bool get isVisible {
     final hidden = {'completed', 'cancelled', 'expired', 'rejected'};
-    final scheduled = raw['scheduled'] == true ||
-        raw['isScheduled'] == true ||
-        raw['scheduledAt'] != null;
+    final deliveryTime = raw['deliveryTime'];
+    final scheduled = deliveryTime is Map
+        ? '${deliveryTime['type'] ?? ''}'.trim().toLowerCase() == 'scheduled'
+        : raw['scheduled'] == true || raw['isScheduled'] == true;
     return scheduled && !hidden.contains(status);
   }
 
@@ -679,8 +680,15 @@ class _ScheduleJob {
   }
 
   static DateTime scheduledDate(Map<String, dynamic> data) {
-    final value = data['scheduledAt'] ?? data['scheduledTime'];
-    return value is Timestamp ? value.toDate() : DateTime.now();
+    final deliveryTime = data['deliveryTime'];
+    final value = deliveryTime is Map
+        ? deliveryTime['scheduledAt'] ??
+            deliveryTime['scheduledTime'] ??
+            deliveryTime['scheduledDate']
+        : data['scheduledAt'] ?? data['scheduledTime'];
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    return DateTime.tryParse('$value') ?? DateTime.now();
   }
 
   static String _two(int value) => value.toString().padLeft(2, '0');

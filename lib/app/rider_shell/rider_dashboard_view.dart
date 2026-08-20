@@ -157,10 +157,11 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
           .toList() ??
       const <Map<String, dynamic>>[];
 
-  static bool _isScheduled(Map<String, dynamic> item) =>
-      item['scheduled'] == true ||
-      item['isScheduled'] == true ||
-      item['scheduledAt'] != null;
+  static bool _isScheduled(Map<String, dynamic> item) => item['deliveryTime']
+          is Map
+      ? '${(item['deliveryTime'] as Map)['type'] ?? ''}'.trim().toLowerCase() ==
+          'scheduled'
+      : item['scheduled'] == true || item['isScheduled'] == true;
 
   static bool _isFinished(Map<String, dynamic> item) => {
         'completed',
