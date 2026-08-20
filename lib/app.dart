@@ -19,29 +19,17 @@ class App extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       if (state.currentState == AppState.authenticated) {
-        return FutureBuilder<bool>(
-            future: RiderInternalAccess.enabled(forceRefresh: true),
-            builder: (context, internalAccess) {
-              if (internalAccess.connectionState != ConnectionState.done) {
-                return const _RiderBootSurface(
-                  message: 'Preparing your Rider workspace…',
-                );
-              }
-              if (internalAccess.hasError) {
-                return _RiderBootSurface(
-                  message: 'We could not confirm your Rider access yet.',
-                  onRetry: () =>
-                      context.read<AuthBloc>().add(SortSessionState()),
-                );
-              }
-              return _buildNavigator(state, internalAccess.data == true);
-            });
+        return _AuthenticatedStartupGate(state: state);
       }
       return _buildNavigator(state, false);
     });
   }
 
-  Widget _buildNavigator(AuthState state, bool internalAccess) {
+  Widget _buildNavigator(
+    AuthState state,
+    bool internalAccess, {
+    VoidCallback? onRetry,
+  }) {
     final pages = <Page<void>>[
       // Unknown app state
       if (state.currentState == AppState.unknownSessionState)
@@ -82,7 +70,6 @@ class App extends StatelessWidget {
 
       // Authenticated app state
       if (state.currentState == AppState.authenticated &&
-          state.authenticatedStatus == AuthenticatedStatus.authenticated &&
           (internalAccess ||
               state.riderAccountState == RiderAccountState.approved))
         const MaterialPage(child: AppNavView()),
@@ -91,13 +78,65 @@ class App extends StatelessWidget {
     return Navigator(
       key: NavKey.navKey,
       pages: pages.isEmpty
-          ? const [MaterialPage(child: _RiderBootSurface())]
+          ? [MaterialPage(child: _RiderBootSurface(onRetry: onRetry))]
           : pages,
       onPopPage: (route, result) {
         // route.didPop(result);
 
         if (!route.didPop(result)) return false;
         return true;
+      },
+    );
+  }
+}
+
+class _AuthenticatedStartupGate extends StatefulWidget {
+  const _AuthenticatedStartupGate({required this.state});
+
+  final AuthState state;
+
+  @override
+  State<_AuthenticatedStartupGate> createState() =>
+      _AuthenticatedStartupGateState();
+}
+
+class _AuthenticatedStartupGateState extends State<_AuthenticatedStartupGate> {
+  late Future<bool> _internalAccessFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _internalAccessFuture = _resolveInternalAccess();
+  }
+
+  Future<bool> _resolveInternalAccess() =>
+      RiderInternalAccess.enabled(forceRefresh: true).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => false,
+      );
+
+  void _retry() {
+    setState(() {
+      _internalAccessFuture = _resolveInternalAccess();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: _internalAccessFuture,
+      builder: (context, internalAccess) {
+        if (internalAccess.connectionState != ConnectionState.done) {
+          return App()._buildNavigator(widget.state, false);
+        }
+        if (internalAccess.hasError) {
+          return App()._buildNavigator(
+            widget.state,
+            false,
+            onRetry: _retry,
+          );
+        }
+        return App()._buildNavigator(widget.state, internalAccess.data == true);
       },
     );
   }
