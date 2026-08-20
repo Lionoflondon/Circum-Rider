@@ -21,68 +21,112 @@ class App extends StatelessWidget {
       if (state.currentState == AppState.authenticated) {
         return FutureBuilder<bool>(
             future: RiderInternalAccess.enabled(forceRefresh: true),
-            builder: (context, internalAccess) =>
-                _buildNavigator(state, internalAccess.data == true));
+            builder: (context, internalAccess) {
+              if (internalAccess.connectionState != ConnectionState.done) {
+                return const _RiderBootSurface(
+                  message: 'Preparing your Rider workspace…',
+                );
+              }
+              if (internalAccess.hasError) {
+                return _RiderBootSurface(
+                  message: 'We could not confirm your Rider access yet.',
+                  onRetry: () =>
+                      context.read<AuthBloc>().add(SortSessionState()),
+                );
+              }
+              return _buildNavigator(state, internalAccess.data == true);
+            });
       }
       return _buildNavigator(state, false);
     });
   }
 
   Widget _buildNavigator(AuthState state, bool internalAccess) {
+    final pages = <Page<void>>[
+      // Unknown app state
+      if (state.currentState == AppState.unknownSessionState)
+        const MaterialPage(child: IndexPage()),
+
+      // Unauthenticated app state
+      if (state.currentState == AppState.unauthenticated)
+        const MaterialPage(
+          child: OnboardingView(),
+        ),
+
+      if (!internalAccess &&
+          state.currentState == AppState.authenticated &&
+          (state.riderAccountState == RiderAccountState.onboardingNotStarted ||
+              state.riderAccountState ==
+                  RiderAccountState.onboardingInProgress))
+        const MaterialPage(child: AddDetailsView()),
+
+      if (!internalAccess &&
+          state.currentState == AppState.authenticated &&
+          (state.riderAccountState == RiderAccountState.submitted ||
+              state.riderAccountState == RiderAccountState.pendingReview))
+        const MaterialPage(child: ApplicationSubmittedView()),
+
+      if (!internalAccess &&
+          state.currentState == AppState.authenticated &&
+          (state.riderAccountState ==
+                  RiderAccountState.moreInformationRequired ||
+              state.riderAccountState == RiderAccountState.rejected ||
+              state.riderAccountState == RiderAccountState.suspended ||
+              state.riderAccountState == RiderAccountState.frozen ||
+              state.riderAccountState == RiderAccountState.closed))
+        MaterialPage(
+          child: RiderAccountStatusView(
+            accountState: state.riderAccountState,
+          ),
+        ),
+
+      // Authenticated app state
+      if (state.currentState == AppState.authenticated &&
+          state.authenticatedStatus == AuthenticatedStatus.authenticated &&
+          (internalAccess ||
+              state.riderAccountState == RiderAccountState.approved))
+        const MaterialPage(child: AppNavView()),
+    ];
+
     return Navigator(
       key: NavKey.navKey,
-      pages: [
-        // Unknown app state
-        if (state.currentState == AppState.unknownSessionState)
-          const MaterialPage(child: IndexPage()),
-
-        // Unauthenticated app state
-        if (state.currentState == AppState.unauthenticated)
-          const MaterialPage(
-            child: OnboardingView(),
-          ),
-
-        if (!internalAccess &&
-            state.currentState == AppState.authenticated &&
-            (state.riderAccountState ==
-                    RiderAccountState.onboardingNotStarted ||
-                state.riderAccountState ==
-                    RiderAccountState.onboardingInProgress))
-          const MaterialPage(child: AddDetailsView()),
-
-        if (!internalAccess &&
-            state.currentState == AppState.authenticated &&
-            (state.riderAccountState == RiderAccountState.submitted ||
-                state.riderAccountState == RiderAccountState.pendingReview))
-          const MaterialPage(child: ApplicationSubmittedView()),
-
-        if (!internalAccess &&
-            state.currentState == AppState.authenticated &&
-            (state.riderAccountState ==
-                    RiderAccountState.moreInformationRequired ||
-                state.riderAccountState == RiderAccountState.rejected ||
-                state.riderAccountState == RiderAccountState.suspended ||
-                state.riderAccountState == RiderAccountState.frozen ||
-                state.riderAccountState == RiderAccountState.closed))
-          MaterialPage(
-            child: RiderAccountStatusView(
-              accountState: state.riderAccountState,
-            ),
-          ),
-
-        // Authenticated app state
-        if (state.currentState == AppState.authenticated &&
-            state.authenticatedStatus == AuthenticatedStatus.authenticated &&
-            (internalAccess ||
-                state.riderAccountState == RiderAccountState.approved))
-          const MaterialPage(child: AppNavView()),
-      ],
+      pages: pages.isEmpty
+          ? const [MaterialPage(child: _RiderBootSurface())]
+          : pages,
       onPopPage: (route, result) {
         // route.didPop(result);
 
         if (!route.didPop(result)) return false;
         return true;
       },
+    );
+  }
+}
+
+class _RiderBootSurface extends StatelessWidget {
+  const _RiderBootSurface({this.message = 'Loading Rider…', this.onRetry});
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF070B14),
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 20),
+            Text(message, style: const TextStyle(color: Colors.white)),
+            if (onRetry != null) ...[
+              const SizedBox(height: 16),
+              TextButton(onPressed: onRetry, child: const Text('Retry')),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
