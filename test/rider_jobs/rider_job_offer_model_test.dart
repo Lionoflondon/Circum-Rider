@@ -80,6 +80,66 @@ void main() {
     expect(offer.parcelGuidance, 'Books');
   });
 
+  test('canonical now wins over stale scheduling metadata', () {
+    final offer = RiderJobOffer.fromFirestore(
+      docId: 'now-1',
+      data: {
+        'deliveryTime': {
+          'type': 'now',
+          'scheduledDate': '2099-01-01',
+          'scheduledWindow': 'Morning',
+        },
+        'isScheduled': true,
+        'scheduledTime': '2099-01-01',
+      },
+    );
+
+    expect(offer.warningChips, isNot(contains('Scheduled')));
+    expect(offer.pickupTiming, 'ASAP');
+  });
+
+  test('canonical scheduled data drives chip and timing', () {
+    final offer = RiderJobOffer.fromFirestore(
+      docId: 'scheduled-1',
+      data: {
+        'deliveryTime': {
+          'type': 'scheduled',
+          'scheduledDate': '2099-01-01',
+          'scheduledWindow': 'Morning',
+        },
+      },
+    );
+
+    expect(offer.warningChips, contains('Scheduled'));
+    expect(offer.pickupTiming, '2099-01-01 · Morning');
+  });
+
+  test('canonical scheduled summary takes precedence', () {
+    final offer = RiderJobOffer.fromFirestore(
+      docId: 'scheduled-2',
+      data: {
+        'deliveryTime': {
+          'type': 'scheduled',
+          'summary': 'Tomorrow afternoon',
+          'scheduledDate': '2099-01-01',
+        },
+      },
+    );
+
+    expect(offer.warningChips, contains('Scheduled'));
+    expect(offer.pickupTiming, 'Tomorrow afternoon');
+  });
+
+  test('legacy scheduled data remains supported', () {
+    final offer = RiderJobOffer.fromFirestore(
+      docId: 'legacy-scheduled',
+      data: {'isScheduled': true, 'scheduledTime': 'Tomorrow · Morning'},
+    );
+
+    expect(offer.warningChips, contains('Scheduled'));
+    expect(offer.pickupTiming, 'Tomorrow · Morning');
+  });
+
   testWidgets('shows an overflow chip instead of silently dropping badges',
       (tester) async {
     const offer = RiderJobOffer(

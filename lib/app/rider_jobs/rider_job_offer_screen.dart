@@ -355,11 +355,14 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     });
   }
 
-  bool _isScheduled(RiderJobOffer offer) =>
-      offer.warningChips.contains('Scheduled') ||
-      offer.raw['isScheduled'] == true ||
-      offer.raw['scheduled'] == true ||
-      offer.raw['scheduledAt'] != null;
+  bool _isScheduled(RiderJobOffer offer) {
+    final deliveryTime = offer.raw['deliveryTime'];
+    if (deliveryTime is Map) {
+      final type = '${deliveryTime['type'] ?? ''}'.trim().toLowerCase();
+      if (type.isNotEmpty) return type == 'scheduled';
+    }
+    return offer.raw['isScheduled'] == true || offer.raw['scheduled'] == true;
+  }
 
   Future<void> _acceptPreview(RiderJobOffer offer) async {
     if (_accepting || _accepted) return;
