@@ -28,7 +28,23 @@ void main() {
         () {
       expect(authBloc, contains('RiderRothOnboarding'));
       expect(authBloc, contains('ensureWalletForRider'));
-      expect(authBloc, contains("'approvalStatus': 'pending'"));
+      expect(authBloc, contains("'onboardingStatus': 'profile_complete'"));
+      expect(authBloc, contains("httpsCallable('advanceRiderOnboarding')"));
+      for (final field in [
+        'role',
+        'roles',
+        'approvalStatus',
+        'verificationStatus',
+        'driverStatus',
+        'riderRank',
+        'rating',
+      ]) {
+        expect(
+          authBloc,
+          isNot(contains("'$field':")),
+          reason: '$field must remain server-authoritative',
+        );
+      }
       expect(authBloc, isNot(contains("'approvalStatus': 'approved'")));
       expect(authBloc, isNot(contains("'onboardingStatus': 'approved'")));
     });
