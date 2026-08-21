@@ -10,7 +10,6 @@
 
     <application
         android:label="Circum Rider"
-        android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
         android:enableOnBackInvokedCallback="true">
 
