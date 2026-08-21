@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:async';
 
 import 'package:circum_rider/app/account/bloc/account_bloc.dart';
-// import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -13,6 +12,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 import 'app.dart';
+import 'app/security/circum_rider_app_check.dart';
 import 'app/authentication/bloc/auth_bloc.dart';
 import 'app/bottom_nav/bloc/navbar_bloc.dart';
 import 'app/home/bloc/home_bloc.dart';
@@ -69,16 +69,10 @@ void main() async {
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   await Firebase.initializeApp();
-
-  // Activate app check after initialization, but before
-  // usage of any Firebase services.
-  // await FirebaseAppCheck.instance
-  //     // Your personal reCaptcha public key goes here:
-  //     .activate(
-  //   androidProvider: AndroidProvider.playIntegrity,
-  //   appleProvider: AppleProvider.appAttest,
-  // webProvider: ReCaptchaV3Provider(kWebRecaptchaSiteKey),
-  // );
+  if (!await initializeRiderAppCheck()) {
+    runApp(const RiderSecurityBlocked());
+    return;
+  }
 
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
     alert: true, // Required to display a heads up notification
@@ -122,6 +116,9 @@ void main() async {
 Future<void> _initializeRiderWeb() async {
   try {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
+    if (!await initializeRiderAppCheck()) {
+      throw StateError('Rider security verification is not configured.');
+    }
   } on FirebaseException catch (error) {
     if (error.code != 'duplicate-app') rethrow;
   }
