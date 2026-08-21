@@ -27,7 +27,14 @@ jobs:
       - run: flutter pub get
       - run: flutter test test/canonical_rider_entry_point_test.dart test/rider_startup_test.dart
       - run: node --test test/rider_deployment_manifest_test.js
-      - run: flutter build web --release
+      - name: Verify Rider App Check site key
+        env:
+          RIDER_WEB_APPCHECK_SITE_KEY: ${{ secrets.CIRCUM_RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}
+        run: test -n "$RIDER_WEB_APPCHECK_SITE_KEY"
+      - name: Build Rider Web
+        env:
+          RIDER_WEB_APPCHECK_SITE_KEY: ${{ secrets.CIRCUM_RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}
+        run: flutter build web --release --dart-define=CIRCUM_RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="$RIDER_WEB_APPCHECK_SITE_KEY"
       - run: node scripts/rider_deployment_manifest.js prepare
       - run: node scripts/rider_deployment_manifest.js verify
       - uses: google-github-actions/auth@v2
