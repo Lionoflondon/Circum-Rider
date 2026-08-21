@@ -29,11 +29,11 @@ jobs:
       - run: node --test test/rider_deployment_manifest_test.js
       - name: Verify Rider App Check site key
         env:
-          RIDER_WEB_APPCHECK_SITE_KEY: ${{ secrets.CIRCUM_RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}
+          RIDER_WEB_APPCHECK_SITE_KEY: ${{ secrets.RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}
         run: test -n "$RIDER_WEB_APPCHECK_SITE_KEY"
       - name: Build Rider Web
         env:
-          RIDER_WEB_APPCHECK_SITE_KEY: ${{ secrets.CIRCUM_RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}
+          RIDER_WEB_APPCHECK_SITE_KEY: ${{ secrets.RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}
         run: flutter build web --release --dart-define=CIRCUM_RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="$RIDER_WEB_APPCHECK_SITE_KEY"
       - run: node scripts/rider_deployment_manifest.js prepare
       - run: node scripts/rider_deployment_manifest.js verify
