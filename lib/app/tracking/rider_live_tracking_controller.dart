@@ -6,6 +6,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
+import 'rider_location_disclosure.dart';
+
 enum RiderLiveTrackingStatus {
   idle,
   acquiring,
@@ -319,6 +321,7 @@ class RiderLiveTrackingController {
   bool _stopping = false;
   bool _arrivalPickupSignalled = false;
   bool _arrivalDropoffSignalled = false;
+  RiderLocationDisclosure? _beforePermission;
 
   Stream<RiderLiveTrackingSnapshot> get states => _states.stream;
   RiderLiveTrackingSnapshot get snapshot => _snapshot;
@@ -329,6 +332,7 @@ class RiderLiveTrackingController {
     required String trackingStatus,
     required RiderGeoPoint? pickup,
     required RiderGeoPoint? dropoff,
+    required RiderLocationDisclosure beforePermission,
   }) async {
     if (_started &&
         _deliveryId == deliveryId &&
@@ -344,6 +348,7 @@ class RiderLiveTrackingController {
     _trackingStatus = trackingStatus;
     _pickup = pickup;
     _dropoff = dropoff;
+    _beforePermission = beforePermission;
     _arrivalPickupSignalled = false;
     _arrivalDropoffSignalled = false;
     _emit(const RiderLiveTrackingSnapshot(
@@ -437,6 +442,7 @@ class RiderLiveTrackingController {
       trackingStatus: status,
       pickup: _pickup,
       dropoff: _dropoff,
+      beforePermission: _beforePermission!,
     );
   }
 
@@ -456,6 +462,13 @@ class RiderLiveTrackingController {
       }
       var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
+        final disclosed = await _beforePermission?.call() ?? false;
+        if (!disclosed) {
+          return const RiderLiveTrackingSnapshot(
+            status: RiderLiveTrackingStatus.permissionRequired,
+            message: 'Location disclosure was not accepted.',
+          );
+        }
         permission = await Geolocator.requestPermission();
       }
       if (permission == LocationPermission.denied) {

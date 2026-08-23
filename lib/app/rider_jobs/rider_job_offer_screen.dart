@@ -18,6 +18,7 @@ import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
 import '../support/view/support.dart';
 import '../tracking/rider_live_tracking_controller.dart';
+import '../tracking/rider_location_disclosure.dart';
 import 'rider_accept_controller.dart';
 import 'rider_delivery_controller.dart';
 import 'rider_offer_card.dart';
@@ -1927,6 +1928,7 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
             widget.offer.raw['dropoffDetails'] ??
             widget.offer.raw['dropoff'],
       ),
+      beforePermission: () => RiderLocationDisclosureDialog.show(context),
     );
   }
 
