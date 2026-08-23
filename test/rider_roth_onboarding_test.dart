@@ -24,10 +24,13 @@ void main() {
       expect(service, isNot(contains('FieldValue.increment')));
     });
 
-    test('auth onboarding invokes Roth wallet connection without approving',
+    test('auth onboarding invokes server-authoritative wallet connection',
         () {
-      expect(authBloc, contains('RiderRothOnboarding'));
-      expect(authBloc, contains('ensureWalletForRider'));
+      expect(authBloc, contains("httpsCallable('ensureRiderRothWallet')"));
+      expect(authBloc, contains('await ensureRiderRothWallet(user)'));
+      expect(authBloc, isNot(contains('RiderRothOnboarding')));
+      expect(authBloc, isNot(contains('ensureWalletForRider')));
+      expect(authBloc, isNot(contains("collection('riderRothWallets')")));
       expect(authBloc, contains("'onboardingStatus': 'profile_complete'"));
       expect(authBloc, contains("httpsCallable('advanceRiderOnboarding')"));
       for (final field in [
