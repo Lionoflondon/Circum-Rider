@@ -34,4 +34,12 @@ void main() {
     expect(source, contains('pages.isEmpty'));
     expect(source, contains('onRetry: _retry'));
   });
+
+  test('unknown startup state never renders a second branded splash', () {
+    final source = File('lib/app.dart').readAsStringSync();
+    expect(source, contains('unknownSessionState'));
+    expect(source, isNot(contains('IndexPage')));
+    expect(source, isNot(contains('assets/images/splash.png')));
+    expect(source, contains('_RiderBootSurface'));
+  });
 }
