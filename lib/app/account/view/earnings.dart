@@ -71,74 +71,75 @@ class _EarningsViewState extends State<EarningsView> {
             onRefresh: () {},
           )
         : FutureBuilder<Map<String, dynamic>>(
-      future: _summary!,
-      builder: (context, summarySnapshot) {
-        if (summarySnapshot.hasError) {
-          return _EarningsFailure(
-            onRetry: () => setState(() => _summary = _loadSummary()),
-          );
-        }
-        if (!summarySnapshot.hasData) return const _EarningsLoading();
-
-        return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('riderEarnings')
-              .doc(uid)
-              .snapshots(),
-          builder: (context, earningsSnapshot) {
-            return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('payoutRequests')
-                  .where('riderId', isEqualTo: uid)
-                  .limit(30)
-                  .snapshots(),
-              builder: (context, payoutSnapshot) {
-                return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: FirebaseFirestore.instance
-                      .collection('riderWalletTransactions')
-                      .where('riderId', isEqualTo: uid)
-                      .limit(40)
-                      .snapshots(),
-                  builder: (context, transactionSnapshot) {
-                    if (earningsSnapshot.hasError ||
-                        payoutSnapshot.hasError ||
-                        transactionSnapshot.hasError) {
-                      return _EarningsFailure(
-                        onRetry: () =>
-                            setState(() => _summary = _loadSummary()),
-                      );
-                    }
-                    if (!earningsSnapshot.hasData ||
-                        !payoutSnapshot.hasData ||
-                        !transactionSnapshot.hasData) {
-                      return const _EarningsLoading();
-                    }
-
-                    final payouts = payoutSnapshot.data?.docs
-                            .map((doc) => {'id': doc.id, ...doc.data()})
-                            .toList() ??
-                        const <Map<String, dynamic>>[];
-                    final transactions = transactionSnapshot.data?.docs
-                            .map((doc) => {'id': doc.id, ...doc.data()})
-                            .toList() ??
-                        const <Map<String, dynamic>>[];
-
-                    return _EarningsContent(
-                      summary: summarySnapshot.data!,
-                      storedEarnings: earningsSnapshot.data?.data() ?? const {},
-                      payouts: payouts,
-                      transactions: transactions,
-                      onRefresh: () =>
-                          setState(() => _summary = _loadSummary()),
-                    );
-                  },
+            future: _summary!,
+            builder: (context, summarySnapshot) {
+              if (summarySnapshot.hasError) {
+                return _EarningsFailure(
+                  onRetry: () => setState(() => _summary = _loadSummary()),
                 );
-              },
-            );
-          },
-        );
-      },
-    );
+              }
+              if (!summarySnapshot.hasData) return const _EarningsLoading();
+
+              return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                stream: FirebaseFirestore.instance
+                    .collection('riderEarnings')
+                    .doc(uid)
+                    .snapshots(),
+                builder: (context, earningsSnapshot) {
+                  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: FirebaseFirestore.instance
+                        .collection('payoutRequests')
+                        .where('riderId', isEqualTo: uid)
+                        .limit(30)
+                        .snapshots(),
+                    builder: (context, payoutSnapshot) {
+                      return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                        stream: FirebaseFirestore.instance
+                            .collection('riderWalletTransactions')
+                            .where('riderId', isEqualTo: uid)
+                            .limit(40)
+                            .snapshots(),
+                        builder: (context, transactionSnapshot) {
+                          if (earningsSnapshot.hasError ||
+                              payoutSnapshot.hasError ||
+                              transactionSnapshot.hasError) {
+                            return _EarningsFailure(
+                              onRetry: () =>
+                                  setState(() => _summary = _loadSummary()),
+                            );
+                          }
+                          if (!earningsSnapshot.hasData ||
+                              !payoutSnapshot.hasData ||
+                              !transactionSnapshot.hasData) {
+                            return const _EarningsLoading();
+                          }
+
+                          final payouts = payoutSnapshot.data?.docs
+                                  .map((doc) => {'id': doc.id, ...doc.data()})
+                                  .toList() ??
+                              const <Map<String, dynamic>>[];
+                          final transactions = transactionSnapshot.data?.docs
+                                  .map((doc) => {'id': doc.id, ...doc.data()})
+                                  .toList() ??
+                              const <Map<String, dynamic>>[];
+
+                          return _EarningsContent(
+                            summary: summarySnapshot.data!,
+                            storedEarnings:
+                                earningsSnapshot.data?.data() ?? const {},
+                            payouts: payouts,
+                            transactions: transactions,
+                            onRefresh: () =>
+                                setState(() => _summary = _loadSummary()),
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          );
 
     if (widget.embedded) {
       return SafeArea(bottom: false, child: content);
