@@ -7,6 +7,8 @@ import 'app/authentication/view/application_submitted.dart';
 import 'app/rider_account/rider_account_state.dart';
 import 'app/rider_account/rider_account_status_view.dart';
 import 'app/rider_internal_access/rider_internal_access.dart';
+import 'app/review/rider_review_fixture_screen.dart';
+import 'app/review/rider_review_fixture_service.dart';
 import 'utils/nav/nav_key.dart';
 
 import '../app/authentication/view/index.dart';
@@ -17,19 +19,23 @@ class App extends StatelessWidget {
   const App({Key? key}) : super(key: key);
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-      if (state.currentState == AppState.authenticated) {
-        return _AuthenticatedStartupGate(state: state);
-      }
-      return _buildNavigator(state, false);
-    });
+    return BlocBuilder<AuthBloc, AuthState>(
+      builder: (context, state) {
+        if (state.currentState == AppState.authenticated) {
+          return _AuthenticatedStartupGate(state: state);
+        }
+        return _buildNavigator(state, false);
+      },
+    );
   }
 
   Widget _buildNavigator(
     AuthState state,
     bool internalAccess, {
+    Map<String, dynamic>? reviewFixture,
     VoidCallback? onRetry,
   }) {
+    final hasReviewFixture = reviewFixture != null;
     final pages = <Page<void>>[
       // Unknown app state
       if (state.currentState == AppState.unknownSessionState)
@@ -37,11 +43,10 @@ class App extends StatelessWidget {
 
       // Unauthenticated app state
       if (state.currentState == AppState.unauthenticated)
-        const MaterialPage(
-          child: OnboardingView(),
-        ),
+        const MaterialPage(child: OnboardingView()),
 
       if (!internalAccess &&
+          !hasReviewFixture &&
           state.currentState == AppState.authenticated &&
           (state.riderAccountState == RiderAccountState.onboardingNotStarted ||
               state.riderAccountState ==
@@ -49,12 +54,14 @@ class App extends StatelessWidget {
         const MaterialPage(child: AddDetailsView()),
 
       if (!internalAccess &&
+          !hasReviewFixture &&
           state.currentState == AppState.authenticated &&
           (state.riderAccountState == RiderAccountState.submitted ||
               state.riderAccountState == RiderAccountState.pendingReview))
         const MaterialPage(child: ApplicationSubmittedView()),
 
       if (!internalAccess &&
+          !hasReviewFixture &&
           state.currentState == AppState.authenticated &&
           (state.riderAccountState ==
                   RiderAccountState.moreInformationRequired ||
@@ -63,16 +70,18 @@ class App extends StatelessWidget {
               state.riderAccountState == RiderAccountState.frozen ||
               state.riderAccountState == RiderAccountState.closed))
         MaterialPage(
-          child: RiderAccountStatusView(
-            accountState: state.riderAccountState,
-          ),
+          child: RiderAccountStatusView(accountState: state.riderAccountState),
         ),
 
       // Authenticated app state
-      if (state.currentState == AppState.authenticated &&
+      if (!hasReviewFixture &&
+          state.currentState == AppState.authenticated &&
           (internalAccess ||
               state.riderAccountState == RiderAccountState.approved))
         const MaterialPage(child: AppNavView()),
+
+      if (state.currentState == AppState.authenticated && hasReviewFixture)
+        MaterialPage(child: RiderReviewFixtureScreen(fixture: reviewFixture)),
     ];
 
     return Navigator(
@@ -101,42 +110,57 @@ class _AuthenticatedStartupGate extends StatefulWidget {
 }
 
 class _AuthenticatedStartupGateState extends State<_AuthenticatedStartupGate> {
-  late Future<bool> _internalAccessFuture;
+  late Future<({bool internalAccess, Map<String, dynamic>? reviewFixture})>
+  _startupAccessFuture;
 
   @override
   void initState() {
     super.initState();
-    _internalAccessFuture = _resolveInternalAccess();
+    _startupAccessFuture = _resolveStartupAccess();
   }
 
-  Future<bool> _resolveInternalAccess() =>
-      RiderInternalAccess.enabled(forceRefresh: true).timeout(
+  Future<({bool internalAccess, Map<String, dynamic>? reviewFixture})>
+  _resolveStartupAccess() async {
+    final internalAccess = await RiderInternalAccess.enabled(
+      forceRefresh: true,
+    ).timeout(const Duration(seconds: 5), onTimeout: () => false);
+    Map<String, dynamic>? reviewFixture;
+    try {
+      reviewFixture = await RiderReviewFixtureService().getOwnFixture().timeout(
         const Duration(seconds: 5),
-        onTimeout: () => false,
       );
+    } catch (_) {
+      // Review access is opt-in and server-authoritative. Any failure falls
+      // closed to the Rider's normal account-state route.
+    }
+    return (internalAccess: internalAccess, reviewFixture: reviewFixture);
+  }
 
   void _retry() {
     setState(() {
-      _internalAccessFuture = _resolveInternalAccess();
+      _startupAccessFuture = _resolveStartupAccess();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<bool>(
-      future: _internalAccessFuture,
-      builder: (context, internalAccess) {
-        if (internalAccess.connectionState != ConnectionState.done) {
+    return FutureBuilder<
+      ({bool internalAccess, Map<String, dynamic>? reviewFixture})
+    >(
+      future: _startupAccessFuture,
+      builder: (context, startupAccess) {
+        if (startupAccess.connectionState != ConnectionState.done) {
           return App()._buildNavigator(widget.state, false);
         }
-        if (internalAccess.hasError) {
-          return App()._buildNavigator(
-            widget.state,
-            false,
-            onRetry: _retry,
-          );
+        if (startupAccess.hasError) {
+          return App()._buildNavigator(widget.state, false, onRetry: _retry);
         }
-        return App()._buildNavigator(widget.state, internalAccess.data == true);
+        final access = startupAccess.data!;
+        return App()._buildNavigator(
+          widget.state,
+          access.internalAccess,
+          reviewFixture: access.reviewFixture,
+        );
       },
     );
   }

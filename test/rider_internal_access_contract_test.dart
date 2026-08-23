@@ -28,7 +28,8 @@ void main() {
     expect(source, contains('_RiderBootSurface'));
     expect(source, contains('_AuthenticatedStartupGate'));
     expect(source, contains('Duration(seconds: 5)'));
-    expect(source, contains('_internalAccessFuture'));
+    expect(source, contains('_startupAccessFuture'));
+    expect(source, contains('RiderReviewFixtureService().getOwnFixture()'));
     expect(source, isNot(contains('authenticatedStatus ==')));
     expect(source, contains('pages.isEmpty'));
     expect(source, contains('onRetry: _retry'));
