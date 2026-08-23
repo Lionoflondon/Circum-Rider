@@ -10,7 +10,6 @@ import 'app/rider_internal_access/rider_internal_access.dart';
 import 'app/review/rider_review_fixture_service.dart';
 import 'utils/nav/nav_key.dart';
 
-import '../app/authentication/view/index.dart';
 import '../app/bottom_nav/view/app_nav.dart';
 import 'utils/app_state/index.dart';
 
@@ -38,7 +37,7 @@ class App extends StatelessWidget {
     final pages = <Page<void>>[
       // Unknown app state
       if (state.currentState == AppState.unknownSessionState)
-        const MaterialPage(child: IndexPage()),
+        const MaterialPage(child: _RiderBootSurface()),
 
       // Unauthenticated app state
       if (state.currentState == AppState.unauthenticated)
