@@ -24,7 +24,6 @@ import 'package:permission_handler/permission_handler.dart'
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
-import '../../onboarding/rider_roth_onboarding.dart';
 import '../../rider_account/rider_account_state.dart';
 import '../rider_auth_error.dart';
 // import '../../onboarding/view/onboarding.dart';
@@ -42,7 +41,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     FirebaseFirestore db = FirebaseFirestore.instance;
     final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-    const rothOnboarding = RiderRothOnboarding();
+
+    Future<void> ensureRiderRothWallet(User user) async {
+      await functions.httpsCallable('ensureRiderRothWallet').call({
+        'riderId': user.uid,
+        if (user.email != null) 'email': user.email,
+      });
+    }
 
     void logRiderAuthError({
       required Object error,
@@ -620,10 +625,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             });
           }
 
-          await rothOnboarding.ensureWalletForRider(
-            riderId: user.uid,
-            email: user.email,
-          );
+          await ensureRiderRothWallet(user);
 
           emit(state.copyWith(
               status: Status.success,
@@ -729,10 +731,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             'locationEnabled': true,
             'position': myLocation.data,
           });
-          await rothOnboarding.ensureWalletForRider(
-            riderId: user.uid,
-            email: user.email,
-          );
+          await ensureRiderRothWallet(user);
         } catch (e) {
           if (e == 'Location permissions are permanently denied') {
             emit(state.copyWith(
@@ -777,10 +776,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             'locationEnabled': event.locationEnabled,
             'onboardingStatus': 'profile_complete',
           });
-          await rothOnboarding.ensureWalletForRider(
-            riderId: user.uid,
-            email: user.email,
-          );
+          await ensureRiderRothWallet(user);
           emit(state.copyWith(status: Status.locationRequested));
         } catch (error) {
           logRiderAuthError(
@@ -1216,10 +1212,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'timestamp': FieldValue.serverTimestamp(),
               'statusAfterEvent': 'account_created',
             });
-            await rothOnboarding.ensureWalletForRider(
-              riderId: user.uid,
-              email: user.email,
-            );
+            await ensureRiderRothWallet(user);
           }
 
           emit(state.copyWith(
