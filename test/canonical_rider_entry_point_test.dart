@@ -17,7 +17,7 @@ void main() {
       expect(appSource, contains('child: OnboardingView()'));
       expect(appSource, contains('child: AddDetailsView()'));
       expect(appSource, contains('child: ApplicationSubmittedView()'));
-      expect(appSource, contains('MaterialPage(child: AppNavView())'));
+      expect(appSource, contains('AppNavView(reviewFixture: reviewFixture)'));
     });
   });
 }
