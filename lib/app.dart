@@ -77,7 +77,7 @@ class App extends StatelessWidget {
           (internalAccess ||
               reviewAccess ||
               state.riderAccountState == RiderAccountState.approved))
-        const MaterialPage(child: AppNavView()),
+        MaterialPage(child: AppNavView(reviewFixture: reviewFixture)),
     ];
 
     return Navigator(

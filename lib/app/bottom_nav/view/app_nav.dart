@@ -8,6 +8,7 @@ import '../../rider_jobs/rider_job_offer_screen.dart';
 import '../../ratings/rider_appreciation.dart';
 import '../../rider_shell/rider_dashboard_view.dart';
 import '../../rider_shell/rider_profile_view.dart';
+import '../../review/rider_review_fixture_service.dart';
 import '../../schedule/rider_schedule_view.dart';
 import '../bloc/navbar_bloc.dart';
 
@@ -15,10 +16,42 @@ import '../bloc/navbar_bloc.dart';
 ///
 /// Delivery chat, notifications and schedule remain contextual destinations;
 /// they are intentionally not restored as legacy primary tabs.
-class AppNavView extends StatelessWidget {
-  const AppNavView({super.key});
+class AppNavView extends StatefulWidget {
+  const AppNavView({super.key, this.reviewFixture});
+
+  final Map<String, dynamic>? reviewFixture;
 
   static const labels = ['Home', 'Jobs', 'Action', 'Earnings', 'Profile'];
+
+  @override
+  State<AppNavView> createState() => _AppNavViewState();
+}
+
+class _AppNavViewState extends State<AppNavView> {
+  late bool _reviewOnline;
+  bool _updatingReviewPresence = false;
+
+  bool get _isReviewer => widget.reviewFixture != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _reviewOnline = widget.reviewFixture?['reviewPresence'] == 'online';
+  }
+
+  Future<void> _toggleReviewPresence() async {
+    if (!_isReviewer || _updatingReviewPresence) return;
+    setState(() => _updatingReviewPresence = true);
+    try {
+      final presence = await RiderReviewFixtureService().setPresence(
+        fixtureId: '${widget.reviewFixture!['fixtureId']}',
+        online: !_reviewOnline,
+      );
+      if (mounted) setState(() => _reviewOnline = presence == 'online');
+    } finally {
+      if (mounted) setState(() => _updatingReviewPresence = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,13 +61,36 @@ class AppNavView extends StatelessWidget {
             context.read<NavbarBloc>().add(ChangeTabIndex(index: index));
 
         final screens = <Widget>[
-          RiderDashboardView(onSelectTab: select),
-          RiderJobOfferScreen(
-            onScheduledAccepted: () => select(2),
-            onNavigateTab: select,
+          RiderDashboardView(
+            onSelectTab: select,
+            reviewFixture: widget.reviewFixture,
+            reviewOnline: _reviewOnline,
+            onReviewToggle: _toggleReviewPresence,
           ),
-          const RiderScheduleView(embedded: true),
-          const EarningsView(embedded: true),
+          if (_isReviewer)
+            const _ReviewerSafePage(
+              title: 'Jobs',
+              message: 'No available deliveries',
+            )
+          else
+            RiderJobOfferScreen(
+              onScheduledAccepted: () => select(2),
+              onNavigateTab: select,
+            ),
+          if (_isReviewer)
+            const _ReviewerSafePage(
+              title: 'Scheduled jobs',
+              message: 'No scheduled deliveries',
+            )
+          else
+            const RiderScheduleView(embedded: true),
+          if (_isReviewer)
+            const _ReviewerSafePage(
+              title: 'Earnings',
+              message: 'No review earnings',
+            )
+          else
+            const EarningsView(embedded: true),
           RiderProfileView(onSelectTab: select),
         ];
 
@@ -46,6 +102,9 @@ class AppNavView extends StatelessWidget {
               bottomNavigationBar: _RiderDashboardNav(
                 currentIndex: nav.currentNavIndex,
                 onSelect: select,
+                reviewOnline: _isReviewer ? _reviewOnline : null,
+                reviewBusy: _updatingReviewPresence,
+                onReviewToggle: _isReviewer ? _toggleReviewPresence : null,
               ),
             ),
           ),
@@ -59,10 +118,16 @@ class _RiderDashboardNav extends StatelessWidget {
   const _RiderDashboardNav({
     required this.currentIndex,
     required this.onSelect,
+    required this.reviewOnline,
+    required this.reviewBusy,
+    required this.onReviewToggle,
   });
 
   final int currentIndex;
   final ValueChanged<int> onSelect;
+  final bool? reviewOnline;
+  final bool reviewBusy;
+  final Future<void> Function()? onReviewToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -93,7 +158,14 @@ class _RiderDashboardNav extends StatelessWidget {
                 selected: currentIndex == 1,
                 onTap: () => onSelect(1),
               ),
-              const _CentralAction(),
+              if (reviewOnline == null)
+                const _CentralAction()
+              else
+                _ReviewCentralAction(
+                  online: reviewOnline!,
+                  busy: reviewBusy,
+                  onToggle: onReviewToggle!,
+                ),
               _NavItem(
                 icon: Icons.account_balance_wallet_outlined,
                 selectedIcon: Icons.account_balance_wallet_rounded,
@@ -114,6 +186,68 @@ class _RiderDashboardNav extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ReviewerSafePage extends StatelessWidget {
+  const _ReviewerSafePage({required this.title, required this.message});
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+        child: RiderEmptyState(
+          icon: Icons.work_off_outlined,
+          title: title,
+          message: message,
+        ),
+      );
+}
+
+class _ReviewCentralAction extends StatelessWidget {
+  const _ReviewCentralAction({
+    required this.online,
+    required this.busy,
+    required this.onToggle,
+  });
+
+  final bool online;
+  final bool busy;
+  final Future<void> Function() onToggle;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        button: true,
+        label: online ? 'Reviewer online. Go offline' : 'Go online',
+        child: GestureDetector(
+          onTap: busy ? null : onToggle,
+          child: Transform.translate(
+            offset: const Offset(0, -14),
+            child: Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: online ? RiderPalette.green : RiderPalette.blue,
+              ),
+              child: busy
+                  ? const Padding(
+                      padding: EdgeInsets.all(15),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.4,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Icon(
+                      online
+                          ? Icons.power_settings_new_rounded
+                          : Icons.add_rounded,
+                      color: Colors.white,
+                    ),
+            ),
+          ),
+        ),
+      );
 }
 
 class _NavItem extends StatelessWidget {

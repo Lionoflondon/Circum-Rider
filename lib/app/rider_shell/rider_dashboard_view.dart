@@ -18,9 +18,18 @@ import '../review/rider_review_fixture_screen.dart';
 import '../review/rider_review_fixture_service.dart';
 
 class RiderDashboardView extends StatefulWidget {
-  const RiderDashboardView({super.key, required this.onSelectTab});
+  const RiderDashboardView({
+    super.key,
+    required this.onSelectTab,
+    this.reviewFixture,
+    this.reviewOnline = false,
+    this.onReviewToggle,
+  });
 
   final ValueChanged<int> onSelectTab;
+  final Map<String, dynamic>? reviewFixture;
+  final bool reviewOnline;
+  final Future<void> Function()? onReviewToggle;
 
   @override
   State<RiderDashboardView> createState() => _RiderDashboardViewState();
@@ -30,9 +39,11 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
   @override
   void initState() {
     super.initState();
-    context.read<HomeBloc>()
-      ..add(CheckForPushToken())
-      ..add(CheckForActiveRequest());
+    if (widget.reviewFixture == null) {
+      context.read<HomeBloc>()
+        ..add(CheckForPushToken())
+        ..add(CheckForActiveRequest());
+    }
   }
 
   @override
@@ -43,6 +54,39 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
         icon: Icons.lock_outline_rounded,
         title: 'Sign in required',
         message: 'Sign in to open your Rider dashboard.',
+      );
+    }
+
+    if (widget.reviewFixture != null) {
+      return BlocBuilder<HomeBloc, HomeState>(
+        builder: (context, homeState) {
+          final data = _DashboardData(
+            profile: const {},
+            earnings: const {},
+            presence: {
+              'isOnline': widget.reviewOnline,
+              'availabilityStatus': widget.reviewOnline ? 'online' : 'offline',
+            },
+            eligibleOffers: const [],
+            scheduled: const [],
+            recent: const [],
+            loading: false,
+            hasDataError: false,
+            notificationsUnavailable: false,
+          );
+          return _DashboardSurface(
+            data: data,
+            home: homeState.copyWith(
+              rideStatus:
+                  widget.reviewOnline ? RideStatus.online : RideStatus.offline,
+              canGoOnline: true,
+              message: null,
+            ),
+            onSelectTab: widget.onSelectTab,
+            onToggleAvailability: widget.onReviewToggle!,
+            reviewFixture: widget.reviewFixture,
+          );
+        },
       );
     }
 
@@ -97,10 +141,15 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                                   presenceSnapshot.data?.data() ?? const {},
                               eligibleOffers: _docs(offersSnapshot),
                               scheduled: assigned
-                                  .where((item) =>
-                                      _isScheduled(item) && !_isFinished(item))
+                                  .where(
+                                    (item) =>
+                                        _isScheduled(item) &&
+                                        !_isFinished(item),
+                                  )
                                   .toList()
-                                ..sort((a, b) => _time(a).compareTo(_time(b))),
+                                ..sort(
+                                  (a, b) => _time(a).compareTo(_time(b)),
+                                ),
                               recent: assigned.where(_isFinished).toList()
                                 ..sort((a, b) => _time(b).compareTo(_time(a))),
                               loading: profileSnapshot.connectionState ==
@@ -135,6 +184,7 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                                                   : RideStatus.online,
                                             ),
                                           ),
+                                  reviewFixture: null,
                                 );
                               },
                             );
@@ -153,7 +203,8 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
   }
 
   static List<Map<String, dynamic>> _docs(
-          AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot) =>
+    AsyncSnapshot<QuerySnapshot<Map<String, dynamic>>> snapshot,
+  ) =>
       snapshot.data?.docs
           .map((doc) => {'id': doc.id, ...doc.data()})
           .toList() ??
@@ -275,12 +326,14 @@ class _DashboardSurface extends StatelessWidget {
     required this.home,
     required this.onSelectTab,
     required this.onToggleAvailability,
+    required this.reviewFixture,
   });
 
   final _DashboardData data;
   final HomeState home;
   final ValueChanged<int> onSelectTab;
   final VoidCallback onToggleAvailability;
+  final Map<String, dynamic>? reviewFixture;
 
   @override
   Widget build(BuildContext context) {
@@ -326,7 +379,7 @@ class _DashboardSurface extends StatelessWidget {
                     online: data.isOnline,
                     onToggle: onToggleAvailability,
                   ),
-                  const _GooglePlayReviewEntry(),
+                  _GooglePlayReviewEntry(fixture: reviewFixture),
                   FutureBuilder<bool>(
                     future: RiderInternalAccess.enabled(),
                     builder: (context, snapshot) {
@@ -390,33 +443,40 @@ class _DashboardSurface extends StatelessWidget {
 }
 
 class _GooglePlayReviewEntry extends StatelessWidget {
-  const _GooglePlayReviewEntry();
+  const _GooglePlayReviewEntry({this.fixture});
+
+  final Map<String, dynamic>? fixture;
 
   @override
   Widget build(BuildContext context) {
+    if (fixture != null) return _entry(context, fixture!);
     return FutureBuilder<Map<String, dynamic>>(
       future: RiderReviewFixtureService().getOwnFixture(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const SizedBox.shrink();
-        return Padding(
-          padding: const EdgeInsets.only(top: 14),
-          child: Card(
-            child: ListTile(
-              leading: const Icon(Icons.location_on_outlined),
-              title: const Text('Review location tracking'),
-              subtitle: const Text('Open the controlled Rider review path.'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => RiderReviewFixtureScreen(
-                  fixture: snapshot.data!,
-                ),
-              )),
-            ),
-          ),
-        );
+        return _entry(context, snapshot.data!);
       },
     );
   }
+
+  Widget _entry(BuildContext context, Map<String, dynamic> activeFixture) =>
+      Padding(
+        padding: const EdgeInsets.only(top: 14),
+        child: Card(
+          child: ListTile(
+            leading: const Icon(Icons.location_on_outlined),
+            title: const Text('Review location tracking'),
+            subtitle: const Text('Open the controlled Rider review path.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    RiderReviewFixtureScreen(fixture: activeFixture),
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class _DashboardHeader extends StatelessWidget {
@@ -554,8 +614,11 @@ class _NotificationButton extends StatelessWidget {
           return Stack(
             clipBehavior: Clip.none,
             children: [
-              const Icon(Icons.notifications_none_rounded,
-                  color: RiderPalette.paper, size: 20),
+              const Icon(
+                Icons.notifications_none_rounded,
+                color: RiderPalette.paper,
+                size: 20,
+              ),
               if (snapshot.hasData && unread > 0)
                 Positioned(
                   right: -1,
@@ -677,14 +740,16 @@ class _AvailabilityCard extends StatelessWidget {
                         : RiderPalette.green,
                     foregroundColor:
                         online ? RiderPalette.paper : RiderPalette.background,
-                    disabledBackgroundColor:
-                        Colors.white.withValues(alpha: .05),
+                    disabledBackgroundColor: Colors.white.withValues(
+                      alpha: .05,
+                    ),
                     disabledForegroundColor: RiderPalette.muted,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                       side: online
                           ? BorderSide(
-                              color: Colors.white.withValues(alpha: .16))
+                              color: Colors.white.withValues(alpha: .16),
+                            )
                           : BorderSide.none,
                     ),
                     textStyle: const TextStyle(
@@ -714,35 +779,37 @@ class _InternalDiagnosticsCard extends StatelessWidget {
     final rows = <({String label, String value})>[
       (
         label: 'GPS status',
-        value: _clean(presence['gpsStatus'], fallback: 'Unknown')
+        value: _clean(presence['gpsStatus'], fallback: 'Unknown'),
       ),
       (
         label: 'Accuracy',
-        value: _meters(locationMap['accuracyMeters'] ?? locationMap['accuracy'])
+        value: _meters(
+          locationMap['accuracyMeters'] ?? locationMap['accuracy'],
+        ),
       ),
       (
         label: 'Last fix',
-        value: _age(locationMap['updatedAt'] ?? presence['lastLocationAt'])
+        value: _age(locationMap['updatedAt'] ?? presence['lastLocationAt']),
       ),
       (label: 'Update frequency', value: 'Idle heartbeat: 45s'),
       (
         label: 'Background tracking',
-        value: _clean(presence['backgroundTracking'], fallback: 'Unknown')
+        value: _clean(presence['backgroundTracking'], fallback: 'Unknown'),
       ),
       (
         label: 'Connectivity',
-        value: _clean(presence['connectionStatus'], fallback: 'Unknown')
+        value: _clean(presence['connectionStatus'], fallback: 'Unknown'),
       ),
       (
         label: 'Battery optimisation',
-        value: _clean(presence['batteryOptimisation'], fallback: 'Unknown')
+        value: _clean(presence['batteryOptimisation'], fallback: 'Unknown'),
       ),
       (label: 'Last backend upload', value: _age(presence['lastHeartbeatAt'])),
       (
         label: 'Dispatch eligibility',
         value: presence['dispatchEligible'] == true
             ? 'Eligible'
-            : 'Waiting for healthy GPS'
+            : 'Waiting for healthy GPS',
       ),
     ];
 
@@ -753,8 +820,11 @@ class _InternalDiagnosticsCard extends StatelessWidget {
         children: [
           const Row(
             children: [
-              Icon(Icons.monitor_heart_rounded,
-                  color: RiderPalette.blue, size: 18),
+              Icon(
+                Icons.monitor_heart_rounded,
+                color: RiderPalette.blue,
+                size: 18,
+              ),
               SizedBox(width: 8),
               Text(
                 'Internal dispatch diagnostics',
@@ -806,11 +876,15 @@ class _InternalDiagnosticsCard extends StatelessWidget {
     if (text.isEmpty) return fallback;
     return text
         .replaceAll('_', ' ')
-        .replaceAllMapped(RegExp(r'([a-z])([A-Z])'),
-            (match) => '${match.group(1)} ${match.group(2)}')
+        .replaceAllMapped(
+          RegExp(r'([a-z])([A-Z])'),
+          (match) => '${match.group(1)} ${match.group(2)}',
+        )
         .toLowerCase()
         .replaceFirstMapped(
-            RegExp(r'^[a-z]'), (match) => match.group(0)!.toUpperCase());
+          RegExp(r'^[a-z]'),
+          (match) => match.group(0)!.toUpperCase(),
+        );
   }
 
   String _meters(Object? value) {
@@ -822,8 +896,9 @@ class _InternalDiagnosticsCard extends StatelessWidget {
   String _age(Object? value) {
     final millis = _millis(value);
     if (millis == null) return 'Unknown';
-    final elapsed =
-        DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(millis));
+    final elapsed = DateTime.now().difference(
+      DateTime.fromMillisecondsSinceEpoch(millis),
+    );
     if (elapsed.inSeconds < 15) return 'Just now';
     if (elapsed.inMinutes < 1) return '${elapsed.inSeconds}s ago';
     if (elapsed.inHours < 1) return '${elapsed.inMinutes}m ago';
@@ -856,10 +931,8 @@ class _DashboardGuideEntry extends StatelessWidget {
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => RiderGuideView(
-            authenticated: true,
-            progress: progress,
-          ),
+          builder: (_) =>
+              RiderGuideView(authenticated: true, progress: progress),
         ),
       ),
     );
@@ -881,12 +954,18 @@ class _RankCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Rank pending',
-                style: TextStyle(
-                    color: RiderPalette.paper, fontWeight: FontWeight.w800)),
+            Text(
+              'Rank pending',
+              style: TextStyle(
+                color: RiderPalette.paper,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             SizedBox(height: 6),
-            Text('Build trust with every completed delivery.',
-                style: TextStyle(color: RiderPalette.muted, fontSize: 12.5)),
+            Text(
+              'Build trust with every completed delivery.',
+              style: TextStyle(color: RiderPalette.muted, fontSize: 12.5),
+            ),
           ],
         ),
       );
@@ -935,18 +1014,22 @@ class _RankCard extends StatelessWidget {
               value: progress.progress,
               minHeight: 5,
               backgroundColor: Colors.white.withValues(alpha: .07),
-              valueColor:
-                  const AlwaysStoppedAnimation<Color>(RiderPalette.green),
+              valueColor: const AlwaysStoppedAnimation<Color>(
+                RiderPalette.green,
+              ),
             ),
           ),
           const SizedBox(height: 7),
-          Text(note,
-              style: const TextStyle(color: RiderPalette.muted, fontSize: 11)),
+          Text(
+            note,
+            style: const TextStyle(color: RiderPalette.muted, fontSize: 11),
+          ),
           if (rank.overrideReason != null) ...[
             const SizedBox(height: 7),
-            Text(rank.overrideReason!,
-                style:
-                    const TextStyle(color: RiderPalette.amber, fontSize: 11)),
+            Text(
+              rank.overrideReason!,
+              style: const TextStyle(color: RiderPalette.amber, fontSize: 11),
+            ),
           ],
           if (recognitions.hasAny) ...[
             const SizedBox(height: 10),
@@ -996,15 +1079,19 @@ class _TodaySection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final summary = RiderEarningsSummary.from(earnings);
-    final today = _number(earnings['todayEarnings'] ??
-        earnings['todayClearedCash'] ??
-        earnings['availableToday']);
+    final today = _number(
+      earnings['todayEarnings'] ??
+          earnings['todayClearedCash'] ??
+          earnings['availableToday'],
+    );
     final jobs = _number(
-            earnings['todayCompletedJobs'] ?? earnings['completedJobsToday'])
-        .toInt();
-    final pending = _number(earnings['pendingEarnings'] ??
-        earnings['pendingBalance'] ??
-        summary?.pending);
+      earnings['todayCompletedJobs'] ?? earnings['completedJobsToday'],
+    ).toInt();
+    final pending = _number(
+      earnings['pendingEarnings'] ??
+          earnings['pendingBalance'] ??
+          summary?.pending,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1254,8 +1341,11 @@ class _RecentRow extends StatelessWidget {
                 color: RiderPalette.green.withValues(alpha: .14),
                 borderRadius: BorderRadius.circular(11),
               ),
-              child: const Icon(Icons.done_rounded,
-                  color: RiderPalette.green, size: 18),
+              child: const Icon(
+                Icons.done_rounded,
+                color: RiderPalette.green,
+                size: 18,
+              ),
             ),
             const SizedBox(width: 13),
             Expanded(
@@ -1424,8 +1514,10 @@ class _ActionRow extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   subtitle,
-                  style:
-                      const TextStyle(color: RiderPalette.muted, fontSize: 12),
+                  style: const TextStyle(
+                    color: RiderPalette.muted,
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -1537,15 +1629,22 @@ class _InlineNotice extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: const TextStyle(
-                        color: RiderPalette.paper,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: RiderPalette.paper,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
                 const SizedBox(height: 3),
-                Text(message,
-                    style: const TextStyle(
-                        color: RiderPalette.muted, fontSize: 12)),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    color: RiderPalette.muted,
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1556,11 +1655,7 @@ class _InlineNotice extends StatelessWidget {
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.title,
-    this.action,
-    this.onAction,
-  });
+  const _SectionHeader({required this.title, this.action, this.onAction});
 
   final String title;
   final String? action;
@@ -1661,11 +1756,7 @@ class _RankProgressData {
       if (trustPoints >= RiderRankSnapshot.thresholds[i]) index = i;
     }
     if (index == RiderRankSnapshot.ranks.length - 1) {
-      return const _RankProgressData(
-        progress: 1,
-        remaining: 0,
-        nextRank: null,
-      );
+      return const _RankProgressData(progress: 1, remaining: 0, nextRank: null);
     }
     final current = RiderRankSnapshot.thresholds[index];
     final next = RiderRankSnapshot.thresholds[index + 1];

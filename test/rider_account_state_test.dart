@@ -157,7 +157,7 @@ void main() {
   test('existing app session gate retains AppNav for approved riders', () {
     final source = File('lib/app.dart').readAsStringSync();
     expect(source, contains('RiderAccountState.approved'));
-    expect(source, contains('MaterialPage(child: AppNavView())'));
+    expect(source, contains('AppNavView(reviewFixture: reviewFixture)'));
     expect(source, contains('RiderAccountStatusView'));
   });
 }
