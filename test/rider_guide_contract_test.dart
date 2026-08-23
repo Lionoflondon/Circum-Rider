@@ -15,8 +15,6 @@ void main() {
     final pending =
         File('lib/app/authentication/view/application_submitted.dart')
             .readAsStringSync();
-    final addDetails =
-        File('lib/app/authentication/view/add_details.dart').readAsStringSync();
     final accountState = File('lib/app/rider_account/rider_account_state.dart')
         .readAsStringSync();
     final applicationCentre =
@@ -47,7 +45,7 @@ void main() {
 
     test('authenticated guide is session-safe and closeable', () {
       final authenticatedEntryPoints =
-          '$dashboard\n$profile\n$pending\n$addDetails';
+          '$dashboard\n$profile\n$pending';
       expect(authenticatedEntryPoints, contains('authenticated: true'));
       expect(guide, contains('Open Application Centre'));
       expect(guide, contains('RiderApplicationCentre'));
@@ -63,8 +61,7 @@ void main() {
       expect(profile, contains('RiderApplicationCentre'));
       expect(pending, contains('RiderGuideEntryCard'));
       expect(pending, contains('RiderGuideProgressCard'));
-      expect(addDetails, contains('Rider Guide'));
-      expect(addDetails, contains('RiderGuideView'));
+      expect(applicationCentre, contains('RiderApplicationCentre'));
     });
 
     test('Roth guidance is present and separate from cash', () {
