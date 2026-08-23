@@ -31,7 +31,6 @@ class _OnboardingViewState extends State<OnboardingView> {
   final _otp = TextEditingController();
   bool _terms = false;
   bool _privacy = false;
-  bool _rightToWork = false;
   bool _showPassword = false;
   bool _checkingIntro = true;
   bool _showIntro = true;
@@ -155,7 +154,6 @@ class _OnboardingViewState extends State<OnboardingView> {
           showPassword: _showPassword,
           terms: _terms,
           privacy: _privacy,
-          rightToWork: _rightToWork,
           loading: state.status == Status.loading,
           error: _message(state),
           onChanged: _syncCreateFields,
@@ -163,7 +161,6 @@ class _OnboardingViewState extends State<OnboardingView> {
               setState(() => _showPassword = !_showPassword),
           onTerms: (value) => setState(() => _terms = value),
           onPrivacy: (value) => setState(() => _privacy = value),
-          onRightToWork: (value) => setState(() => _rightToWork = value),
           onSubmit: () => _createAccount(state),
           onSignIn: () => setState(() => _step = _RiderAuthStep.signIn),
         ),
@@ -271,9 +268,6 @@ class _OnboardingViewState extends State<OnboardingView> {
     }
     if (!_terms) return 'Accept the Rider Terms to continue.';
     if (!_privacy) return 'Accept the Privacy Policy to continue.';
-    if (!_rightToWork) {
-      return 'Confirm you are legally entitled to work in the UK.';
-    }
     return null;
   }
 
@@ -518,13 +512,11 @@ class _CreateAccountStep extends StatelessWidget {
     required this.showPassword,
     required this.terms,
     required this.privacy,
-    required this.rightToWork,
     required this.loading,
     required this.onChanged,
     required this.onTogglePassword,
     required this.onTerms,
     required this.onPrivacy,
-    required this.onRightToWork,
     required this.onSubmit,
     required this.onSignIn,
     this.error,
@@ -537,13 +529,11 @@ class _CreateAccountStep extends StatelessWidget {
   final bool showPassword;
   final bool terms;
   final bool privacy;
-  final bool rightToWork;
   final bool loading;
   final VoidCallback onChanged;
   final VoidCallback onTogglePassword;
   final ValueChanged<bool> onTerms;
   final ValueChanged<bool> onPrivacy;
-  final ValueChanged<bool> onRightToWork;
   final VoidCallback onSubmit;
   final VoidCallback onSignIn;
   final String? error;
@@ -604,11 +594,6 @@ class _CreateAccountStep extends StatelessWidget {
               value: privacy,
               text: 'I agree to the Privacy Policy.',
               onChanged: onPrivacy,
-            ),
-            _ConsentTile(
-              value: rightToWork,
-              text: 'I confirm I am legally entitled to work in the UK.',
-              onChanged: onRightToWork,
             ),
             if (error != null) _AuthError(error!),
             const SizedBox(height: 16),
