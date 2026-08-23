@@ -31,6 +31,7 @@ class RiderJobOfferScreen extends StatefulWidget {
   final FirebaseAuth? auth;
   final RiderAcceptController? acceptController;
   final List<RiderJobOffer>? previewOffers;
+  final bool isolatedEmptyData;
   final VoidCallback? onScheduledAccepted;
   final ValueChanged<int>? onNavigateTab;
 
@@ -40,6 +41,7 @@ class RiderJobOfferScreen extends StatefulWidget {
     this.auth,
     this.acceptController,
     this.previewOffers,
+    this.isolatedEmptyData = false,
     this.onScheduledAccepted,
     this.onNavigateTab,
   });
@@ -61,7 +63,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.previewOffers != null) return;
+    if (widget.previewOffers != null || widget.isolatedEmptyData) return;
     _firestore = widget.firestore ?? FirebaseFirestore.instance;
     _auth = widget.auth ?? FirebaseAuth.instance;
     _acceptController = widget.acceptController ??
@@ -72,6 +74,13 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isolatedEmptyData) {
+      return const _JobsStateScaffold(
+        title: 'No offers nearby',
+        message: 'New delivery offers will appear here when available.',
+      );
+    }
+
     final previewOffers = widget.previewOffers;
     if (previewOffers != null) {
       return _OfferExperience(

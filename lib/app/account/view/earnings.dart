@@ -10,20 +10,26 @@ import '../../rider_design/rider_ui.dart';
 import '../bloc/account_bloc.dart';
 
 class EarningsView extends StatefulWidget {
-  const EarningsView({super.key, this.embedded = false});
+  const EarningsView({
+    super.key,
+    this.embedded = false,
+    this.isolatedZeroData = false,
+  });
 
   final bool embedded;
+  final bool isolatedZeroData;
 
   @override
   State<EarningsView> createState() => _EarningsViewState();
 }
 
 class _EarningsViewState extends State<EarningsView> {
-  late Future<Map<String, dynamic>> _summary;
+  Future<Map<String, dynamic>>? _summary;
 
   @override
   void initState() {
     super.initState();
+    if (widget.isolatedZeroData) return;
     _summary = _loadSummary();
     context.read<AccountBloc>()
       ..add(GetEarnings())
@@ -48,8 +54,24 @@ class _EarningsViewState extends State<EarningsView> {
       );
     }
 
-    final content = FutureBuilder<Map<String, dynamic>>(
-      future: _summary,
+    final content = widget.isolatedZeroData
+        ? _EarningsContent(
+            summary: const {
+              'storedAvailable': 0,
+              'pending': 0,
+              'activityCount': 0,
+              'reconciled': true,
+              'connectReadiness': 'setup_required',
+              'totals': <String, dynamic>{},
+            },
+            storedEarnings: const {},
+            payouts: const [],
+            transactions: const [],
+            showZeroValueSections: true,
+            onRefresh: () {},
+          )
+        : FutureBuilder<Map<String, dynamic>>(
+      future: _summary!,
       builder: (context, summarySnapshot) {
         if (summarySnapshot.hasError) {
           return _EarningsFailure(
@@ -135,6 +157,7 @@ class _EarningsContent extends StatelessWidget {
     required this.payouts,
     required this.transactions,
     required this.onRefresh,
+    this.showZeroValueSections = false,
   });
 
   final Map<String, dynamic> summary;
@@ -142,6 +165,7 @@ class _EarningsContent extends StatelessWidget {
   final List<Map<String, dynamic>> payouts;
   final List<Map<String, dynamic>> transactions;
   final VoidCallback onRefresh;
+  final bool showZeroValueSections;
 
   @override
   Widget build(BuildContext context) {
@@ -193,7 +217,7 @@ class _EarningsContent extends StatelessWidget {
           children: [
             const _TopBar(),
             const SizedBox(height: 18),
-            if (!hasEarnings) ...[
+            if (!hasEarnings && !showZeroValueSections) ...[
               const _NoEarningsState(),
             ] else ...[
               _BalanceHero(
@@ -204,6 +228,7 @@ class _EarningsContent extends StatelessWidget {
                 reconciled: reconciled,
                 unexplained: unexplained,
                 activePayout: activePayout,
+                showPending: showZeroValueSections,
                 busy: account.status == AccountStatus.loading,
                 onWithdraw: pendingPayout ||
                         available <= 0 ||
@@ -395,6 +420,7 @@ class _BalanceHero extends StatelessWidget {
     required this.payouts,
     required this.reviewRequired,
     required this.reviewMessage,
+    this.showPending = false,
     required this.busy,
     required this.onWithdraw,
   });
@@ -409,6 +435,7 @@ class _BalanceHero extends StatelessWidget {
   final List<Map<String, dynamic>> payouts;
   final bool reviewRequired;
   final String reviewMessage;
+  final bool showPending;
   final bool busy;
   final VoidCallback? onWithdraw;
 
@@ -434,7 +461,7 @@ class _BalanceHero extends StatelessWidget {
             const SizedBox(height: 16),
             Row(
               children: [
-                if (pending > 0) ...[
+                if (pending > 0 || showPending) ...[
                   Expanded(
                     child:
                         _MiniMetric(value: _money(pending), label: 'PENDING'),

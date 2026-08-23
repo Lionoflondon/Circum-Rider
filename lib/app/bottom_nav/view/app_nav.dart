@@ -67,16 +67,11 @@ class _AppNavViewState extends State<AppNavView> {
             reviewOnline: _reviewOnline,
             onReviewToggle: _toggleReviewPresence,
           ),
-          if (_isReviewer)
-            const _ReviewerSafePage(
-              title: 'Jobs',
-              message: 'No available deliveries',
-            )
-          else
-            RiderJobOfferScreen(
-              onScheduledAccepted: () => select(2),
-              onNavigateTab: select,
-            ),
+          RiderJobOfferScreen(
+            isolatedEmptyData: _isReviewer,
+            onScheduledAccepted: () => select(2),
+            onNavigateTab: select,
+          ),
           if (_isReviewer)
             const _ReviewerSafePage(
               title: 'Scheduled jobs',
@@ -84,13 +79,10 @@ class _AppNavViewState extends State<AppNavView> {
             )
           else
             const RiderScheduleView(embedded: true),
-          if (_isReviewer)
-            const _ReviewerSafePage(
-              title: 'Earnings',
-              message: 'No review earnings',
-            )
-          else
-            const EarningsView(embedded: true),
+          EarningsView(
+            embedded: true,
+            isolatedZeroData: _isReviewer,
+          ),
           RiderProfileView(onSelectTab: select),
         ];
 
