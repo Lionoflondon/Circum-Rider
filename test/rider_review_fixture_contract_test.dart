@@ -30,9 +30,11 @@ void main() {
       expect(dashboard, contains('Review location tracking'));
       expect(dashboard, contains('RiderReviewFixtureScreen'));
       expect(service, contains('setGooglePlayReviewPresence'));
-      expect(nav, contains('No available deliveries'));
       expect(nav, contains('No scheduled deliveries'));
-      expect(nav, contains('No review earnings'));
+      expect(nav, contains('isolatedEmptyData: _isReviewer'));
+      expect(nav, contains('isolatedZeroData: _isReviewer'));
+      expect(nav, isNot(contains('No available deliveries')));
+      expect(nav, isNot(contains('No review earnings')));
       expect(nav, contains('RiderReviewFixtureService().setPresence'));
       expect(nav, isNot(contains("collection('deliveryRequests')")));
       expect(dashboard, contains('widget.reviewFixture != null'));
@@ -66,5 +68,49 @@ void main() {
     expect(home, contains("httpsCallable('goOnline')"));
     expect(home, contains("httpsCallable('goOffline')"));
     expect(home, contains('RiderAccountStateResolver.canOperate'));
+  });
+
+  test('reviewer Jobs uses the production screen with an isolated empty source',
+      () {
+    final nav = File('lib/app/bottom_nav/view/app_nav.dart').readAsStringSync();
+    final jobs = File(
+      'lib/app/rider_jobs/rider_job_offer_screen.dart',
+    ).readAsStringSync();
+
+    expect(nav, contains('RiderJobOfferScreen('));
+    expect(nav, contains('isolatedEmptyData: _isReviewer'));
+    expect(jobs, contains('if (widget.isolatedEmptyData)'));
+    expect(jobs, contains("title: 'No offers nearby'"));
+    expect(jobs, contains("title: 'Available deliveries'"));
+    expect(jobs, contains("title: 'Scheduled deliveries'"));
+    expect(jobs, contains("title: 'Active delivery'"));
+    expect(jobs, contains("title: 'Activity'"));
+    expect(
+      jobs.indexOf('if (widget.isolatedEmptyData)'),
+      lessThan(jobs.indexOf("collection('deliveryRequests')")),
+    );
+  });
+
+  test('reviewer Earnings uses production sections with isolated zero data',
+      () {
+    final nav = File('lib/app/bottom_nav/view/app_nav.dart').readAsStringSync();
+    final earnings = File(
+      'lib/app/account/view/earnings.dart',
+    ).readAsStringSync();
+
+    expect(nav, contains('EarningsView('));
+    expect(nav, contains('isolatedZeroData: _isReviewer'));
+    expect(earnings, contains('if (widget.isolatedZeroData) return;'));
+    expect(earnings, contains("'storedAvailable': 0"));
+    expect(earnings, contains("'pending': 0"));
+    expect(earnings, contains("'activityCount': 0"));
+    expect(earnings, contains('showZeroValueSections: true'));
+    expect(earnings, contains("'Available balance'"));
+    expect(earnings, contains("title: 'Payout history'"));
+    expect(earnings, contains("title: 'Transactions'"));
+    expect(
+      earnings.indexOf('if (widget.isolatedZeroData) return;'),
+      lessThan(earnings.indexOf("httpsCallable('getRiderEarningsSummary')")),
+    );
   });
 }
