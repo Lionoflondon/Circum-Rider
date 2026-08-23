@@ -14,6 +14,8 @@ import '../recognitions/rider_recognitions.dart';
 import '../rider_account/rider_account_state.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
+import '../review/rider_review_fixture_screen.dart';
+import '../review/rider_review_fixture_service.dart';
 
 class RiderDashboardView extends StatefulWidget {
   const RiderDashboardView({super.key, required this.onSelectTab});
@@ -324,6 +326,7 @@ class _DashboardSurface extends StatelessWidget {
                     online: data.isOnline,
                     onToggle: onToggleAvailability,
                   ),
+                  const _GooglePlayReviewEntry(),
                   FutureBuilder<bool>(
                     future: RiderInternalAccess.enabled(),
                     builder: (context, snapshot) {
@@ -382,6 +385,36 @@ class _DashboardSurface extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _GooglePlayReviewEntry extends StatelessWidget {
+  const _GooglePlayReviewEntry();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>>(
+      future: RiderReviewFixtureService().getOwnFixture(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: 14),
+          child: Card(
+            child: ListTile(
+              leading: const Icon(Icons.location_on_outlined),
+              title: const Text('Review location tracking'),
+              subtitle: const Text('Open the controlled Rider review path.'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => RiderReviewFixtureScreen(
+                  fixture: snapshot.data!,
+                ),
+              )),
+            ),
+          ),
+        );
+      },
     );
   }
 }
