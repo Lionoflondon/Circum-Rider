@@ -7,7 +7,6 @@ import 'app/authentication/view/application_submitted.dart';
 import 'app/rider_account/rider_account_state.dart';
 import 'app/rider_account/rider_account_status_view.dart';
 import 'app/rider_internal_access/rider_internal_access.dart';
-import 'app/review/rider_review_fixture_screen.dart';
 import 'app/review/rider_review_fixture_service.dart';
 import 'utils/nav/nav_key.dart';
 
@@ -35,7 +34,7 @@ class App extends StatelessWidget {
     Map<String, dynamic>? reviewFixture,
     VoidCallback? onRetry,
   }) {
-    final hasReviewFixture = reviewFixture != null;
+    final reviewAccess = reviewFixture != null;
     final pages = <Page<void>>[
       // Unknown app state
       if (state.currentState == AppState.unknownSessionState)
@@ -46,7 +45,7 @@ class App extends StatelessWidget {
         const MaterialPage(child: OnboardingView()),
 
       if (!internalAccess &&
-          !hasReviewFixture &&
+          !reviewAccess &&
           state.currentState == AppState.authenticated &&
           (state.riderAccountState == RiderAccountState.onboardingNotStarted ||
               state.riderAccountState ==
@@ -54,14 +53,14 @@ class App extends StatelessWidget {
         const MaterialPage(child: AddDetailsView()),
 
       if (!internalAccess &&
-          !hasReviewFixture &&
+          !reviewAccess &&
           state.currentState == AppState.authenticated &&
           (state.riderAccountState == RiderAccountState.submitted ||
               state.riderAccountState == RiderAccountState.pendingReview))
         const MaterialPage(child: ApplicationSubmittedView()),
 
       if (!internalAccess &&
-          !hasReviewFixture &&
+          !reviewAccess &&
           state.currentState == AppState.authenticated &&
           (state.riderAccountState ==
                   RiderAccountState.moreInformationRequired ||
@@ -74,14 +73,11 @@ class App extends StatelessWidget {
         ),
 
       // Authenticated app state
-      if (!hasReviewFixture &&
-          state.currentState == AppState.authenticated &&
+      if (state.currentState == AppState.authenticated &&
           (internalAccess ||
+              reviewAccess ||
               state.riderAccountState == RiderAccountState.approved))
         const MaterialPage(child: AppNavView()),
-
-      if (state.currentState == AppState.authenticated && hasReviewFixture)
-        MaterialPage(child: RiderReviewFixtureScreen(fixture: reviewFixture)),
     ];
 
     return Navigator(
@@ -111,7 +107,7 @@ class _AuthenticatedStartupGate extends StatefulWidget {
 
 class _AuthenticatedStartupGateState extends State<_AuthenticatedStartupGate> {
   late Future<({bool internalAccess, Map<String, dynamic>? reviewFixture})>
-  _startupAccessFuture;
+      _startupAccessFuture;
 
   @override
   void initState() {
@@ -120,15 +116,15 @@ class _AuthenticatedStartupGateState extends State<_AuthenticatedStartupGate> {
   }
 
   Future<({bool internalAccess, Map<String, dynamic>? reviewFixture})>
-  _resolveStartupAccess() async {
+      _resolveStartupAccess() async {
     final internalAccess = await RiderInternalAccess.enabled(
       forceRefresh: true,
     ).timeout(const Duration(seconds: 5), onTimeout: () => false);
     Map<String, dynamic>? reviewFixture;
     try {
       reviewFixture = await RiderReviewFixtureService().getOwnFixture().timeout(
-        const Duration(seconds: 5),
-      );
+            const Duration(seconds: 5),
+          );
     } catch (_) {
       // Review access is opt-in and server-authoritative. Any failure falls
       // closed to the Rider's normal account-state route.
@@ -145,8 +141,7 @@ class _AuthenticatedStartupGateState extends State<_AuthenticatedStartupGate> {
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<
-      ({bool internalAccess, Map<String, dynamic>? reviewFixture})
-    >(
+        ({bool internalAccess, Map<String, dynamic>? reviewFixture})>(
       future: _startupAccessFuture,
       builder: (context, startupAccess) {
         if (startupAccess.connectionState != ConnectionState.done) {

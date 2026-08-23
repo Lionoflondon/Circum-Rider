@@ -19,10 +19,13 @@ void main() {
 
       expect(service, contains("getGooglePlayReviewFixture"));
       expect(app, contains('RiderReviewFixtureService().getOwnFixture()'));
-      expect(app, contains('RiderReviewFixtureScreen(fixture: reviewFixture)'));
+      expect(app, contains('reviewAccess ||'));
+      expect(app, contains('MaterialPage(child: AppNavView())'));
+      expect(app, isNot(contains('RiderReviewFixtureScreen')));
       expect(app, contains('Any failure falls'));
       expect(dashboard, contains('RiderReviewFixtureService'));
       expect(dashboard, contains('Review location tracking'));
+      expect(dashboard, contains('RiderReviewFixtureScreen'));
       expect(screen, contains('RiderLocationDisclosureDialog.show(context)'));
       expect(screen, contains('Geolocator.requestPermission()'));
       expect(screen, isNot(contains('updateDeliveryLiveLocation')));
