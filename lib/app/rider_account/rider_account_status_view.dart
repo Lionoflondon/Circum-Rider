@@ -4,8 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../authentication/bloc/auth_bloc.dart';
-import '../authentication/view/add_details.dart';
 import '../authentication/view/widgets/rider_onboarding_shell.dart';
+import '../onboarding/rider_application_centre.dart';
 import 'rider_account_state.dart';
 import '../support/view/support.dart';
 
@@ -56,7 +56,7 @@ class RiderAccountStatusView extends StatelessWidget {
                       onPressed: () => Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(
-                            builder: (_) => const AddDetailsView()),
+                            builder: (_) => const RiderApplicationCentre()),
                       ),
                     ),
                   if (accountState == RiderAccountState.rejected)
@@ -65,7 +65,7 @@ class RiderAccountStatusView extends StatelessWidget {
                       onPressed: () => Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(
-                            builder: (_) => const AddDetailsView()),
+                            builder: (_) => const RiderApplicationCentre()),
                       ),
                     ),
                   if (accountState == RiderAccountState.closed)
