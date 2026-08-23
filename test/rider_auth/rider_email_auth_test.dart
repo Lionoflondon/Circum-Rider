@@ -89,7 +89,8 @@ void main() {
     expect(source, contains('Change number'));
     expect(source, contains('Accept the Rider Terms'));
     expect(source, contains('Accept the Privacy Policy'));
-    expect(source, contains('legally entitled to work in the UK'));
+    expect(source, isNot(contains('legally entitled to work in the UK')));
+    expect(source, isNot(contains('workEntitledUk')));
     expect(source, contains('RequestLocationData'));
     expect(
         source, contains('CompleteRiderApplication(locationEnabled: false)'));

@@ -10,10 +10,11 @@ void main() {
   final reviewScreen = File('lib/app/review/rider_review_fixture_screen.dart')
       .readAsStringSync();
 
-  test('ordinary Rider signup keeps the mandatory UK work declaration', () {
+  test('ordinary Rider signup has no UK work declaration or assertion', () {
     expect(onboarding,
-        contains('I confirm I am legally entitled to work in the UK.'));
-    expect(onboarding, contains('if (!_rightToWork)'));
+        isNot(contains('I confirm I am legally entitled to work in the UK.')));
+    expect(onboarding, isNot(contains('_rightToWork')));
+    expect(onboarding, isNot(contains('workEntitledUk')));
   });
 
   test('reviewer provisioning occurs before signup and uses server authority',
