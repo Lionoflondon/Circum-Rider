@@ -39,43 +39,29 @@ HomeBloc get homeBloc => _homeBloc ??= HomeBloc();
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
-void main() async {
-  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
-
-  if (kIsWeb) {
-    runApp(
-      RiderStartupApp(
-        initializer: _initializeRiderWeb,
-        appBuilder: (_) => const CircumRider(),
-      ),
-    );
-    return;
-  }
-
-  // Initialize notification settings
-  const AndroidInitializationSettings initializationSettingsAndroid =
-      AndroidInitializationSettings('@mipmap/launcher_icon');
-
-  const DarwinInitializationSettings initializationSettingsIOS =
-      DarwinInitializationSettings();
-
-  const InitializationSettings initializationSettings = InitializationSettings(
-    android: initializationSettingsAndroid,
-    iOS: initializationSettingsIOS,
+void main() {
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  if (!kIsWeb) FlutterNativeSplash.preserve(widgetsBinding: binding);
+  runApp(
+    RiderStartupApp(
+      initializer: kIsWeb ? _initializeRiderWeb : _initializeRiderNative,
+      appBuilder: (_) => const CircumRider(),
+    ),
   );
+}
 
+Future<void> _initializeRiderNative() async {
+  const initializationSettings = InitializationSettings(
+    android: AndroidInitializationSettings('@mipmap/launcher_icon'),
+    iOS: DarwinInitializationSettings(),
+  );
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
-
-  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
-
   await Firebase.initializeApp();
   if (!await initializeRiderAppCheck()) {
-    runApp(const RiderSecurityBlocked());
-    return;
+    throw StateError('Rider security verification is not configured.');
   }
-
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-    alert: true, // Required to display a heads up notification
+    alert: true,
     badge: true,
     sound: true,
   );
@@ -93,9 +79,6 @@ void main() async {
   foregoundMessage();
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  FlutterNativeSplash.remove();
-
-  // Lock app in portrait mode
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       // statusBarColor: Colors.transparent,
@@ -104,13 +87,11 @@ void main() async {
     ),
   );
 
-  SystemChrome.setPreferredOrientations([
+  await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
-  ]).then((value) {
-    Bloc.observer = SimpleBlocObserver();
-    runApp(const CircumRider());
-  });
+  ]);
+  Bloc.observer = SimpleBlocObserver();
 }
 
 Future<void> _initializeRiderWeb() async {
@@ -147,6 +128,9 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!kIsWeb) FlutterNativeSplash.remove();
+    });
     _start();
   }
 
@@ -169,7 +153,20 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
   @override
   Widget build(BuildContext context) {
     if (_ready) return widget.appBuilder(context);
-    if (_error == null) return const SizedBox.shrink();
+    if (_error == null) {
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          backgroundColor: Color(0xFF07090F),
+          body: Center(
+            child: Semantics(
+              label: 'Starting Rider',
+              child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
+            ),
+          ),
+        ),
+      );
+    }
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(useMaterial3: true),

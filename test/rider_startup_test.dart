@@ -18,9 +18,8 @@ void main() {
         ),
       );
 
-      expect(find.byType(SizedBox), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
       expect(find.text('Starting Rider'), findsNothing);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
 
       completer.complete();
       await tester.pumpAndSettle();
