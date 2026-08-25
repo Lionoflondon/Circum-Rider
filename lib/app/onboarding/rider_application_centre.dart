@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../communication/rider_conversation_view.dart';
+import '../account/view/earnings.dart';
 import '../rider_account/rider_account_state.dart';
 import '../rider_design/rider_ui.dart';
 import 'rider_roth_onboarding.dart';
@@ -137,6 +138,15 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
                           _auth.currentUser?.emailVerified == true,
                       rider: {...application, ...rider},
                     );
+                    final sections = _sections(
+                      rider: rider,
+                      application: application,
+                      documents: documents,
+                    );
+                    final requiredProgress = _requiredProgress(
+                      sections,
+                      applicationSubmitted: progress.applicationSubmitted,
+                    );
                     return RefreshIndicator(
                       color: RiderPalette.blue,
                       backgroundColor: RiderPalette.panel,
@@ -154,6 +164,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
                                 const SizedBox(height: 16),
                                 _ApplicationHero(
                                   progress: progress,
+                                  requiredProgress: requiredProgress,
                                   status: _overallStatus(application, rider),
                                   busy: _busy,
                                   onSubmit: () => _submitApplication(uid),
@@ -170,14 +181,15 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
                                   ),
                                 ],
                                 const SizedBox(height: 18),
-                                for (final section in _sections(
-                                  rider: rider,
-                                  application: application,
-                                  documents: documents,
-                                )) ...[
+                                for (final section in sections) ...[
                                   _ApplicationSectionRow(
                                     section: section,
-                                    onTap: () => _openSection(uid, section),
+                                    onTap: () => _openSection(
+                                      uid,
+                                      section,
+                                      application: application,
+                                      rider: rider,
+                                    ),
                                   ),
                                   const SizedBox(height: 10),
                                 ],
@@ -402,7 +414,40 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
         : RiderApplicationSectionStatus.notStarted;
   }
 
-  Future<void> _openSection(String uid, _ApplicationSection section) async {
+  _RequiredApplicationProgress _requiredProgress(
+    List<_ApplicationSection> sections, {
+    required bool applicationSubmitted,
+  }) {
+    const requiredKeys = {
+      'personal_details',
+      'home_address',
+      'contact_details',
+      'identity_verification',
+      'right_to_work',
+      'vehicle_details',
+      'vehicle_documents',
+      'roth_wallet_setup',
+      'payout_details',
+    };
+    final required =
+        sections.where((section) => requiredKeys.contains(section.key));
+    final completed = required
+        .where((section) =>
+            section.status == RiderApplicationSectionStatus.submitted ||
+            section.status == RiderApplicationSectionStatus.approved)
+        .length;
+    return _RequiredApplicationProgress(
+      completed: completed + (applicationSubmitted ? 1 : 0),
+      total: required.length + 1,
+    );
+  }
+
+  Future<void> _openSection(
+    String uid,
+    _ApplicationSection section, {
+    required Map<String, dynamic> application,
+    required Map<String, dynamic> rider,
+  }) async {
     switch (section.key) {
       case 'personal_details':
       case 'home_address':
@@ -411,6 +456,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
             (await _db.collection('riders').doc(uid).get()).data();
         final profileData =
             (await _db.collection('riderProfiles').doc(uid).get()).data();
+        if (!mounted) return;
         final saved = await Navigator.push<bool>(
           context,
           MaterialPageRoute(
@@ -476,15 +522,23 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
           ),
         );
       case 'payout_details':
-        await _runGuard(() async {
-          await _saveSectionStatus(
-            uid,
-            section.key,
-            RiderApplicationSectionStatus.inProgress,
-          );
-        }, success: 'Payout setup status will update from Stripe Connect.');
+        if (!mounted) return;
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const EarningsView()),
+        );
       case 'review_status':
-        await _submitApplication(uid);
+        if (!mounted) return;
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _ApplicationReviewStatusView(
+              status: _overallStatus(application, rider),
+              application: application,
+              rider: rider,
+            ),
+          ),
+        );
     }
   }
 
@@ -544,13 +598,13 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     }
   }
 
-  Future<void> _uploadDocument(
+  Future<bool> _uploadDocument(
     String uid,
     String section,
     String documentType,
     XFile file,
   ) async {
-    await _runGuard(() async {
+    return _runGuard(() async {
       final name = file.name;
       final extension = name.split('.').last.toLowerCase();
       const allowed = {'jpg', 'jpeg', 'png', 'webp', 'pdf'};
@@ -640,6 +694,33 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
 
   Future<void> _submitApplication(String uid) async {
     await _runGuard(() async {
+      final rider = (await _db.collection('riders').doc(uid).get()).data() ??
+          const <String, dynamic>{};
+      final application = (await _db
+                  .collection(RiderApplicationCentre.applicationCollection)
+                  .doc(uid)
+                  .get())
+              .data() ??
+          const <String, dynamic>{};
+      final documents = (await _db
+              .collection(RiderApplicationCentre.documentsCollection)
+              .where('riderId', isEqualTo: uid)
+              .get())
+          .docs
+          .map((doc) => {'id': doc.id, ...doc.data()})
+          .toList();
+      final required = _requiredProgress(
+        _sections(
+          rider: rider,
+          application: application,
+          documents: documents,
+        ),
+        applicationSubmitted: false,
+      );
+      if (required.completed < required.total - 1) {
+        throw StateError(
+            'Complete all required Application Centre sections before submitting.');
+      }
       await _db
           .collection(RiderApplicationCentre.applicationCollection)
           .doc(uid)
@@ -689,7 +770,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     });
   }
 
-  Future<void> _runGuard(
+  Future<bool> _runGuard(
     Future<void> Function() action, {
     required String success,
   }) async {
@@ -700,11 +781,13 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     try {
       await action();
       if (mounted) setState(() => _message = success);
+      return true;
     } catch (error) {
       if (mounted) {
         setState(
             () => _message = error.toString().replaceFirst('Bad state: ', ''));
       }
+      return false;
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -775,6 +858,16 @@ class _ApplicationSection {
   final RiderApplicationSectionStatus status;
 }
 
+class _RequiredApplicationProgress {
+  const _RequiredApplicationProgress(
+      {required this.completed, required this.total});
+
+  final int completed;
+  final int total;
+
+  double get fraction => total == 0 ? 0 : completed / total;
+}
+
 class _TopBar extends StatelessWidget {
   const _TopBar({required this.onBack});
 
@@ -808,29 +901,20 @@ class _TopBar extends StatelessWidget {
 class _ApplicationHero extends StatelessWidget {
   const _ApplicationHero({
     required this.progress,
+    required this.requiredProgress,
     required this.status,
     required this.busy,
     required this.onSubmit,
   });
 
   final RiderApprovalProgress progress;
+  final _RequiredApplicationProgress requiredProgress;
   final String status;
   final bool busy;
   final VoidCallback onSubmit;
 
   @override
   Widget build(BuildContext context) {
-    final complete = [
-      progress.accountCreated,
-      progress.phoneVerified,
-      progress.documentsSubmitted,
-      progress.vehicleDetails,
-      progress.rothWalletSetup,
-      progress.payoutSetup,
-      progress.applicationSubmitted,
-      progress.underReview,
-      progress.approved,
-    ].where((item) => item).length;
     return RiderGlassSurface(
       radius: 26,
       blur: 14,
@@ -857,7 +941,7 @@ class _ApplicationHero extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           LinearProgressIndicator(
-            value: complete / 9,
+            value: requiredProgress.fraction,
             minHeight: 6,
             borderRadius: BorderRadius.circular(999),
             backgroundColor: Colors.white.withValues(alpha: .10),
@@ -1359,7 +1443,7 @@ class _DocumentUploadSection extends StatefulWidget {
   });
 
   final _ApplicationSection section;
-  final Future<void> Function(String type, XFile file) upload;
+  final Future<bool> Function(String type, XFile file) upload;
 
   @override
   State<_DocumentUploadSection> createState() => _DocumentUploadSectionState();
@@ -1369,6 +1453,8 @@ class _DocumentUploadSectionState extends State<_DocumentUploadSection> {
   String _type = 'passport';
   XFile? _file;
   bool _uploading = false;
+  bool _submitted = false;
+  String? _error;
 
   @override
   void initState() {
@@ -1427,15 +1513,43 @@ class _DocumentUploadSectionState extends State<_DocumentUploadSection> {
           ),
           const SizedBox(height: 12),
           FilledButton(
-            onPressed: _file == null || _uploading
+            onPressed: _file == null || _uploading || _submitted
                 ? null
                 : () async {
                     setState(() => _uploading = true);
-                    await widget.upload(_type, _file!);
-                    if (context.mounted) Navigator.pop(context);
+                    try {
+                      final saved = await widget.upload(_type, _file!);
+                      if (!mounted) return;
+                      setState(() {
+                        _submitted = saved;
+                        _error = saved
+                            ? null
+                            : 'The document was not submitted. Please try again.';
+                      });
+                    } catch (_) {
+                      if (mounted) {
+                        setState(() => _error =
+                            'The document was not submitted. Please try again.');
+                      }
+                    } finally {
+                      if (mounted) setState(() => _uploading = false);
+                    }
                   },
             child: Text(_uploading ? 'Uploading…' : 'Submit document'),
           ),
+          if (_submitted) ...[
+            const SizedBox(height: 12),
+            const Text('Submitted',
+                style: TextStyle(
+                    color: RiderPalette.green, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 4),
+            const Text('Your document has been submitted for review.',
+                style: TextStyle(color: RiderPalette.muted)),
+          ],
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(_error!, style: const TextStyle(color: RiderPalette.red)),
+          ],
         ],
       ),
     );
@@ -1493,6 +1607,56 @@ class _SectionScaffold extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ApplicationReviewStatusView extends StatelessWidget {
+  const _ApplicationReviewStatusView({
+    required this.status,
+    required this.application,
+    required this.rider,
+  });
+
+  final String status;
+  final Map<String, dynamic> application;
+  final Map<String, dynamic> rider;
+
+  @override
+  Widget build(BuildContext context) {
+    final submitted = application['submittedAt'] != null ||
+        rider['applicationSubmittedAt'] != null;
+    final needsInformation = RiderAccountStateResolver.resolve({
+          ...application,
+          ...rider,
+        }) ==
+        RiderAccountState.moreInformationRequired;
+    return _SectionScaffold(
+      title: 'Review status',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(status,
+              style: const TextStyle(
+                  color: RiderPalette.paper,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900)),
+          const SizedBox(height: 12),
+          Text(
+            needsInformation
+                ? 'More information is needed. Check Application messages for the next request.'
+                : submitted
+                    ? 'Your application has been submitted and is awaiting review.'
+                    : 'Your application has not been submitted yet.',
+            style: const TextStyle(color: RiderPalette.muted, height: 1.45),
+          ),
+          const SizedBox(height: 18),
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Done'),
+          ),
+        ],
       ),
     );
   }
