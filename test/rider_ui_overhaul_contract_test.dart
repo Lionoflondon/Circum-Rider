@@ -72,13 +72,13 @@ void main() {
       expect(mainSource, isNot(contains('textScaleFactor: 1.0')));
     });
 
-    test('startup uses one branded splash without rotating boot copy', () {
+    test('startup uses a single native splash followed by neutral Flutter loading', () {
       expect(mainSource, isNot(contains('_RiderStartupHold')));
       expect(mainSource, contains('signalRiderWebReady'));
       expect(mainSource,
           isNot(contains("AssetImage('assets/images/splash.png')")));
-      expect(mainSource, isNot(contains('Starting Rider')));
-      expect(mainSource, isNot(contains('CircularProgressIndicator(')));
+      expect(mainSource, contains("label: 'Starting Rider'"));
+      expect(mainSource, contains('CircularProgressIndicator('));
       expect(webIndex, contains('startup-logo'));
       expect(webIndex, contains('splash/img/dark-3x.png'));
       expect(webIndex, isNot(contains('startup-spinner')));

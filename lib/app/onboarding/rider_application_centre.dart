@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 
 import '../communication/rider_conversation_view.dart';
 import '../rider_account/rider_account_state.dart';
@@ -78,6 +81,7 @@ class RiderApplicationCentre extends StatefulWidget {
 class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
   final _db = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
+  final _functions = FirebaseFunctions.instance;
   final _storage = FirebaseStorage.instance;
   final _roth = const RiderRothOnboarding();
 
@@ -143,8 +147,10 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
                             padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
                             sliver: SliverList.list(
                               children: [
-                                _TopBar(
-                                    onBack: () => Navigator.maybePop(context)),
+                                if (Navigator.canPop(context))
+                                  _TopBar(
+                                      onBack: () =>
+                                          Navigator.maybePop(context)),
                                 const SizedBox(height: 16),
                                 _ApplicationHero(
                                   progress: progress,
@@ -401,16 +407,24 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
       case 'personal_details':
       case 'home_address':
       case 'contact_details':
-        await Navigator.push(
+        final riderData =
+            (await _db.collection('riders').doc(uid).get()).data();
+        final profileData =
+            (await _db.collection('riderProfiles').doc(uid).get()).data();
+        final saved = await Navigator.push<bool>(
           context,
           MaterialPageRoute(
             builder: (_) => _PersonalApplicationForm(
               sectionKey: section.key,
               title: section.title,
+              initialData: {...?riderData, ...?profileData},
               save: (patch) => _saveApplicationPatch(uid, section.key, patch),
             ),
           ),
         );
+        if (saved == true && mounted) {
+          setState(() => _message = '${section.title} saved successfully.');
+        }
       case 'vehicle_details':
         await Navigator.push(
           context,
@@ -479,32 +493,34 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     String section,
     Map<String, dynamic> patch,
   ) async {
-    await _runGuard(() async {
-      final data = {
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      await _functions.httpsCallable('updateRiderProfile').call({
         ...patch,
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-      await _db
-          .collection('riders')
-          .doc(uid)
-          .set(data, SetOptions(merge: true));
-      await _db
-          .collection('riderProfiles')
-          .doc(uid)
-          .set(data, SetOptions(merge: true));
+        'section': section,
+      });
       await _saveSectionStatus(
         uid,
         section,
         RiderApplicationSectionStatus.submitted,
       );
-    }, success: 'Section saved for review.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _saveVehicles(
     String uid,
     List<Map<String, dynamic>> vehicles,
   ) async {
-    await _runGuard(() async {
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
       final capped = vehicles.take(RiderApplicationCentre.maxVehicles).toList();
       final primary = capped.firstWhere(
         (vehicle) => vehicle['primary'] == true,
@@ -523,7 +539,9 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
         'vehicle_details',
         RiderApplicationSectionStatus.submitted,
       );
-    }, success: 'Vehicle details saved.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _uploadDocument(
@@ -1003,11 +1021,13 @@ class _PersonalApplicationForm extends StatefulWidget {
   const _PersonalApplicationForm({
     required this.sectionKey,
     required this.title,
+    required this.initialData,
     required this.save,
   });
 
   final String sectionKey;
   final String title;
+  final Map<String, dynamic> initialData;
   final Future<void> Function(Map<String, dynamic> patch) save;
 
   @override
@@ -1018,6 +1038,7 @@ class _PersonalApplicationForm extends StatefulWidget {
 class _PersonalApplicationFormState extends State<_PersonalApplicationForm> {
   final _controllers = <String, TextEditingController>{};
   bool _saving = false;
+  String? _error;
 
   @override
   void initState() {
@@ -1036,7 +1057,9 @@ class _PersonalApplicationFormState extends State<_PersonalApplicationForm> {
         ],
     };
     for (final field in fields) {
-      _controllers[field] = TextEditingController();
+      final value = widget.initialData[field] ??
+          (field == 'phone' ? widget.initialData['phoneNumber'] : null);
+      _controllers[field] = TextEditingController(text: '${value ?? ''}');
     }
   }
 
@@ -1055,41 +1078,84 @@ class _PersonalApplicationFormState extends State<_PersonalApplicationForm> {
       child: Column(
         children: [
           for (final entry in _controllers.entries) ...[
-            TextField(
-              controller: entry.value,
-              style: const TextStyle(color: RiderPalette.paper),
-              decoration: InputDecoration(
-                labelText: _fieldLabel(entry.key),
-                labelStyle: const TextStyle(color: RiderPalette.muted),
-                enabledBorder: OutlineInputBorder(
-                  borderSide:
-                      BorderSide(color: Colors.white.withValues(alpha: .12)),
-                ),
-                focusedBorder: const OutlineInputBorder(
-                  borderSide: BorderSide(color: RiderPalette.blue),
+            if (entry.key == 'dateOfBirth')
+              _DateOfBirthField(controller: entry.value)
+            else
+              TextField(
+                controller: entry.value,
+                style: const TextStyle(color: RiderPalette.paper),
+                decoration: InputDecoration(
+                  labelText: _fieldLabel(entry.key),
+                  labelStyle: const TextStyle(color: RiderPalette.muted),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide:
+                        BorderSide(color: Colors.white.withValues(alpha: .12)),
+                  ),
+                  focusedBorder: const OutlineInputBorder(
+                    borderSide: BorderSide(color: RiderPalette.blue),
+                  ),
                 ),
               ),
-            ),
             const SizedBox(height: 12),
           ],
           FilledButton(
-            onPressed: _saving
-                ? null
-                : () async {
-                    setState(() => _saving = true);
-                    await widget.save({
-                      for (final entry in _controllers.entries)
-                        if (entry.value.text.trim().isNotEmpty)
-                          entry.key: entry.value.text.trim(),
-                    });
-                    if (context.mounted) Navigator.pop(context);
-                  },
+            onPressed: _saving ? null : _save,
             child: Text(_saving ? 'Saving…' : 'Save and continue'),
           ),
+          if (_error != null)
+            Text(_error!, style: const TextStyle(color: RiderPalette.red)),
         ],
       ),
     );
   }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    if (widget.sectionKey == 'personal_details') {
+      final error = _validateDob(_controllers['dateOfBirth']!.text.trim());
+      if (error != null) {
+        setState(() => _error = error);
+        return;
+      }
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.save({
+        for (final entry in _controllers.entries)
+          if (entry.value.text.trim().isNotEmpty)
+            entry.key: entry.value.text.trim(),
+      }).timeout(const Duration(seconds: 15));
+      if (mounted) Navigator.pop(context, true);
+    } catch (error) {
+      if (mounted) setState(() => _error = _saveError(error));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  String? _validateDob(String value) {
+    if (value.isEmpty) return 'Date of birth is required.';
+    late final DateTime date;
+    try {
+      date = DateFormat('yyyy-MM-dd').parseStrict(value);
+    } catch (_) {
+      return 'Enter a valid date of birth.';
+    }
+    final today = DateTime.now();
+    if (date.isAfter(DateTime(today.year, today.month, today.day))) {
+      return 'Date of birth cannot be in the future.';
+    }
+    var age = today.year - date.year;
+    if (DateTime(today.year, date.month, date.day).isAfter(today)) age--;
+    return age < 18 ? 'You must be at least 18 years old.' : null;
+  }
+
+  String _saveError(Object error) => error is TimeoutException
+      ? 'Saving took too long. Check your connection and try again.'
+      : 'We could not save these details. Please try again.';
 
   String _fieldLabel(String key) => switch (key) {
         'legalFirstName' => 'Legal first name',
@@ -1102,6 +1168,39 @@ class _PersonalApplicationFormState extends State<_PersonalApplicationForm> {
         'accessibilityNeeds' => 'Optional accessibility needs',
         _ => key,
       };
+}
+
+class _DateOfBirthField extends StatelessWidget {
+  const _DateOfBirthField({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  Widget build(BuildContext context) => TextField(
+        controller: controller,
+        readOnly: true,
+        decoration: const InputDecoration(labelText: 'Date of birth'),
+        onTap: () async {
+          final now = DateTime.now();
+          final picked = await showDatePicker(
+            context: context,
+            initialDate: _initialDate(now),
+            firstDate: DateTime(now.year - 100, now.month, now.day),
+            lastDate: DateTime(now.year, now.month, now.day),
+          );
+          if (picked != null) {
+            controller.text = DateFormat('yyyy-MM-dd').format(picked);
+          }
+        },
+      );
+
+  DateTime _initialDate(DateTime now) {
+    try {
+      final date = DateFormat('yyyy-MM-dd').parseStrict(controller.text);
+      if (!date.isAfter(now)) return date;
+    } catch (_) {}
+    return DateTime(now.year - 18, now.month, now.day);
+  }
 }
 
 class _VehicleApplicationForm extends StatefulWidget {
@@ -1121,6 +1220,7 @@ class _VehicleApplicationForm extends StatefulWidget {
 class _VehicleApplicationFormState extends State<_VehicleApplicationForm> {
   final _vehicles = <Map<String, TextEditingController>>[];
   bool _saving = false;
+  String? _error;
 
   @override
   void initState() {
@@ -1198,20 +1298,32 @@ class _VehicleApplicationFormState extends State<_VehicleApplicationForm> {
             onPressed: _saving
                 ? null
                 : () async {
+                    if (_saving) return;
                     setState(() => _saving = true);
-                    await widget.save([
-                      for (var i = 0; i < _vehicles.length; i++)
-                        {
-                          for (final entry in _vehicles[i].entries)
-                            if (entry.value.text.trim().isNotEmpty)
-                              entry.key: entry.value.text.trim(),
-                          'primary': i == 0,
-                        }
-                    ]);
-                    if (context.mounted) Navigator.pop(context);
+                    try {
+                      await widget.save([
+                        for (var i = 0; i < _vehicles.length; i++)
+                          {
+                            for (final entry in _vehicles[i].entries)
+                              if (entry.value.text.trim().isNotEmpty)
+                                entry.key: entry.value.text.trim(),
+                            'primary': i == 0,
+                          }
+                      ]).timeout(const Duration(seconds: 15));
+                      if (context.mounted) Navigator.pop(context, true);
+                    } catch (_) {
+                      if (mounted) {
+                        setState(() => _error =
+                            'Saving took too long or failed. Please try again.');
+                      }
+                    } finally {
+                      if (mounted) setState(() => _saving = false);
+                    }
                   },
             child: Text(_saving ? 'Saving…' : 'Save vehicles'),
           ),
+          if (_error != null)
+            Text(_error!, style: const TextStyle(color: RiderPalette.red)),
         ],
       ),
     );
