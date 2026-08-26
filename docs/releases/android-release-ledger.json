@@ -1,0 +1,13 @@
+{
+  "app": "rider",
+  "package": "com.circum.rider",
+  "repositoryVersionFloor": {
+    "versionName": "1.0.6",
+    "versionCode": 33,
+    "sourceSha": "65a5a52b7ea5991aa55a4a7fab3615212e51ff18",
+    "artifactSha256": "5513b47f078ffa0eb5b55eb50f00f82e32b37c361ea0cbfa16c498ec52fe260c",
+    "uploadCertificateSha1": "96:2E:01:F3:B1:AA:DF:96:C1:23:62:CB:4A:7F:83:42:9D:F5:08:8E",
+    "releaseDate": "2026-08-26",
+    "status": "repository_floor_not_play_console_confirmed"
+  }
+}
