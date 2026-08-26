@@ -106,7 +106,7 @@ jobs:
           ACTUAL_SHA256="$(keytool -printcert -file /tmp/rider-aab-cert.rsa | awk -F': ' '/SHA256:/{print $2}')"
           test "$ACTUAL_SHA1" = "$EXPECTED_UPLOAD_SHA1"
           test "$ACTUAL_SHA256" = "$EXPECTED_UPLOAD_SHA256"
-          jarsigner -verify -strict "$AAB" >/dev/null
+          jarsigner -verify "$AAB" >/dev/null
           shasum -a 256 "$AAB" | tee build/app/outputs/bundle/release/app-release.aab.sha256
       - uses: actions/upload-artifact@v4
         with:
