@@ -1,0 +1,118 @@
+name: Rider Android Release Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rider-android:
+    name: Build Rider Android AAB
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Install bundletool
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            -o /tmp/bundletool.jar \
+            https://github.com/google/bundletool/releases/download/1.17.2/bundletool-all-1.17.2.jar
+      - run: flutter pub get
+      - name: Verify release inputs
+        env:
+          RIDER_ANDROID_GOOGLE_MAPS_API_KEY: ${{ secrets.RIDER_ANDROID_GOOGLE_MAPS_API_KEY }}
+          GOOGLE_MAPS_DIRECTIONS_API_KEY: ${{ secrets.GOOGLE_MAPS_DIRECTIONS_API_KEY }}
+          RIDER_ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.RIDER_ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          RIDER_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.RIDER_ANDROID_KEYSTORE_PASSWORD }}
+          RIDER_ANDROID_KEY_PASSWORD: ${{ secrets.RIDER_ANDROID_KEY_PASSWORD }}
+          RIDER_ANDROID_KEY_ALIAS: ${{ secrets.RIDER_ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          test -n "$RIDER_ANDROID_GOOGLE_MAPS_API_KEY" || (echo "Missing RIDER_ANDROID_GOOGLE_MAPS_API_KEY" >&2; exit 1)
+          test -n "$GOOGLE_MAPS_DIRECTIONS_API_KEY" || (echo "Missing GOOGLE_MAPS_DIRECTIONS_API_KEY" >&2; exit 1)
+          test -n "$RIDER_ANDROID_UPLOAD_KEYSTORE_BASE64" || (echo "Missing RIDER_ANDROID_UPLOAD_KEYSTORE_BASE64" >&2; exit 1)
+          test -n "$RIDER_ANDROID_KEYSTORE_PASSWORD" || (echo "Missing RIDER_ANDROID_KEYSTORE_PASSWORD" >&2; exit 1)
+          test -n "$RIDER_ANDROID_KEY_PASSWORD" || (echo "Missing RIDER_ANDROID_KEY_PASSWORD" >&2; exit 1)
+          test -n "$RIDER_ANDROID_KEY_ALIAS" || (echo "Missing RIDER_ANDROID_KEY_ALIAS" >&2; exit 1)
+      - name: Enforce repository version floor
+        run: node scripts/android_release_guard.js rider --expected-package com.circum.rider --min-version-code 34
+      - name: Run Rider release gates
+        run: |
+          set -euo pipefail
+          flutter analyze --no-fatal-warnings --no-fatal-infos
+          flutter test
+          git diff --check HEAD
+      - name: Restore release signing
+        env:
+          RIDER_ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.RIDER_ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          RIDER_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.RIDER_ANDROID_KEYSTORE_PASSWORD }}
+          RIDER_ANDROID_KEY_PASSWORD: ${{ secrets.RIDER_ANDROID_KEY_PASSWORD }}
+          RIDER_ANDROID_KEY_ALIAS: ${{ secrets.RIDER_ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          mkdir -p android/release-signing
+          printf '%s' "$RIDER_ANDROID_UPLOAD_KEYSTORE_BASE64" | base64 --decode > android/release-signing/circum-rider-upload.jks
+          chmod 600 android/release-signing/circum-rider-upload.jks
+          {
+            echo "storeFile=release-signing/circum-rider-upload.jks"
+            echo "storePassword=$RIDER_ANDROID_KEYSTORE_PASSWORD"
+            echo "keyPassword=$RIDER_ANDROID_KEY_PASSWORD"
+            echo "keyAlias=$RIDER_ANDROID_KEY_ALIAS"
+          } > android/key.properties
+          chmod 600 android/key.properties
+      - name: Build signed Rider AAB
+        env:
+          GOOGLE_MAPS_API_KEY: ${{ secrets.RIDER_ANDROID_GOOGLE_MAPS_API_KEY }}
+          GOOGLE_MAPS_DIRECTIONS_API_KEY: ${{ secrets.GOOGLE_MAPS_DIRECTIONS_API_KEY }}
+        run: |
+          set -euo pipefail
+          flutter build appbundle --release --target=lib/main.dart \
+            --dart-define=GOOGLE_MAPS_API_KEY="$GOOGLE_MAPS_API_KEY" \
+            --dart-define=GOOGLE_MAPS_DIRECTIONS_API_KEY="$GOOGLE_MAPS_DIRECTIONS_API_KEY"
+      - name: Verify Rider AAB
+        env:
+          EXPECTED_UPLOAD_SHA1: 96:2E:01:F3:B1:AA:DF:96:C1:23:62:CB:4A:7F:83:42:9D:F5:08:8E
+          EXPECTED_UPLOAD_SHA256: D9:6A:06:5A:98:F8:82:58:5D:8D:D6:8E:27:7B:22:68:64:2B:BE:96:57:AC:DD:B3:1E:EA:1D:F3:02:49:A1:F9
+        run: |
+          set -euo pipefail
+          AAB="build/app/outputs/bundle/release/app-release.aab"
+          test -f "$AAB"
+          java -jar /tmp/bundletool.jar validate --bundle="$AAB"
+          PACKAGE="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath=/manifest/@package)"
+          TARGET_SDK="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath=/manifest/uses-sdk/@android:targetSdkVersion)"
+          LAUNCHERS="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath='count(/manifest/application/activity[intent-filter/action/@android:name="android.intent.action.MAIN" and intent-filter/category/@android:name="android.intent.category.LAUNCHER"])')"
+          FINE_LOCATION="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath='count(/manifest/uses-permission[@android:name="android.permission.ACCESS_FINE_LOCATION"])')"
+          BACKGROUND_LOCATION="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath='count(/manifest/uses-permission[@android:name="android.permission.ACCESS_BACKGROUND_LOCATION"])')"
+          test "$PACKAGE" = "com.circum.rider"
+          test "$TARGET_SDK" = "36"
+          test "$LAUNCHERS" = "1"
+          test "$FINE_LOCATION" = "1"
+          test "$BACKGROUND_LOCATION" = "1"
+          unzip -p "$AAB" 'META-INF/*.RSA' > /tmp/rider-aab-cert.rsa
+          ACTUAL_SHA1="$(keytool -printcert -file /tmp/rider-aab-cert.rsa | awk -F': ' '/SHA1:/{print $2}')"
+          ACTUAL_SHA256="$(keytool -printcert -file /tmp/rider-aab-cert.rsa | awk -F': ' '/SHA256:/{print $2}')"
+          test "$ACTUAL_SHA1" = "$EXPECTED_UPLOAD_SHA1"
+          test "$ACTUAL_SHA256" = "$EXPECTED_UPLOAD_SHA256"
+          jarsigner -verify -strict "$AAB" >/dev/null
+          shasum -a 256 "$AAB" | tee build/app/outputs/bundle/release/app-release.aab.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rider-android-release-aab
+          path: |
+            build/app/outputs/bundle/release/app-release.aab
+            build/app/outputs/bundle/release/app-release.aab.sha256
+      - name: Cleanup signing material
+        if: always()
+        run: |
+          rm -f android/key.properties
+          rm -rf android/release-signing
