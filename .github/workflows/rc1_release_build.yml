@@ -72,6 +72,7 @@ jobs:
           chmod 600 android/key.properties
       - name: Build signed Rider AAB
         env:
+          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx6g
           GOOGLE_MAPS_API_KEY: ${{ secrets.RIDER_ANDROID_GOOGLE_MAPS_API_KEY }}
           GOOGLE_MAPS_DIRECTIONS_API_KEY: ${{ secrets.GOOGLE_MAPS_DIRECTIONS_API_KEY }}
         run: |
