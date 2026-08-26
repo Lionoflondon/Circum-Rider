@@ -86,8 +86,6 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
 
   String? _message;
   bool _busy = false;
-  bool _rightToWorkConfirmed = false;
-  bool _sealedPackageConsent = false;
 
   String? get _uid => _auth.currentUser?.uid;
 
@@ -167,12 +165,6 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
                                   requiredProgress: requiredProgress,
                                   status: _overallStatus(application, rider),
                                   busy: _busy,
-                                  rightToWorkConfirmed: _rightToWorkConfirmed,
-                                  sealedPackageConsent: _sealedPackageConsent,
-                                  onRightToWorkChanged: (value) => setState(
-                                      () => _rightToWorkConfirmed = value),
-                                  onSealedPackageChanged: (value) => setState(
-                                      () => _sealedPackageConsent = value),
                                   onSubmit: () => _submitApplication(uid),
                                 ),
                                 if (_message != null) ...[
@@ -649,8 +641,6 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     await _runGuard(() async {
       await _functions.httpsCallable('submitRiderApplication').call({
         'idempotencyKey': 'rider_application:$uid',
-        'rightToWorkConfirmed': _rightToWorkConfirmed,
-        'sealedPackageConsent': _sealedPackageConsent,
       });
     }, success: 'Application submitted for Admin review.');
   }
@@ -800,10 +790,6 @@ class _ApplicationHero extends StatelessWidget {
     required this.requiredProgress,
     required this.status,
     required this.busy,
-    required this.rightToWorkConfirmed,
-    required this.sealedPackageConsent,
-    required this.onRightToWorkChanged,
-    required this.onSealedPackageChanged,
     required this.onSubmit,
   });
 
@@ -811,10 +797,6 @@ class _ApplicationHero extends StatelessWidget {
   final _RequiredApplicationProgress requiredProgress;
   final String status;
   final bool busy;
-  final bool rightToWorkConfirmed;
-  final bool sealedPackageConsent;
-  final ValueChanged<bool> onRightToWorkChanged;
-  final ValueChanged<bool> onSealedPackageChanged;
   final VoidCallback onSubmit;
 
   @override
@@ -844,25 +826,6 @@ class _ApplicationHero extends StatelessWidget {
                 color: RiderPalette.muted, fontSize: 13, height: 1.45),
           ),
           const SizedBox(height: 14),
-          CheckboxListTile(
-            value: rightToWorkConfirmed,
-            onChanged:
-                busy ? null : (value) => onRightToWorkChanged(value ?? false),
-            title: const Text(
-                'I confirm my right-to-work information is accurate.'),
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            dense: true,
-          ),
-          CheckboxListTile(
-            value: sealedPackageConsent,
-            onChanged:
-                busy ? null : (value) => onSealedPackageChanged(value ?? false),
-            title: const Text('I agree to the Rider Terms.'),
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            dense: true,
-          ),
           LinearProgressIndicator(
             value: requiredProgress.fraction,
             minHeight: 6,
