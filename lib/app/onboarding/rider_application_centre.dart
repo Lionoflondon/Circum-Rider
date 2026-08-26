@@ -1,9 +1,8 @@
 import 'dart:async';
-import 'dart:typed_data';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -83,11 +82,12 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
   final _db = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
   final _functions = FirebaseFunctions.instance;
-  final _storage = FirebaseStorage.instance;
   final _roth = const RiderRothOnboarding();
 
   String? _message;
   bool _busy = false;
+  bool _rightToWorkConfirmed = false;
+  bool _sealedPackageConsent = false;
 
   String? get _uid => _auth.currentUser?.uid;
 
@@ -167,6 +167,12 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
                                   requiredProgress: requiredProgress,
                                   status: _overallStatus(application, rider),
                                   busy: _busy,
+                                  rightToWorkConfirmed: _rightToWorkConfirmed,
+                                  sealedPackageConsent: _sealedPackageConsent,
+                                  onRightToWorkChanged: (value) => setState(
+                                      () => _rightToWorkConfirmed = value),
+                                  onSealedPackageChanged: (value) => setState(
+                                      () => _sealedPackageConsent = value),
                                   onSubmit: () => _submitApplication(uid),
                                 ),
                                 if (_message != null) ...[
@@ -580,14 +586,14 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
         (vehicle) => vehicle['primary'] == true,
         orElse: () => capped.isEmpty ? const {} : capped.first,
       );
-      await _db.collection('riders').doc(uid).set({
+      await _functions.httpsCallable('updateRiderProfile').call({
         'vehicles': capped,
         if (primary.isNotEmpty) 'vehicle': primary,
         if (primary['type'] != null) 'vehicleType': primary['type'],
         if (primary['registration'] != null)
           'vehicleRegistration': primary['registration'],
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+        'section': 'vehicle_details',
+      });
       await _saveSectionStatus(
         uid,
         'vehicle_details',
@@ -617,132 +623,34 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
       }
       final bytes = await file.readAsBytes();
       final safeType = _normalise(documentType);
-      final documentId = '${uid}_$safeType';
-      final storagePath =
-          '${RiderApplicationCentre.storageRoot}/$uid/documents/$safeType/${DateTime.now().millisecondsSinceEpoch}_$name';
-      final metadata = SettableMetadata(
-        contentType: extension == 'pdf'
-            ? 'application/pdf'
-            : 'image/${extension == 'jpg' ? 'jpeg' : extension}',
-        customMetadata: {
-          'riderId': uid,
-          'section': section,
-          'documentType': safeType,
-          'source': 'rider_application_centre',
-        },
-      );
-      await _storage
-          .ref(storagePath)
-          .putData(Uint8List.fromList(bytes), metadata);
-      final documentRef = _db
-          .collection(RiderApplicationCentre.documentsCollection)
-          .doc(documentId);
-      final existing = await documentRef.get();
-      final existingData = existing.data();
-      await documentRef.set({
-        'riderId': uid,
-        'uid': uid,
-        'section': section,
+      await _functions.httpsCallable('submitRiderDocument').call({
         'documentType': safeType,
-        'displayName': _documentLabel(safeType),
-        'filename': name,
-        'storagePath': storagePath,
-        'status': 'under_review',
-        'verificationStatus': 'under_review',
-        'active': true,
-        'uploadedAt': FieldValue.serverTimestamp(),
-        'submittedAt': FieldValue.serverTimestamp(),
-        'reviewedAt': null,
-        'reviewedBy': null,
-        'rejectionReason': null,
-        'statusHistory': FieldValue.arrayUnion([
+        'notes': 'Application Centre section: $section',
+        'files': [
           {
-            'status': 'under_review',
-            'actor': uid,
-            'note': 'Document uploaded by rider.',
-            'timestamp': Timestamp.now(),
+            'side': 'primary',
+            'fileName': name,
+            'contentType': extension == 'pdf'
+                ? 'application/pdf'
+                : 'image/${extension == 'jpg' ? 'jpeg' : extension}',
+            'base64': base64Encode(bytes),
           }
-        ]),
-        if (existingData != null)
-          'archivedVersions': FieldValue.arrayUnion([
-            {
-              'storagePath': existingData['storagePath'],
-              'filename': existingData['filename'],
-              'status': existingData['status'],
-              'reviewedAt': existingData['reviewedAt'],
-              'reviewedBy': existingData['reviewedBy'],
-              'rejectionReason': existingData['rejectionReason'],
-              'archivedAt': Timestamp.now(),
-            }
-          ]),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+        ],
+      });
       await _saveSectionStatus(
         uid,
         section,
         RiderApplicationSectionStatus.submitted,
       );
-      await _db.collection('riders').doc(uid).set({
-        'documentChecklist.$safeType': 'under_review',
-        if (section == 'vehicle_documents')
-          'vehicleRegistrationDocumentStatus': 'under_review',
-        'verificationStatus': 'under_review',
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
     }, success: 'Document uploaded for Admin review.');
   }
 
   Future<void> _submitApplication(String uid) async {
     await _runGuard(() async {
-      final rider = (await _db.collection('riders').doc(uid).get()).data() ??
-          const <String, dynamic>{};
-      final application = (await _db
-                  .collection(RiderApplicationCentre.applicationCollection)
-                  .doc(uid)
-                  .get())
-              .data() ??
-          const <String, dynamic>{};
-      final documents = (await _db
-              .collection(RiderApplicationCentre.documentsCollection)
-              .where('riderId', isEqualTo: uid)
-              .get())
-          .docs
-          .map((doc) => {'id': doc.id, ...doc.data()})
-          .toList();
-      final required = _requiredProgress(
-        _sections(
-          rider: rider,
-          application: application,
-          documents: documents,
-        ),
-        applicationSubmitted: false,
-      );
-      if (required.completed < required.total - 1) {
-        throw StateError(
-            'Complete all required Application Centre sections before submitting.');
-      }
-      await _db
-          .collection(RiderApplicationCentre.applicationCollection)
-          .doc(uid)
-          .set({
-        'riderId': uid,
-        'status': 'submitted',
-        'onboardingStatus': 'application_submitted',
-        'submittedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      await _db.collection('riders').doc(uid).set({
-        'approvalStatus': 'submitted',
-        'onboardingStatus': 'application_submitted',
-        'applicationSubmittedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      await _db.collection(RiderApplicationCentre.auditCollection).add({
-        'riderId': uid,
-        'actor': uid,
-        'actorRole': 'rider',
-        'action': 'application_submitted',
-        'timestamp': FieldValue.serverTimestamp(),
+      await _functions.httpsCallable('submitRiderApplication').call({
+        'idempotencyKey': 'rider_application:$uid',
+        'rightToWorkConfirmed': _rightToWorkConfirmed,
+        'sealedPackageConsent': _sealedPackageConsent,
       });
     }, success: 'Application submitted for Admin review.');
   }
@@ -752,21 +660,9 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     String section,
     RiderApplicationSectionStatus status,
   ) async {
-    await _db
-        .collection(RiderApplicationCentre.applicationCollection)
-        .doc(uid)
-        .set({
-      'riderId': uid,
-      'sectionStatus.$section': status.storageValue,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await _db.collection(RiderApplicationCentre.auditCollection).add({
-      'riderId': uid,
-      'actor': uid,
-      'actorRole': 'rider',
-      'action': 'section_${status.storageValue}',
+    await _functions.httpsCallable('updateRiderApplicationSection').call({
       'section': section,
-      'timestamp': FieldValue.serverTimestamp(),
+      'status': status.storageValue,
     });
   }
 
@@ -904,6 +800,10 @@ class _ApplicationHero extends StatelessWidget {
     required this.requiredProgress,
     required this.status,
     required this.busy,
+    required this.rightToWorkConfirmed,
+    required this.sealedPackageConsent,
+    required this.onRightToWorkChanged,
+    required this.onSealedPackageChanged,
     required this.onSubmit,
   });
 
@@ -911,6 +811,10 @@ class _ApplicationHero extends StatelessWidget {
   final _RequiredApplicationProgress requiredProgress;
   final String status;
   final bool busy;
+  final bool rightToWorkConfirmed;
+  final bool sealedPackageConsent;
+  final ValueChanged<bool> onRightToWorkChanged;
+  final ValueChanged<bool> onSealedPackageChanged;
   final VoidCallback onSubmit;
 
   @override
@@ -940,6 +844,25 @@ class _ApplicationHero extends StatelessWidget {
                 color: RiderPalette.muted, fontSize: 13, height: 1.45),
           ),
           const SizedBox(height: 14),
+          CheckboxListTile(
+            value: rightToWorkConfirmed,
+            onChanged:
+                busy ? null : (value) => onRightToWorkChanged(value ?? false),
+            title: const Text(
+                'I confirm my right-to-work information is accurate.'),
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            dense: true,
+          ),
+          CheckboxListTile(
+            value: sealedPackageConsent,
+            onChanged:
+                busy ? null : (value) => onSealedPackageChanged(value ?? false),
+            title: const Text('I agree to the Rider Terms.'),
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            dense: true,
+          ),
           LinearProgressIndicator(
             value: requiredProgress.fraction,
             minHeight: 6,
