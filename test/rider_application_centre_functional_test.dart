@@ -34,6 +34,13 @@ void main() {
         contains('applicationSubmitted: progress.applicationSubmitted'));
   });
 
+  test('submission is available independently of completion or declarations', () {
+    expect(source, contains("httpsCallable('submitRiderApplication')"));
+    expect(source, contains("'idempotencyKey': 'rider_application:\$uid'"));
+    expect(source, isNot(contains('rightToWorkConfirmed')));
+    expect(source, isNot(contains('sealedPackageConsent')));
+  });
+
   test('personal and vehicle forms close only after awaited save success', () {
     expect(source, contains('await widget.save({'));
     expect(source, contains('await widget.save(['));
