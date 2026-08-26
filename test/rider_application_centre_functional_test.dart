@@ -34,7 +34,8 @@ void main() {
         contains('applicationSubmitted: progress.applicationSubmitted'));
   });
 
-  test('submission is available independently of completion or declarations', () {
+  test('submission is available independently of completion or declarations',
+      () {
     expect(source, contains("httpsCallable('submitRiderApplication')"));
     expect(source, contains("'idempotencyKey': 'rider_application:\$uid'"));
     expect(source, isNot(contains('rightToWorkConfirmed')));
