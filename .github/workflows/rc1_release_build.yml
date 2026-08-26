@@ -94,6 +94,8 @@ jobs:
           LAUNCHERS="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath='/manifest/application/activity[intent-filter/action/@android:name="android.intent.action.MAIN" and intent-filter/category/@android:name="android.intent.category.LAUNCHER"]/@android:name')"
           FINE_LOCATION="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath='/manifest/uses-permission[@android:name="android.permission.ACCESS_FINE_LOCATION"]/@android:name')"
           BACKGROUND_LOCATION="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath='/manifest/uses-permission[@android:name="android.permission.ACCESS_BACKGROUND_LOCATION"]/@android:name')"
+          printf 'package=%s targetSdk=%s launchers=%s fineLocation=%s backgroundLocation=%s\n' \
+            "$PACKAGE" "$TARGET_SDK" "$LAUNCHERS" "$FINE_LOCATION" "$BACKGROUND_LOCATION"
           test "$PACKAGE" = "com.circum.rider"
           test "$TARGET_SDK" = "36"
           test -n "$LAUNCHERS"
