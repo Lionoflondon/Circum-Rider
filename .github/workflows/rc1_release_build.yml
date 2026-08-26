@@ -60,9 +60,9 @@ jobs:
           RIDER_ANDROID_KEY_ALIAS: ${{ secrets.RIDER_ANDROID_KEY_ALIAS }}
         run: |
           set -euo pipefail
-          mkdir -p android/release-signing
-          printf '%s' "$RIDER_ANDROID_UPLOAD_KEYSTORE_BASE64" | base64 --decode > android/release-signing/circum-rider-upload.jks
-          chmod 600 android/release-signing/circum-rider-upload.jks
+          mkdir -p android/app/release-signing
+          printf '%s' "$RIDER_ANDROID_UPLOAD_KEYSTORE_BASE64" | base64 --decode > android/app/release-signing/circum-rider-upload.jks
+          chmod 600 android/app/release-signing/circum-rider-upload.jks
           {
             echo "storeFile=release-signing/circum-rider-upload.jks"
             echo "storePassword=$RIDER_ANDROID_KEYSTORE_PASSWORD"
@@ -116,4 +116,4 @@ jobs:
         if: always()
         run: |
           rm -f android/key.properties
-          rm -rf android/release-signing
+          rm -rf android/app/release-signing
