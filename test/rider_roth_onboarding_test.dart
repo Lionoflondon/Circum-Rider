@@ -13,19 +13,18 @@ void main() {
     final service = File('lib/app/onboarding/rider_roth_onboarding.dart')
         .readAsStringSync();
 
-    test('wallet onboarding service is present and idempotent by rider UID',
-        () {
+    test('wallet onboarding uses the authoritative idempotent callable', () {
       expect(RiderRothOnboarding.walletCollection, 'riderRothWallets');
       expect(RiderRothOnboarding.ledgerCollection, 'riderRothLedger');
-      expect(service, contains("doc(riderId)"));
-      expect(service, contains('runTransaction'));
-      expect(service, contains('wallet.exists'));
-      expect(service, contains('rothWalletConnectedAt'));
-      expect(service, isNot(contains('FieldValue.increment')));
+      expect(service, contains("httpsCallable('ensureRiderRothWallet')"));
+      expect(service, contains("'riderId': riderId"));
+      expect(service, contains("data['walletCreated']"));
+      expect(service, isNot(contains('FirebaseFirestore')));
+      expect(service, isNot(contains('runTransaction')));
+      expect(service, isNot(contains("collection('riderRothWallets')")));
     });
 
-    test('auth onboarding invokes server-authoritative wallet connection',
-        () {
+    test('auth onboarding invokes server-authoritative wallet connection', () {
       expect(authBloc, contains("httpsCallable('ensureRiderRothWallet')"));
       expect(authBloc, contains('await ensureRiderRothWallet(user)'));
       expect(authBloc, isNot(contains('RiderRothOnboarding')));

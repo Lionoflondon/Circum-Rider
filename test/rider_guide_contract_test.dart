@@ -20,6 +20,8 @@ void main() {
     final applicationCentre =
         File('lib/app/onboarding/rider_application_centre.dart')
             .readAsStringSync();
+    final rothService = File('lib/app/onboarding/rider_roth_onboarding.dart')
+        .readAsStringSync();
 
     test('new Riders see the guide before auth and viewed state persists', () {
       expect(onboarding, contains('RiderGuideView.hasViewedIntro'));
@@ -135,7 +137,9 @@ void main() {
       expect(applicationCentre, contains('maxVehicles = 2'));
       expect(applicationCentre, contains('V5C or MOT'));
       expect(applicationCentre, contains('insurance can be supplied later'));
-      expect(applicationCentre, contains('ensureWalletForRider'));
+      expect(rothService, contains('ensureRiderRothWallet'));
+      expect(applicationCentre, contains('maxRiderDocumentUploadBytes'));
+      expect(applicationCentre, contains('up to 8 MiB'));
       expect(applicationCentre, contains('RiderConversationView'));
       expect(applicationCentre, contains("admin_rider_"));
       expect(applicationCentre, contains('_application'));

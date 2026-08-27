@@ -22,6 +22,8 @@ enum RiderApplicationSectionStatus {
   approved,
 }
 
+const maxRiderDocumentUploadBytes = 8 * 1024 * 1024;
+
 extension RiderApplicationSectionStatusCopy on RiderApplicationSectionStatus {
   String get label => switch (this) {
         RiderApplicationSectionStatus.notStarted => 'Not started',
@@ -157,8 +159,8 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
                               children: [
                                 if (Navigator.canPop(context))
                                   _TopBar(
-                                      onBack: () =>
-                                          Navigator.maybePop(context)),
+                                    onBack: () => Navigator.maybePop(context),
+                                  ),
                                 const SizedBox(height: 16),
                                 _ApplicationHero(
                                   progress: progress,
@@ -210,7 +212,9 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
   }
 
   String _overallStatus(
-      Map<String, dynamic> application, Map<String, dynamic> rider) {
+    Map<String, dynamic> application,
+    Map<String, dynamic> rider,
+  ) {
     final state = RiderAccountStateResolver.resolve({...application, ...rider});
     return switch (state) {
       RiderAccountState.approved => 'Approved and ready',
@@ -373,19 +377,26 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     required Set<String> match,
   }) {
     final docs = documents.where((doc) {
-      final type =
-          _normalise(doc['documentType'] ?? doc['idType'] ?? doc['type']);
+      final type = _normalise(
+        doc['documentType'] ?? doc['idType'] ?? doc['type'],
+      );
       return match.contains(type);
     }).toList();
-    final hasAttention = docs.any((doc) =>
-        riderApplicationStatusFrom(
-            doc['status'] ?? doc['verificationStatus']) ==
-        RiderApplicationSectionStatus.needsAttention);
+    final hasAttention = docs.any(
+      (doc) =>
+          riderApplicationStatusFrom(
+            doc['status'] ?? doc['verificationStatus'],
+          ) ==
+          RiderApplicationSectionStatus.needsAttention,
+    );
     final approved = docs.isNotEmpty &&
-        docs.any((doc) =>
-            riderApplicationStatusFrom(
-                doc['status'] ?? doc['verificationStatus']) ==
-            RiderApplicationSectionStatus.approved);
+        docs.any(
+          (doc) =>
+              riderApplicationStatusFrom(
+                doc['status'] ?? doc['verificationStatus'],
+              ) ==
+              RiderApplicationSectionStatus.approved,
+        );
     return _ApplicationSection(
       key: key,
       title: title,
@@ -427,12 +438,15 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
       'roth_wallet_setup',
       'payout_details',
     };
-    final required =
-        sections.where((section) => requiredKeys.contains(section.key));
+    final required = sections.where(
+      (section) => requiredKeys.contains(section.key),
+    );
     final completed = required
-        .where((section) =>
-            section.status == RiderApplicationSectionStatus.submitted ||
-            section.status == RiderApplicationSectionStatus.approved)
+        .where(
+          (section) =>
+              section.status == RiderApplicationSectionStatus.submitted ||
+              section.status == RiderApplicationSectionStatus.approved,
+        )
         .length;
     return _RequiredApplicationProgress(
       completed: completed + (applicationSubmitted ? 1 : 0),
@@ -610,24 +624,19 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
         throw StateError('Please upload JPG, PNG, WEBP or PDF files.');
       }
       final length = await file.length();
-      if (length > 10 * 1024 * 1024) {
-        throw StateError('Document must be smaller than 10MB.');
+      if (length > maxRiderDocumentUploadBytes) {
+        throw StateError('Document must be smaller than 8 MiB.');
       }
       final bytes = await file.readAsBytes();
       final safeType = _normalise(documentType);
       await _functions.httpsCallable('submitRiderDocument').call({
         'documentType': safeType,
         'notes': 'Application Centre section: $section',
-        'files': [
-          {
-            'side': 'primary',
-            'fileName': name,
-            'contentType': extension == 'pdf'
-                ? 'application/pdf'
-                : 'image/${extension == 'jpg' ? 'jpeg' : extension}',
-            'base64': base64Encode(bytes),
-          }
-        ],
+        'fileName': name,
+        'contentType': extension == 'pdf'
+            ? 'application/pdf'
+            : 'image/${extension == 'jpg' ? 'jpeg' : extension}',
+        'fileBase64': base64Encode(bytes),
       });
       await _saveSectionStatus(
         uid,
@@ -670,13 +679,32 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
       return true;
     } catch (error) {
       if (mounted) {
-        setState(
-            () => _message = error.toString().replaceFirst('Bad state: ', ''));
+        setState(() => _message = _friendlyOnboardingError(error));
       }
       return false;
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  String _friendlyOnboardingError(Object error) {
+    if (error is FirebaseFunctionsException) {
+      return switch (error.code) {
+        'unauthenticated' => 'Sign in again to continue your application.',
+        'permission-denied' =>
+          'This account cannot change that application section.',
+        'invalid-argument' =>
+          error.message ?? 'Check the details and try again.',
+        'resource-exhausted' =>
+          'Too many attempts just now. Wait a moment and try again.',
+        'unavailable' ||
+        'deadline-exceeded' =>
+          'The connection dropped. Your progress is safe; try again.',
+        _ => 'We could not save this application section. Please try again.',
+      };
+    }
+    if (error is StateError) return error.message;
+    return 'We could not save this application section. Please try again.';
   }
 
   static List<Map<String, dynamic>> _vehicleList(Map<String, dynamic> rider) {
@@ -698,7 +726,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
           'colour': rider['vehicleColour'],
           'registration': rider['vehicleRegistration'],
           'primary': true,
-        }
+        },
       ];
     }
     return const [];
@@ -721,9 +749,11 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
         'insurance' => 'Insurance evidence',
         _ => type
             .split('_')
-            .map((part) => part.isEmpty
-                ? part
-                : '${part[0].toUpperCase()}${part.substring(1)}')
+            .map(
+              (part) => part.isEmpty
+                  ? part
+                  : '${part[0].toUpperCase()}${part.substring(1)}',
+            )
             .join(' '),
       };
 }
@@ -745,8 +775,10 @@ class _ApplicationSection {
 }
 
 class _RequiredApplicationProgress {
-  const _RequiredApplicationProgress(
-      {required this.completed, required this.total});
+  const _RequiredApplicationProgress({
+    required this.completed,
+    required this.total,
+  });
 
   final int completed;
   final int total;
@@ -823,7 +855,10 @@ class _ApplicationHero extends StatelessWidget {
           const Text(
             'Complete each section, submit documents securely, and message Admin if review changes are requested.',
             style: TextStyle(
-                color: RiderPalette.muted, fontSize: 13, height: 1.45),
+              color: RiderPalette.muted,
+              fontSize: 13,
+              height: 1.45,
+            ),
           ),
           const SizedBox(height: 14),
           LinearProgressIndicator(
@@ -859,10 +894,7 @@ class _ApplicationHero extends StatelessWidget {
 }
 
 class _ApplicationSectionRow extends StatelessWidget {
-  const _ApplicationSectionRow({
-    required this.section,
-    required this.onTap,
-  });
+  const _ApplicationSectionRow({required this.section, required this.onTap});
 
   final _ApplicationSection section;
   final VoidCallback onTap;
@@ -1058,8 +1090,9 @@ class _PersonalApplicationFormState extends State<_PersonalApplicationForm> {
                   labelText: _fieldLabel(entry.key),
                   labelStyle: const TextStyle(color: RiderPalette.muted),
                   enabledBorder: OutlineInputBorder(
-                    borderSide:
-                        BorderSide(color: Colors.white.withValues(alpha: .12)),
+                    borderSide: BorderSide(
+                      color: Colors.white.withValues(alpha: .12),
+                    ),
                   ),
                   focusedBorder: const OutlineInputBorder(
                     borderSide: BorderSide(color: RiderPalette.blue),
@@ -1174,10 +1207,7 @@ class _DateOfBirthField extends StatelessWidget {
 }
 
 class _VehicleApplicationForm extends StatefulWidget {
-  const _VehicleApplicationForm({
-    required this.load,
-    required this.save,
-  });
+  const _VehicleApplicationForm({required this.load, required this.save});
 
   final Future<List<Map<String, dynamic>>> Function() load;
   final Future<void> Function(List<Map<String, dynamic>> vehicles) save;
@@ -1198,8 +1228,9 @@ class _VehicleApplicationFormState extends State<_VehicleApplicationForm> {
     widget.load().then((vehicles) {
       if (!mounted) return;
       setState(() {
-        for (final vehicle
-            in vehicles.take(RiderApplicationCentre.maxVehicles)) {
+        for (final vehicle in vehicles.take(
+          RiderApplicationCentre.maxVehicles,
+        )) {
           _vehicles.add(_controllersFor(vehicle));
         }
         if (_vehicles.isEmpty) _vehicles.add(_controllersFor(const {}));
@@ -1230,9 +1261,13 @@ class _VehicleApplicationFormState extends State<_VehicleApplicationForm> {
           ),
           const SizedBox(height: 14),
           for (var i = 0; i < _vehicles.length; i++) ...[
-            Text('Vehicle ${i + 1}',
-                style: const TextStyle(
-                    color: RiderPalette.paper, fontWeight: FontWeight.w900)),
+            Text(
+              'Vehicle ${i + 1}',
+              style: const TextStyle(
+                color: RiderPalette.paper,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
             const SizedBox(height: 8),
             for (final key in [
               'type',
@@ -1278,13 +1313,15 @@ class _VehicleApplicationFormState extends State<_VehicleApplicationForm> {
                               if (entry.value.text.trim().isNotEmpty)
                                 entry.key: entry.value.text.trim(),
                             'primary': i == 0,
-                          }
+                          },
                       ]).timeout(const Duration(seconds: 15));
                       if (context.mounted) Navigator.pop(context, true);
                     } catch (_) {
                       if (mounted) {
-                        setState(() => _error =
-                            'Saving took too long or failed. Please try again.');
+                        setState(
+                          () => _error =
+                              'Saving took too long or failed. Please try again.',
+                        );
                       }
                     } finally {
                       if (mounted) setState(() => _saving = false);
@@ -1300,7 +1337,8 @@ class _VehicleApplicationFormState extends State<_VehicleApplicationForm> {
   }
 
   Map<String, TextEditingController> _controllersFor(
-      Map<String, dynamic> data) {
+    Map<String, dynamic> data,
+  ) {
     return {
       for (final key in [
         'type',
@@ -1323,10 +1361,7 @@ class _VehicleApplicationFormState extends State<_VehicleApplicationForm> {
 }
 
 class _DocumentUploadSection extends StatefulWidget {
-  const _DocumentUploadSection({
-    required this.section,
-    required this.upload,
-  });
+  const _DocumentUploadSection({required this.section, required this.upload});
 
   final _ApplicationSection section;
   final Future<bool> Function(String type, XFile file) upload;
@@ -1374,7 +1409,7 @@ class _DocumentUploadSectionState extends State<_DocumentUploadSection> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text(
-            'Accepted formats: JPG, PNG, WEBP or PDF up to 10MB. Documents are uploaded to your secure Rider application path for Admin review.',
+            'Accepted formats: JPG, PNG, WEBP or PDF up to 8 MiB. Documents are uploaded to your secure Rider application path for Admin review.',
             style: TextStyle(color: RiderPalette.muted, height: 1.45),
           ),
           const SizedBox(height: 14),
@@ -1414,8 +1449,10 @@ class _DocumentUploadSectionState extends State<_DocumentUploadSection> {
                       });
                     } catch (_) {
                       if (mounted) {
-                        setState(() => _error =
-                            'The document was not submitted. Please try again.');
+                        setState(
+                          () => _error =
+                              'The document was not submitted. Please try again.',
+                        );
                       }
                     } finally {
                       if (mounted) setState(() => _uploading = false);
@@ -1425,12 +1462,18 @@ class _DocumentUploadSectionState extends State<_DocumentUploadSection> {
           ),
           if (_submitted) ...[
             const SizedBox(height: 12),
-            const Text('Submitted',
-                style: TextStyle(
-                    color: RiderPalette.green, fontWeight: FontWeight.w800)),
+            const Text(
+              'Submitted',
+              style: TextStyle(
+                color: RiderPalette.green,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 4),
-            const Text('Your document has been submitted for review.',
-                style: TextStyle(color: RiderPalette.muted)),
+            const Text(
+              'Your document has been submitted for review.',
+              style: TextStyle(color: RiderPalette.muted),
+            ),
           ],
           if (_error != null) ...[
             const SizedBox(height: 12),
@@ -1443,10 +1486,7 @@ class _DocumentUploadSectionState extends State<_DocumentUploadSection> {
 }
 
 class _SectionScaffold extends StatelessWidget {
-  const _SectionScaffold({
-    required this.title,
-    required this.child,
-  });
+  const _SectionScaffold({required this.title, required this.child});
 
   final String title;
   final Widget child;
@@ -1513,21 +1553,22 @@ class _ApplicationReviewStatusView extends StatelessWidget {
   Widget build(BuildContext context) {
     final submitted = application['submittedAt'] != null ||
         rider['applicationSubmittedAt'] != null;
-    final needsInformation = RiderAccountStateResolver.resolve({
-          ...application,
-          ...rider,
-        }) ==
-        RiderAccountState.moreInformationRequired;
+    final needsInformation =
+        RiderAccountStateResolver.resolve({...application, ...rider}) ==
+            RiderAccountState.moreInformationRequired;
     return _SectionScaffold(
       title: 'Review status',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(status,
-              style: const TextStyle(
-                  color: RiderPalette.paper,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900)),
+          Text(
+            status,
+            style: const TextStyle(
+              color: RiderPalette.paper,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           const SizedBox(height: 12),
           Text(
             needsInformation
