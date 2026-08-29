@@ -23,13 +23,14 @@ void main() {
     final rothService = File('lib/app/onboarding/rider_roth_onboarding.dart')
         .readAsStringSync();
 
-    test('new Riders see the guide before auth and viewed state persists', () {
-      expect(onboarding, contains('RiderGuideView.hasViewedIntro'));
+    test('new Riders reach auth before the optional guide', () {
+      expect(onboarding, isNot(contains('RiderGuideView.hasViewedIntro')));
       expect(onboarding, contains('RiderGuideView('));
       expect(onboarding, contains('authenticated: false'));
       expect(
-          onboarding, contains('_finishIntro(_RiderAuthStep.createAccount)'));
-      expect(onboarding, contains('_finishIntro(_RiderAuthStep.signIn)'));
+          onboarding, contains('_finishGuide(_RiderAuthStep.createAccount)'));
+      expect(onboarding, contains('_finishGuide(_RiderAuthStep.signIn)'));
+      expect(onboarding, contains("'How Rider works'"));
       expect(guide, contains('SharedPreferences.getInstance'));
       expect(guide, contains('circum_rider_intro_viewed'));
       expect(guide, contains('markIntroViewed'));
