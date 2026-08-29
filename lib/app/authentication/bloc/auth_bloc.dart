@@ -33,6 +33,8 @@ part 'auth_state.dart';
 part 'signup_event.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
+  static const _signupOperationTimeout = Duration(seconds: 30);
+
   AuthBloc() : super(AuthState()) {
     FirebaseAuth auth = FirebaseAuth.instance;
     // Init firestore and geoFlutterFire
@@ -1190,29 +1192,32 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         //     androidMinimumVersion: '12');
         try {
           emit(state.copyWith(status: Status.loading));
-          final UserCredential userCredential =
-              await auth.createUserWithEmailAndPassword(
-                  email: event.email, password: event.password);
+          final UserCredential userCredential = await auth
+              .createUserWithEmailAndPassword(
+                  email: event.email, password: event.password)
+              .timeout(_signupOperationTimeout);
 
           final user = userCredential.user;
           final fullName =
               '${state.firstName ?? ''} ${state.lastName ?? ''}'.trim();
           if (user != null && fullName.isNotEmpty) {
-            await user.updateDisplayName(fullName);
+            await user.updateDisplayName(fullName).timeout(
+                  _signupOperationTimeout,
+                );
             final vehicleRegistration = state.vehicleRegistration?.trim();
             await upsertRiderOnboarding(user: user, data: {
               'name': fullName,
               'phone': state.phoneNumber,
               'phoneVerified': false,
               'onboardingStatus': 'profile_started',
-            });
+            }).timeout(_signupOperationTimeout);
             await db.collection('riderOnboardingEvents').add({
               'riderId': user.uid,
               'eventType': 'account_created',
               'timestamp': FieldValue.serverTimestamp(),
               'statusAfterEvent': 'account_created',
-            });
-            await ensureRiderRothWallet(user);
+            }).timeout(_signupOperationTimeout);
+            await ensureRiderRothWallet(user).timeout(_signupOperationTimeout);
           }
 
           emit(state.copyWith(
