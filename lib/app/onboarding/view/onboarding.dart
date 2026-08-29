@@ -32,20 +32,7 @@ class _OnboardingViewState extends State<OnboardingView> {
   bool _terms = false;
   bool _privacy = false;
   bool _showPassword = false;
-  bool _checkingIntro = true;
-  bool _showIntro = true;
-
-  @override
-  void initState() {
-    super.initState();
-    RiderGuideView.hasViewedIntro().then((viewed) {
-      if (!mounted) return;
-      setState(() {
-        _showIntro = !viewed;
-        _checkingIntro = false;
-      });
-    });
-  }
+  bool _showGuide = false;
 
   @override
   void dispose() {
@@ -75,20 +62,12 @@ class _OnboardingViewState extends State<OnboardingView> {
         }
       },
       builder: (context, state) {
-        if (_checkingIntro) {
-          return const Scaffold(
-            backgroundColor: RiderPalette.background,
-            body: Center(
-              child: CircularProgressIndicator(color: RiderPalette.blue),
-            ),
-          );
-        }
-        if (_showIntro) {
+        if (_showGuide) {
           return RiderGuideView(
             authenticated: false,
-            onGetStarted: () => _finishIntro(_RiderAuthStep.createAccount),
-            onSignIn: () => _finishIntro(_RiderAuthStep.signIn),
-            onClose: () => _finishIntro(_RiderAuthStep.welcome),
+            onGetStarted: () => _finishGuide(_RiderAuthStep.createAccount),
+            onSignIn: () => _finishGuide(_RiderAuthStep.signIn),
+            onClose: () => _finishGuide(_RiderAuthStep.welcome),
           );
         }
         return Scaffold(
@@ -127,9 +106,9 @@ class _OnboardingViewState extends State<OnboardingView> {
     );
   }
 
-  void _finishIntro(_RiderAuthStep nextStep) {
+  void _finishGuide(_RiderAuthStep nextStep) {
     setState(() {
-      _showIntro = false;
+      _showGuide = false;
       _step = nextStep;
     });
   }
@@ -143,6 +122,7 @@ class _OnboardingViewState extends State<OnboardingView> {
           onApple: _appleAvailable
               ? () => context.read<AuthBloc>().add(SignInWithAppleAuth())
               : null,
+          onGuide: () => setState(() => _showGuide = true),
           error: _message(state),
           loading: state.status == Status.loading,
         ),
@@ -443,6 +423,7 @@ class _WelcomeStep extends StatelessWidget {
     required this.onSignIn,
     required this.onGoogle,
     required this.onApple,
+    required this.onGuide,
     required this.loading,
     this.error,
   });
@@ -451,6 +432,7 @@ class _WelcomeStep extends StatelessWidget {
   final VoidCallback onSignIn;
   final VoidCallback onGoogle;
   final VoidCallback? onApple;
+  final VoidCallback onGuide;
   final bool loading;
   final String? error;
 
@@ -482,6 +464,12 @@ class _WelcomeStep extends StatelessWidget {
               label: 'Existing Rider sign in',
               icon: Icons.login_rounded,
               onPressed: onSignIn,
+            ),
+            const SizedBox(height: 12),
+            _SecondaryAuthButton(
+              label: 'How Rider works',
+              icon: Icons.route_rounded,
+              onPressed: onGuide,
             ),
             const SizedBox(height: 18),
             const _DividerLabel(),

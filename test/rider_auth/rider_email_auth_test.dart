@@ -13,6 +13,7 @@ void main() {
     expect(entry, contains('Deliver with Circum'));
     expect(entry, contains('Get started'));
     expect(entry, contains('Existing Rider sign in'));
+    expect(entry, contains('How Rider works'));
     expect(entry, contains('Create Rider account'));
     expect(entry, contains('Full name'));
     expect(entry, contains('UK mobile number'));
@@ -20,6 +21,8 @@ void main() {
     expect(entry, contains('Enable location'));
     expect(entry, isNot(contains("What's your email?")));
     expect(entry, isNot(contains('phone number or email')));
+    expect(entry, isNot(contains('RiderGuideView.hasViewedIntro')));
+    expect(entry, isNot(contains('circum_rider_intro_viewed')));
   });
 
   test('legacy Rider auth presentation files are removed', () {
