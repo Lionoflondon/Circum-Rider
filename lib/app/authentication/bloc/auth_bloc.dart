@@ -660,7 +660,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           //   await user!.updatePhotoURL(state.oAuthPhotoURL!);
           // }
 
-          final documentReference = db.collection('riders').doc(user.uid);
           final SharedPreferences prefs =
               await SharedPreferences.getInstance().timeout(
             _authOperationTimeout,
@@ -670,59 +669,27 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 _authOperationTimeout,
               );
 
-          // Get the document snapshot
-          final documentSnapshot =
-              await documentReference.get().timeout(_authRestoreTimeout);
-
-          if (documentSnapshot.exists) {
-            // Document exists
-            await db.collection("riders").doc(user.uid).update({
-              'name': event.username,
-              'phone': user.phoneNumber ?? state.phoneNumber,
-              'phoneVerified': state.isPhoneVerified,
-              if (state.isPhoneVerified)
-                'phoneVerifiedAt': FieldValue.serverTimestamp(),
-              'status': 'offline',
-              'profileCompletionStatus': 'complete',
-              'onboardingStatus': 'profile_complete',
-              'vehicle': {
-                'type': state.vehicleType?.trim(),
-                'makeModel': state.vehicleMakeModel?.trim(),
-                'colour': state.vehicleColour?.trim(),
-                'plateNumber': state.vehicleRegistration?.trim(),
-              },
-              'vehicleType': state.vehicleType?.trim(),
-              'vehicleMakeModel': state.vehicleMakeModel?.trim(),
-              'vehicleColour': state.vehicleColour?.trim(),
-              'vehicleRegistration': state.vehicleRegistration?.trim(),
+          await functions.httpsCallable('updateRiderProfile').call({
+            'name': event.username,
+            'phone': user.phoneNumber ?? state.phoneNumber,
+            'phoneVerified': state.isPhoneVerified,
+            'vehicle': {
+              'type': state.vehicleType?.trim(),
+              'makeModel': state.vehicleMakeModel?.trim(),
+              'colour': state.vehicleColour?.trim(),
               'plateNumber': state.vehicleRegistration?.trim(),
-              'typeOfVehicle': state.vehicleType?.trim(),
-            }).timeout(_authOperationTimeout);
-          } else {
-            // Document does not exist
-            await db.collection("riders").doc(user.uid).set({
-              'name': event.username,
-              'phone': user.phoneNumber ?? state.phoneNumber,
-              'phoneVerified': state.isPhoneVerified,
-              if (state.isPhoneVerified)
-                'phoneVerifiedAt': FieldValue.serverTimestamp(),
-              'status': 'offline',
-              'profileCompletionStatus': 'complete',
-              'onboardingStatus': 'profile_complete',
-              'vehicle': {
-                'type': state.vehicleType?.trim(),
-                'makeModel': state.vehicleMakeModel?.trim(),
-                'colour': state.vehicleColour?.trim(),
-                'plateNumber': state.vehicleRegistration?.trim(),
-              },
-              'vehicleType': state.vehicleType?.trim(),
-              'vehicleMakeModel': state.vehicleMakeModel?.trim(),
-              'vehicleColour': state.vehicleColour?.trim(),
-              'vehicleRegistration': state.vehicleRegistration?.trim(),
-              'plateNumber': state.vehicleRegistration?.trim(),
-              'typeOfVehicle': state.vehicleType?.trim(),
-            }).timeout(_authOperationTimeout);
-          }
+            },
+            'vehicleType': state.vehicleType?.trim(),
+            'vehicleMakeModel': state.vehicleMakeModel?.trim(),
+            'vehicleColour': state.vehicleColour?.trim(),
+            'vehicleRegistration': state.vehicleRegistration?.trim(),
+            'plateNumber': state.vehicleRegistration?.trim(),
+            'typeOfVehicle': state.vehicleType?.trim(),
+            'section': 'profile_details',
+          }).timeout(_authOperationTimeout);
+          await upsertRiderOnboarding(user: user, data: {
+            'onboardingStatus': 'profile_complete',
+          }).timeout(_authOperationTimeout);
 
           await ensureRiderRothWallet(user).timeout(_authOperationTimeout);
 
@@ -898,7 +865,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             'locationEnabled': event.locationEnabled,
             'onboardingStatus': 'profile_complete',
           });
-          await ensureRiderRothWallet(user);
+          await ensureRiderRothWallet(user).timeout(_authOperationTimeout);
           emit(state.copyWith(status: Status.locationRequested));
         } catch (error) {
           logRiderAuthError(
@@ -1342,12 +1309,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'phoneVerified': false,
               'onboardingStatus': 'profile_started',
             }).timeout(_signupOperationTimeout);
-            await db.collection('riderOnboardingEvents').add({
-              'riderId': user.uid,
-              'eventType': 'account_created',
-              'timestamp': FieldValue.serverTimestamp(),
-              'statusAfterEvent': 'account_created',
-            }).timeout(_signupOperationTimeout);
             await ensureRiderRothWallet(user).timeout(_signupOperationTimeout);
           }
 
@@ -1428,7 +1389,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           final name =
               '${state.firstName ?? ''} ${state.lastName ?? ''}'.trim();
           await user.updateDisplayName(name).timeout(_authOperationTimeout);
-          await upsertRiderOnboarding(user: user, data: {'name': name});
+          await upsertRiderOnboarding(user: user, data: {'name': name})
+              .timeout(_authOperationTimeout);
           emit(state.copyWith(
             status: Status.success,
             username: name,
