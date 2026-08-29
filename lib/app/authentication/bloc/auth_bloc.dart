@@ -575,8 +575,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               resendToken: resendTokenValue,
               status: Status.success));
         } catch (e) {
+          logRiderAuthError(
+            error: e,
+            path: 'phone/request_otp',
+            step: 'request_phone_otp',
+            riderDocumentId: auth.currentUser?.uid,
+          );
           emit(state.copyWith(
-              errorMessage: e.toString().split(':').last.trim(),
+              errorMessage: 'Verification code could not be sent. Try again.',
               isLoading: false,
               status: Status.failure));
         }

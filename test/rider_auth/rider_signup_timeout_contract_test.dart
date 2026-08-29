@@ -38,11 +38,19 @@ void main() {
   });
 
   test('Rider OTP paths cannot leave completers unresolved forever', () {
+    final otpHandler = authBloc.substring(
+      authBloc.indexOf('if (event is RequestForOTP)'),
+      authBloc.indexOf('if (event is VerifySentCode)'),
+    );
     expect(authBloc, contains("TimeoutException('phone_otp_send')"));
     expect(authBloc, contains("TimeoutException('phone_otp_request')"));
     expect(
         authBloc, contains('completer.future.timeout(_authOperationTimeout)'));
-    expect(authBloc, contains('if (!completer.isCompleted)'));
+    expect(otpHandler, contains('if (!completer.isCompleted)'));
+    expect(otpHandler, contains("step: 'request_phone_otp'"));
+    expect(otpHandler,
+        contains('Verification code could not be sent. Try again.'));
+    expect(otpHandler, isNot(contains("e.toString().split(':').last.trim()")));
   });
 
   test('Rider OAuth and password reset failures terminate safely', () {
