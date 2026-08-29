@@ -26,6 +26,48 @@ void main() {
     expect(authBloc, contains('.timeout(_signupOperationTimeout)'));
   });
 
+  test('bounds Rider session restore and profile enrichment operations', () {
+    expect(authBloc, contains('_authRestoreTimeout'));
+    expect(authBloc, contains('.readAll()'));
+    expect(authBloc, contains('.timeout(_authOperationTimeout))["phone"]'));
+    expect(authBloc, contains('Future.wait(['));
+    expect(authBloc, contains(']).timeout(_authRestoreTimeout)'));
+    expect(authBloc, contains('vehicleRegistrationDocumentStatus'));
+    expect(authBloc, contains('SharedPreferences.getInstance().timeout'));
+    expect(authBloc, contains("setString('riderId', user.uid).timeout"));
+  });
+
+  test('Rider OTP paths cannot leave completers unresolved forever', () {
+    expect(authBloc, contains("TimeoutException('phone_otp_send')"));
+    expect(authBloc, contains("TimeoutException('phone_otp_request')"));
+    expect(
+        authBloc, contains('completer.future.timeout(_authOperationTimeout)'));
+    expect(authBloc, contains('if (!completer.isCompleted)'));
+  });
+
+  test('Rider OAuth and password reset failures terminate safely', () {
+    expect(authBloc, contains("step: 'apple_sign_in'"));
+    expect(authBloc, contains("step: 'google_sign_in'"));
+    expect(
+        authBloc, contains('Apple sign-in could not be completed. Try again.'));
+    expect(authBloc,
+        contains('Google sign-in could not be completed. Try again.'));
+    expect(authBloc, isNot(contains('user!.displayName!')));
+    expect(
+        authBloc, isNot(contains('throw Exception(err.message.toString())')));
+    expect(authBloc, isNot(contains('throw Exception(err.toString())')));
+  });
+
+  test('Rider auth diagnostics are production safe', () {
+    expect(authBloc, contains('Rider auth diagnostic stage='));
+    expect(authBloc, contains(r'category=$category'));
+    expect(authBloc, contains('riderDocumentId.hashCode'));
+    expect(
+        authBloc,
+        isNot(contains(r'Rider auth diagnostic stage=$step '
+            r'category=$category code=$code path=$path riderRef=$riderDocumentId')));
+  });
+
   test('signup retains recoverable partial-account path', () {
     expect(authBloc, contains("'onboardingStatus': 'profile_started'"));
     expect(authBloc, contains('email-already-in-use'));
