@@ -27,6 +27,7 @@ void main() {
     test('auth onboarding invokes server-authoritative wallet connection', () {
       expect(authBloc, contains("httpsCallable('ensureRiderRothWallet')"));
       expect(authBloc, contains('await ensureRiderRothWallet(user)'));
+      expect(authBloc, contains('await ensureRiderRothWallet(user).timeout'));
       expect(authBloc, isNot(contains('RiderRothOnboarding')));
       expect(authBloc, isNot(contains('ensureWalletForRider')));
       expect(authBloc, isNot(contains("collection('riderRothWallets')")));
@@ -49,6 +50,35 @@ void main() {
       }
       expect(authBloc, isNot(contains("'approvalStatus': 'approved'")));
       expect(authBloc, isNot(contains("'onboardingStatus': 'approved'")));
+    });
+
+    test('legacy profile completion does not client-write lifecycle fields',
+        () {
+      final handler = authBloc.substring(
+        authBloc.indexOf('if (event is UpdateUserProfile)'),
+        authBloc.indexOf('if (event is SubmitOTP)'),
+      );
+      expect(handler, contains("httpsCallable('updateRiderProfile')"));
+      expect(handler, contains('upsertRiderOnboarding(user: user'));
+      expect(handler, contains("section': 'profile_details'"));
+      expect(handler, isNot(contains('documentReference.get()')));
+      expect(
+          handler, isNot(contains('.collection("riders").doc(user.uid).set')));
+      expect(handler,
+          isNot(contains('.collection("riders").doc(user.uid).update')));
+      expect(handler, isNot(contains("'status': 'offline'")));
+      expect(handler, isNot(contains("'profileCompletionStatus': 'complete'")));
+    });
+
+    test('signup does not create onboarding events from the client', () {
+      final handler = authBloc.substring(
+        authBloc.indexOf('on<SignUpWithEmail>'),
+        authBloc.indexOf('on<UpdatePhoneNumber>'),
+      );
+      expect(handler, contains('upsertRiderOnboarding(user: user'));
+      expect(handler, isNot(contains("collection('riderOnboardingEvents')")));
+      expect(handler, isNot(contains("eventType': 'account_created'")));
+      expect(handler, contains('ensureRiderRothWallet(user).timeout'));
     });
 
     test('Roth onboarding required keeps Rider in onboarding', () {
