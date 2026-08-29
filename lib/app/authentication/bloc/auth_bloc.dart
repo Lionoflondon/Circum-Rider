@@ -33,7 +33,11 @@ part 'auth_state.dart';
 part 'signup_event.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
-  AuthBloc() : super(AuthState()) {
+  static const _authOperationTimeout = Duration(seconds: 20);
+  static const _authRestoreTimeout = Duration(seconds: 12);
+  static const _signupOperationTimeout = Duration(seconds: 30);
+
+  AuthBloc() : super(const AuthState()) {
     FirebaseAuth auth = FirebaseAuth.instance;
     // Init firestore and geoFlutterFire
     // final geo = GeoFlutterFire();
@@ -46,7 +50,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       await functions.httpsCallable('ensureRiderRothWallet').call({
         'riderId': user.uid,
         if (user.email != null) 'email': user.email,
-      });
+      }).timeout(_authOperationTimeout);
     }
 
     void logRiderAuthError({
@@ -54,7 +58,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       required String path,
       required String step,
       String? riderDocumentId,
-    }) {}
+    }) {
+      final code = error is FirebaseException ? error.code : error.runtimeType;
+      final category = error is TimeoutException
+          ? 'timeout'
+          : error is FirebaseException
+              ? 'firebase'
+              : 'unexpected';
+      final riderRef =
+          riderDocumentId == null ? 'unknown' : riderDocumentId.hashCode;
+      final pathSurface = path.split('/').first;
+      debugPrint(
+        'Rider auth diagnostic stage=$step category=$category code=$code '
+        'surface=$pathSurface riderRef=$riderRef',
+      );
+    }
 
     Future<void> upsertRiderOnboarding({
       required User user,
@@ -63,16 +81,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       await functions.httpsCallable('advanceRiderOnboarding').call({
         'stage': data['onboardingStatus'] ?? data['stage'] ?? 'profile_started',
         if (data['name'] != null) 'name': data['name'],
-        if (data['locationEnabled'] != null) 'locationEnabled': data['locationEnabled'],
+        if (data['locationEnabled'] != null)
+          'locationEnabled': data['locationEnabled'],
         if (data['position'] != null) 'position': data['position'],
-      });
+      }).timeout(_authOperationTimeout);
     }
 
     Future<String?> vehicleRegistrationDocumentStatus(String uid) async {
       final doc = await db
           .collection('riderDocuments')
           .doc('${uid}_vehicle_registration')
-          .get();
+          .get()
+          .timeout(_authRestoreTimeout);
       if (!doc.exists) return null;
       return '${doc.data()?['status'] ?? doc.data()?['verificationStatus'] ?? ''}'
           .trim();
@@ -86,11 +106,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<AuthEvent>((event, emit) async {
       if (event is SortSessionState) {
-        final storage = FlutterSecureStorage();
+        const storage = FlutterSecureStorage();
         User? user = auth.currentUser;
 
         if (user != null) {
-          final phone = (await storage.readAll())["phone"];
+          String? phone;
+          try {
+            phone = (await storage
+                .readAll()
+                .timeout(_authOperationTimeout))["phone"];
+          } catch (error) {
+            logRiderAuthError(
+              error: error,
+              path: 'secure_storage',
+              step: 'session_restore_storage',
+              riderDocumentId: user.uid,
+            );
+          }
           String? riderPhone = phone;
           bool phoneVerified = false;
           String? vehicleDocStatus;
@@ -101,7 +133,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             final records = await Future.wait([
               db.collection('riders').doc(user.uid).get(),
               db.collection('riderProfiles').doc(user.uid).get(),
-            ]);
+            ]).timeout(_authRestoreTimeout);
             final riderRecord = records[0].data() ?? const <String, dynamic>{};
             final riderProfile = records[1].data() ?? const <String, dynamic>{};
             final riderData = <String, dynamic>{
@@ -139,9 +171,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             );
           }
 
-          final SharedPreferences prefs = await SharedPreferences.getInstance();
+          final SharedPreferences prefs = await SharedPreferences.getInstance()
+              .timeout(_authOperationTimeout);
 
-          await prefs.setString('riderId', user.uid);
+          await prefs
+              .setString('riderId', user.uid)
+              .timeout(_authOperationTimeout);
           // You can also access user information like user.displayName, user.email, etc.
           emit(state.copyWith(
               currentState: AppState.authenticated,
@@ -275,9 +310,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             },
             codeAutoRetrievalTimeout: (id) {
               verificationId = id;
+              if (!completer.isCompleted) {
+                completer.completeError(TimeoutException('phone_otp_send'));
+              }
             },
           );
-          await completer.future;
+          await completer.future.timeout(_authOperationTimeout);
           emit(state.copyWith(
             verificationId: verificationId,
             resendToken: resendToken ?? state.resendToken,
@@ -312,7 +350,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             smsCode: event.otpCode,
           );
           try {
-            await user.linkWithCredential(credential);
+            await user
+                .linkWithCredential(credential)
+                .timeout(_authOperationTimeout);
           } on FirebaseAuthException catch (error) {
             if (error.code != 'provider-already-linked' &&
                 error.code != 'credential-already-in-use') {
@@ -331,8 +371,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             'phoneVerified': true,
             'phoneVerifiedAt': FieldValue.serverTimestamp(),
             'onboardingStatus': 'phone_verified',
-          });
-          await user.sendEmailVerification();
+          }).timeout(_authOperationTimeout);
+          await user.sendEmailVerification().timeout(_authOperationTimeout);
 
           emit(state.copyWith(
             otpCode: event.otpCode,
@@ -370,7 +410,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (event is ResendVerificationEmail) {
         try {
           emit(state.copyWith(status: Status.loading));
-          await auth.currentUser?.sendEmailVerification();
+          await auth.currentUser
+              ?.sendEmailVerification()
+              .timeout(_authOperationTimeout);
           emit(state.copyWith(status: Status.success));
         } catch (error) {
           emit(state.copyWith(
@@ -386,13 +428,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       if (event is SignInWithAppleAuth) {
         try {
+          emit(state.copyWith(status: Status.loading));
           final appleCredential = await SignInWithApple.getAppleIDCredential(
             scopes: [
               AppleIDAuthorizationScopes.email,
               AppleIDAuthorizationScopes.fullName,
             ],
             // nonce: nonce
-          );
+          ).timeout(_authOperationTimeout);
 
           // SignInWithApple
 
@@ -407,8 +450,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               );
 
           // Sign in with credential
-          UserCredential userCredential =
-              await auth.signInWithCredential(oauthCredential);
+          UserCredential userCredential = await auth
+              .signInWithCredential(oauthCredential)
+              .timeout(_authOperationTimeout);
 
           emit(state.copyWith(
               username: userCredential.user?.displayName,
@@ -426,23 +470,38 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 username:
                     "${appleCredential.givenName} ${appleCredential.familyName}"));
           }
-          await Future.delayed(const Duration(seconds: 2));
-
           // await googleSignIn.signOut();
-        } catch (_) {
-          // OAuth profile enrichment should not block sign-in.
+        } catch (error) {
+          logRiderAuthError(
+            error: error,
+            path: 'oauth/apple',
+            step: 'apple_sign_in',
+            riderDocumentId: auth.currentUser?.uid,
+          );
+          emit(state.copyWith(
+            status: Status.failure,
+            errorMessage: 'Apple sign-in could not be completed. Try again.',
+            clearSensitiveAuthFields: true,
+          ));
         }
       }
 
       if (event is SignInWithGoogle) {
-        final GoogleSignIn googleSignIn = GoogleSignIn();
-        await googleSignIn.signOut();
-        final GoogleSignInAccount? googleSignInAccount =
-            await googleSignIn.signIn();
+        try {
+          emit(state.copyWith(status: Status.loading));
+          final GoogleSignIn googleSignIn = GoogleSignIn();
+          await googleSignIn.signOut().timeout(_authOperationTimeout);
+          final GoogleSignInAccount? googleSignInAccount =
+              await googleSignIn.signIn().timeout(_authOperationTimeout);
 
-        if (googleSignInAccount != null) {
+          if (googleSignInAccount == null) {
+            emit(state.copyWith(status: Status.initial));
+            return;
+          }
+
           final GoogleSignInAuthentication googleSignInAuthentication =
-              await googleSignInAccount.authentication;
+              await googleSignInAccount.authentication
+                  .timeout(_authOperationTimeout);
 
           final credential = GoogleAuthProvider.credential(
             accessToken: googleSignInAuthentication.accessToken,
@@ -451,7 +510,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
           // Sign in with credential
           UserCredential userCredential =
-              await auth.signInWithCredential(credential);
+              await auth.signInWithCredential(credential).timeout(
+                    _authOperationTimeout,
+                  );
 
           emit(state.copyWith(
               username: userCredential.user?.displayName,
@@ -461,36 +522,57 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               currentState: AppState.authenticated,
               authenticatedStatus: AuthenticatedStatus.authenticated));
 
-          add(UpdateUserProfile(username: userCredential.user!.displayName!));
+          final displayName = userCredential.user?.displayName?.trim();
+          if (displayName != null && displayName.isNotEmpty) {
+            add(UpdateUserProfile(username: displayName));
+          }
           // await googleSignIn.signOut();
+        } catch (error) {
+          logRiderAuthError(
+            error: error,
+            path: 'oauth/google',
+            step: 'google_sign_in',
+            riderDocumentId: auth.currentUser?.uid,
+          );
+          emit(state.copyWith(
+            status: Status.failure,
+            errorMessage: 'Google sign-in could not be completed. Try again.',
+            clearSensitiveAuthFields: true,
+          ));
         }
       }
 
       if (event is RequestForOTP) {
         // emit(state.copyWith(isLoading: true, status: Status.loading));
 
-        var completer = Completer<bool>();
+        final completer = Completer<bool>();
 
-        String? _verificationId;
-        int? _resendToken;
+        String? verificationIdValue;
+        int? resendTokenValue;
 
         try {
           emit(state.copyWith(status: Status.loading));
           await auth.verifyPhoneNumber(
             phoneNumber: state.phoneNumber,
             verificationCompleted: (_) {},
-            verificationFailed: (_) {},
-            codeSent: (String verificationId, int? resendToken) async {
-              _verificationId = verificationId;
-              _resendToken = resendToken;
-              completer.complete(true);
+            verificationFailed: (error) {
+              if (!completer.isCompleted) completer.completeError(error);
             },
-            codeAutoRetrievalTimeout: (_) {},
+            codeSent: (String verificationId, int? resendToken) async {
+              verificationIdValue = verificationId;
+              resendTokenValue = resendToken;
+              if (!completer.isCompleted) completer.complete(true);
+            },
+            codeAutoRetrievalTimeout: (_) {
+              if (!completer.isCompleted) {
+                completer.completeError(TimeoutException('phone_otp_request'));
+              }
+            },
           );
-          await completer.future;
+          await completer.future.timeout(_authOperationTimeout);
           emit(state.copyWith(
-              verificationId: _verificationId,
-              resendToken: _resendToken,
+              verificationId: verificationIdValue,
+              resendToken: resendTokenValue,
               status: Status.success));
         } catch (e) {
           emit(state.copyWith(
@@ -506,13 +588,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           PhoneAuthCredential credential = PhoneAuthProvider.credential(
               verificationId: state.verificationId!, smsCode: '${state.otp}');
           if (auth.currentUser != null) {
-            await auth.currentUser?.linkWithCredential(credential);
+            await auth.currentUser
+                ?.linkWithCredential(credential)
+                .timeout(_authOperationTimeout);
           } else {
             // Sign the user in (or link) with the credential
-            final UserCredential _userCredential =
-                await auth.signInWithCredential(credential);
+            final UserCredential userCredential = await auth
+                .signInWithCredential(credential)
+                .timeout(_authOperationTimeout);
 
-            if (_userCredential.user?.displayName == null) {
+            if (userCredential.user?.displayName == null) {
               if (state.oAuthFirstName == null) {
                 emit(state.copyWith(
                     authenticatedStatus: AuthenticatedStatus.incompleteData,
@@ -526,16 +611,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                     username: "${state.oAuthFirstName} ${state.oAuthLastName}",
                     profilePhoto: state.oAuthPhotoURL,
                     email: state.oAuthEmail,
-                    phoneNumber: _userCredential.user?.phoneNumber,
+                    phoneNumber: userCredential.user?.phoneNumber,
                     currentState: AppState.authenticated));
               }
             } else {
               emit(state.copyWith(
                   status: Status.success,
-                  username: _userCredential.user?.displayName,
-                  profilePhoto: _userCredential.user?.photoURL,
-                  email: _userCredential.user?.email,
-                  phoneNumber: _userCredential.user?.phoneNumber,
+                  username: userCredential.user?.displayName,
+                  profilePhoto: userCredential.user?.photoURL,
+                  email: userCredential.user?.email,
+                  phoneNumber: userCredential.user?.phoneNumber,
                   currentState: AppState.authenticated));
             }
           }
@@ -558,7 +643,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 errorMessage: 'Please sign in again to continue.'));
             return;
           }
-          await user.updateDisplayName(event.username);
+          await user.updateDisplayName(event.username).timeout(
+                _authOperationTimeout,
+              );
           // if (state.oAuthEmail != null) {
           //   await user!.updateEmail(state.oAuthEmail!);
           // }
@@ -568,12 +655,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           // }
 
           final documentReference = db.collection('riders').doc(user.uid);
-          final SharedPreferences prefs = await SharedPreferences.getInstance();
+          final SharedPreferences prefs =
+              await SharedPreferences.getInstance().timeout(
+            _authOperationTimeout,
+          );
 
-          await prefs.setString('riderId', user.uid);
+          await prefs.setString('riderId', user.uid).timeout(
+                _authOperationTimeout,
+              );
 
           // Get the document snapshot
-          final documentSnapshot = await documentReference.get();
+          final documentSnapshot =
+              await documentReference.get().timeout(_authRestoreTimeout);
 
           if (documentSnapshot.exists) {
             // Document exists
@@ -598,7 +691,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'vehicleRegistration': state.vehicleRegistration?.trim(),
               'plateNumber': state.vehicleRegistration?.trim(),
               'typeOfVehicle': state.vehicleType?.trim(),
-            });
+            }).timeout(_authOperationTimeout);
           } else {
             // Document does not exist
             await db.collection("riders").doc(user.uid).set({
@@ -622,10 +715,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               'vehicleRegistration': state.vehicleRegistration?.trim(),
               'plateNumber': state.vehicleRegistration?.trim(),
               'typeOfVehicle': state.vehicleType?.trim(),
-            });
+            }).timeout(_authOperationTimeout);
           }
 
-          await ensureRiderRothWallet(user);
+          await ensureRiderRothWallet(user).timeout(_authOperationTimeout);
 
           emit(state.copyWith(
               status: Status.success,
@@ -690,12 +783,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       if (event is RequestLocationData) {
         // Obtain shared preferences.
-        final SharedPreferences prefs = await SharedPreferences.getInstance();
         try {
           emit(state.copyWith(status: Status.locationRequested));
           final User? user = auth.currentUser;
+          if (user == null) {
+            emit(state.copyWith(
+              status: Status.failure,
+              errorMessage: 'Please sign in again to continue.',
+            ));
+            return;
+          }
+          final SharedPreferences prefs =
+              await SharedPreferences.getInstance().timeout(
+            _authOperationTimeout,
+          );
 
-          Position locationData = await locationHelper.enableLocation();
+          Position locationData = await locationHelper
+              .enableLocation()
+              .timeout(_authOperationTimeout);
 
           // Position myPosition = Position(
           //     longitude: 7.496811,
@@ -708,12 +813,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           //     headingAccuracy: 0,
           //     speed: 0,
           //     speedAccuracy: 0);
-          await prefs.setString('riderId', user!.uid);
-          await prefs.setDouble('longitude', locationData.longitude);
-          await prefs.setDouble('latitude', locationData.latitude);
-          await prefs.setString(
-              'timestamp', locationData.timestamp.toIso8601String());
-          await prefs.setDouble('altitude', locationData.altitude);
+          await prefs.setString('riderId', user.uid).timeout(
+                _authOperationTimeout,
+              );
+          await prefs
+              .setDouble('longitude', locationData.longitude)
+              .timeout(_authOperationTimeout);
+          await prefs
+              .setDouble('latitude', locationData.latitude)
+              .timeout(_authOperationTimeout);
+          await prefs
+              .setString('timestamp', locationData.timestamp.toIso8601String())
+              .timeout(
+                _authOperationTimeout,
+              );
+          await prefs
+              .setDouble('altitude', locationData.altitude)
+              .timeout(_authOperationTimeout);
 
           GeoFirePoint myLocation = GeoFirePoint(
               GeoPoint(locationData.latitude, locationData.longitude));
@@ -722,16 +838,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             hasLocationPermission: true,
             isLocationEnabled: true,
           ));
-          await db.collection("riders").doc(user?.uid).update({
+          await db.collection("riders").doc(user.uid).update({
             'position': myLocation.data,
             'locationEnabled': true,
-          });
+          }).timeout(_authOperationTimeout);
           await upsertRiderOnboarding(user: user, data: {
             'onboardingStatus': 'profile_complete',
             'locationEnabled': true,
             'position': myLocation.data,
           });
-          await ensureRiderRothWallet(user);
+          await ensureRiderRothWallet(user).timeout(_authOperationTimeout);
         } catch (e) {
           if (e == 'Location permissions are permanently denied') {
             emit(state.copyWith(
@@ -1098,13 +1214,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       (event, emit) async {
         try {
           emit(state.copyWith(status: Status.loading));
-          final UserCredential userCredential =
-              await auth.signInWithEmailAndPassword(
-                  email: event.email, password: event.password);
+          final UserCredential userCredential = await auth
+              .signInWithEmailAndPassword(
+                  email: event.email, password: event.password)
+              .timeout(_authOperationTimeout);
           const storage = FlutterSecureStorage();
 
           if (auth.currentUser?.emailVerified == false) {
-            await auth.currentUser?.sendEmailVerification();
+            await auth.currentUser
+                ?.sendEmailVerification()
+                .timeout(_authOperationTimeout);
             emit(state.copyWith(
               status: Status.unverifiedEmail,
               clearSensitiveAuthFields: true,
@@ -1121,7 +1240,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             }
             final documentReference = db.collection('riders').doc(user.uid);
             // Get the document snapshot
-            final documentSnapshot = await documentReference.get();
+            final documentSnapshot =
+                await documentReference.get().timeout(_authRestoreTimeout);
             String? riderPhone = userCredential.user?.phoneNumber;
             var authenticatedStatus = AuthenticatedStatus.authenticated;
 
@@ -1140,7 +1260,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                     : AuthenticatedStatus.pendingApproval;
               }
               if (riderPhone != null) {
-                await storage.write(key: 'phone', value: riderPhone);
+                await storage
+                    .write(key: 'phone', value: riderPhone)
+                    .timeout(_authOperationTimeout);
               }
             }
             emit(state.copyWith(
@@ -1164,7 +1286,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             errorMessage: RiderAuthError.messageFor(e.code),
             clearSensitiveAuthFields: true,
           ));
-        } catch (_) {
+        } catch (error) {
+          logRiderAuthError(
+            error: error,
+            path: 'riders/${auth.currentUser?.uid ?? 'unknown'}',
+            step: 'email_sign_in_enrichment',
+            riderDocumentId: auth.currentUser?.uid,
+          );
           emit(state.copyWith(
             status: Status.failure,
             errorMessage: RiderAuthError.messageFor('unknown'),
@@ -1190,29 +1318,31 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         //     androidMinimumVersion: '12');
         try {
           emit(state.copyWith(status: Status.loading));
-          final UserCredential userCredential =
-              await auth.createUserWithEmailAndPassword(
-                  email: event.email, password: event.password);
+          final UserCredential userCredential = await auth
+              .createUserWithEmailAndPassword(
+                  email: event.email, password: event.password)
+              .timeout(_signupOperationTimeout);
 
           final user = userCredential.user;
           final fullName =
               '${state.firstName ?? ''} ${state.lastName ?? ''}'.trim();
           if (user != null && fullName.isNotEmpty) {
-            await user.updateDisplayName(fullName);
-            final vehicleRegistration = state.vehicleRegistration?.trim();
+            await user.updateDisplayName(fullName).timeout(
+                  _signupOperationTimeout,
+                );
             await upsertRiderOnboarding(user: user, data: {
               'name': fullName,
               'phone': state.phoneNumber,
               'phoneVerified': false,
               'onboardingStatus': 'profile_started',
-            });
+            }).timeout(_signupOperationTimeout);
             await db.collection('riderOnboardingEvents').add({
               'riderId': user.uid,
               'eventType': 'account_created',
               'timestamp': FieldValue.serverTimestamp(),
               'statusAfterEvent': 'account_created',
-            });
-            await ensureRiderRothWallet(user);
+            }).timeout(_signupOperationTimeout);
+            await ensureRiderRothWallet(user).timeout(_signupOperationTimeout);
           }
 
           emit(state.copyWith(
@@ -1251,17 +1381,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       (event, emit) async {
         try {
           User? user = auth.currentUser;
-          FlutterSecureStorage storage = const FlutterSecureStorage();
-          final documentReference = db.collection('riders').doc(user?.uid);
+          if (user == null) return;
+          const storage = FlutterSecureStorage();
+          final documentReference = db.collection('riders').doc(user.uid);
           // Get the document snapshot
-          final documentSnapshot = await documentReference.get();
+          final documentSnapshot =
+              await documentReference.get().timeout(_authRestoreTimeout);
 
           if (documentSnapshot.exists) {
-            await db.collection("riders").doc(user!.uid).update({
+            await db.collection("riders").doc(user.uid).update({
               'phone': event.value,
-            });
+            }).timeout(_authOperationTimeout);
 
-            await storage.write(key: 'phone', value: event.value);
+            await storage
+                .write(key: 'phone', value: event.value)
+                .timeout(_authOperationTimeout);
 
             emit(state.copyWith(phoneNumber: event.value));
           }
@@ -1272,7 +1406,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     );
 
     on<ConfirmEmailVerification>((event, emit) async {
-      await auth.currentUser?.reload();
+      await auth.currentUser?.reload().timeout(_authOperationTimeout);
       if (auth.currentUser?.emailVerified == true) {
         final user = auth.currentUser;
         if (user != null) {
@@ -1280,14 +1414,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             'onboardingStatus': 'email_verified',
             'emailVerified': true,
             'emailVerifiedAt': FieldValue.serverTimestamp(),
-          });
+          }).timeout(_authOperationTimeout);
         }
         if (user != null &&
             user.displayName == null &&
             (state.firstName?.trim().isNotEmpty ?? false)) {
           final name =
               '${state.firstName ?? ''} ${state.lastName ?? ''}'.trim();
-          await user.updateDisplayName(name);
+          await user.updateDisplayName(name).timeout(_authOperationTimeout);
           await upsertRiderOnboarding(user: user, data: {'name': name});
           emit(state.copyWith(
             status: Status.success,
@@ -1310,10 +1444,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<SignOut>(
       (event, emit) async {
         FlutterSecureStorage storage = const FlutterSecureStorage();
-        await auth.signOut();
+        await auth.signOut().timeout(_authOperationTimeout);
         emit(const AuthState());
         emit(state.copyWith(currentState: AppState.unauthenticated));
-        await storage.deleteAll();
+        await storage.deleteAll().timeout(_authOperationTimeout);
       },
     );
 
@@ -1323,7 +1457,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       // auth.currentUser.reauthenticateWithProvider(provider)
 
       try {
-        await storage.delete(key: 'password');
+        await storage.delete(key: 'password').timeout(_authOperationTimeout);
         emit(state.copyWith(
           status: Status.failure,
           errorMessage:
@@ -1344,7 +1478,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<ResetPassword>((event, emit) async {
       try {
         emit(state.copyWith(status: Status.loading));
-        await auth.sendPasswordResetEmail(email: event.email);
+        await auth
+            .sendPasswordResetEmail(email: event.email)
+            .timeout(_authOperationTimeout);
         emit(state.copyWith(status: Status.passwordResetEmailSent));
       } on FirebaseAuthException catch (err) {
         emit(state.copyWith(status: Status.failure));
@@ -1355,11 +1491,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         if (err.code == 'user-not-found') {
           emit(state.copyWith(errorMessage: 'User not found'));
         }
-
-        throw Exception(err.message.toString());
       } catch (err) {
         emit(state.copyWith(status: Status.failure));
-        throw Exception(err.toString());
       }
     });
   }
@@ -1408,7 +1541,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       thumbnailSize: thumbnail.width,
     );
   }
-
 }
 
 class _ProcessedRiderProfilePhoto {

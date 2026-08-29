@@ -304,13 +304,15 @@ class _OnboardingViewState extends State<OnboardingView> {
   bool _validUkPhone(String value) {
     final digits = value.replaceAll(RegExp(r'\D'), '');
     return digits.startsWith('07') && digits.length == 11 ||
-        digits.startsWith('447') && digits.length == 12;
+        digits.startsWith('447') && digits.length == 12 ||
+        digits.startsWith('7') && digits.length == 10;
   }
 
   String _formatPhone(String value) {
     final digits = value.replaceAll(RegExp(r'\D'), '');
-    if (digits.startsWith('44')) return '+$digits';
+    if (digits.startsWith('447') && digits.length == 12) return '+$digits';
     if (digits.startsWith('0')) return '+44${digits.substring(1)}';
+    if (digits.startsWith('7') && digits.length == 10) return '+44$digits';
     return value.trim();
   }
 }
