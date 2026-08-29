@@ -45,7 +45,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       RiderCommunicationService();
 
   List<DirectionStep> _currentRoute = [];
-  int _currentStepIndex = 0;
   Timer? _presenceHeartbeatTimer;
 
   bool get _isLogicallyOnline {
@@ -138,8 +137,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
-    switch (lifecycleState) {
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
       case AppLifecycleState.resumed:
         if (_isLogicallyOnline) _startPresenceHeartbeat();
         break;
@@ -217,7 +216,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       }
       return;
     } else {
-      final accountState = await _loadAccountState(user?.uid);
+      final accountState = await _loadAccountState(user.uid);
       if (!internalAccess &&
           !RiderAccountStateResolver.canOperate(accountState)) {
         emit(state.copyWith(
@@ -227,7 +226,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         ));
         return;
       }
-      final remaining = await _loadRemainingVerificationItems(user?.uid);
+      final remaining = await _loadRemainingVerificationItems(user.uid);
       if (!internalAccess &&
           event.status == RideStatus.online &&
           remaining.isNotEmpty) {
@@ -301,10 +300,17 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   void _handleAcceptRide(AcceptRide event, Emitter emit) async {
     try {
       final User? user = auth.currentUser;
+      final requests = state.dispatchRequests;
+      if (user == null ||
+          event.selectedRequestIndex < 0 ||
+          event.selectedRequestIndex >= requests.length) {
+        emit(state.copyWith(rideStatus: RideStatus.online));
+        return;
+      }
       // Obtain shared preferences.
       final SharedPreferences prefs = await SharedPreferences.getInstance();
 
-      final documentReference = db.collection('riders').doc(user?.uid);
+      final documentReference = db.collection('riders').doc(user.uid);
       // Get the document snapshot
       final documentSnapshot = await documentReference.get();
 
@@ -313,24 +319,36 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       emit(state.copyWith(
           rideStatus: RideStatus.acceptedARide,
           selectedRequestIndex: event.selectedRequestIndex,
-          activeRequest: state.dispatchRequests![event.selectedRequestIndex]));
+          activeRequest: requests[event.selectedRequestIndex]));
 
       final double? riderLng = prefs.getDouble('longitude');
       final double? riderLat = prefs.getDouble('latitude');
 
       final riderCoordinates = PlaceCoordinate(lat: riderLat!, lng: riderLng!);
       final userPickupCoordinates = PlaceCoordinate(
-        lat: state.dispatchRequests![event.selectedRequestIndex].pickupData
-            .position.geopoint.latitude,
-        lng: state.dispatchRequests![event.selectedRequestIndex].pickupData
-            .position.geopoint.longitude,
+        lat: requests[event.selectedRequestIndex]
+            .pickupData
+            .position
+            .geopoint
+            .latitude,
+        lng: requests[event.selectedRequestIndex]
+            .pickupData
+            .position
+            .geopoint
+            .longitude,
       );
 
       final userDestinationCoordinates = PlaceCoordinate(
-        lat: state.dispatchRequests![event.selectedRequestIndex].dropoffData
-            .position.geopoint.latitude,
-        lng: state.dispatchRequests![event.selectedRequestIndex].dropoffData
-            .position.geopoint.longitude,
+        lat: requests[event.selectedRequestIndex]
+            .dropoffData
+            .position
+            .geopoint
+            .latitude,
+        lng: requests[event.selectedRequestIndex]
+            .dropoffData
+            .position
+            .geopoint
+            .longitude,
       );
 
 // Create the Ployfills for the routes between the rider and the pickup locations
@@ -366,9 +384,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
           endingPolylineResult.totalDistanceValue!;
 
       final formattedDeliveryTime = formattedTimeAfterSeconds(totalTime);
-      final riderPhone = riderData?['phone'] ?? user?.phoneNumber ?? '';
+      final riderPhone = riderData?['phone'] ?? user.phoneNumber ?? '';
       final riderPhoto =
-          '${riderData?['profileThumbnailUrl'] ?? riderData?['profilePhotoUrl'] ?? riderData?['photoURL'] ?? riderData?['photoUrl'] ?? user?.photoURL ?? ''}';
+          '${riderData?['profileThumbnailUrl'] ?? riderData?['profilePhotoUrl'] ?? riderData?['photoURL'] ?? riderData?['photoUrl'] ?? user.photoURL ?? ''}';
 
       // final userData = await firebaseMessaging
       //     .subscribeToTopic('your_topic_name')
@@ -378,67 +396,82 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
             'type': 'connection',
             'status': 'accepted',
             'data': '''{
-                'courierName': '${user?.displayName}',
+                'courierName': '${user.displayName}',
                 'photoURL': '$riderPhoto',
                 'rating': '${riderData?['rating'] ?? '0'}',
                 'plateNumber': '${riderData!['plateNumber']}',
                 'typeOfVehicle': '${riderData['typeOfVehicle']}',
                 'estimatedDeliveryTime': '$formattedDeliveryTime',
                 'phoneNumber': '$riderPhone',
-                'riderId': '${user?.uid}',
+                'riderId': '${user.uid}',
                 'code': '${riderData['fcmToken']}'
               }'''
           },
           code: event.code,
           message:
-              '${user?.displayName!.split(' ').first.trim()} will be picking up your parcel soon.');
+              '${user.displayName?.split(' ').first.trim() ?? 'Your Rider'} will be picking up your parcel soon.');
 
-      await prefs.setString('courierName', '${user?.displayName}');
+      await prefs.setString('courierName', '${user.displayName}');
       await prefs.setString('rating', '${riderData['rating']}');
       await prefs.setString('plateNumber', '${riderData['plateNumber']}');
       await prefs.setString('typeOfVehicle', '${riderData['typeOfVehicle']}');
       await prefs.setString('estimatedDeliveryTime', formattedDeliveryTime);
       await prefs.setString('phoneNumber', '$riderPhone');
-      await prefs.setString('riderId', '${user?.uid}');
+      await prefs.setString('riderId', user.uid);
       await prefs.setString('code', '${riderData['fcmToken']}');
       await prefs.setString('userCode', event.code);
 
       // Verify that the ride was assigned to this rider
 
       final Completer<bool> rideAssigned = Completer();
+      Timer? assignmentTimer;
 
-      Timer.periodic(const Duration(seconds: 2), (timer) async {
-        final requestID =
-            state.dispatchRequests?[event.selectedRequestIndex].requestId;
+      assignmentTimer =
+          Timer.periodic(const Duration(seconds: 2), (timer) async {
+        final requestID = requests[event.selectedRequestIndex].requestId;
         final docReference = db
             .collection('deliveryRequests')
-            .where('requestId', isEqualTo: '$requestID');
+            .where('requestId', isEqualTo: requestID);
 
-        final docResponse = await docReference.get();
-        final doc = docResponse.docs.firstOrNull;
+        try {
+          final docResponse =
+              await docReference.get().timeout(const Duration(seconds: 10));
+          final doc = docResponse.docs.firstOrNull;
 
-        if (doc != null) {
-          final data = doc.data();
-          if (data['riderId'] != null && data['riderId'] == user!.uid) {
-            // Set user as the active delivery;
-            await documentReference.update(
-                {'activeDelivery': doc.id, 'updatedAt': DateTime.now()});
-            rideAssigned.complete(true);
+          if (doc != null) {
+            final data = doc.data();
+            if (data['riderId'] != null && data['riderId'] == user.uid) {
+              // Set user as the active delivery;
+              await documentReference.update({
+                'activeDelivery': doc.id,
+                'updatedAt': DateTime.now(),
+              }).timeout(const Duration(seconds: 10));
+              if (!rideAssigned.isCompleted) rideAssigned.complete(true);
 
-            timer.cancel();
-          } else if (timer.tick ==
-                  15 // Automatically cancel request after 30 sec
-              ) {
-            rideAssigned.complete(false);
+              timer.cancel();
+            } else if (timer.tick ==
+                    15 // Automatically cancel request after 30 sec
+                ) {
+              if (!rideAssigned.isCompleted) rideAssigned.complete(false);
+              timer.cancel();
+            }
+          } else {
+            if (!rideAssigned.isCompleted) rideAssigned.complete(false);
             timer.cancel();
           }
-        } else {
-          rideAssigned.complete(false);
+        } catch (_) {
+          if (!rideAssigned.isCompleted) rideAssigned.complete(false);
           timer.cancel();
         }
       });
 
-      final rideAssignedResult = await rideAssigned.future;
+      final rideAssignedResult = await rideAssigned.future.timeout(
+        const Duration(seconds: 35),
+        onTimeout: () {
+          assignmentTimer?.cancel();
+          return false;
+        },
+      );
       // The ride was not assigned to this rider in 30s
       if (rideAssignedResult == false) {
         emit(state.copyWith(
@@ -447,11 +480,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         add(CancelRequest());
       }
       if (rideAssignedResult == true) {
-        await prefs.setString('activeRequest',
-            state.dispatchRequests[event.selectedRequestIndex].requestId);
+        await prefs.setString(
+            'activeRequest', requests[event.selectedRequestIndex].requestId);
         emit(state.copyWith(
             rideStatus: RideStatus.userConfirmedRide,
-            activeRequest: state.dispatchRequests?[event.selectedRequestIndex],
+            activeRequest: requests[event.selectedRequestIndex],
             actionButtonStatus: ActionButtonStatus.goingToPickupLocation));
 
         add(BroadcastLocation());
@@ -577,15 +610,16 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         final icon =
             await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
                 "assets/svg/bike_top.svg");
+        const riderMarkerId = MarkerId('rider_location_marker');
         final Marker riderLocationMarker = Marker(
-            markerId: MarkerId('rider_location_marker'),
+            markerId: riderMarkerId,
             position:
                 LatLng(riderLat!, riderLng!), // Destination address location
             icon: icon);
 
-        Map<MarkerId, Marker> markers = Map.of(state.markers);
+        final Map<MarkerId, Marker> markers = Map.of(state.markers);
 
-        markers[MarkerId('rider_location_marker')] = riderLocationMarker;
+        markers[riderMarkerId] = riderLocationMarker;
 
         emit(state.copyWith(markers: markers));
 
@@ -638,10 +672,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
     User? user = auth.currentUser;
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final desiredOnline = prefs.getBool(_desiredOnlineStateKey) == true;
-    final String? activeRequest = prefs.getString('activeRequest');
     final double? riderLng = prefs.getDouble('longitude');
     final double? riderLat = prefs.getDouble('latitude');
-    final String? riderId = prefs.getString('riderId');
     String? statusString = prefs.getString('status');
     RideStatus? status;
     final presenceSnapshot = user == null
