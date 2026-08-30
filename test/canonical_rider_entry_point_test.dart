@@ -13,12 +13,12 @@ void main() {
       expect(mainSource, isNot(contains("import 'canonical_rider/")));
     });
 
-    test('uses the existing auth session gate and onboarding routes', () {
+    test('uses the auth session gate and one authenticated app shell', () {
       expect(appSource, contains('child: OnboardingView()'));
-      expect(appSource, contains('child: RiderApplicationCentre()'));
       expect(appSource, isNot(contains('AddDetailsView')));
-      expect(appSource, contains('child: ApplicationSubmittedView()'));
       expect(appSource, contains('AppNavView(reviewFixture: reviewFixture)'));
+      expect(appSource, isNot(contains('RiderAccountStatusView')));
+      expect(appSource, isNot(contains('state.riderAccountState ==')));
     });
   });
 }

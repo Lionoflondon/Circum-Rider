@@ -15,12 +15,14 @@ void main() {
   });
 
   test(
-      'session gate preserves normal account states while allowing claim override',
+      'authenticated riders use the normal shell while claim access stays isolated',
       () {
     final source = File('lib/app.dart').readAsStringSync();
-    expect(source, contains('!internalAccess'));
-    expect(source, contains('internalAccess ||'));
-    expect(source, contains('RiderAccountState.approved'));
+    expect(
+        source, contains('if (state.currentState == AppState.authenticated)'));
+    expect(source, contains('AppNavView(reviewFixture: reviewFixture)'));
+    expect(source, contains('RiderInternalAccess.enabled'));
+    expect(source, isNot(contains('RiderAccountState.approved')));
   });
 
   test('authenticated startup never falls through to an empty surface', () {
