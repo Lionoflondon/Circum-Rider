@@ -54,4 +54,28 @@ void main() {
     expect(lifecycleSource, isNot(contains('_desiredOnlineStateKey')));
     expect(lifecycleSource, isNot(contains('setBool')));
   });
+
+  test('legacy ride-assignment polling cannot strand or double-complete', () {
+    final handler = source.substring(
+      source.indexOf('final Completer<bool> rideAssigned = Completer();'),
+      source.indexOf('// The ride was not assigned to this rider in 30s'),
+    );
+
+    expect(handler, contains('Timer? assignmentTimer'));
+    expect(handler, contains('if (!rideAssigned.isCompleted)'));
+    expect(handler, contains('docReference.get().timeout'));
+    expect(handler, contains('documentReference.update'));
+    expect(handler, contains('.timeout(const Duration(seconds: 10))'));
+    expect(handler, contains('rideAssigned.future.timeout'));
+    expect(handler, contains('assignmentTimer?.cancel()'));
+    expect(handler, contains('if (!rideAssigned.isCompleted)'));
+    expect(
+        handler,
+        contains(
+            'if (!rideAssigned.isCompleted) rideAssigned.complete(true);'));
+    expect(
+        handler,
+        contains(
+            'if (!rideAssigned.isCompleted) rideAssigned.complete(false);'));
+  });
 }

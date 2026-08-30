@@ -404,6 +404,32 @@ void main() {
       expect(legacyEvents, isNot(contains('class StartDelivery')));
       expect(legacyEvents, isNot(contains('class RideCompleted')));
     });
+
+    test('rider lifecycle and evidence operations are bounded', () {
+      final controller =
+          File('lib/app/rider_jobs/rider_delivery_controller.dart')
+              .readAsStringSync();
+
+      expect(
+        controller,
+        contains(
+            'const _riderDeliveryOperationTimeout = Duration(seconds: 30)'),
+      );
+      for (final callable in [
+        "httpsCallable('recordRiderArrival')",
+        "httpsCallable('updateDeliveryTrackingStatus')",
+        "httpsCallable('reportLoadDiscrepancy')",
+        "httpsCallable('markRiderNoShow')",
+        "httpsCallable('reportWaitingContext')",
+        "httpsCallable('confirmRiderIrisAssessment')",
+      ]) {
+        expect(controller, contains(callable));
+      }
+      expect(controller, contains('.timeout(_riderDeliveryOperationTimeout)'));
+      expect(controller, contains('readAsBytes().timeout'));
+      expect(controller, contains('putData('));
+      expect(controller, contains('getDownloadURL().timeout'));
+    });
   });
 }
 

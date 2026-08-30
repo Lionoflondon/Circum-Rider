@@ -8,6 +8,8 @@ import 'package:geolocator/geolocator.dart';
 
 import 'rider_location_disclosure.dart';
 
+const _riderTrackingWriteTimeout = Duration(seconds: 15);
+
 enum RiderLiveTrackingStatus {
   idle,
   acquiring,
@@ -750,7 +752,7 @@ class RiderLiveTrackingController {
         'backgroundCapable': !kIsWeb,
         'queueDepth': _queue.length,
       },
-    });
+    }).timeout(_riderTrackingWriteTimeout);
   }
 
   Future<void> _writeStop({

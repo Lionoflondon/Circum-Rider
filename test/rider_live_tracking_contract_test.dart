@@ -212,6 +212,11 @@ void main() {
       expect(source, contains("'gpsSignalQuality'"));
       expect(source, contains("'accuracyMeters'"));
       expect(source, contains("'backgroundCapable'"));
+      expect(
+        source,
+        contains('const _riderTrackingWriteTimeout = Duration(seconds: 15)'),
+      );
+      expect(source, contains('.timeout(_riderTrackingWriteTimeout)'));
       expect(source, isNot(contains(".collection('activeDeliveries')")));
       expect(source, isNot(contains(".collection('tracking')")));
     });

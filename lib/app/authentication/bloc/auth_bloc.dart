@@ -36,6 +36,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   static const _authOperationTimeout = Duration(seconds: 20);
   static const _authRestoreTimeout = Duration(seconds: 12);
   static const _signupOperationTimeout = Duration(seconds: 30);
+  static const _profilePhotoOperationTimeout = Duration(seconds: 30);
 
   AuthBloc() : super(const AuthState()) {
     FirebaseAuth auth = FirebaseAuth.instance;
@@ -1065,8 +1066,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           final storageRef = FirebaseStorage.instance;
           final profilePath = 'rider-profiles/${user.uid}/profile.jpg';
           final thumbnailPath = 'rider-profiles/${user.uid}/thumbnail.jpg';
-          final current =
-              await db.collection('riderProfiles').doc(user.uid).get();
+          final current = await db
+              .collection('riderProfiles')
+              .doc(user.uid)
+              .get()
+              .timeout(_profilePhotoOperationTimeout);
           final previousVersion =
               (current.data()?['profilePhotoVersion'] as num?)?.toInt() ?? 0;
           final version = previousVersion + 1;
@@ -1081,12 +1085,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           );
           final profileRef = storageRef.ref(profilePath);
           final thumbnailRef = storageRef.ref(thumbnailPath);
-          await profileRef.putData(processed.full, metadata);
-          await thumbnailRef.putData(processed.thumbnail, metadata);
-          final downloadUrl = await profileRef.getDownloadURL();
-          final thumbnailUrl = await thumbnailRef.getDownloadURL();
+          await profileRef
+              .putData(processed.full, metadata)
+              .timeout(_profilePhotoOperationTimeout);
+          await thumbnailRef
+              .putData(processed.thumbnail, metadata)
+              .timeout(_profilePhotoOperationTimeout);
+          final downloadUrl = await profileRef
+              .getDownloadURL()
+              .timeout(_profilePhotoOperationTimeout);
+          final thumbnailUrl = await thumbnailRef
+              .getDownloadURL()
+              .timeout(_profilePhotoOperationTimeout);
 
-          await user.updatePhotoURL(downloadUrl);
+          await user
+              .updatePhotoURL(downloadUrl)
+              .timeout(_profilePhotoOperationTimeout);
           final patch = {
             'photoURL': downloadUrl,
             'photoUrl': downloadUrl,
@@ -1113,11 +1127,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await db
               .collection('riders')
               .doc(user.uid)
-              .set(patch, SetOptions(merge: true));
+              .set(patch, SetOptions(merge: true))
+              .timeout(_profilePhotoOperationTimeout);
           await db
               .collection('riderProfiles')
               .doc(user.uid)
-              .set(patch, SetOptions(merge: true));
+              .set(patch, SetOptions(merge: true))
+              .timeout(_profilePhotoOperationTimeout);
           emit(state.copyWith(
               profilePhoto: thumbnailUrl,
               errorMessage: 'Profile photo updated.'));
@@ -1139,12 +1155,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await FirebaseStorage.instance
               .ref(profilePath)
               .delete()
+              .timeout(_profilePhotoOperationTimeout)
               .catchError((_) {});
           await FirebaseStorage.instance
               .ref(thumbnailPath)
               .delete()
+              .timeout(_profilePhotoOperationTimeout)
               .catchError((_) {});
-          await user.updatePhotoURL(null);
+          await user
+              .updatePhotoURL(null)
+              .timeout(_profilePhotoOperationTimeout);
           final patch = {
             'photoURL': FieldValue.delete(),
             'photoUrl': FieldValue.delete(),
@@ -1163,11 +1183,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await db
               .collection('riders')
               .doc(user.uid)
-              .set(patch, SetOptions(merge: true));
+              .set(patch, SetOptions(merge: true))
+              .timeout(_profilePhotoOperationTimeout);
           await db
               .collection('riderProfiles')
               .doc(user.uid)
-              .set(patch, SetOptions(merge: true));
+              .set(patch, SetOptions(merge: true))
+              .timeout(_profilePhotoOperationTimeout);
           emit(state.copyWith(
               profilePhoto: empty, errorMessage: 'Profile photo removed.'));
         } catch (e) {

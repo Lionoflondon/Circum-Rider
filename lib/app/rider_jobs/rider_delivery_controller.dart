@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+
+const _riderDeliveryOperationTimeout = Duration(seconds: 30);
 
 class RiderDeliveryTransitionResult {
   final String status;
@@ -57,7 +61,7 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
       final arrival = await functions.httpsCallable('recordRiderArrival').call({
         'deliveryId': deliveryId,
         'phase': action == 'arrived_at_dropoff' ? 'dropoff' : 'pickup',
-      });
+      }).timeout(_riderDeliveryOperationTimeout);
       final arrivalData = Map<String, dynamic>.from(arrival.data as Map);
       final decision = arrivalData['decision'] is Map
           ? Map<String, dynamic>.from(arrivalData['decision'] as Map)
@@ -76,7 +80,7 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
       if (pin != null) 'pin': pin,
       if (evidence != null) 'evidence': evidence,
       if (issue != null) 'issue': issue,
-    });
+    }).timeout(_riderDeliveryOperationTimeout);
     final data = Map<String, dynamic>.from(result.data as Map);
     return RiderDeliveryTransitionResult('${data['status'] ?? ''}');
   }
@@ -95,7 +99,7 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
       'evidencePhotos': evidencePhotos,
       if (observedWeightKg != null) 'observedWeightKg': observedWeightKg,
       if (notes != null) 'riderNotes': notes,
-    });
+    }).timeout(_riderDeliveryOperationTimeout);
     return Map<String, dynamic>.from(result.data as Map);
   }
 
@@ -104,7 +108,7 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
     final result = await functions.httpsCallable('markRiderNoShow').call({
       'deliveryId': deliveryId,
       'idempotencyKey': '$deliveryId:no_show',
-    });
+    }).timeout(_riderDeliveryOperationTimeout);
     return Map<String, dynamic>.from(result.data as Map);
   }
 
@@ -118,7 +122,7 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
       'deliveryId': deliveryId,
       'type': type,
       if (note != null) 'note': note,
-    });
+    }).timeout(_riderDeliveryOperationTimeout);
     return Map<String, dynamic>.from(result.data as Map);
   }
 
@@ -128,7 +132,9 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
   }) async {
     final result = await functions
         .httpsCallable('confirmRiderIrisAssessment')
-        .call({'deliveryId': deliveryId});
+        .call({'deliveryId': deliveryId}).timeout(
+      _riderDeliveryOperationTimeout,
+    );
     return Map<String, dynamic>.from(result.data as Map);
   }
 }
@@ -151,15 +157,19 @@ class RiderEvidenceUploader {
       maxWidth: 1600,
     );
     if (image == null) return null;
-    final bytes = await image.readAsBytes();
+    final bytes = await image.readAsBytes().timeout(
+          _riderDeliveryOperationTimeout,
+        );
     final safeStage = stage.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
     final ref = storage.ref(
       'delivery_weight_evidence/$deliveryId/$safeStage/${DateTime.now().millisecondsSinceEpoch}.jpg',
     );
-    await ref.putData(
-      bytes,
-      SettableMetadata(contentType: 'image/jpeg'),
-    );
-    return ref.getDownloadURL();
+    await ref
+        .putData(
+          bytes,
+          SettableMetadata(contentType: 'image/jpeg'),
+        )
+        .timeout(_riderDeliveryOperationTimeout);
+    return ref.getDownloadURL().timeout(_riderDeliveryOperationTimeout);
   }
 }
