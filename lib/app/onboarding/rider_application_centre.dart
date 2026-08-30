@@ -81,6 +81,7 @@ class RiderApplicationCentre extends StatefulWidget {
 }
 
 class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
+  static const _applicationOperationTimeout = Duration(seconds: 30);
   final _db = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
   final _functions = FirebaseFunctions.instance;
@@ -637,7 +638,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
             ? 'application/pdf'
             : 'image/${extension == 'jpg' ? 'jpeg' : extension}',
         'fileBase64': base64Encode(bytes),
-      });
+      }).timeout(_applicationOperationTimeout);
       await _saveSectionStatus(
         uid,
         section,
