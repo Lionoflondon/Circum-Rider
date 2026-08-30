@@ -22,7 +22,6 @@ void main() {
 
       expect(service, contains("getGooglePlayReviewFixture"));
       expect(app, contains('RiderReviewFixtureService().getOwnFixture()'));
-      expect(app, contains('reviewAccess ||'));
       expect(app, contains('AppNavView(reviewFixture: reviewFixture)'));
       expect(app, isNot(contains('RiderReviewFixtureScreen')));
       expect(app, contains('Any failure falls'));
@@ -53,17 +52,8 @@ void main() {
     final nav = File('lib/app/bottom_nav/view/app_nav.dart').readAsStringSync();
     final home = File('lib/app/home/bloc/home_bloc.dart').readAsStringSync();
 
-    for (final state in [
-      'onboardingNotStarted',
-      'pendingReview',
-      'moreInformationRequired',
-      'rejected',
-      'suspended',
-      'frozen',
-      'closed',
-    ]) {
-      expect(app, contains('RiderAccountState.$state'));
-    }
+    expect(app, contains('if (state.currentState == AppState.authenticated)'));
+    expect(app, isNot(contains('state.riderAccountState ==')));
     expect(nav, contains('const _CentralAction()'));
     expect(home, contains("httpsCallable('goOnline')"));
     expect(home, contains("httpsCallable('goOffline')"));

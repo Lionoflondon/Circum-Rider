@@ -2,10 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../app/authentication/bloc/auth_bloc.dart';
 import '../app/onboarding/onboarding.dart';
-import 'app/authentication/view/application_submitted.dart';
-import 'app/onboarding/rider_application_centre.dart';
-import 'app/rider_account/rider_account_state.dart';
-import 'app/rider_account/rider_account_status_view.dart';
 import 'app/rider_internal_access/rider_internal_access.dart';
 import 'app/review/rider_review_fixture_service.dart';
 import 'utils/nav/nav_key.dart';
@@ -33,7 +29,6 @@ class App extends StatelessWidget {
     Map<String, dynamic>? reviewFixture,
     VoidCallback? onRetry,
   }) {
-    final reviewAccess = reviewFixture != null;
     final pages = <Page<void>>[
       // Unknown app state
       if (state.currentState == AppState.unknownSessionState)
@@ -43,39 +38,8 @@ class App extends StatelessWidget {
       if (state.currentState == AppState.unauthenticated)
         const MaterialPage(child: OnboardingView()),
 
-      if (!internalAccess &&
-          !reviewAccess &&
-          state.currentState == AppState.authenticated &&
-          (state.riderAccountState == RiderAccountState.onboardingNotStarted ||
-              state.riderAccountState ==
-                  RiderAccountState.onboardingInProgress))
-        const MaterialPage(child: RiderApplicationCentre()),
-
-      if (!internalAccess &&
-          !reviewAccess &&
-          state.currentState == AppState.authenticated &&
-          (state.riderAccountState == RiderAccountState.submitted ||
-              state.riderAccountState == RiderAccountState.pendingReview))
-        const MaterialPage(child: ApplicationSubmittedView()),
-
-      if (!internalAccess &&
-          !reviewAccess &&
-          state.currentState == AppState.authenticated &&
-          (state.riderAccountState ==
-                  RiderAccountState.moreInformationRequired ||
-              state.riderAccountState == RiderAccountState.rejected ||
-              state.riderAccountState == RiderAccountState.suspended ||
-              state.riderAccountState == RiderAccountState.frozen ||
-              state.riderAccountState == RiderAccountState.closed))
-        MaterialPage(
-          child: RiderAccountStatusView(accountState: state.riderAccountState),
-        ),
-
       // Authenticated app state
-      if (state.currentState == AppState.authenticated &&
-          (internalAccess ||
-              reviewAccess ||
-              state.riderAccountState == RiderAccountState.approved))
+      if (state.currentState == AppState.authenticated)
         MaterialPage(child: AppNavView(reviewFixture: reviewFixture)),
     ];
 

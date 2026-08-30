@@ -154,10 +154,12 @@ void main() {
     });
   });
 
-  test('existing app session gate retains AppNav for approved riders', () {
+  test('every authenticated session enters the normal Rider shell', () {
     final source = File('lib/app.dart').readAsStringSync();
-    expect(source, contains('RiderAccountState.approved'));
     expect(source, contains('AppNavView(reviewFixture: reviewFixture)'));
-    expect(source, contains('RiderAccountStatusView'));
+    expect(
+        source, contains('if (state.currentState == AppState.authenticated)'));
+    expect(source, isNot(contains('RiderAccountStatusView')));
+    expect(source, isNot(contains('state.riderAccountState ==')));
   });
 }

@@ -21,7 +21,7 @@ void main() {
     expect(runtime, isNot(contains('Add Your Name')));
     expect(runtime, isNot(contains('Phil Knight')));
     expect(runtime, isNot(contains('AddDetailsView')));
-    expect(app, contains('RiderApplicationCentre'));
+    expect(app, isNot(contains('RiderApplicationCentre')));
     expect(status, contains('RiderApplicationCentre'));
   });
 }
