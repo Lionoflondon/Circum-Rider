@@ -13,6 +13,8 @@ import '../../rider_design/rider_ui.dart';
 
 enum _RiderAuthStep { welcome, createAccount, signIn, phoneOtp, location }
 
+const _riderOnboardingRestoreTimeout = Duration(seconds: 5);
+
 class OnboardingView extends StatefulWidget {
   const OnboardingView({super.key});
 
@@ -39,7 +41,10 @@ class _OnboardingViewState extends State<OnboardingView> {
   @override
   void initState() {
     super.initState();
-    RiderGuideView.hasViewedIntro().then((viewed) {
+    RiderGuideView.hasViewedIntro()
+        .timeout(_riderOnboardingRestoreTimeout)
+        .catchError((_) => false)
+        .then((viewed) {
       if (!mounted) return;
       setState(() {
         _showIntro = !viewed;

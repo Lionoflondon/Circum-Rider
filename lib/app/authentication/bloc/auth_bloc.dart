@@ -32,6 +32,8 @@ part 'auth_state.dart';
 part 'signup_event.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
+  static const _authOperationTimeout = Duration(seconds: 30);
+
   AuthBloc() : super(const AuthState()) {
     FirebaseAuth auth = FirebaseAuth.instance;
     // Init firestore and geoFlutterFire
@@ -1017,8 +1019,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         try {
           emit(state.copyWith(status: Status.loading));
           final UserCredential userCredential =
-              await auth.signInWithEmailAndPassword(
-                  email: event.email, password: event.password);
+              await auth
+                  .signInWithEmailAndPassword(
+                    email: event.email,
+                    password: event.password,
+                  )
+                  .timeout(_authOperationTimeout);
           const storage = FlutterSecureStorage();
 
           if (auth.currentUser?.emailVerified == false) {
@@ -1040,7 +1046,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             final records = await Future.wait([
               db.collection('riders').doc(user.uid).get(),
               db.collection('riderProfiles').doc(user.uid).get(),
-            ]);
+            ]).timeout(_authOperationTimeout);
             final riderRecord = records[0];
             final riderProfile = records[1];
             String? riderPhone = userCredential.user?.phoneNumber;
@@ -1068,7 +1074,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                     : AuthenticatedStatus.pendingApproval;
               }
               if (riderPhone != null) {
-                await storage.write(key: 'phone', value: riderPhone);
+                await storage
+                    .write(key: 'phone', value: riderPhone)
+                    .timeout(_authOperationTimeout);
               }
             }
             emit(state.copyWith(
