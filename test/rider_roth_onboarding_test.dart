@@ -59,7 +59,7 @@ void main() {
         authBloc.indexOf('if (event is SubmitOTP)'),
       );
       expect(handler, contains("httpsCallable('updateRiderProfile')"));
-      expect(handler, contains('upsertRiderOnboarding(user: user'));
+      expect(handler, contains('ensureRiderOnboardingStarted('));
       expect(handler, contains("section': 'profile_details'"));
       expect(handler, isNot(contains('documentReference.get()')));
       expect(
@@ -75,10 +75,12 @@ void main() {
         authBloc.indexOf('on<SignUpWithEmail>'),
         authBloc.indexOf('on<UpdatePhoneNumber>'),
       );
-      expect(handler, contains('upsertRiderOnboarding(user: user'));
+      expect(handler, contains('ensureRiderOnboardingStarted('));
       expect(handler, isNot(contains("collection('riderOnboardingEvents')")));
       expect(handler, isNot(contains("eventType': 'account_created'")));
-      expect(handler, contains('ensureRiderRothWallet(user).timeout'));
+      expect(handler, contains('runRiderAuthBootstrap('));
+      expect(handler,
+          contains('initializeRothWallet: () => ensureRiderRothWallet(user!)'));
     });
 
     test('Roth onboarding required keeps Rider in onboarding', () {

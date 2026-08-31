@@ -25,7 +25,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../rider_account/rider_account_state.dart';
+import '../apple_auth_nonce.dart';
 import '../rider_auth_error.dart';
+import '../rider_auth_bootstrap.dart';
 // import '../../onboarding/view/onboarding.dart';
 
 part 'auth_event.dart';
@@ -36,6 +38,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   static const _authOperationTimeout = Duration(seconds: 20);
   static const _authRestoreTimeout = Duration(seconds: 12);
   static const _signupOperationTimeout = Duration(seconds: 30);
+  static const _signupBootstrapTimeout = Duration(seconds: 20);
   static const _profilePhotoOperationTimeout = Duration(seconds: 30);
 
   AuthBloc() : super(const AuthState()) {
@@ -88,6 +91,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }).timeout(_authOperationTimeout);
     }
 
+    Future<void> ensureRiderOnboardingStarted({
+      required User user,
+      String? name,
+    }) async {
+      final rider = await db
+          .collection('riders')
+          .doc(user.uid)
+          .get()
+          .timeout(_authRestoreTimeout);
+      final status = rider.data()?['onboardingStatus']?.toString();
+      if (!riderOnboardingNeedsProfileStart(status)) return;
+      await upsertRiderOnboarding(user: user, data: {
+        if (name != null && name.isNotEmpty) 'name': name,
+        'onboardingStatus': 'profile_started',
+      });
+    }
+
     Future<String?> vehicleRegistrationDocumentStatus(String uid) async {
       final doc = await db
           .collection('riderDocuments')
@@ -131,10 +151,25 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           var authenticatedStatus = AuthenticatedStatus.authenticated;
           var riderAccountState = RiderAccountState.onboardingNotStarted;
           try {
-            final records = await Future.wait([
+            var records = await Future.wait([
               db.collection('riders').doc(user.uid).get(),
               db.collection('riderProfiles').doc(user.uid).get(),
             ]).timeout(_authRestoreTimeout);
+            if (!records[0].exists && !records[1].exists) {
+              await runRiderAuthBootstrap(
+                timeout: _signupBootstrapTimeout,
+                updateDisplayName: () async {},
+                initializeProfile: () => ensureRiderOnboardingStarted(
+                  user: user,
+                  name: user.displayName?.trim(),
+                ),
+                initializeRothWallet: () => ensureRiderRothWallet(user),
+              );
+              records = await Future.wait([
+                db.collection('riders').doc(user.uid).get(),
+                db.collection('riderProfiles').doc(user.uid).get(),
+              ]).timeout(_authRestoreTimeout);
+            }
             final riderRecord = records[0].data() ?? const <String, dynamic>{};
             final riderProfile = records[1].data() ?? const <String, dynamic>{};
             final riderData = <String, dynamic>{
@@ -172,12 +207,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             );
           }
 
-          final SharedPreferences prefs = await SharedPreferences.getInstance()
-              .timeout(_authOperationTimeout);
-
-          await prefs
-              .setString('riderId', user.uid)
-              .timeout(_authOperationTimeout);
+          try {
+            final prefs = await SharedPreferences.getInstance()
+                .timeout(_authOperationTimeout);
+            await prefs
+                .setString('riderId', user.uid)
+                .timeout(_authOperationTimeout);
+          } catch (error) {
+            logRiderAuthError(
+              error: error,
+              path: 'shared_preferences',
+              step: 'session_restore_preferences',
+              riderDocumentId: user.uid,
+            );
+          }
           // You can also access user information like user.displayName, user.email, etc.
           emit(state.copyWith(
               currentState: AppState.authenticated,
@@ -430,12 +473,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (event is SignInWithAppleAuth) {
         try {
           emit(state.copyWith(status: Status.loading));
+          final rawNonce = generateAppleAuthNonce();
           final appleCredential = await SignInWithApple.getAppleIDCredential(
             scopes: [
               AppleIDAuthorizationScopes.email,
               AppleIDAuthorizationScopes.fullName,
             ],
-            // nonce: nonce
+            nonce: sha256Nonce(rawNonce),
           ).timeout(_authOperationTimeout);
 
           // SignInWithApple
@@ -445,10 +489,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
           // Create an `OAuthCredential` from the credential returned by Apple.
           final oauthCredential = OAuthProvider("apple.com").credential(
-              idToken: appleCredential.identityToken,
-              accessToken: appleCredential.authorizationCode
-              // rawNonce: rawNonce,
-              );
+            idToken: appleCredential.identityToken,
+            rawNonce: rawNonce,
+          );
 
           // Sign in with credential
           UserCredential userCredential = await auth
@@ -466,11 +509,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                   ? AuthenticatedStatus.incompleteData
                   : AuthenticatedStatus.authenticated));
 
-          if (appleCredential.givenName != null) {
-            add(UpdateUserProfile(
-                username:
-                    "${appleCredential.givenName} ${appleCredential.familyName}"));
-          }
+          final appleName =
+              '${appleCredential.givenName ?? ''} ${appleCredential.familyName ?? ''}'
+                  .trim();
+          add(BootstrapOAuthRider(
+            username: appleName.isEmpty
+                ? userCredential.user?.displayName
+                : appleName,
+          ));
           // await googleSignIn.signOut();
         } catch (error) {
           logRiderAuthError(
@@ -523,10 +569,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               currentState: AppState.authenticated,
               authenticatedStatus: AuthenticatedStatus.authenticated));
 
-          final displayName = userCredential.user?.displayName?.trim();
-          if (displayName != null && displayName.isNotEmpty) {
-            add(UpdateUserProfile(username: displayName));
-          }
+          add(BootstrapOAuthRider(
+            username: userCredential.user?.displayName?.trim(),
+          ));
           // await googleSignIn.signOut();
         } catch (error) {
           logRiderAuthError(
@@ -698,8 +743,71 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               status: Status.success,
               authenticatedStatus: AuthenticatedStatus.authenticated,
               username: event.username));
-        } catch (_) {
-          emit(state.copyWith(status: Status.failure));
+        } catch (error) {
+          logRiderAuthError(
+            error: error,
+            path: 'riders/${auth.currentUser?.uid ?? 'unknown'}',
+            step: 'authenticated_profile_update',
+            riderDocumentId: auth.currentUser?.uid,
+          );
+          emit(state.copyWith(
+            status: Status.success,
+            currentState: AppState.authenticated,
+            authenticatedStatus: AuthenticatedStatus.incompleteData,
+            errorMessage:
+                'You are signed in. Some account details are still loading.',
+          ));
+        }
+      }
+      if (event is BootstrapOAuthRider) {
+        final user = auth.currentUser;
+        if (user == null) {
+          emit(state.copyWith(
+            status: Status.failure,
+            errorMessage: 'Please sign in again to continue.',
+          ));
+        } else {
+          try {
+            final name = event.username?.trim() ?? '';
+            await runRiderAuthBootstrap(
+              timeout: _signupBootstrapTimeout,
+              updateDisplayName: () async {
+                if (name.isNotEmpty && user.displayName != name) {
+                  await user.updateDisplayName(name);
+                }
+              },
+              initializeProfile: () async {
+                await functions.httpsCallable('updateRiderProfile').call({
+                  if (name.isNotEmpty) 'name': name,
+                  'phone': user.phoneNumber ?? state.phoneNumber,
+                  'phoneVerified': state.isPhoneVerified,
+                  'section': 'profile_details',
+                });
+                await ensureRiderOnboardingStarted(user: user, name: name);
+              },
+              initializeRothWallet: () => ensureRiderRothWallet(user),
+            );
+            emit(state.copyWith(
+              status: Status.success,
+              username: name.isEmpty ? user.displayName : name,
+              currentState: AppState.authenticated,
+              authenticatedStatus: AuthenticatedStatus.incompleteData,
+            ));
+          } on RiderBootstrapException catch (error) {
+            logRiderAuthError(
+              error: error.cause,
+              path: 'riders/${user.uid}',
+              step: 'oauth_bootstrap_${error.stage.name}',
+              riderDocumentId: user.uid,
+            );
+            emit(state.copyWith(
+              status: Status.success,
+              currentState: AppState.authenticated,
+              authenticatedStatus: AuthenticatedStatus.incompleteData,
+              errorMessage:
+                  'You are signed in. Some account details are still loading.',
+            ));
+          }
         }
       }
       if (event is SubmitOTP) {
@@ -1207,12 +1315,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<SignInWithEmail>(
       (event, emit) async {
+        var firebaseAuthenticationSucceeded = false;
         try {
           emit(state.copyWith(status: Status.loading));
           final UserCredential userCredential = await auth
               .signInWithEmailAndPassword(
                   email: event.email, password: event.password)
               .timeout(_authOperationTimeout);
+          firebaseAuthenticationSucceeded = true;
           const storage = FlutterSecureStorage();
 
           if (auth.currentUser?.emailVerified == false) {
@@ -1235,8 +1345,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             }
             final documentReference = db.collection('riders').doc(user.uid);
             // Get the document snapshot
-            final documentSnapshot =
+            var documentSnapshot =
                 await documentReference.get().timeout(_authRestoreTimeout);
+            if (!documentSnapshot.exists) {
+              final recoveredName = user.displayName?.trim() ?? '';
+              await runRiderAuthBootstrap(
+                timeout: _signupBootstrapTimeout,
+                updateDisplayName: () async {},
+                initializeProfile: () => ensureRiderOnboardingStarted(
+                  user: user,
+                  name: recoveredName,
+                ),
+                initializeRothWallet: () => ensureRiderRothWallet(user),
+              );
+              documentSnapshot =
+                  await documentReference.get().timeout(_authRestoreTimeout);
+            }
             String? riderPhone = userCredential.user?.phoneNumber;
             var authenticatedStatus = AuthenticatedStatus.authenticated;
 
@@ -1288,11 +1412,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             step: 'email_sign_in_enrichment',
             riderDocumentId: auth.currentUser?.uid,
           );
-          emit(state.copyWith(
-            status: Status.failure,
-            errorMessage: RiderAuthError.messageFor('unknown'),
-            clearSensitiveAuthFields: true,
-          ));
+          if (firebaseAuthenticationSucceeded && auth.currentUser != null) {
+            emit(state.copyWith(
+              status: Status.success,
+              currentState: AppState.authenticated,
+              authenticatedStatus: AuthenticatedStatus.incompleteData,
+              errorMessage:
+                  'You are signed in. Some account details are still loading.',
+              clearSensitiveAuthFields: true,
+            ));
+          } else {
+            emit(state.copyWith(
+              status: Status.failure,
+              errorMessage: RiderAuthError.messageFor('unknown'),
+              clearSensitiveAuthFields: true,
+            ));
+          }
         }
       },
     );
@@ -1313,25 +1448,28 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         //     androidMinimumVersion: '12');
         try {
           emit(state.copyWith(status: Status.loading));
-          final UserCredential userCredential = await auth
-              .createUserWithEmailAndPassword(
-                  email: event.email, password: event.password)
-              .timeout(_signupOperationTimeout);
+          User? user = auth.currentUser;
+          final normalizedEmail = event.email.trim().toLowerCase();
+          if (user?.email?.trim().toLowerCase() != normalizedEmail) {
+            final userCredential = await auth
+                .createUserWithEmailAndPassword(
+                    email: event.email, password: event.password)
+                .timeout(_signupOperationTimeout);
+            user = userCredential.user;
+          }
 
-          final user = userCredential.user;
           final fullName =
               '${state.firstName ?? ''} ${state.lastName ?? ''}'.trim();
           if (user != null && fullName.isNotEmpty) {
-            await user.updateDisplayName(fullName).timeout(
-                  _signupOperationTimeout,
-                );
-            await upsertRiderOnboarding(user: user, data: {
-              'name': fullName,
-              'phone': state.phoneNumber,
-              'phoneVerified': false,
-              'onboardingStatus': 'profile_started',
-            }).timeout(_signupOperationTimeout);
-            await ensureRiderRothWallet(user).timeout(_signupOperationTimeout);
+            await runRiderAuthBootstrap(
+              timeout: _signupBootstrapTimeout,
+              updateDisplayName: () => user!.updateDisplayName(fullName),
+              initializeProfile: () => ensureRiderOnboardingStarted(
+                user: user!,
+                name: fullName,
+              ),
+              initializeRothWallet: () => ensureRiderRothWallet(user!),
+            );
           }
 
           emit(state.copyWith(
@@ -1341,27 +1479,54 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           ));
           add(SendPhoneOtp());
         } on FirebaseAuthException catch (e) {
+          final message = switch (e.code) {
+            'invalid-email' => 'Enter a valid email address.',
+            'email-already-in-use' =>
+              'An account already exists for this email. Sign in to continue setup.',
+            'weak-password' => 'Use a stronger password and try again.',
+            'network-request-failed' => 'Check your connection and try again.',
+            'too-many-requests' =>
+              'Too many attempts. Wait a moment and try again.',
+            _ => "We couldn't create your account. Please try again.",
+          };
+          logRiderAuthError(
+            error: e,
+            path: 'riders/${auth.currentUser?.uid ?? 'unknown'}',
+            step: 'signup_authentication',
+            riderDocumentId: auth.currentUser?.uid,
+          );
           emit(state.copyWith(
             status: Status.failure,
+            errorMessage: message,
             clearSensitiveAuthFields: true,
           ));
-          if (e.code == 'invalid-email') {
-            emit(state.copyWith(errorMessage: 'Email is invalid'));
-          }
-          if (e.code == 'email-already-in-use') {
-            emit(state.copyWith(errorMessage: 'User already exists'));
-          }
-          if (e.code == 'user-not-found') {
-            emit(state.copyWith(errorMessage: 'User not found'));
-          }
-          if (e.code == 'weak-password') {
-            emit(state.copyWith(errorMessage: 'Use a strong password'));
-          }
-        } catch (e) {
+        } on RiderBootstrapException catch (error) {
+          logRiderAuthError(
+            error: error.cause,
+            path: 'riders/${auth.currentUser?.uid ?? 'unknown'}',
+            step: 'signup_bootstrap_${error.stage.name}',
+            riderDocumentId: auth.currentUser?.uid,
+          );
           emit(state.copyWith(
-              status: Status.failure,
-              errorMessage: 'Something went wrong',
-              clearSensitiveAuthFields: true));
+            status: Status.failure,
+            errorMessage:
+                'Your account was created, but setup did not finish. Try again to continue.',
+            clearSensitiveAuthFields: true,
+          ));
+        } catch (e) {
+          logRiderAuthError(
+            error: e,
+            path: 'riders/${auth.currentUser?.uid ?? 'unknown'}',
+            step: 'signup_unexpected_failure',
+            riderDocumentId: auth.currentUser?.uid,
+          );
+          emit(state.copyWith(
+            status: Status.failure,
+            errorMessage: auth.currentUser == null
+                ? "We couldn't create your account. Please try again."
+                : 'Your account was created, but setup did not finish. Try again to continue.',
+            clearSensitiveAuthFields: true,
+          ));
         }
       },
     );

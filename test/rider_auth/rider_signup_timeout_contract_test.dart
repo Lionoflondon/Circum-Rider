@@ -35,6 +35,7 @@ void main() {
     expect(authBloc, contains('vehicleRegistrationDocumentStatus'));
     expect(authBloc, contains('SharedPreferences.getInstance().timeout'));
     expect(authBloc, contains("setString('riderId', user.uid).timeout"));
+    expect(authBloc, contains("step: 'session_restore_preferences'"));
   });
 
   test('Rider OTP paths cannot leave completers unresolved forever', () {
@@ -58,6 +59,12 @@ void main() {
     expect(authBloc, contains("step: 'google_sign_in'"));
     expect(
         authBloc, contains('Apple sign-in could not be completed. Try again.'));
+    expect(authBloc, contains('nonce: sha256Nonce(rawNonce)'));
+    expect(authBloc, contains('rawNonce: rawNonce'));
+    expect(
+      authBloc,
+      isNot(contains('accessToken: appleCredential.authorizationCode')),
+    );
     expect(authBloc,
         contains('Google sign-in could not be completed. Try again.'));
     expect(authBloc, isNot(contains('user!.displayName!')));
@@ -80,6 +87,22 @@ void main() {
     expect(authBloc, contains("'onboardingStatus': 'profile_started'"));
     expect(authBloc, contains('email-already-in-use'));
     expect(authBloc, contains('Status.failure'));
-    expect(authBloc, contains('Something went wrong'));
+    expect(
+      authBloc,
+      contains("We couldn't create your account. Please try again."),
+    );
+    expect(
+      authBloc,
+      contains(
+        'Your account was created, but setup did not finish. Try again to continue.',
+      ),
+    );
+    expect(authBloc, isNot(contains('Something went wrong')));
+  });
+
+  test('session restore retries missing Rider bootstrap idempotently', () {
+    expect(authBloc, contains('!records[0].exists && !records[1].exists'));
+    expect(authBloc, contains('ensureRiderOnboardingStarted('));
+    expect(authBloc, contains('riderOnboardingNeedsProfileStart(status)'));
   });
 }

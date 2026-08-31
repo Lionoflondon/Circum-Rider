@@ -114,6 +114,14 @@
           }
         },
         {
+          "client_id": "516426305461-v9a348qam9ok5hfofa9jm7ul2173i7r9.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.circum.rider",
+            "certificate_hash": "962e01f3b1aadf96c12362cb4a7f83429df5088e"
+          }
+        },
+        {
           "client_id": "516426305461-7n9fg5bvmmrvio68n4aiism70gd8sba5.apps.googleusercontent.com",
           "client_type": 3
         }
