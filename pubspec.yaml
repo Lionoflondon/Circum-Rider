@@ -46,6 +46,7 @@ dependencies:
   bot_toast: ^4.0.3
   cached_network_image: ^3.3.1
   cupertino_icons: ^1.0.2
+  crypto: ^3.0.6
   currency_symbols: ^0.0.1+2
   dio: ^5.4.0
   dotted_border: ^2.1.0

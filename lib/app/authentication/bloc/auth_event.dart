@@ -111,6 +111,11 @@ class SignInWithGoogle extends AuthEvent {}
 
 class SignInWithAppleAuth extends AuthEvent {}
 
+class BootstrapOAuthRider extends AuthEvent {
+  final String? username;
+  const BootstrapOAuthRider({this.username});
+}
+
 class SignInWithEmail extends AuthEvent {
   final String email;
   final String password;
