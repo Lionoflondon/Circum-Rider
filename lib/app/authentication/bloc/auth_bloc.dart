@@ -1653,9 +1653,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         }
         emit(AuthState(
           currentState: AppState.unauthenticated,
-          status: result.localCleanupCompleted
-              ? Status.success
-              : Status.failure,
+          status:
+              result.localCleanupCompleted ? Status.success : Status.failure,
           errorMessage: result.localCleanupCompleted
               ? null
               : 'You are signed out. Local account data could not be fully cleared.',
