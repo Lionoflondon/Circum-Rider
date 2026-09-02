@@ -95,7 +95,7 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
         'lastName': parts.length > 1 ? parts.sublist(1).join(' ') : '',
         'handle': handle,
         'username': handle,
-        'dateOfBirth': _dob.text.trim(),
+        'dateOfBirth': canonicalRiderDateOfBirth(_dob.text),
         'gender': _gender.text.trim(),
         'homeAddress': _address.text.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
@@ -368,6 +368,27 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
       ),
     );
   }
+}
+
+String canonicalRiderDateOfBirth(String value) {
+  final raw = value.trim();
+  if (raw.isEmpty) return '';
+  final canonical = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(raw);
+  final display = RegExp(r'^(\d{2})/(\d{2})/(\d{4})$').firstMatch(raw);
+  final normalized = canonical != null
+      ? raw
+      : display != null
+          ? '${display.group(3)}-${display.group(2)}-${display.group(1)}'
+          : null;
+  if (normalized == null) {
+    throw const FormatException('Enter a valid date of birth.');
+  }
+  final parts = normalized.split('-').map(int.parse).toList();
+  final date = DateTime.utc(parts[0], parts[1], parts[2]);
+  if (date.year != parts[0] || date.month != parts[1] || date.day != parts[2]) {
+    throw const FormatException('Enter a valid date of birth.');
+  }
+  return normalized;
 }
 
 class _EditableProfilePhoto extends StatelessWidget {
