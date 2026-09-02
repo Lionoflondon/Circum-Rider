@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -29,6 +30,23 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
   final _address = TextEditingController();
   bool _loaded = false;
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _ensurePublicRiderId();
+  }
+
+  Future<void> _ensurePublicRiderId() async {
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('ensurePublicRiderId')
+          .call()
+          .timeout(const Duration(seconds: 20));
+    } catch (_) {
+      // The live profile streams retry naturally when the screen is reopened.
+    }
+  }
 
   @override
   void dispose() {
@@ -82,18 +100,11 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
         'homeAddress': _address.text.trim(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
-      final batch = FirebaseFirestore.instance.batch();
-      batch.set(
-          FirebaseFirestore.instance.collection('riders').doc(widget.user.uid),
-          patch,
-          SetOptions(merge: true));
-      batch.set(
-          FirebaseFirestore.instance
-              .collection('riderProfiles')
-              .doc(widget.user.uid),
-          patch,
-          SetOptions(merge: true));
-      await batch.commit();
+      patch.remove('updatedAt');
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('updateRiderProfile')
+          .call(patch)
+          .timeout(const Duration(seconds: 20));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile updated.')),
@@ -307,7 +318,8 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
                               style: TextStyle(
                                   color: RiderPalette.paper,
                                   fontWeight: FontWeight.w800)),
-                          subtitle: Text('Rider ID ${widget.user.uid}',
+                          subtitle: Text(
+                              'Rider ID ${data['publicRiderId'] ?? 'Preparing…'}',
                               style:
                                   const TextStyle(color: RiderPalette.muted)),
                         ),

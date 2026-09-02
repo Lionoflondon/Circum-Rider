@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:circum_rider/app/home/bloc/home_bloc.dart';
 
 void main() {
   final source = File('lib/app/home/bloc/home_bloc.dart').readAsStringSync();
@@ -43,7 +44,35 @@ void main() {
         source,
         contains(
             'if (desiredOnline || presenceOnline || statusString == \'online\')'));
-    expect(source, contains('if (desiredOnline && !presenceOnline)'));
+    expect(source, contains('add(SetRideStatus(status: RideStatus.online))'));
+  });
+
+  test('dispatch location must be fresh and accurate', () {
+    final now = DateTime.utc(2026, 9, 2, 12);
+    expect(
+      isFreshDispatchLocation(
+        capturedAt: now.subtract(const Duration(seconds: 30)),
+        accuracyMeters: 35,
+        now: now,
+      ),
+      isTrue,
+    );
+    expect(
+      isFreshDispatchLocation(
+        capturedAt: now.subtract(const Duration(hours: 158)),
+        accuracyMeters: 35,
+        now: now,
+      ),
+      isFalse,
+    );
+    expect(
+      isFreshDispatchLocation(
+        capturedAt: now,
+        accuracyMeters: 101,
+        now: now,
+      ),
+      isFalse,
+    );
   });
 
   test('offline intent is not changed by lifecycle transitions', () {

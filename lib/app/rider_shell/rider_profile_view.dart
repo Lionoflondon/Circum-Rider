@@ -196,8 +196,7 @@ class _RiderProfileScreen extends StatelessWidget {
                             icon: Icons.diamond_outlined,
                             title: 'Roth Wallet',
                             description: data.rothSummary,
-                            onTap: () =>
-                                _open(context, const RiderApplicationCentre()),
+                            onTap: () => onSelectTab(3),
                           ),
                           _ProfileRow(
                             icon: Icons.verified_outlined,
@@ -252,12 +251,6 @@ class _RiderProfileScreen extends StatelessWidget {
                               context,
                               RiderRatingsHistoryView(riderId: user.uid),
                             ),
-                          ),
-                          _ProfileRow(
-                            icon: Icons.workspace_premium_outlined,
-                            title: 'Achievements',
-                            description: data.achievementsSummary,
-                            onTap: () => onSelectTab(0),
                           ),
                         ],
                       ),

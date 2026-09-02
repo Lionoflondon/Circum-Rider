@@ -19,6 +19,15 @@ enum RideStatus {
   delivered
 }
 
+enum OnlineTransition {
+  offline,
+  acquiringPermission,
+  acquiringLocation,
+  registeringOnline,
+  online,
+  blocked,
+}
+
 enum PanelControlStatus { initialized, isOpened, isClosed }
 
 enum BroadcastStatus { initialized, broadcasting }
@@ -58,6 +67,7 @@ class HomeState {
   bool canGoOnline;
   List<String> verificationChecklist;
   RequestStatus requestStatus;
+  OnlineTransition onlineTransition;
 
   HomeState({
     this.ongoingRequests = const [],
@@ -82,6 +92,7 @@ class HomeState {
     this.canGoOnline = false,
     this.verificationChecklist = const [],
     this.requestStatus = RequestStatus.initial,
+    this.onlineTransition = OnlineTransition.offline,
   });
 
   HomeState copyWith(
@@ -106,7 +117,9 @@ class HomeState {
       String? message,
       bool? canGoOnline,
       List<String>? verificationChecklist,
-      RequestStatus? requestStatus}) {
+      RequestStatus? requestStatus,
+      OnlineTransition? onlineTransition,
+      bool clearMessage = false}) {
     return HomeState(
         ongoingRequests: ongoingRequests ?? this.ongoingRequests,
         rideStatus: rideStatus ?? this.rideStatus,
@@ -127,10 +140,11 @@ class HomeState {
         activeRequest: activeRequest ?? this.activeRequest,
         chatMessages: chatMessages ?? this.chatMessages,
         chatStatus: chatStatus ?? this.chatStatus,
-        message: message ?? this.message,
+        message: clearMessage ? null : message ?? this.message,
         canGoOnline: canGoOnline ?? this.canGoOnline,
         verificationChecklist:
             verificationChecklist ?? this.verificationChecklist,
-        requestStatus: requestStatus ?? this.requestStatus);
+        requestStatus: requestStatus ?? this.requestStatus,
+        onlineTransition: onlineTransition ?? this.onlineTransition);
   }
 }

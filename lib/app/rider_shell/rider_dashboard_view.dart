@@ -166,7 +166,9 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                             );
                             return BlocBuilder<HomeBloc, HomeState>(
                               builder: (context, homeState) {
-                                final online = data.isOnline;
+                                final online = homeState.onlineTransition ==
+                                        OnlineTransition.online &&
+                                    data.isOnline;
                                 final mergedHome = homeState.copyWith(
                                   rideStatus: online
                                       ? RideStatus.online
@@ -660,6 +662,17 @@ class _AvailabilityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final starting =
+        home.onlineTransition == OnlineTransition.acquiringPermission ||
+            home.onlineTransition == OnlineTransition.acquiringLocation ||
+            home.onlineTransition == OnlineTransition.registeringOnline;
+    final statusTitle = switch (home.onlineTransition) {
+      OnlineTransition.acquiringPermission => 'Checking location permission…',
+      OnlineTransition.acquiringLocation => 'Getting your location…',
+      OnlineTransition.registeringOnline => 'Connecting…',
+      OnlineTransition.blocked => 'Location unavailable',
+      _ => online ? 'Online and available' : 'You are currently offline',
+    };
     return RiderGlassSurface(
       opacity: .66,
       edgeColor: online ? RiderPalette.green : RiderPalette.red,
@@ -687,7 +700,7 @@ class _AvailabilityCard extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  online ? 'Online and available' : 'You are currently offline',
+                  statusTitle,
                   style: const TextStyle(
                     color: RiderPalette.paper,
                     fontWeight: FontWeight.w700,
@@ -720,8 +733,8 @@ class _AvailabilityCard extends StatelessWidget {
           FutureBuilder<bool>(
             future: RiderInternalAccess.enabled(),
             builder: (context, internalAccess) {
-              final allowed =
-                  internalAccess.data == true || home.canGoOnline || online;
+              final allowed = !starting &&
+                  (internalAccess.data == true || home.canGoOnline || online);
               return SizedBox(
                 height: 52,
                 width: double.infinity,
@@ -733,7 +746,11 @@ class _AvailabilityCard extends StatelessWidget {
                         : Icons.power_settings_new_rounded,
                     size: 18,
                   ),
-                  label: Text(online ? 'Go offline' : 'Go online'),
+                  label: Text(starting
+                      ? 'Getting location…'
+                      : online
+                          ? 'Go offline'
+                          : 'Go online'),
                   style: FilledButton.styleFrom(
                     backgroundColor: online
                         ? Colors.white.withValues(alpha: .06)

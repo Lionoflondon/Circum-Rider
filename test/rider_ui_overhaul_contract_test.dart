@@ -72,7 +72,9 @@ void main() {
       expect(mainSource, isNot(contains('textScaleFactor: 1.0')));
     });
 
-    test('startup uses a single native splash followed by neutral Flutter loading', () {
+    test(
+        'startup uses a single native splash followed by neutral Flutter loading',
+        () {
       expect(mainSource, isNot(contains('_RiderStartupHold')));
       expect(mainSource, contains('signalRiderWebReady'));
       expect(mainSource,
@@ -233,7 +235,7 @@ void main() {
       expect(profile, contains('Payout History'));
       expect(profile, contains('Transaction History'));
       expect(profile, contains('Rank & Trust'));
-      expect(profile, contains('Achievements'));
+      expect(profile, isNot(contains("title: 'Achievements'")));
       expect(profile, contains('Notifications'));
       expect(profile, contains('Accessibility'));
       expect(profile, contains('RiderAccessibilitySettingsView'));
