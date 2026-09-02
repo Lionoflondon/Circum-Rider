@@ -4,7 +4,10 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:crypto/crypto.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
@@ -12,6 +15,7 @@ import '../communication/rider_conversation_view.dart';
 import '../account/view/earnings.dart';
 import '../rider_account/rider_account_state.dart';
 import '../rider_design/rider_ui.dart';
+import '../verification/rider_document_selection.dart';
 import 'rider_roth_onboarding.dart';
 
 enum RiderApplicationSectionStatus {
@@ -630,8 +634,11 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
       }
       final bytes = await file.readAsBytes();
       final safeType = _normalise(documentType);
+      final idempotencyKey = sha256.convert(
+          [...utf8.encode('$uid:$section:$safeType:'), ...bytes]).toString();
       await _functions.httpsCallable('submitRiderDocument').call({
         'documentType': safeType,
+        'idempotencyKey': idempotencyKey,
         'notes': 'Application Centre section: $section',
         'fileName': name,
         'contentType': extension == 'pdf'
@@ -1378,6 +1385,83 @@ class _DocumentUploadSectionState extends State<_DocumentUploadSection> {
   bool _submitted = false;
   String? _error;
 
+  Future<void> _pickDocument() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+        allowMultiple: false,
+      );
+      if (result == null || !mounted) return;
+      final path = result.files.single.path;
+      if (path == null) {
+        setState(() =>
+            _error = 'The selected file could not be opened. Choose it again.');
+        return;
+      }
+      await RiderDocumentSelection.fromPath(
+        path,
+        fileName: result.files.single.name,
+      );
+      if (mounted) setState(() => _file = XFile(path));
+    } on RiderDocumentSelectionException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } on PlatformException {
+      if (mounted) {
+        setState(() =>
+            _error = 'The document picker could not open. Please try again.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() =>
+            _error = 'The document could not be selected. Please try again.');
+      }
+    }
+  }
+
+  Future<void> _pickPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(children: [
+          ListTile(
+            leading: const Icon(Icons.photo_library_outlined),
+            title: const Text('Choose from Photos'),
+            onTap: () => Navigator.pop(context, ImageSource.gallery),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo_camera_outlined),
+            title: const Text('Take a photo'),
+            onTap: () => Navigator.pop(context, ImageSource.camera),
+          ),
+        ]),
+      ),
+    );
+    if (source == null || !mounted) return;
+    try {
+      final file =
+          await ImagePicker().pickImage(source: source, imageQuality: 90);
+      if (file == null || !mounted) return;
+      await RiderDocumentSelection.fromPath(file.path, fileName: file.name);
+      if (mounted) setState(() => _file = file);
+    } on PlatformException catch (error) {
+      final denied = error.code.toLowerCase().contains('permission') ||
+          error.code.toLowerCase().contains('denied');
+      if (mounted) {
+        setState(() => _error = denied
+            ? 'Camera or photo access is unavailable. Check Settings or upload a document instead.'
+            : 'The photo could not be selected. Please try again.');
+      }
+    } on RiderDocumentSelectionException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() =>
+            _error = 'The photo could not be selected. Please try again.');
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1395,7 +1479,6 @@ class _DocumentUploadSectionState extends State<_DocumentUploadSection> {
           ],
         _ => [
             'passport',
-            'drivers_license',
             'national_identity_card',
             'proof_of_address',
             'identity_selfie',
@@ -1426,12 +1509,15 @@ class _DocumentUploadSectionState extends State<_DocumentUploadSection> {
           ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
-            onPressed: () async {
-              final file = await ImagePicker().pickMedia();
-              if (file != null) setState(() => _file = file);
-            },
+            onPressed: _uploading ? null : _pickDocument,
             icon: const Icon(Icons.upload_file_rounded),
-            label: Text(_file == null ? 'Choose document' : _file!.name),
+            label: Text(_file == null ? 'Upload Document' : _file!.name),
+          ),
+          const SizedBox(height: 8),
+          TextButton.icon(
+            onPressed: _uploading ? null : _pickPhoto,
+            icon: const Icon(Icons.photo_camera_outlined),
+            label: const Text('Photo / Camera'),
           ),
           const SizedBox(height: 12),
           FilledButton(

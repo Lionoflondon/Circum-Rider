@@ -41,6 +41,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   static const _signupOperationTimeout = Duration(seconds: 30);
   static const _signupBootstrapTimeout = Duration(seconds: 20);
   static const _profilePhotoOperationTimeout = Duration(seconds: 30);
+  static const _documentUploadOperationTimeout = Duration(seconds: 45);
 
   AuthBloc() : super(const AuthState()) {
     FirebaseAuth auth = FirebaseAuth.instance;
@@ -1057,12 +1058,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Future<void> writeRiderDocumentRecord({
       required String uid,
       required String idType,
+      required String idempotencyKey,
       required List<Map<String, dynamic>> files,
     }) async {
       await functions.httpsCallable('submitRiderDocument').call({
         'documentType': documentKeyForIdType(idType),
         'files': files,
-      });
+        'idempotencyKey': idempotencyKey,
+      }).timeout(_documentUploadOperationTimeout);
     }
 
     Future<Map<String, dynamic>> documentFile(String path, String side) async {
@@ -1089,74 +1092,67 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<SubmitVerificationDocuments>(
       (event, emit) async {
         final User? user = auth.currentUser;
-
-        if (event.idType == 'drivers license' ||
-            event.idType == 'international passport') {
-          try {
-            emit(state.copyWith(
-                verificationUploadStatus: VerificationUploadStatus.loading));
-            final uid = user?.uid;
-            if (uid != null) {
-              await writeRiderDocumentRecord(
-                uid: uid,
-                idType: event.idType!,
-                files: [
-                  await documentFile(event.frontImagePath!, 'front'),
-                  await documentFile(event.backImagePath!, 'back'),
-                ],
-              );
-            }
-
-            emit(state.copyWith(
-                verificationUploadStatus: VerificationUploadStatus.uploaded));
-          } catch (e) {
-            emit(state.copyWith(
-                verificationUploadStatus: VerificationUploadStatus.failure));
+        emit(state.copyWith(
+          verificationUploadStatus: VerificationUploadStatus.loading,
+          errorMessage: '',
+        ));
+        try {
+          final uid = user?.uid;
+          final idType = event.idType;
+          final idempotencyKey = event.idempotencyKey;
+          if (uid == null || idType == null || idempotencyKey == null) {
+            throw StateError('Sign in to submit verification documents.');
           }
-        }
-
-        if (event.idType == 'work permit') {
-          try {
-            emit(state.copyWith(
-                verificationUploadStatus: VerificationUploadStatus.loading));
-            final uid = user?.uid;
-            if (uid != null) {
-              await writeRiderDocumentRecord(
-                uid: uid,
-                idType: event.idType!,
-                files: [await documentFile(event.workPermitPath!, 'primary')],
-              );
-            }
-            emit(state.copyWith(
-                verificationUploadStatus: VerificationUploadStatus.uploaded));
-          } catch (e) {
-            emit(state.copyWith(
-                verificationUploadStatus: VerificationUploadStatus.failure));
-          }
-        }
-
-        if (event.idType == 'vehicle registration') {
-          try {
-            emit(state.copyWith(
-                verificationUploadStatus: VerificationUploadStatus.loading));
-            final uid = user?.uid;
-            if (uid == null) {
-              emit(state.copyWith(
-                  verificationUploadStatus: VerificationUploadStatus.failure));
-              return;
-            }
-            await writeRiderDocumentRecord(
-              uid: uid,
-              idType: event.idType!,
-              files: [await documentFile(event.workPermitPath!, 'primary')],
-            );
-            emit(state.copyWith(
-                vehicleRegistrationDocumentStatus: 'under_review',
-                verificationUploadStatus: VerificationUploadStatus.uploaded));
-          } catch (e) {
-            emit(state.copyWith(
-                verificationUploadStatus: VerificationUploadStatus.failure));
-          }
+          final files =
+              idType == 'drivers license' || idType == 'international passport'
+                  ? [
+                      await documentFile(event.frontImagePath!, 'front'),
+                      await documentFile(event.backImagePath!, 'back'),
+                    ]
+                  : [await documentFile(event.workPermitPath!, 'primary')];
+          await writeRiderDocumentRecord(
+            uid: uid,
+            idType: idType,
+            idempotencyKey: idempotencyKey,
+            files: files,
+          );
+          emit(state.copyWith(
+            vehicleRegistrationDocumentStatus:
+                idType == 'vehicle registration' ? 'under_review' : null,
+            verificationUploadStatus: VerificationUploadStatus.uploaded,
+            errorMessage: '',
+          ));
+        } on TimeoutException {
+          emit(state.copyWith(
+            verificationUploadStatus: VerificationUploadStatus.failure,
+            errorMessage:
+                'The upload took too long. Check your connection and try again.',
+          ));
+        } on FirebaseFunctionsException catch (error) {
+          final message = switch (error.code) {
+            'unauthenticated' =>
+              'Your session has expired. Sign in and try again.',
+            'failed-precondition' =>
+              'Complete the required account details and try again.',
+            'invalid-argument' =>
+              'The selected document could not be accepted. Check the file and try again.',
+            'permission-denied' =>
+              'This document could not be submitted from your account.',
+            'unavailable' ||
+            'deadline-exceeded' =>
+              'The connection dropped. Please try the upload again.',
+            _ => 'The document could not be submitted. Please try again.',
+          };
+          emit(state.copyWith(
+            verificationUploadStatus: VerificationUploadStatus.failure,
+            errorMessage: message,
+          ));
+        } catch (_) {
+          emit(state.copyWith(
+            verificationUploadStatus: VerificationUploadStatus.failure,
+            errorMessage:
+                'The document could not be submitted. Please try again.',
+          ));
         }
       },
     );
@@ -1171,9 +1167,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             emit(state.copyWith(errorMessage: 'Choose a profile photo.'));
             return;
           }
-          if (sourceBytes.length > 20 * 1024 * 1024) {
+          if (sourceBytes.length > 10 * 1024 * 1024) {
             emit(state.copyWith(
-                errorMessage: 'Profile photo must be smaller than 20MB.'));
+                errorMessage: 'Profile photo must be 10 MB or smaller.'));
             return;
           }
           final processed = _processRiderProfilePhoto(sourceBytes);

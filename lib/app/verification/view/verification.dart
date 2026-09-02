@@ -43,7 +43,7 @@ class VerificationView extends StatelessWidget {
             return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
               stream: FirebaseFirestore.instance
                   .collection('riderDocuments')
-                  .where('uid', isEqualTo: user.uid)
+                  .where('riderId', isEqualTo: user.uid)
                   .snapshots(),
               builder: (context, documentsSnapshot) {
                 if (riderSnapshot.hasError ||
@@ -731,7 +731,7 @@ class _VerificationState {
         status: _statusFromDoc(identityDoc),
         document: identityDoc,
         acceptedFormats: 'JPG, PNG, WEBP or PDF',
-        maxFileSize: '10 MB',
+        maxFileSize: '8 MiB',
         reviewTime: 'Usually within 24 hours',
         uploadRoute: identityType == "Driver's Licence"
             ? const UploadIDView(idType: IdType.driversLicense)
@@ -749,7 +749,7 @@ class _VerificationState {
         status: _statusFromDoc(rightToWorkDoc),
         document: rightToWorkDoc,
         acceptedFormats: 'JPG, PNG, WEBP or PDF',
-        maxFileSize: '10 MB',
+        maxFileSize: '8 MiB',
         reviewTime: 'Usually within 24 hours',
         uploadRoute: const UploadIDView(idType: IdType.workPermit),
       ),
@@ -765,7 +765,7 @@ class _VerificationState {
         status: _statusFromDoc(vehicleDoc),
         document: vehicleDoc,
         acceptedFormats: 'JPG, PNG, WEBP or PDF',
-        maxFileSize: '10 MB',
+        maxFileSize: '8 MiB',
         reviewTime: 'Usually within 24 hours',
         uploadRoute: const UploadIDView(idType: IdType.vehicleRegistration),
       ),
@@ -781,8 +781,9 @@ class _VerificationState {
         status: _statusFromDoc(insuranceDoc),
         document: insuranceDoc,
         acceptedFormats: 'JPG, PNG, WEBP or PDF',
-        maxFileSize: '10 MB',
+        maxFileSize: '8 MiB',
         reviewTime: 'Usually within 24 hours',
+        uploadRoute: const UploadIDView(idType: IdType.insurance),
       ),
       _VerificationCardData(
         key: 'profile_photo',
@@ -794,7 +795,7 @@ class _VerificationState {
             'Your profile photo helps senders and operations identify you during deliveries.',
         icon: Icons.account_circle_outlined,
         status: profilePhotoStatus,
-        acceptedFormats: 'JPG, PNG or HEIC',
+        acceptedFormats: 'JPG or PNG',
         maxFileSize: '10 MB',
         reviewTime: 'Usually within 2 hours',
         uploadRoute: profilePhotoRoute,
@@ -967,7 +968,10 @@ _VerificationStatus _statusFrom(Object? value) {
       isReviewing: true,
     );
   }
-  if (raw == 'under_review' || raw == 'pending_review' || raw == 'review') {
+  if (raw == 'pending' ||
+      raw == 'under_review' ||
+      raw == 'pending_review' ||
+      raw == 'review') {
     return const _VerificationStatus(
       label: 'Under Review',
       color: RiderPalette.amber,

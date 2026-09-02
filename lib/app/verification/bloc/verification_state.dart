@@ -5,6 +5,7 @@ enum IdType {
   internationalPassport,
   workPermit,
   vehicleRegistration,
+  insurance,
 }
 
 abstract class VerificationState extends Equatable {
