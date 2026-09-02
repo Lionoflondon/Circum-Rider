@@ -199,11 +199,13 @@ class SubmitVerificationDocuments extends AuthEvent {
   final String? backImagePath;
   final String? workPermitPath;
   final String? idType;
+  final String? idempotencyKey;
   const SubmitVerificationDocuments(
       {this.frontImagePath,
       this.backImagePath,
       this.workPermitPath,
-      this.idType});
+      this.idType,
+      this.idempotencyKey});
 }
 
 class RequestLocationData extends AuthEvent {}
