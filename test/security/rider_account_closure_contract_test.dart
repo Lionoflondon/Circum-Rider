@@ -9,14 +9,18 @@ void main() {
     ).readAsStringSync();
 
     expect(profile, contains('Close Account'));
-    expect(profile,
-        contains('Permanently delete your Circum account and personal data.'));
+    expect(
+      profile,
+      contains('Permanently delete your Circum account and personal data.'),
+    );
     expect(profile, contains('Close your Circum account?'));
     expect(profile, contains('Type DELETE to confirm.'));
     expect(profile, contains("httpsCallable('closeCircumAccount')"));
     expect(profile, contains("'accountType': 'rider'"));
     expect(profile, contains('reauthenticateWithCredential'));
     expect(profile, contains('reauthenticateWithProvider'));
+    expect(profile, contains('runRiderAccountClosure'));
+    expect(profile, isNot(contains('error.message')));
     expect(profile, isNot(contains("storage.write(key: 'password'")));
   });
 }

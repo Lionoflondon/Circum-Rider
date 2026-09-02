@@ -28,6 +28,7 @@ import '../../rider_account/rider_account_state.dart';
 import '../apple_auth_nonce.dart';
 import '../rider_auth_error.dart';
 import '../rider_auth_bootstrap.dart';
+import '../rider_terminal_operations.dart';
 // import '../../onboarding/view/onboarding.dart';
 
 part 'auth_event.dart';
@@ -676,12 +677,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                   currentState: AppState.authenticated));
             }
           }
-        } on FirebaseException catch (e) {
-          if (e.code == 'invalid-verification-code') {
-            emit(state.copyWith(errorMessage: 'Invalid verification code'));
-          }
+        } on FirebaseAuthException catch (error) {
+          emit(state.copyWith(
+              status: Status.failure,
+              isLoading: false,
+              errorMessage: riderOtpFailureMessage(error.code)));
+        } on TimeoutException {
+          emit(state.copyWith(
+              status: Status.failure,
+              isLoading: false,
+              errorMessage:
+                  'Verification took too long. Check your connection and try again.'));
         } catch (_) {
-          emit(state.copyWith(status: Status.failure));
+          emit(state.copyWith(
+              status: Status.failure,
+              isLoading: false,
+              errorMessage:
+                  'Your verification code could not be confirmed. Please try again.'));
         }
       }
 
@@ -1560,49 +1572,93 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     );
 
     on<ConfirmEmailVerification>((event, emit) async {
-      await auth.currentUser?.reload().timeout(_authOperationTimeout);
-      if (auth.currentUser?.emailVerified == true) {
-        final user = auth.currentUser;
-        if (user != null) {
-          await upsertRiderOnboarding(user: user, data: {
-            'onboardingStatus': 'email_verified',
-            'emailVerified': true,
-            'emailVerifiedAt': FieldValue.serverTimestamp(),
-          }).timeout(_authOperationTimeout);
+      if (state.status == Status.loading) return;
+      emit(state.copyWith(status: Status.loading, isLoading: true));
+      try {
+        final verified = await runRiderEmailVerification(
+          reload: () async {
+            final user = auth.currentUser;
+            if (user == null) {
+              throw FirebaseAuthException(code: 'user-not-found');
+            }
+            await user.reload();
+          },
+          isVerified: () => auth.currentUser?.emailVerified == true,
+          completeVerifiedBootstrap: () async {
+            final user = auth.currentUser;
+            if (user == null) {
+              throw FirebaseAuthException(code: 'user-not-found');
+            }
+            await upsertRiderOnboarding(user: user, data: {
+              'onboardingStatus': 'email_verified',
+              'emailVerified': true,
+              'emailVerifiedAt': FieldValue.serverTimestamp(),
+            });
+            if (user.displayName == null &&
+                (state.firstName?.trim().isNotEmpty ?? false)) {
+              final name =
+                  '${state.firstName ?? ''} ${state.lastName ?? ''}'.trim();
+              await user.updateDisplayName(name);
+              await upsertRiderOnboarding(user: user, data: {'name': name});
+            }
+          },
+          timeout: _authOperationTimeout,
+        );
+        if (!verified) {
+          emit(state.copyWith(
+              status: Status.unverifiedEmail,
+              isLoading: false,
+              errorMessage: 'Verify your email, then try again.'));
+          return;
         }
-        if (user != null &&
-            user.displayName == null &&
-            (state.firstName?.trim().isNotEmpty ?? false)) {
-          final name =
-              '${state.firstName ?? ''} ${state.lastName ?? ''}'.trim();
-          await user.updateDisplayName(name).timeout(_authOperationTimeout);
-          await upsertRiderOnboarding(user: user, data: {'name': name})
-              .timeout(_authOperationTimeout);
+        final user = auth.currentUser;
+        if (user?.displayName == null) {
           emit(state.copyWith(
-            status: Status.success,
-            username: name,
-          ));
-        } else if (user?.displayName == null) {
-          emit(state.copyWith(
+              status: Status.success,
+              isLoading: false,
               authenticatedStatus: AuthenticatedStatus.incompleteData,
               currentState: AppState.authenticated));
         } else {
           emit(state.copyWith(
-            status: Status.success,
-            username: auth.currentUser?.displayName,
-            profilePhoto: auth.currentUser?.photoURL,
-          ));
+              status: Status.success,
+              isLoading: false,
+              username: user?.displayName,
+              profilePhoto: user?.photoURL));
         }
-      } else {}
+      } on RiderOperationFailure catch (error) {
+        emit(state.copyWith(
+            status: Status.failure,
+            isLoading: false,
+            errorMessage: error.safeMessage));
+      }
     });
 
     on<SignOut>(
       (event, emit) async {
-        FlutterSecureStorage storage = const FlutterSecureStorage();
-        await auth.signOut().timeout(_authOperationTimeout);
-        emit(const AuthState());
-        emit(state.copyWith(currentState: AppState.unauthenticated));
-        await storage.deleteAll().timeout(_authOperationTimeout);
+        const storage = FlutterSecureStorage();
+        emit(state.copyWith(status: Status.loading, isLoading: true));
+        final result = await runRiderSignOut(
+          signOut: auth.signOut,
+          clearLocalSession: storage.deleteAll,
+          timeout: _authOperationTimeout,
+        );
+        if (!result.remoteSignedOut) {
+          emit(state.copyWith(
+              status: Status.failure,
+              isLoading: false,
+              clearSensitiveAuthFields: true,
+              errorMessage:
+                  'Sign out could not be completed. Check your connection and try again.'));
+          return;
+        }
+        emit(AuthState(
+          currentState: AppState.unauthenticated,
+          status:
+              result.localCleanupCompleted ? Status.success : Status.failure,
+          errorMessage: result.localCleanupCompleted
+              ? null
+              : 'You are signed out. Local account data could not be fully cleared.',
+        ));
       },
     );
 
