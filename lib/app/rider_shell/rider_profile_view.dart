@@ -7,6 +7,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../authentication/bloc/auth_bloc.dart';
+import '../authentication/rider_terminal_operations.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../onboarding/rider_application_centre.dart';
 import '../rider_design/rider_ui.dart';
@@ -1263,29 +1264,26 @@ Future<void> _confirmCloseAccount(BuildContext context) async {
   if (continueClosure != true || !context.mounted) return;
 
   try {
-    await _reauthenticateRiderForClosure(context, user);
-    if (!context.mounted) return;
-    final confirmed = await _showRiderDeleteConfirmation(context);
-    if (confirmed != true || !context.mounted) return;
-    await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('closeCircumAccount')
-        .call({'accountType': 'rider'});
+    final closed = await runRiderAccountClosure(
+      reauthenticate: () => _reauthenticateRiderForClosure(context, user),
+      confirmClosure: () async {
+        if (!context.mounted) return false;
+        return await _showRiderDeleteConfirmation(context) == true;
+      },
+      closeAccount: () async {
+        await FirebaseFunctions.instanceFor(region: 'us-central1')
+            .httpsCallable('closeCircumAccount')
+            .call({'accountType': 'rider'});
+      },
+      timeout: const Duration(seconds: 30),
+    );
+    if (!closed) return;
     if (context.mounted) {
       context.read<AuthBloc>().add(SignOut());
     }
-  } on FirebaseFunctionsException catch (error) {
+  } on RiderOperationFailure catch (error) {
     if (context.mounted) {
-      _showClosureError(
-        context,
-        error.message ?? 'Your account could not be closed. Please try again.',
-      );
-    }
-  } on FirebaseAuthException catch (error) {
-    if (context.mounted) {
-      _showClosureError(
-        context,
-        error.message ?? 'Please sign in again before closing your account.',
-      );
+      _showClosureError(context, error.safeMessage);
     }
   } catch (_) {
     if (context.mounted) {
