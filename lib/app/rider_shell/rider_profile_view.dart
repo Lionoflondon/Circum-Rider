@@ -14,6 +14,7 @@ import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
 import '../ratings/rider_appreciation.dart';
 import '../support/view/support.dart';
+import '../stripe/rider_payout_account_view.dart';
 import '../verification/view/verification.dart';
 import 'rider_accessibility_settings_view.dart';
 import 'rider_profile_details_view.dart';
@@ -203,7 +204,10 @@ class _RiderProfileScreen extends StatelessWidget {
                             title: 'Payout Account',
                             description: data.stripeStatus,
                             statusColor: data.stripeStatusColor,
-                            onTap: () => onSelectTab(3),
+                            onTap: () => _open(
+                              context,
+                              const RiderPayoutAccountView(),
+                            ),
                           ),
                           _ProfileRow(
                             icon: Icons.savings_outlined,
@@ -526,7 +530,7 @@ class _RiderProfileData {
     final value = timestampFromAny(earnings['nextEstimatedPayoutAt'] ??
         earnings['nextPayoutAt'] ??
         profile['nextEstimatedPayoutAt']);
-    if (value == null) return 'Estimated by Stripe Connect';
+    if (value == null) return 'No payout currently scheduled';
     return _shortDate(value);
   }
 

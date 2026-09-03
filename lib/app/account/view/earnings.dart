@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../rider_design/rider_ui.dart';
+import '../../stripe/rider_payout_account_view.dart';
 import '../bloc/account_bloc.dart';
 
 class EarningsView extends StatefulWidget {
@@ -39,7 +40,8 @@ class _EarningsViewState extends State<EarningsView> {
   Future<Map<String, dynamic>> _loadSummary() async {
     final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
         .httpsCallable('getRiderEarningsSummary')
-        .call();
+        .call()
+        .timeout(const Duration(seconds: 25));
     return Map<String, dynamic>.from(result.data as Map);
   }
 
@@ -68,7 +70,7 @@ class _EarningsViewState extends State<EarningsView> {
             payouts: const [],
             transactions: const [],
             showZeroValueSections: true,
-            onRefresh: () {},
+            onRefresh: () async {},
           )
         : FutureBuilder<Map<String, dynamic>>(
             future: _summary!,
@@ -129,8 +131,11 @@ class _EarningsViewState extends State<EarningsView> {
                                 earningsSnapshot.data?.data() ?? const {},
                             payouts: payouts,
                             transactions: transactions,
-                            onRefresh: () =>
-                                setState(() => _summary = _loadSummary()),
+                            onRefresh: () async {
+                              final next = _loadSummary();
+                              setState(() => _summary = next);
+                              await next;
+                            },
                           );
                         },
                       );
@@ -165,7 +170,7 @@ class _EarningsContent extends StatelessWidget {
   final Map<String, dynamic> storedEarnings;
   final List<Map<String, dynamic>> payouts;
   final List<Map<String, dynamic>> transactions;
-  final VoidCallback onRefresh;
+  final Future<void> Function() onRefresh;
   final bool showZeroValueSections;
 
   @override
@@ -195,7 +200,21 @@ class _EarningsContent extends StatelessWidget {
       ..sort((a, b) => _millis(b).compareTo(_millis(a)));
     final activePayout = _firstWhereOrNull(sortedPayouts, _isActivePayout);
     final pendingPayout = activePayout != null;
-    final sortedTransactions = [...transactions]
+    final setupRequired = {
+      'setup_required',
+      'restricted',
+      'disabled',
+      'pending_verification',
+    }.contains(readiness);
+    final authoritativeTransactions = <String, Map<String, dynamic>>{};
+    for (final item in [
+      ..._mapList(summary['production']),
+      ...transactions,
+    ]) {
+      final id = '${item['id'] ?? ''}'.trim();
+      authoritativeTransactions[id.isEmpty ? item.toString() : id] = item;
+    }
+    final sortedTransactions = authoritativeTransactions.values.toList()
       ..sort((a, b) => _millis(b).compareTo(_millis(a)));
     final hasEarnings = [
           available,
@@ -208,10 +227,20 @@ class _EarningsContent extends StatelessWidget {
         sortedPayouts.isNotEmpty ||
         sortedTransactions.isNotEmpty;
 
-    return BlocBuilder<AccountBloc, AccountState>(
+    return BlocConsumer<AccountBloc, AccountState>(
+      listenWhen: (previous, current) =>
+          previous.status != current.status &&
+          (current.status == AccountStatus.failure ||
+              current.status == AccountStatus.success),
+      listener: (context, account) {
+        if (account.message.isEmpty) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(account.message)));
+      },
       builder: (context, account) => RefreshIndicator(
         color: RiderPalette.blue,
-        onRefresh: () async => onRefresh(),
+        onRefresh: onRefresh,
         child: ListView(
           key: const PageStorageKey('rider-earnings-replacement'),
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 96),
@@ -231,12 +260,21 @@ class _EarningsContent extends StatelessWidget {
                 activePayout: activePayout,
                 showPending: showZeroValueSections,
                 busy: account.status == AccountStatus.loading,
-                onWithdraw: pendingPayout ||
-                        available <= 0 ||
-                        readiness != 'ready' ||
-                        !reconciled
+                onWithdraw: pendingPayout || !reconciled
                     ? null
-                    : () => _requestWithdrawal(context, available),
+                    : setupRequired
+                        ? () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const RiderPayoutAccountView(),
+                              ),
+                            );
+                            await onRefresh();
+                          }
+                        : available > 0 && readiness == 'ready'
+                            ? () => _requestWithdrawal(context, available)
+                            : null,
                 payouts: sortedPayouts,
                 reviewRequired: _requiresPayoutReview(summary, activePayout),
                 reviewMessage:
@@ -252,29 +290,24 @@ class _EarningsContent extends StatelessWidget {
               const SizedBox(height: 24),
               _HistorySection(
                 title: 'Payout history',
-                seeAll: sortedPayouts.length > 1,
                 empty: const RiderEmptyState(
                   icon: Icons.account_balance_outlined,
                   title: 'No payouts yet',
                   message:
                       'Requested and completed Stripe payouts will appear here.',
                 ),
-                rows: sortedPayouts.take(6).map(_PayoutRow.new).toList(),
+                rows: sortedPayouts.map(_PayoutRow.new).toList(),
               ),
               const SizedBox(height: 24),
               _HistorySection(
                 title: 'Transactions',
-                seeAll: sortedTransactions.length > 12,
                 empty: const RiderEmptyState(
                   icon: Icons.receipt_long_outlined,
                   title: 'No earnings activity yet',
                   message:
                       'Completed delivery earnings and adjustments will appear here.',
                 ),
-                rows: sortedTransactions
-                    .take(12)
-                    .map(_TransactionRow.new)
-                    .toList(),
+                rows: sortedTransactions.map(_TransactionRow.new).toList(),
               ),
             ],
           ],
@@ -631,13 +664,11 @@ class _BreakdownTile extends StatelessWidget {
 class _HistorySection extends StatelessWidget {
   const _HistorySection({
     required this.title,
-    required this.seeAll,
     required this.empty,
     required this.rows,
   });
 
   final String title;
-  final bool seeAll;
   final Widget empty;
   final List<Widget> rows;
 
@@ -657,15 +688,6 @@ class _HistorySection extends StatelessWidget {
                   ),
                 ),
               ),
-              if (seeAll)
-                const Text(
-                  'View all',
-                  style: TextStyle(
-                    color: RiderPalette.blue,
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
             ],
           ),
           const SizedBox(height: 8),
@@ -1225,6 +1247,10 @@ class _EarningsFailure extends StatelessWidget {
 
 Map<String, dynamic> _map(Object? value) =>
     value is Map ? Map<String, dynamic>.from(value) : const {};
+
+List<Map<String, dynamic>> _mapList(Object? value) => value is List
+    ? value.whereType<Map>().map(Map<String, dynamic>.from).toList()
+    : const [];
 
 double _number(Object? value) => value is num ? value.toDouble() : 0;
 
