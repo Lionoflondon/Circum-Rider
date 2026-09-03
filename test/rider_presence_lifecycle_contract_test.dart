@@ -75,6 +75,37 @@ void main() {
     );
   });
 
+  test('go-online acknowledgement reads the deployed nested presence result',
+      () {
+    expect(
+        isPresenceRegistrationAcknowledged({
+          'success': true,
+          'presence': {'dispatchEligible': true},
+        }),
+        isTrue);
+    expect(
+        isPresenceRegistrationAcknowledged({
+          'success': true,
+          'presence': {'dispatchEligible': false},
+        }),
+        isFalse);
+    expect(isPresenceRegistrationAcknowledged({'success': false}), isFalse);
+  });
+
+  test('presence heartbeat is bounded, singular, and reconnects', () {
+    expect(source, contains('_presenceHeartbeatInFlight'));
+    expect(source, contains('if (_presenceHeartbeatInFlight) return;'));
+    expect(source, contains('.timeout(const Duration(seconds: 20))'));
+    expect(source, contains('OnlineTransition.reconnecting'));
+    expect(source, contains('PresenceHeartbeatResult(succeeded: false)'));
+    final onlineEmit =
+        source.indexOf('onlineTransition: OnlineTransition.online,');
+    final heartbeatStart =
+        source.indexOf('_startPresenceHeartbeat();', onlineEmit);
+    expect(onlineEmit, greaterThanOrEqualTo(0));
+    expect(heartbeatStart, greaterThan(onlineEmit));
+  });
+
   test('offline intent is not changed by lifecycle transitions', () {
     final lifecycleStart = source.indexOf('void didChangeAppLifecycleState');
     final lifecycleEnd =

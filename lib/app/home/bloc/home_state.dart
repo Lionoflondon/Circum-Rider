@@ -25,6 +25,7 @@ enum OnlineTransition {
   acquiringLocation,
   registeringOnline,
   online,
+  reconnecting,
   blocked,
 }
 
