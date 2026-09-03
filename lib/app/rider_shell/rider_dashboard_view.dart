@@ -166,8 +166,10 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                             );
                             return BlocBuilder<HomeBloc, HomeState>(
                               builder: (context, homeState) {
-                                final online = homeState.onlineTransition ==
-                                        OnlineTransition.online &&
+                                final online = (homeState.onlineTransition ==
+                                            OnlineTransition.online ||
+                                        homeState.onlineTransition ==
+                                            OnlineTransition.reconnecting) &&
                                     data.isOnline;
                                 final mergedHome = homeState.copyWith(
                                   rideStatus: online
@@ -670,6 +672,7 @@ class _AvailabilityCard extends StatelessWidget {
       OnlineTransition.acquiringPermission => 'Checking location permission…',
       OnlineTransition.acquiringLocation => 'Getting your location…',
       OnlineTransition.registeringOnline => 'Connecting…',
+      OnlineTransition.reconnecting => 'Reconnecting…',
       OnlineTransition.blocked => 'Location unavailable',
       _ => online ? 'Online and available' : 'You are currently offline',
     };

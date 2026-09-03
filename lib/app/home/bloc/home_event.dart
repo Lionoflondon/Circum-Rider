@@ -10,6 +10,11 @@ class SetRideStatus extends HomeEvent {
   SetRideStatus({required this.status});
 }
 
+class PresenceHeartbeatResult extends HomeEvent {
+  final bool succeeded;
+  PresenceHeartbeatResult({required this.succeeded});
+}
+
 class GetAvailableRequests extends HomeEvent {}
 
 class SetHomeLocationData extends HomeEvent {
