@@ -8,6 +8,7 @@ import '../authentication/bloc/auth_bloc.dart';
 import '../communication/rider_communication_service.dart';
 import '../rider_internal_access/rider_internal_access.dart';
 import '../home/bloc/home_bloc.dart';
+import '../home/rider_presence_authority.dart';
 import '../notifications/rider_notifications_view.dart';
 import '../onboarding/rider_guide_view.dart';
 import '../recognitions/rider_recognitions.dart';
@@ -319,9 +320,7 @@ class _DashboardData {
   final bool hasDataError;
   final bool notificationsUnavailable;
 
-  bool get isOnline =>
-      presence['isOnline'] == true &&
-      '${presence['availabilityStatus'] ?? ''}'.toLowerCase() != 'offline';
+  bool get isOnline => isAuthoritativeRiderPresenceOnline(presence);
 }
 
 class _DashboardSurface extends StatelessWidget {
