@@ -6,9 +6,9 @@ void main() {
   final source = File('lib/app/onboarding/rider_application_centre.dart')
       .readAsStringSync();
 
-  test('payout row opens the existing earnings and payout surface', () {
+  test('payout row opens the canonical Stripe Connect account surface', () {
     expect(source, contains("case 'payout_details':"));
-    expect(source, contains('const EarningsView()'));
+    expect(source, contains('const RiderPayoutAccountView()'));
     expect(source, isNot(contains("'Payout setup status will update")));
   });
 

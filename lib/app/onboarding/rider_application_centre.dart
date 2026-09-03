@@ -12,9 +12,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../communication/rider_conversation_view.dart';
-import '../account/view/earnings.dart';
 import '../rider_account/rider_account_state.dart';
 import '../rider_design/rider_ui.dart';
+import '../stripe/rider_payout_account_view.dart';
 import '../verification/rider_document_selection.dart';
 import 'rider_roth_onboarding.dart';
 
@@ -542,7 +542,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
         if (!mounted) return;
         await Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const EarningsView()),
+          MaterialPageRoute(builder: (_) => const RiderPayoutAccountView()),
         );
       case 'review_status':
         if (!mounted) return;

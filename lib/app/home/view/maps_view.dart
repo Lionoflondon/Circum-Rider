@@ -16,6 +16,7 @@ class MapsView extends StatefulWidget {
 }
 
 class _MapsViewState extends State<MapsView> {
+  static const _mapControllerTimeout = Duration(seconds: 15);
   GlobalKey mapKey = GlobalKey();
 
   final Completer<GoogleMapController> _controller =
@@ -27,32 +28,42 @@ class _MapsViewState extends State<MapsView> {
   );
 
   Future<void> setMapFitToTour(Set<Polyline> p) async {
-    double minLat = p.first.points.first.latitude;
-    double minLong = p.first.points.first.longitude;
-    double maxLat = p.first.points.first.latitude;
-    double maxLong = p.first.points.first.longitude;
-    p.forEach((poly) {
-      poly.points.forEach((point) {
-        if (point.latitude < minLat) minLat = point.latitude;
-        if (point.latitude > maxLat) maxLat = point.latitude;
-        if (point.longitude < minLong) minLong = point.longitude;
-        if (point.longitude > maxLong) maxLong = point.longitude;
-      });
-    });
+    final points = p.expand((polyline) => polyline.points).toList();
+    if (points.isEmpty) return;
+    double minLat = points.first.latitude;
+    double minLong = points.first.longitude;
+    double maxLat = points.first.latitude;
+    double maxLong = points.first.longitude;
+    for (final point in points) {
+      if (point.latitude < minLat) minLat = point.latitude;
+      if (point.latitude > maxLat) maxLat = point.latitude;
+      if (point.longitude < minLong) minLong = point.longitude;
+      if (point.longitude > maxLong) maxLong = point.longitude;
+    }
 
-    final GoogleMapController mapController = await _controller.future;
-
-    await mapController.animateCamera(CameraUpdate.newLatLngBounds(
-        LatLngBounds(
-            southwest: LatLng(minLat, minLong),
-            northeast: LatLng(maxLat, maxLong)),
-        70));
+    try {
+      final GoogleMapController mapController =
+          await _controller.future.timeout(_mapControllerTimeout);
+      await mapController.animateCamera(CameraUpdate.newLatLngBounds(
+          LatLngBounds(
+              southwest: LatLng(minLat, minLong),
+              northeast: LatLng(maxLat, maxLong)),
+          70));
+    } on TimeoutException {
+      return;
+    }
   }
 
-  void changeCameraPositio(CameraPosition cameraPosition) async {
-    final GoogleMapController mapController = await _controller.future;
-    await mapController
-        .animateCamera(CameraUpdate.newCameraPosition(cameraPosition));
+  Future<void> changeCameraPosition(CameraPosition cameraPosition) async {
+    try {
+      final GoogleMapController mapController =
+          await _controller.future.timeout(_mapControllerTimeout);
+      await mapController.animateCamera(
+        CameraUpdate.newCameraPosition(cameraPosition),
+      );
+    } on TimeoutException {
+      return;
+    }
   }
 
   @override
@@ -61,7 +72,7 @@ class _MapsViewState extends State<MapsView> {
       if (state.mapCameraStatus == MapCameraStatus.initialized &&
           context.read<AuthBloc>().state.locationData != null &&
           _controller.isCompleted == true) {
-        changeCameraPositio(CameraPosition(
+        changeCameraPosition(CameraPosition(
           target: LatLng(context.read<AuthBloc>().state.locationData!.latitude,
               context.read<AuthBloc>().state.locationData!.longitude),
           zoom: 15,
@@ -97,7 +108,7 @@ class _MapsViewState extends State<MapsView> {
         initialCameraPosition: _initialCameraPosition,
         cameraTargetBounds: CameraTargetBounds.unbounded,
         onMapCreated: (GoogleMapController controller) async {
-          _controller.complete(controller);
+          if (!_controller.isCompleted) _controller.complete(controller);
         },
         markers: Set<Marker>.of(state.markers.values),
         polylines: Set<Polyline>.of(state.polylines),
