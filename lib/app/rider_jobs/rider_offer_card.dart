@@ -100,8 +100,25 @@ class RiderJobOffer {
       weightText: _weightText(data),
       pickupTiming: _pickupTiming(data),
       warningChips: _warningChips(data),
-      raw: data,
+      raw: _withoutGiftStoryVoice(data),
     );
+  }
+
+  static Map<String, dynamic> _withoutGiftStoryVoice(
+    Map<String, dynamic> data,
+  ) {
+    const giftStoryVoiceFields = {
+      'voiceNote',
+      'voiceNoteUrl',
+      'giftStorySenderVoiceNoteUrl',
+      'giftStoryCustomAudioUrl',
+      'voiceStoragePath',
+      'voiceMimeType',
+      'voiceDuration',
+      'voiceDurationSeconds',
+    };
+    return Map<String, dynamic>.from(data)
+      ..removeWhere((key, _) => giftStoryVoiceFields.contains(key));
   }
 
   RiderPointsResult get points => RiderPointsRules.resolve(raw);

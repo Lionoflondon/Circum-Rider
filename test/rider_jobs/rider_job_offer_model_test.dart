@@ -142,6 +142,42 @@ void main() {
     expect(offer.parcelGuidance, 'Books');
   });
 
+  test('strips Gift Story voice metadata from historical delivery payloads',
+      () {
+    final offer = RiderJobOffer.fromFirestore(
+      docId: 'gift-voice-history',
+      data: {
+        ..._realisticDeliveryDoc(),
+        'isGift': true,
+        'voiceNote': {
+          'storagePath': 'giftAssets/sender-1/voice.m4a',
+          'downloadUrl': 'https://storage.example/voice.m4a?token=secret',
+        },
+        'voiceNoteUrl': 'https://storage.example/legacy.webm',
+        'giftStorySenderVoiceNoteUrl': 'https://storage.example/story.webm',
+        'giftStoryCustomAudioUrl': 'https://storage.example/custom.webm',
+        'voiceStoragePath': 'giftAssets/sender-1/voice.m4a',
+        'voiceMimeType': 'audio/mp4',
+        'voiceDuration': 42,
+        'voiceDurationSeconds': 42,
+      },
+    );
+
+    expect(offer.raw['isGift'], isTrue);
+    for (final key in const [
+      'voiceNote',
+      'voiceNoteUrl',
+      'giftStorySenderVoiceNoteUrl',
+      'giftStoryCustomAudioUrl',
+      'voiceStoragePath',
+      'voiceMimeType',
+      'voiceDuration',
+      'voiceDurationSeconds',
+    ]) {
+      expect(offer.raw, isNot(contains(key)));
+    }
+  });
+
   test('canonical now wins over stale scheduling metadata', () {
     final offer = RiderJobOffer.fromFirestore(
       docId: 'now-1',
