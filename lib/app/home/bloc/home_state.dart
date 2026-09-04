@@ -4,7 +4,7 @@ part of 'home_bloc.dart';
 enum MapCameraStatus {
   initialized,
   showingDeviceLocation,
-  showingSourceAndDestinationLocations
+  showingSourceAndDestinationLocations,
 }
 
 enum SourceAndDestinationStatus { unselected, selected }
@@ -16,7 +16,7 @@ enum RideStatus {
   userConfirmedRide,
   arrivedAtPickupLocation,
   outForDelivery,
-  delivered
+  delivered,
 }
 
 enum OnlineTransition {
@@ -42,7 +42,7 @@ enum ActionButtonStatus {
   goingToPickupLocation,
   arrivedPickupLocation,
   outForDelivery,
-  delivered
+  delivered,
 }
 
 class HomeState {
@@ -69,6 +69,7 @@ class HomeState {
   List<String> verificationChecklist;
   RequestStatus requestStatus;
   OnlineTransition onlineTransition;
+  bool riderIntentOnline;
 
   HomeState({
     this.ongoingRequests = const [],
@@ -94,58 +95,63 @@ class HomeState {
     this.verificationChecklist = const [],
     this.requestStatus = RequestStatus.initial,
     this.onlineTransition = OnlineTransition.offline,
+    this.riderIntentOnline = false,
   });
 
-  HomeState copyWith(
-      {List? ongoingRequests,
-      RideStatus? rideStatus,
-      Position? locationData,
-      Map<MarkerId, Marker>? markers,
-      List<Polyline>? polylines,
-      List<LatLng>? polylineCoordinates,
-      List<DispatchRequest>? dispatchRequests,
-      SourceAndDestinationStatus? sourceAndDestinationStatus,
-      MapCameraStatus? mapCameraStatus,
-      PanelControlStatus? panelControlStatus,
-      ActionButtonStatus? actionButtonStatus,
-      BroadcastStatus? broadcastStatus,
-      double? minDrawerHeight,
-      double? maxDrawerHeight,
-      int? selectedRequestIndex,
-      DispatchRequest? activeRequest,
-      List<Message>? chatMessages,
-      ChatStatus? chatStatus,
-      String? message,
-      bool? canGoOnline,
-      List<String>? verificationChecklist,
-      RequestStatus? requestStatus,
-      OnlineTransition? onlineTransition,
-      bool clearMessage = false}) {
+  HomeState copyWith({
+    List? ongoingRequests,
+    RideStatus? rideStatus,
+    Position? locationData,
+    Map<MarkerId, Marker>? markers,
+    List<Polyline>? polylines,
+    List<LatLng>? polylineCoordinates,
+    List<DispatchRequest>? dispatchRequests,
+    SourceAndDestinationStatus? sourceAndDestinationStatus,
+    MapCameraStatus? mapCameraStatus,
+    PanelControlStatus? panelControlStatus,
+    ActionButtonStatus? actionButtonStatus,
+    BroadcastStatus? broadcastStatus,
+    double? minDrawerHeight,
+    double? maxDrawerHeight,
+    int? selectedRequestIndex,
+    DispatchRequest? activeRequest,
+    List<Message>? chatMessages,
+    ChatStatus? chatStatus,
+    String? message,
+    bool? canGoOnline,
+    List<String>? verificationChecklist,
+    RequestStatus? requestStatus,
+    OnlineTransition? onlineTransition,
+    bool? riderIntentOnline,
+    bool clearMessage = false,
+  }) {
     return HomeState(
-        ongoingRequests: ongoingRequests ?? this.ongoingRequests,
-        rideStatus: rideStatus ?? this.rideStatus,
-        locationData: locationData ?? this.locationData,
-        dispatchRequests: dispatchRequests ?? this.dispatchRequests,
-        markers: markers ?? this.markers,
-        polylines: polylines ?? this.polylines,
-        polylineCoordinates: polylineCoordinates ?? this.polylineCoordinates,
-        sourceAndDestinationStatus:
-            sourceAndDestinationStatus ?? this.sourceAndDestinationStatus,
-        broadcastStatus: broadcastStatus ?? this.broadcastStatus,
-        mapCameraStatus: mapCameraStatus ?? this.mapCameraStatus,
-        minDrawerHeight: minDrawerHeight ?? this.minDrawerHeight,
-        maxDrawerHeight: maxDrawerHeight ?? this.maxDrawerHeight,
-        panelControlStatus: panelControlStatus ?? this.panelControlStatus,
-        actionButtonStatus: actionButtonStatus ?? this.actionButtonStatus,
-        selectedRequestIndex: selectedRequestIndex ?? this.selectedRequestIndex,
-        activeRequest: activeRequest ?? this.activeRequest,
-        chatMessages: chatMessages ?? this.chatMessages,
-        chatStatus: chatStatus ?? this.chatStatus,
-        message: clearMessage ? null : message ?? this.message,
-        canGoOnline: canGoOnline ?? this.canGoOnline,
-        verificationChecklist:
-            verificationChecklist ?? this.verificationChecklist,
-        requestStatus: requestStatus ?? this.requestStatus,
-        onlineTransition: onlineTransition ?? this.onlineTransition);
+      ongoingRequests: ongoingRequests ?? this.ongoingRequests,
+      rideStatus: rideStatus ?? this.rideStatus,
+      locationData: locationData ?? this.locationData,
+      dispatchRequests: dispatchRequests ?? this.dispatchRequests,
+      markers: markers ?? this.markers,
+      polylines: polylines ?? this.polylines,
+      polylineCoordinates: polylineCoordinates ?? this.polylineCoordinates,
+      sourceAndDestinationStatus:
+          sourceAndDestinationStatus ?? this.sourceAndDestinationStatus,
+      broadcastStatus: broadcastStatus ?? this.broadcastStatus,
+      mapCameraStatus: mapCameraStatus ?? this.mapCameraStatus,
+      minDrawerHeight: minDrawerHeight ?? this.minDrawerHeight,
+      maxDrawerHeight: maxDrawerHeight ?? this.maxDrawerHeight,
+      panelControlStatus: panelControlStatus ?? this.panelControlStatus,
+      actionButtonStatus: actionButtonStatus ?? this.actionButtonStatus,
+      selectedRequestIndex: selectedRequestIndex ?? this.selectedRequestIndex,
+      activeRequest: activeRequest ?? this.activeRequest,
+      chatMessages: chatMessages ?? this.chatMessages,
+      chatStatus: chatStatus ?? this.chatStatus,
+      message: clearMessage ? null : message ?? this.message,
+      canGoOnline: canGoOnline ?? this.canGoOnline,
+      verificationChecklist:
+          verificationChecklist ?? this.verificationChecklist,
+      requestStatus: requestStatus ?? this.requestStatus,
+      onlineTransition: onlineTransition ?? this.onlineTransition,
+      riderIntentOnline: riderIntentOnline ?? this.riderIntentOnline,
+    );
   }
 }

@@ -184,9 +184,10 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                                   onToggleAvailability: () =>
                                       context.read<HomeBloc>().add(
                                             SetRideStatus(
-                                              status: online
-                                                  ? RideStatus.offline
-                                                  : RideStatus.online,
+                                              status:
+                                                  homeState.riderIntentOnline
+                                                      ? RideStatus.offline
+                                                      : RideStatus.online,
                                             ),
                                           ),
                                   reviewFixture: null,
@@ -667,6 +668,9 @@ class _AvailabilityCard extends StatelessWidget {
         home.onlineTransition == OnlineTransition.acquiringPermission ||
             home.onlineTransition == OnlineTransition.acquiringLocation ||
             home.onlineTransition == OnlineTransition.registeringOnline;
+    final reconnecting =
+        home.onlineTransition == OnlineTransition.reconnecting &&
+            home.riderIntentOnline;
     final statusTitle = switch (home.onlineTransition) {
       OnlineTransition.acquiringPermission => 'Checking location permission…',
       OnlineTransition.acquiringLocation => 'Getting your location…',
@@ -714,9 +718,11 @@ class _AvailabilityCard extends StatelessWidget {
           ),
           const SizedBox(height: 9),
           Text(
-            online
-                ? 'Circum is checking eligible delivery opportunities near you.'
-                : 'Go online when you are ready to receive eligible jobs.',
+            reconnecting
+                ? 'Connection interrupted. Circum is reconnecting automatically.'
+                : online
+                    ? 'Circum is checking eligible delivery opportunities near you.'
+                    : 'Go online when you are ready to receive eligible jobs.',
             style: const TextStyle(
               color: RiderPalette.muted,
               fontFamily: RiderTypography.body,
@@ -736,36 +742,42 @@ class _AvailabilityCard extends StatelessWidget {
             future: RiderInternalAccess.enabled(),
             builder: (context, internalAccess) {
               final allowed = !starting &&
-                  (internalAccess.data == true || home.canGoOnline || online);
+                  (internalAccess.data == true ||
+                      home.canGoOnline ||
+                      online ||
+                      home.riderIntentOnline);
               return SizedBox(
                 height: 52,
                 width: double.infinity,
                 child: FilledButton.icon(
                   onPressed: allowed ? onToggle : null,
                   icon: Icon(
-                    online
+                    home.riderIntentOnline
                         ? Icons.pause_rounded
                         : Icons.power_settings_new_rounded,
                     size: 18,
                   ),
-                  label: Text(starting
-                      ? 'Getting location…'
-                      : online
-                          ? 'Go offline'
-                          : 'Go online'),
+                  label: Text(
+                    starting
+                        ? 'Getting location…'
+                        : home.riderIntentOnline
+                            ? 'Go offline'
+                            : 'Go online',
+                  ),
                   style: FilledButton.styleFrom(
-                    backgroundColor: online
+                    backgroundColor: home.riderIntentOnline
                         ? Colors.white.withValues(alpha: .06)
                         : RiderPalette.green,
-                    foregroundColor:
-                        online ? RiderPalette.paper : RiderPalette.background,
+                    foregroundColor: home.riderIntentOnline
+                        ? RiderPalette.paper
+                        : RiderPalette.background,
                     disabledBackgroundColor: Colors.white.withValues(
                       alpha: .05,
                     ),
                     disabledForegroundColor: RiderPalette.muted,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
-                      side: online
+                      side: home.riderIntentOnline
                           ? BorderSide(
                               color: Colors.white.withValues(alpha: .16),
                             )

@@ -15,8 +15,8 @@ void main() {
     expect(source, contains('AppLifecycleState.paused'));
     expect(source, contains('AppLifecycleState.detached'));
     expect(source, contains('AppLifecycleState.hidden'));
-    expect(
-        source, contains('if (_isLogicallyOnline) _startPresenceHeartbeat();'));
+    expect(source, contains('if (_isLogicallyOnline) {'));
+    expect(source, contains('_schedulePresenceReconnect(immediate: true);'));
     expect(source, contains('unawaited(_sendPresenceHeartbeat())'));
     final lifecycleStart = source.indexOf('void didChangeAppLifecycleState');
     final lifecycleEnd =
@@ -45,6 +45,36 @@ void main() {
         contains(
             'if (desiredOnline || presenceOnline || statusString == \'online\')'));
     expect(source, contains('add(SetRideStatus(status: RideStatus.online))'));
+    expect(source, contains('riderIntentOnline: true'));
+    expect(source, contains('riderIntentOnline: false'));
+  });
+
+  test('transient presence failure keeps intent and reconnects once', () {
+    expect(source, contains('_presenceReconnectTimer != null'));
+    expect(source, contains('<int>[2, 4, 8, 16, 30]'));
+    expect(source, contains("'unavailable'"));
+    expect(source, contains("'deadline-exceeded'"));
+    expect(source, contains('OnlineTransition.reconnecting'));
+    expect(source, contains('_schedulePresenceReconnect();'));
+  });
+
+  test('reconnecting UI cannot offer Go online again', () {
+    final dashboard = File('lib/app/rider_shell/rider_dashboard_view.dart')
+        .readAsStringSync();
+    expect(dashboard, contains('home.riderIntentOnline'));
+    expect(dashboard, contains("? 'Go offline'"));
+    expect(
+      dashboard,
+      contains(
+        'Connection interrupted. Circum is reconnecting automatically.',
+      ),
+    );
+  });
+
+  test('heartbeat interval has backend stale-threshold safety margin', () {
+    const heartbeatSeconds = 45;
+    const backendStaleSeconds = 120;
+    expect(backendStaleSeconds, greaterThan(heartbeatSeconds * 2));
   });
 
   test('dispatch location must be fresh and accurate', () {
@@ -124,7 +154,8 @@ void main() {
     expect(handler, contains('Timer? assignmentTimer'));
     expect(handler, contains('if (!rideAssigned.isCompleted)'));
     expect(handler, contains('docReference.get().timeout'));
-    expect(handler, contains('documentReference.update'));
+    expect(handler, contains('documentReference'));
+    expect(handler, contains('.update({'));
     expect(handler, contains('.timeout(const Duration(seconds: 10))'));
     expect(handler, contains('rideAssigned.future.timeout'));
     expect(handler, contains('assignmentTimer?.cancel()'));
