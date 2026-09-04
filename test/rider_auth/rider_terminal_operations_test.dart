@@ -4,6 +4,26 @@ import 'package:circum_rider/app/authentication/rider_terminal_operations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  group('bounded operation guard', () {
+    test('returns successful operation result', () async {
+      final result = await runBoundedRiderOperation(
+        Future.value('done'),
+        timeout: const Duration(seconds: 1),
+      );
+      expect(result, 'done');
+    });
+
+    test('terminates a never-completing operation', () async {
+      await expectLater(
+        runBoundedRiderOperation(
+          Completer<void>().future,
+          timeout: const Duration(milliseconds: 1),
+        ),
+        throwsA(isA<TimeoutException>()),
+      );
+    });
+  });
+
   group('email verification', () {
     test('completes verified bootstrap', () async {
       var bootstrapped = false;

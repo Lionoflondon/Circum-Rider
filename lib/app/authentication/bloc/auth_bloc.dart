@@ -861,10 +861,62 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
 
       if (event is ForgotPassword) {
-        try {} catch (e) {
+        final email = state.email?.trim() ?? '';
+        if (email.isEmpty) {
           emit(state.copyWith(
-              errorMessage: e.toString().split(':').last.trim(),
-              isLoading: false));
+            status: Status.failure,
+            isLoading: false,
+            errorMessage: 'Enter your email address first.',
+          ));
+          return;
+        }
+        try {
+          emit(state.copyWith(
+            status: Status.loading,
+            isLoading: true,
+            errorMessage: null,
+          ));
+          await auth
+              .sendPasswordResetEmail(email: email)
+              .timeout(_authOperationTimeout);
+          emit(state.copyWith(
+            status: Status.passwordResetEmailSent,
+            isLoading: false,
+          ));
+        } on FirebaseAuthException catch (error) {
+          emit(state.copyWith(
+            status: Status.failure,
+            isLoading: false,
+            errorMessage: switch (error.code) {
+              'invalid-email' => 'Enter a valid email address.',
+              'user-not-found' => 'No Rider account was found for that email.',
+              'network-request-failed' =>
+                'Check your connection and try again.',
+              'too-many-requests' =>
+                'Too many attempts. Wait a moment and try again.',
+              _ => 'Password reset could not be completed. Please try again.',
+            },
+          ));
+        } on TimeoutException {
+          emit(state.copyWith(
+            status: Status.failure,
+            isLoading: false,
+            errorMessage:
+                'Password reset timed out. Check your connection and try again.',
+          ));
+        } catch (error) {
+          logRiderAuthError(
+            error: error,
+            path: 'auth',
+            step: 'password_reset',
+            riderDocumentId: auth.currentUser?.uid,
+          );
+          emit(state.copyWith(
+            status: Status.failure,
+            isLoading: false,
+            errorMessage:
+                'Password reset could not be completed. Please try again.',
+          ));
         }
       }
 

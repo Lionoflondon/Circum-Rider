@@ -116,6 +116,20 @@ void main() {
         'Too many attempts. Wait a moment or reset your password.');
   });
 
+  test('legacy password-reset event is terminal and customer-safe', () {
+    final source =
+        File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
+    final handler = source.substring(
+      source.indexOf('if (event is ForgotPassword)'),
+      source.indexOf('if (event is SetShowPassword)'),
+    );
+    expect(handler, contains('sendPasswordResetEmail'));
+    expect(handler, contains('timeout(_authOperationTimeout)'));
+    expect(handler, contains('Status.passwordResetEmailSent'));
+    expect(handler, contains('isLoading: false'));
+    expect(handler, isNot(contains('error.toString()')));
+  });
+
   test('existing sign-in restores Rider document without creating a profile',
       () {
     final bloc =

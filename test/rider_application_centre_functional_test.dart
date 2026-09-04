@@ -42,6 +42,13 @@ void main() {
     expect(source, isNot(contains('sealedPackageConsent')));
   });
 
+  test('every Application Centre mutation is bounded by the shared guard', () {
+    expect(source, contains('runBoundedRiderOperation('));
+    expect(source, contains('timeout: _applicationOperationTimeout'));
+    expect(source, contains('finally {'));
+    expect(source, contains('setState(() => _busy = false)'));
+  });
+
   test('personal and vehicle forms close only after awaited save success', () {
     expect(source, contains('await widget.save({'));
     expect(source, contains('await widget.save(['));
