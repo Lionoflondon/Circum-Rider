@@ -108,7 +108,9 @@ class _VerificationCentre extends StatelessWidget {
           _VerificationSummary(state: state),
           const SizedBox(height: 18),
           FilledButton(
-            onPressed: () => _openPrimary(context, state),
+            onPressed: state.hasActionableItem
+                ? () => _openPrimary(context, state)
+                : null,
             style: FilledButton.styleFrom(
               backgroundColor: RiderPalette.blue,
               foregroundColor: RiderPalette.paper,
@@ -197,7 +199,7 @@ class _VerificationHero extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  '${state.completedCount} of ${state.totalCount} verifications completed',
+                  'Documents submitted: ${state.submissionCount} of ${state.requiredCount}',
                   style: const TextStyle(
                     color: RiderPalette.paper,
                     fontFamily: RiderTypography.mono,
@@ -205,6 +207,23 @@ class _VerificationHero extends StatelessWidget {
                     fontSize: 12,
                   ),
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  'Verified: ${state.verifiedCount} of ${state.requiredCount}',
+                  style: const TextStyle(
+                    color: RiderPalette.muted,
+                    fontFamily: RiderTypography.mono,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+                if (state.allRequiredSubmitted && !state.allVerified) ...[
+                  const SizedBox(height: 8),
+                  const Text(
+                    'All required documents submitted. Some checks are still under review.',
+                    style: TextStyle(color: RiderPalette.muted, height: 1.35),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 _StatusBadge(
                   label: state.eligibilityLabel,
@@ -417,15 +436,19 @@ class _VerificationDetailPage extends StatelessWidget {
           children: [
             Expanded(
               child: OutlinedButton.icon(
-                onPressed: () => _openUpload(context, card),
+                onPressed: card.status.needsAction
+                    ? () => _openUpload(context, card)
+                    : null,
                 icon: const Icon(Icons.upload_file_rounded),
-                label: Text(card.status.hasSubmission ? 'Resubmit' : 'Upload'),
+                label: Text(card.status.hasSubmission ? 'Replace' : 'Upload'),
               ),
             ),
             const SizedBox(width: 10),
             Expanded(
               child: FilledButton.icon(
-                onPressed: () => _openCamera(context, card),
+                onPressed: card.status.needsAction
+                    ? () => _openCamera(context, card)
+                    : null,
                 icon: const Icon(Icons.photo_camera_outlined),
                 label: const Text('Camera'),
                 style: FilledButton.styleFrom(
@@ -655,14 +678,17 @@ class _VerificationState {
   final String eligibilityLabel;
   final Color eligibilityColor;
 
-  int get totalCount => cards.length;
-  int get completedCount =>
-      cards.where((card) => card.status.isVerified).length;
-  double get progress => totalCount == 0 ? 0 : completedCount / totalCount;
+  int get requiredCount => 5;
+  int get submissionCount =>
+      cards.where((card) => card.status.hasSubmission).length;
+  int get verifiedCount => cards.where((card) => card.status.isVerified).length;
+  bool get allRequiredSubmitted => submissionCount == requiredCount;
+  bool get allVerified => verifiedCount == requiredCount;
+  bool get hasActionableItem => cards.any((card) => card.status.needsAction);
+  double get progress => submissionCount / requiredCount;
 
-  String get primaryActionLabel => cards.any((card) => card.status.needsAction)
-      ? 'Continue Verification'
-      : 'View Submitted Documents';
+  String get primaryActionLabel =>
+      hasActionableItem ? 'Continue Verification' : 'Verification Under Review';
 
   static _VerificationState fromBackend({
     required Map<String, dynamic> rider,
@@ -676,7 +702,11 @@ class _VerificationState {
       final type =
           _normalise(doc['documentType'] ?? doc['idType'] ?? doc['type']);
       if (type.isEmpty) continue;
-      byType[type] = doc;
+      final current = byType[type];
+      if (current == null ||
+          _documentUpdatedAt(doc).isAfter(_documentUpdatedAt(current))) {
+        byType[type] = doc;
+      }
     }
     Map<String, dynamic>? firstOf(Iterable<String> types) {
       for (final type in types) {
@@ -702,6 +732,7 @@ class _VerificationState {
       'visa',
     ]);
     final vehicleDoc = firstOf(const [
+      'registration_v5c',
       'vehicle_registration',
       'vehicle registration',
       'v5c',
@@ -1007,7 +1038,9 @@ _VerificationStatus _statusFrom(Object? value) {
       isRejected: true,
     );
   }
-  if (raw == 'requires_update' || raw == 'needs_attention') {
+  if (raw == 'action_required' ||
+      raw == 'requires_update' ||
+      raw == 'needs_attention') {
     return const _VerificationStatus(
       label: 'Requires Update',
       color: RiderPalette.red,
@@ -1129,3 +1162,12 @@ DateTime? _dateFromAny(Object? value) {
   if (value is String) return DateTime.tryParse(value);
   return null;
 }
+
+DateTime _documentUpdatedAt(Map<String, dynamic> document) =>
+    _dateFromAny(
+      document['updatedAt'] ??
+          document['submittedAt'] ??
+          document['uploadedAt'] ??
+          document['createdAt'],
+    ) ??
+    DateTime.fromMillisecondsSinceEpoch(0);

@@ -46,6 +46,27 @@ void main() {
     expect(centre, contains("label: 'Under Review'"));
   });
 
+  test('submission progress is separate from approval progress', () {
+    expect(centre, contains('Documents submitted: \${state.submissionCount}'));
+    expect(centre, contains('Verified: \${state.verifiedCount}'));
+    expect(centre,
+        contains('double get progress => submissionCount / requiredCount'));
+    expect(
+        centre,
+        contains(
+            'All required documents submitted. Some checks are still under review.'));
+    expect(centre, contains("'Verification Under Review'"));
+    expect(centre, contains('onPressed: state.hasActionableItem'));
+    expect(centre, contains("raw == 'action_required'"));
+  });
+
+  test('vehicle status reads the backend canonical registration type', () {
+    expect(centre, contains("'registration_v5c'"));
+    expect(centre, contains("'vehicle_registration'"));
+    expect(centre, contains("status: _statusFromDoc(vehicleDoc)"));
+    expect(centre, contains('_documentUpdatedAt(doc).isAfter'));
+  });
+
   test('document preview has no app screenshot or shared capture input', () {
     expect(upload, isNot(contains('RepaintBoundary')));
     expect(upload, isNot(contains('toImage(')));
