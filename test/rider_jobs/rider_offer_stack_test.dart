@@ -179,10 +179,56 @@ void main() {
       expect(find.text('Weight: 0.2kg'), findsOneWidget);
       expect(find.text('Pickup: Scheduled'), findsOneWidget);
       expect(find.text('Accept Delivery'), findsOneWidget);
-      expect(find.text(_offers.first.pickupAddress), findsNothing);
-      expect(find.text(_offers.first.dropoffAddress), findsNothing);
+      expect(find.text(_offers.first.pickupAddress), findsOneWidget);
+      expect(find.text(_offers.first.dropoffAddress), findsOneWidget);
       expect(find.textContaining('Roth bonus'), findsNothing);
       expect(find.textContaining('Roth Bonus'), findsNothing);
+    });
+
+    testWidgets('long canonical addresses fit the offer card without overflow',
+        (tester) async {
+      final base = _offers.first;
+      final offer = RiderJobOffer(
+        id: base.id,
+        requestId: base.requestId,
+        pickupArea: base.pickupArea,
+        dropoffArea: base.dropoffArea,
+        pickupAddress:
+            'Apartment 44, 282 Extremely Long Lewisham High Street, London SE13 6JZ, United Kingdom',
+        dropoffAddress:
+            'Building Seven, 410 Very Long King\'s Road, Chelsea, London SW3 4NB, United Kingdom',
+        earnings: base.earnings,
+        currency: base.currency,
+        distanceText: base.distanceText,
+        timeText: base.timeText,
+        parcelGuidance: base.parcelGuidance,
+        minimumVehicle: base.minimumVehicle,
+        weightText: base.weightText,
+        pickupTiming: base.pickupTiming,
+        warningChips: base.warningChips,
+        raw: base.raw,
+      );
+
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 390,
+            height: 844,
+            child: RiderOfferCard(
+              offer: offer,
+              riderRank: 'Sentinel',
+              accepting: false,
+              onAccept: () {},
+            ),
+          ),
+        ),
+      ));
+
+      expect(tester.takeException(), isNull);
+      expect(find.text(offer.pickupAddress), findsOneWidget);
+      expect(find.text(offer.dropoffAddress), findsOneWidget);
+      expect(find.text('${offer.pickupArea} → ${offer.dropoffArea}'),
+          findsOneWidget);
     });
 
     testWidgets('accepted job screen is navigation-first and collapsed',

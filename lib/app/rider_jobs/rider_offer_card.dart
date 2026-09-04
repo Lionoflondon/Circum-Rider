@@ -317,6 +317,18 @@ class RiderOfferCard extends StatelessWidget {
                       pickup: offer.pickupArea,
                       dropoff: offer.dropoffArea,
                     ),
+                    const SizedBox(height: 12),
+                    _OfferAddress(
+                      label: 'Pickup',
+                      address: offer.pickupAddress,
+                      icon: Icons.radio_button_checked_rounded,
+                    ),
+                    const SizedBox(height: 8),
+                    _OfferAddress(
+                      label: 'Drop-off',
+                      address: offer.dropoffAddress,
+                      icon: Icons.location_on_outlined,
+                    ),
                     const SizedBox(height: 14),
                     Row(
                       children: [
@@ -516,6 +528,59 @@ class _RouteSummary extends StatelessWidget {
         fontSize: 17,
         fontWeight: FontWeight.w900,
       ),
+    );
+  }
+}
+
+class _OfferAddress extends StatelessWidget {
+  final String label;
+  final String address;
+  final IconData icon;
+
+  const _OfferAddress({
+    required this.label,
+    required this.address,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(icon, color: const Color(0xFF60A5FA), size: 17),
+        ),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label.toUpperCase(),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.58),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                address,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.88),
+                  fontSize: 13,
+                  height: 1.3,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
