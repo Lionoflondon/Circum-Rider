@@ -27,6 +27,68 @@ Map<String, dynamic> _realisticDeliveryDoc() {
 }
 
 void main() {
+  testWidgets('canonical Sender addresses survive delivery mapping and render',
+      (tester) async {
+    const senderPickup = {
+      'address': '282 Lewisham High Street, London SE13 6JZ',
+      'subAddress': 'London SE13 6JZ',
+      'locality': 'Lewisham',
+      'coordinates': {'lat': 51.46, 'lng': -0.01},
+    };
+    const senderDropoff = {
+      'address': '4 Edridge Road, Croydon CR0 1GD',
+      'subAddress': 'Croydon CR0 1GD',
+      'locality': 'Croydon',
+      'coordinates': {'lat': 51.37, 'lng': -0.10},
+    };
+    final delivery = {
+      'pickupDetails': {
+        'address': senderPickup['address'],
+        'locality': senderPickup['locality'],
+        'position': senderPickup['coordinates'],
+      },
+      'dropoffDetails': {
+        'address': senderDropoff['address'],
+        'locality': senderDropoff['locality'],
+        'position': senderDropoff['coordinates'],
+      },
+      'pickupAddress': senderPickup['address'],
+      'pickupLocality': senderPickup['locality'],
+      'dropoffAddress': senderDropoff['address'],
+      'dropoffLocality': senderDropoff['locality'],
+      'riderEarning': 8.50,
+    };
+    final offer = RiderJobOffer.fromFirestore(
+      docId: 'delivery-address-contract',
+      data: delivery,
+    );
+
+    expect(offer.pickupAddress, senderPickup['address']);
+    expect(offer.dropoffAddress, senderDropoff['address']);
+    expect(offer.pickupArea, senderPickup['locality']);
+    expect(offer.dropoffArea, senderDropoff['locality']);
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: SizedBox(
+          width: 390,
+          height: 844,
+          child: RiderOfferCard(
+            offer: offer,
+            riderRank: 'Sentinel',
+            accepting: false,
+            onAccept: () {},
+          ),
+        ),
+      ),
+    ));
+
+    expect(tester.takeException(), isNull);
+    expect(find.text(senderPickup['address']! as String), findsOneWidget);
+    expect(find.text(senderDropoff['address']! as String), findsOneWidget);
+    expect(find.text('Lewisham → Croydon'), findsOneWidget);
+  });
+
   test('parses backend locality and item fields without exposing raw maps', () {
     final offer = RiderJobOffer.fromFirestore(
       docId: 'delivery-123',
