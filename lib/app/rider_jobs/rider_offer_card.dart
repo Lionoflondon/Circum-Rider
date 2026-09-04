@@ -57,8 +57,7 @@ class RiderJobOffer {
       fallback: data['dropoffLocality'],
     );
     final requestId = '${data['requestId'] ?? data['code'] ?? docId}'.trim();
-    final price =
-        (data['riderEarning'] ?? data['riderPay'] ?? data['price'] ?? 0);
+    final price = data['riderEarning'] ?? data['riderPay'] ?? 0;
     final distance = data['distanceText'] ??
         data['estimatedDistanceText'] ??
         data['distance'];
@@ -160,6 +159,25 @@ class RiderJobOffer {
     addIf(data['isGift'] ?? data['giftDelivery'], 'Gift');
     addIf(data['isBusiness'] ?? data['businessDelivery'], 'Business');
     addIf(data['isHeavyDuty'] ?? data['heavyDuty'] ?? data['heavy'], 'Heavy');
+    final serviceType =
+        '${data['serviceType'] ?? data['deliveryType'] ?? data['category'] ?? ''}'
+            .trim()
+            .toLowerCase();
+    if (serviceType.contains('health') && !chips.contains('Health+')) {
+      chips.add('Health+');
+    }
+    if (serviceType.contains('gift') && !chips.contains('Gift')) {
+      chips.add('Gift');
+    }
+    if (serviceType.contains('business') && !chips.contains('Business')) {
+      chips.add('Business');
+    }
+    if (serviceType.contains('heavy') && !chips.contains('Heavy')) {
+      chips.add('Heavy');
+    }
+    if (serviceType.contains('vanguard') && !chips.contains('Vanguard')) {
+      chips.add('Vanguard');
+    }
     final deliveryTime = data['deliveryTime'] is Map
         ? Map<String, dynamic>.from(data['deliveryTime'] as Map)
         : <String, dynamic>{};

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
@@ -115,36 +117,120 @@ abstract class RiderJobTransactionStore {
 }
 
 class CallableRiderJobTransactionStore implements RiderJobTransactionStore {
-  CallableRiderJobTransactionStore({FirebaseFunctions? functions})
-      : functions =
-            functions ?? FirebaseFunctions.instanceFor(region: 'us-central1');
+  CallableRiderJobTransactionStore({
+    FirebaseFunctions? functions,
+    FirebaseFirestore? firestore,
+  })  : functions =
+            functions ?? FirebaseFunctions.instanceFor(region: 'us-central1'),
+        firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFunctions functions;
+  final FirebaseFirestore firestore;
+  static const _acceptTimeout = Duration(seconds: 20);
+  static const _reconciliationTimeout = Duration(seconds: 10);
+
+  static RiderAcceptResult reconcileAssignment({
+    required Map<String, dynamic>? delivery,
+    required String riderId,
+  }) {
+    if (delivery == null) {
+      return const RiderAcceptResult(
+        status: RiderAcceptStatus.networkError,
+        message:
+            'We could not confirm the delivery assignment. Refresh and try again.',
+      );
+    }
+    final assigned =
+        '${delivery['riderId'] ?? delivery['assignedRiderId'] ?? ''}'.trim();
+    final status = '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'
+        .trim()
+        .toLowerCase();
+    if (assigned == riderId &&
+        const {
+          'accepted',
+          'assigned',
+          'navigating_to_pickup',
+          'arrived_at_pickup',
+          'pickup_verified',
+          'collected',
+          'picked_up',
+          'navigating_to_dropoff',
+          'arrived_at_dropoff',
+        }.contains(status)) {
+      return RiderAcceptResult(
+        status: RiderAcceptStatus.accepted,
+        message: 'Delivery accepted.',
+        patch: delivery,
+      );
+    }
+    if (assigned.isNotEmpty && assigned != riderId) {
+      return const RiderAcceptResult(
+        status: RiderAcceptStatus.alreadyTaken,
+        message: 'This delivery has already been accepted.',
+      );
+    }
+    return const RiderAcceptResult(
+      status: RiderAcceptStatus.networkError,
+      message: 'Acceptance could not be confirmed. Refresh and try again.',
+    );
+  }
+
+  Future<RiderAcceptResult> _reconcile({
+    required String jobId,
+    required String riderId,
+  }) async {
+    DocumentSnapshot<Map<String, dynamic>> snapshot =
+        await firestore.collection('deliveryRequests').doc(jobId).get();
+    if (!snapshot.exists) {
+      final byRequestId = await firestore
+          .collection('deliveryRequests')
+          .where('requestId', isEqualTo: jobId)
+          .limit(1)
+          .get();
+      if (byRequestId.docs.isNotEmpty) snapshot = byRequestId.docs.first;
+    }
+    return reconcileAssignment(delivery: snapshot.data(), riderId: riderId);
+  }
 
   @override
-  Future<RiderAcceptResult> acceptInTransaction(
-      {required String jobId, required RiderProfileSnapshot rider}) async {
+  Future<RiderAcceptResult> acceptInTransaction({
+    required String jobId,
+    required RiderProfileSnapshot rider,
+  }) async {
     try {
       final response = await functions
           .httpsCallable('acceptRideRequests')
-          .call({'requestId': jobId});
+          .call({'requestId': jobId}).timeout(_acceptTimeout);
       final data = Map<String, dynamic>.from(response.data as Map);
       return RiderAcceptResult(
-          status: RiderAcceptStatus.accepted,
-          message: 'Delivery accepted.',
-          patch: data);
+        status: RiderAcceptStatus.accepted,
+        message: 'Delivery accepted.',
+        patch: data,
+      );
+    } on TimeoutException {
+      try {
+        return await _reconcile(jobId: jobId, riderId: rider.riderId)
+            .timeout(_reconciliationTimeout);
+      } catch (_) {
+        return const RiderAcceptResult(
+          status: RiderAcceptStatus.networkError,
+          message: 'Acceptance could not be confirmed. Refresh and try again.',
+        );
+      }
     } on FirebaseFunctionsException catch (error) {
       if (error.code == 'already-exists' ||
           error.code == 'not-found' ||
           error.code == 'failed-precondition') {
         return RiderAcceptResult(
-            status: RiderAcceptStatus.alreadyTaken,
-            message: error.message ?? 'This delivery is no longer available.');
+          status: RiderAcceptStatus.alreadyTaken,
+          message: error.message ?? 'This delivery is no longer available.',
+        );
       }
       return RiderAcceptResult(
-          status: RiderAcceptStatus.networkError,
-          message: error.message ??
-              'We could not accept this delivery. Please try again.');
+        status: RiderAcceptStatus.networkError,
+        message: error.message ??
+            'We could not accept this delivery. Please try again.',
+      );
     }
   }
 }
@@ -159,11 +245,13 @@ class RiderAcceptController {
     required RiderProfileSnapshot rider,
   }) {
     if (!rider.canAcceptJobs) {
-      return Future.value(RiderAcceptResult(
-        status: RiderAcceptStatus.blockedByOnboarding,
-        message: rider.blockedReason ??
-            'Complete your rider approval before accepting deliveries.',
-      ));
+      return Future.value(
+        RiderAcceptResult(
+          status: RiderAcceptStatus.blockedByOnboarding,
+          message: rider.blockedReason ??
+              'Complete your rider approval before accepting deliveries.',
+        ),
+      );
     }
     return store.acceptInTransaction(jobId: jobId, rider: rider);
   }
