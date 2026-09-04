@@ -91,6 +91,7 @@ class RiderMarketplaceRules {
 enum RiderAcceptStatus {
   accepted,
   blockedByOnboarding,
+  rejected,
   alreadyTaken,
   networkError,
 }
@@ -120,14 +121,39 @@ class CallableRiderJobTransactionStore implements RiderJobTransactionStore {
   CallableRiderJobTransactionStore({
     FirebaseFunctions? functions,
     FirebaseFirestore? firestore,
-  })  : functions =
-            functions ?? FirebaseFunctions.instanceFor(region: 'us-central1'),
+  })  : functions = functions ?? _defaultFunctions(),
         firestore = firestore ?? FirebaseFirestore.instance;
+
+  static FirebaseFunctions _defaultFunctions() =>
+      FirebaseFunctions.instanceFor(region: 'us-central1');
 
   final FirebaseFunctions functions;
   final FirebaseFirestore firestore;
   static const _acceptTimeout = Duration(seconds: 20);
   static const _reconciliationTimeout = Duration(seconds: 10);
+
+  static RiderAcceptResult mapCallableFailure({
+    required String code,
+    String? message,
+  }) {
+    if (code == 'already-exists' || code == 'not-found') {
+      return RiderAcceptResult(
+        status: RiderAcceptStatus.alreadyTaken,
+        message: message ?? 'This delivery is no longer available.',
+      );
+    }
+    if (code == 'failed-precondition' || code == 'permission-denied') {
+      return RiderAcceptResult(
+        status: RiderAcceptStatus.rejected,
+        message: message ?? 'This delivery cannot be accepted.',
+      );
+    }
+    return RiderAcceptResult(
+      status: RiderAcceptStatus.networkError,
+      message:
+          message ?? 'We could not accept this delivery. Please try again.',
+    );
+  }
 
   static RiderAcceptResult reconcileAssignment({
     required Map<String, dynamic>? delivery,
@@ -209,8 +235,10 @@ class CallableRiderJobTransactionStore implements RiderJobTransactionStore {
       );
     } on TimeoutException {
       try {
-        return await _reconcile(jobId: jobId, riderId: rider.riderId)
-            .timeout(_reconciliationTimeout);
+        return await _reconcile(
+          jobId: jobId,
+          riderId: rider.riderId,
+        ).timeout(_reconciliationTimeout);
       } catch (_) {
         return const RiderAcceptResult(
           status: RiderAcceptStatus.networkError,
@@ -218,19 +246,7 @@ class CallableRiderJobTransactionStore implements RiderJobTransactionStore {
         );
       }
     } on FirebaseFunctionsException catch (error) {
-      if (error.code == 'already-exists' ||
-          error.code == 'not-found' ||
-          error.code == 'failed-precondition') {
-        return RiderAcceptResult(
-          status: RiderAcceptStatus.alreadyTaken,
-          message: error.message ?? 'This delivery is no longer available.',
-        );
-      }
-      return RiderAcceptResult(
-        status: RiderAcceptStatus.networkError,
-        message: error.message ??
-            'We could not accept this delivery. Please try again.',
-      );
+      return mapCallableFailure(code: error.code, message: error.message);
     }
   }
 }

@@ -14,11 +14,15 @@ void main() {
       ).readAsStringSync();
 
       expect(controllerSource, contains("httpsCallable('acceptRideRequests')"));
-      expect(controllerSource,
-          isNot(contains('FirestoreRiderJobTransactionStore')));
+      expect(
+        controllerSource,
+        isNot(contains('FirestoreRiderJobTransactionStore')),
+      );
       expect(controllerSource, isNot(contains('runTransaction(')));
       expect(
-          screenSource, contains('store: CallableRiderJobTransactionStore()'));
+        screenSource,
+        contains('store: CallableRiderJobTransactionStore()'),
+      );
     });
 
     test('blocks riders who are not eligible to accept jobs', () async {
@@ -42,10 +46,7 @@ void main() {
 
     test('accept transaction writes the first acceptance patch', () async {
       final store = _MemoryStore({
-        'job-1': {
-          'status': 'requested',
-          'matchingStatus': 'available',
-        },
+        'job-1': {'status': 'requested', 'matchingStatus': 'available'},
       });
       final controller = RiderAcceptController(store: store);
 
@@ -67,10 +68,7 @@ void main() {
 
     test('second simultaneous accept sees already accepted', () async {
       final store = _MemoryStore({
-        'job-1': {
-          'status': 'requested',
-          'matchingStatus': 'available',
-        },
+        'job-1': {'status': 'requested', 'matchingStatus': 'available'},
       });
       final controller = RiderAcceptController(store: store);
 
@@ -98,10 +96,7 @@ void main() {
 
     test('timeout reconciliation recognises the authoritative assignment', () {
       final result = CallableRiderJobTransactionStore.reconcileAssignment(
-        delivery: const {
-          'status': 'accepted',
-          'assignedRiderId': 'rider-1',
-        },
+        delivery: const {'status': 'accepted', 'assignedRiderId': 'rider-1'},
         riderId: 'rider-1',
       );
 
@@ -110,14 +105,30 @@ void main() {
 
     test('timeout reconciliation never claims another rider assignment', () {
       final result = CallableRiderJobTransactionStore.reconcileAssignment(
-        delivery: const {
-          'status': 'accepted',
-          'assignedRiderId': 'rider-2',
-        },
+        delivery: const {'status': 'accepted', 'assignedRiderId': 'rider-2'},
         riderId: 'rider-1',
       );
 
       expect(result.status, RiderAcceptStatus.alreadyTaken);
+    });
+
+    test('eligibility rejection is not presented as already taken', () {
+      final result = CallableRiderJobTransactionStore.mapCallableFailure(
+        code: 'failed-precondition',
+        message: 'Complete your active delivery before accepting another.',
+      );
+
+      expect(result.status, RiderAcceptStatus.rejected);
+      expect(result.message, contains('active delivery'));
+    });
+
+    test('permission rejection is terminal rather than retryable', () {
+      final result = CallableRiderJobTransactionStore.mapCallableFailure(
+        code: 'permission-denied',
+        message: 'This delivery is not available to this rider.',
+      );
+
+      expect(result.status, RiderAcceptStatus.rejected);
     });
   });
 }
