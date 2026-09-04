@@ -22,6 +22,7 @@ import '../tracking/rider_live_tracking_controller.dart';
 import '../tracking/rider_location_disclosure.dart';
 import 'rider_accept_controller.dart';
 import 'rider_delivery_controller.dart';
+import 'rider_gift_voice_player.dart';
 import 'rider_offer_card.dart';
 import 'rider_offer_stack.dart';
 
@@ -1382,7 +1383,9 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
       widget.offer.raw['isHealthPlus'] == true;
   bool get _gift =>
       widget.offer.warningChips.contains('Gift') ||
-      widget.offer.raw['serviceType'] == 'gift' ||
+      '${widget.offer.raw['serviceType'] ?? ''}'
+          .toLowerCase()
+          .contains('gift') ||
       widget.offer.raw['isGift'] == true;
   bool get _pinRequired =>
       _vanguard ||
@@ -2070,6 +2073,14 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                         style: const TextStyle(color: Color(0xFFFF8A8A)),
                       ),
                     ),
+                  ],
+                  if (_gift &&
+                      widget.offer.raw['voiceNote'] is Map &&
+                      '${(widget.offer.raw['voiceNote'] as Map)['storagePath'] ?? ''}'
+                          .trim()
+                          .isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    RiderGiftVoicePlayer(deliveryId: widget.offer.id),
                   ],
                   const Spacer(),
                   _AcceptedBottomPanel(
