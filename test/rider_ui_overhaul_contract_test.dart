@@ -296,7 +296,8 @@ void main() {
       expect(verification,
           contains('Complete your verification to unlock deliveries.'));
       expect(verification, contains('_ProgressRingPainter'));
-      expect(verification, contains('verifications completed'));
+      expect(verification, contains('Documents submitted:'));
+      expect(verification, contains('Verified:'));
       expect(verification, contains('Ready for Deliveries'));
       expect(verification, contains('Verification Required'));
       expect(verification, contains('Verification Under Review'));
@@ -309,12 +310,12 @@ void main() {
       expect(verification, contains('Profile Photo'));
       expect(verification, contains('Verification Summary'));
       expect(verification, contains('Continue Verification'));
-      expect(verification, contains('View Submitted Documents'));
+      expect(verification, contains("'Verification Under Review'"));
       expect(verification, contains('Accepted formats'));
       expect(verification, contains('Maximum file size'));
       expect(verification, contains('Current submission'));
       expect(verification, contains('Reviewer comments'));
-      expect(verification, contains('Resubmit'));
+      expect(verification, contains('Replace'));
       expect(verification, contains('riderDocuments'));
       expect(verification, contains('riderApplications'));
       expect(verification, contains('RiderAccountStateResolver.resolve'));
