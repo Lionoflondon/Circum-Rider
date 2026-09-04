@@ -12,6 +12,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../communication/rider_conversation_view.dart';
+import '../authentication/rider_terminal_operations.dart';
 import '../rider_account/rider_account_state.dart';
 import '../rider_design/rider_ui.dart';
 import '../stripe/rider_payout_account_view.dart';
@@ -682,7 +683,10 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
       _message = null;
     });
     try {
-      await action();
+      await runBoundedRiderOperation(
+        action(),
+        timeout: _applicationOperationTimeout,
+      );
       if (mounted) setState(() => _message = success);
       return true;
     } catch (error) {

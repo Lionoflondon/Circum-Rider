@@ -6,6 +6,12 @@ class RiderOperationFailure implements Exception {
   final String safeMessage;
 }
 
+Future<T> runBoundedRiderOperation<T>(
+  Future<T> operation, {
+  required Duration timeout,
+}) =>
+    operation.timeout(timeout);
+
 Future<bool> runRiderEmailVerification({
   required Future<void> Function() reload,
   required bool Function() isVerified,
