@@ -95,6 +95,30 @@ void main() {
       expect(store.jobs['job-1']?['riderId'], 'rider-1');
       expect(store.writeCount, 1);
     });
+
+    test('timeout reconciliation recognises the authoritative assignment', () {
+      final result = CallableRiderJobTransactionStore.reconcileAssignment(
+        delivery: const {
+          'status': 'accepted',
+          'assignedRiderId': 'rider-1',
+        },
+        riderId: 'rider-1',
+      );
+
+      expect(result.status, RiderAcceptStatus.accepted);
+    });
+
+    test('timeout reconciliation never claims another rider assignment', () {
+      final result = CallableRiderJobTransactionStore.reconcileAssignment(
+        delivery: const {
+          'status': 'accepted',
+          'assignedRiderId': 'rider-2',
+        },
+        riderId: 'rider-1',
+      );
+
+      expect(result.status, RiderAcceptStatus.alreadyTaken);
+    });
   });
 }
 

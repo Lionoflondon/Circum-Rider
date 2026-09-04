@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 
 const _riderDeliveryOperationTimeout = Duration(seconds: 30);
@@ -58,9 +59,21 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
     Map<String, dynamic>? issue,
   }) async {
     if (action == 'arrived_at_pickup' || action == 'arrived_at_dropoff') {
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 15),
+      ).timeout(_riderDeliveryOperationTimeout);
       final arrival = await functions.httpsCallable('recordRiderArrival').call({
         'deliveryId': deliveryId,
         'phase': action == 'arrived_at_dropoff' ? 'dropoff' : 'pickup',
+        'location': {
+          'latitude': position.latitude,
+          'longitude': position.longitude,
+          'accuracyMeters': position.accuracy,
+          'clientRecordedAt': position.timestamp.millisecondsSinceEpoch,
+          'mocked': position.isMocked,
+        },
+        'gpsAccuracyMeters': position.accuracy,
       }).timeout(_riderDeliveryOperationTimeout);
       final arrivalData = Map<String, dynamic>.from(arrival.data as Map);
       final decision = arrivalData['decision'] is Map
@@ -68,7 +81,8 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
           : const <String, dynamic>{};
       if (arrivalData['success'] != true) {
         throw StateError(
-            '${decision['riderMessage'] ?? 'Arrival could not be confirmed.'}');
+          '${decision['riderMessage'] ?? 'Arrival could not be confirmed.'}',
+        );
       }
       return RiderDeliveryTransitionResult('${decision['state'] ?? ''}');
     }
@@ -133,8 +147,7 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
     final result = await functions
         .httpsCallable('confirmRiderIrisAssessment')
         .call({'deliveryId': deliveryId}).timeout(
-      _riderDeliveryOperationTimeout,
-    );
+            _riderDeliveryOperationTimeout);
     return Map<String, dynamic>.from(result.data as Map);
   }
 }
@@ -165,10 +178,7 @@ class RiderEvidenceUploader {
       'delivery_weight_evidence/$deliveryId/$safeStage/${DateTime.now().millisecondsSinceEpoch}.jpg',
     );
     await ref
-        .putData(
-          bytes,
-          SettableMetadata(contentType: 'image/jpeg'),
-        )
+        .putData(bytes, SettableMetadata(contentType: 'image/jpeg'))
         .timeout(_riderDeliveryOperationTimeout);
     return ref.getDownloadURL().timeout(_riderDeliveryOperationTimeout);
   }

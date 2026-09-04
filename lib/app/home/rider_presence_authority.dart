@@ -17,3 +17,13 @@ bool isAuthoritativeRiderPresenceOnline(Map<String, dynamic> presence) {
 
   return true;
 }
+
+bool isAuthoritativeRiderPresenceDispatchable(
+  Map<String, dynamic> presence,
+) {
+  return isAuthoritativeRiderPresenceOnline(presence) &&
+      presence['dispatchEligible'] == true &&
+      presence['busy'] != true &&
+      '${presence['availabilityStatus'] ?? ''}'.trim().toLowerCase() ==
+          'available';
+}

@@ -52,4 +52,34 @@ void main() {
       isTrue,
     );
   });
+
+  test('only fresh available eligible presence can display offers', () {
+    const available = {
+      'isOnline': true,
+      'availabilityStatus': 'available',
+      'presenceState': 'fresh',
+      'connectionStatus': 'connected',
+      'dispatchEligible': true,
+      'busy': false,
+    };
+    expect(isAuthoritativeRiderPresenceDispatchable(available), isTrue);
+    expect(
+      isAuthoritativeRiderPresenceDispatchable({...available, 'busy': true}),
+      isFalse,
+    );
+    expect(
+      isAuthoritativeRiderPresenceDispatchable({
+        ...available,
+        'presenceState': 'stale',
+      }),
+      isFalse,
+    );
+    expect(
+      isAuthoritativeRiderPresenceDispatchable({
+        ...available,
+        'dispatchEligible': false,
+      }),
+      isFalse,
+    );
+  });
 }

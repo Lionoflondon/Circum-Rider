@@ -64,6 +64,32 @@ class _BackendStageController implements RiderDeliveryController {
 }
 
 void main() {
+  test('special-flow offers use Rider earnings and canonical service chips',
+      () {
+    final gift = RiderJobOffer.fromFirestore(
+      docId: 'gift-1',
+      data: const {
+        'requestId': 'gift-1',
+        'serviceType': 'gift',
+        'riderEarning': 13,
+        'price': 20,
+      },
+    );
+    final health = RiderJobOffer.fromFirestore(
+      docId: 'health-1',
+      data: const {
+        'requestId': 'health-1',
+        'serviceType': 'health_plus',
+        'price': 20,
+      },
+    );
+
+    expect(gift.earnings, 13);
+    expect(gift.warningChips, contains('Gift'));
+    expect(health.earnings, 0);
+    expect(health.warningChips, contains('Health+'));
+  });
+
   test('offer earnings presentation has no bonus reward system', () {
     final source =
         File('lib/app/rider_jobs/rider_offer_card.dart').readAsStringSync();
