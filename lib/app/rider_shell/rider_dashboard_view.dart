@@ -15,6 +15,7 @@ import '../recognitions/rider_recognitions.dart';
 import '../rider_account/rider_account_state.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
+import '../rider_jobs/rider_offer_feed.dart';
 import '../review/rider_review_fixture_screen.dart';
 import '../review/rider_review_fixture_service.dart';
 
@@ -37,6 +38,9 @@ class RiderDashboardView extends StatefulWidget {
 }
 
 class _RiderDashboardViewState extends State<RiderDashboardView> {
+  String? _offersUid;
+  Stream<List<Map<String, dynamic>>>? _authorizedOffers;
+
   @override
   void initState() {
     super.initState();
@@ -91,6 +95,12 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
       );
     }
 
+    if (_offersUid != uid) {
+      _offersUid = uid;
+      _authorizedOffers = RiderOfferFeed()
+          .watch(riderId: uid)
+          .map((offers) => offers.map((offer) => offer.raw).toList());
+    }
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
       stream: FirebaseFirestore.instance
           .collection('riderProfiles')
@@ -121,17 +131,12 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
                       stream: FirebaseFirestore.instance
                           .collection('deliveryRequests')
-                          .where('assignedRider', isEqualTo: uid)
+                          .where('riderId', isEqualTo: uid)
                           .limit(24)
                           .snapshots(),
                       builder: (context, assignedSnapshot) {
-                        return StreamBuilder<
-                            QuerySnapshot<Map<String, dynamic>>>(
-                          stream: FirebaseFirestore.instance
-                              .collection('deliveryRequests')
-                              .where('status', isEqualTo: 'requested')
-                              .limit(8)
-                              .snapshots(),
+                        return StreamBuilder<List<Map<String, dynamic>>>(
+                          stream: _authorizedOffers,
                           builder: (context, offersSnapshot) {
                             final assigned = _docs(assignedSnapshot);
                             final data = _DashboardData(
@@ -140,7 +145,7 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                                   earningsSnapshot.data?.data() ?? const {},
                               presence:
                                   presenceSnapshot.data?.data() ?? const {},
-                              eligibleOffers: _docs(offersSnapshot),
+                              eligibleOffers: offersSnapshot.data ?? const [],
                               scheduled: assigned
                                   .where(
                                     (item) =>

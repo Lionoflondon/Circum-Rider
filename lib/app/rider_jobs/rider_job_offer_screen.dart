@@ -23,6 +23,7 @@ import '../tracking/rider_location_disclosure.dart';
 import 'rider_accept_controller.dart';
 import 'rider_delivery_controller.dart';
 import 'rider_offer_card.dart';
+import 'rider_offer_feed.dart';
 import 'rider_offer_stack.dart';
 
 class RiderJobOfferScreen extends StatefulWidget {
@@ -55,6 +56,8 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
   late final FirebaseFirestore _firestore;
   late final FirebaseAuth _auth;
   late final RiderAcceptController _acceptController;
+  Stream<List<RiderJobOffer>>? _offerFeed;
+  String? _offerFeedRider;
   int _activeIndex = 0;
   bool _accepting = false;
   bool _accepted = false;
@@ -112,6 +115,10 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       );
     }
 
+    if (_offerFeedRider != user.uid) {
+      _offerFeedRider = user.uid;
+      _offerFeed = RiderOfferFeed().watch(riderId: user.uid);
+    }
     context.watch<HomeBloc>().state;
     return FutureBuilder<bool>(
         future: RiderInternalAccess.enabled(),
@@ -158,12 +165,8 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                                 .read<HomeBloc>()
                                 .add(SetRideStatus(status: RideStatus.online)));
 
-                      return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                        stream: _firestore
-                            .collection('deliveryRequests')
-                            .where('status', isEqualTo: 'requested')
-                            .limit(20)
-                            .snapshots(),
+                      return StreamBuilder<List<RiderJobOffer>>(
+                        stream: _offerFeed,
                         builder: (context, snapshot) {
                           if (snapshot.hasError) {
                             return const _JobsStateScaffold(
@@ -187,12 +190,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                             );
                           }
 
-                          final offers = _filterOffers(
-                            docs: snapshot.data!.docs,
-                            riderId: user.uid,
-                            riderVehicle: rider.riderVehicle,
-                            internalAccess: internalAccess,
-                          );
+                          final offers = snapshot.data!;
 
                           if (_activeIndex >= offers.length &&
                               offers.isNotEmpty) {
@@ -264,60 +262,6 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       blockedReason:
           canAccept ? null : RiderOnboardingPolicy.blockedReason(riderData),
     );
-  }
-
-  List<RiderJobOffer> _filterOffers({
-    required List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
-    required String riderId,
-    required String? riderVehicle,
-    bool internalAccess = false,
-  }) {
-    return docs
-        .where((doc) => _isVisibleToRider(doc.data(), riderId, riderVehicle,
-            internalAccess: internalAccess))
-        .map((doc) =>
-            RiderJobOffer.fromFirestore(docId: doc.id, data: doc.data()))
-        .toList();
-  }
-
-  bool _isVisibleToRider(
-      Map<String, dynamic> data, String riderId, String? riderVehicle,
-      {bool internalAccess = false}) {
-    final ignored = _stringList(data['ignoredRiders']);
-    final rejected = _stringList(data['rejectedRiders']);
-    if (ignored.contains(riderId) || rejected.contains(riderId)) return false;
-
-    final matchingStatus =
-        '${data['matchingStatus'] ?? 'available'}'.trim().toLowerCase();
-    if (matchingStatus != 'available' && matchingStatus != 'requested') {
-      return false;
-    }
-
-    final minimumVehicle =
-        '${data['minimumVehicle'] ?? data['recommendedVehicle'] ?? 'Bike'}';
-    return internalAccess ||
-        _vehicleMeetsMinimum(riderVehicle ?? 'Bike', minimumVehicle);
-  }
-
-  List<String> _stringList(dynamic value) {
-    if (value is Iterable) {
-      return value
-          .map((item) => '$item'.trim())
-          .where((v) => v.isNotEmpty)
-          .toList();
-    }
-    return const [];
-  }
-
-  bool _vehicleMeetsMinimum(String riderVehicle, String minimumVehicle) {
-    int rank(String value) {
-      final normalized = value.trim().toLowerCase();
-      if (normalized.contains('van')) return 3;
-      if (normalized.contains('car')) return 2;
-      return 1;
-    }
-
-    return rank(riderVehicle) >= rank(minimumVehicle);
   }
 
   Future<void> _accept(

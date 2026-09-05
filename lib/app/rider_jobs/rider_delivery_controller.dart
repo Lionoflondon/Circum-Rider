@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
@@ -178,7 +179,16 @@ class RiderEvidenceUploader {
       'delivery_weight_evidence/$deliveryId/$safeStage/${DateTime.now().millisecondsSinceEpoch}.jpg',
     );
     await ref
-        .putData(bytes, SettableMetadata(contentType: 'image/jpeg'))
+        .putData(
+            bytes,
+            SettableMetadata(
+              contentType: 'image/jpeg',
+              customMetadata: {
+                'deliveryId': deliveryId,
+                'uploadedBy': FirebaseAuth.instance.currentUser!.uid,
+                'evidenceType': 'weight_discrepancy',
+              },
+            ))
         .timeout(_riderDeliveryOperationTimeout);
     return ref.getDownloadURL().timeout(_riderDeliveryOperationTimeout);
   }

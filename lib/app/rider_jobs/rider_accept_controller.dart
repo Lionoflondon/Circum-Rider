@@ -211,6 +211,7 @@ class CallableRiderJobTransactionStore implements RiderJobTransactionStore {
       final byRequestId = await firestore
           .collection('deliveryRequests')
           .where('requestId', isEqualTo: jobId)
+          .where('riderId', isEqualTo: riderId)
           .limit(1)
           .get();
       if (byRequestId.docs.isNotEmpty) snapshot = byRequestId.docs.first;
