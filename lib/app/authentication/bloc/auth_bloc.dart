@@ -1,3 +1,4 @@
+import '../../verification/rider_document_transport.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -41,7 +42,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   static const _signupOperationTimeout = Duration(seconds: 30);
   static const _signupBootstrapTimeout = Duration(seconds: 20);
   static const _profilePhotoOperationTimeout = Duration(seconds: 30);
-  static const _documentUploadOperationTimeout = Duration(seconds: 45);
+  static const _documentUploadOperationTimeout = Duration(minutes: 2);
 
   AuthBloc() : super(const AuthState()) {
     FirebaseAuth auth = FirebaseAuth.instance;
@@ -78,6 +79,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         'Rider auth diagnostic stage=$step category=$category code=$code '
         'surface=$pathSurface riderRef=$riderRef',
       );
+    }
+
+    Future<void> verifyRiderSurface(User? user) async {
+      if (user == null) throw FirebaseAuthException(code: 'user-not-found');
+      try {
+        await functions
+            .httpsCallable('verifyRiderAccountAccess')
+            .call({}).timeout(_authOperationTimeout);
+      } on FirebaseFunctionsException catch (error) {
+        if (error.code == 'permission-denied') {
+          try {
+            await auth.signOut().timeout(_authOperationTimeout);
+          } catch (_) {}
+          throw FirebaseAuthException(code: 'wrong-surface');
+        }
+        rethrow;
+      }
     }
 
     Future<void> upsertRiderOnboarding({
@@ -133,6 +151,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         User? user = auth.currentUser;
 
         if (user != null) {
+          try {
+            await verifyRiderSurface(user);
+          } catch (error) {
+            emit(state.copyWith(
+                currentState: AppState.unauthenticated,
+                status: Status.failure,
+                isLoading: false,
+                errorMessage: error is FirebaseAuthException
+                    ? RiderAuthError.messageFor(error.code)
+                    : 'Account access could not be checked. Check your connection and sign in again.'));
+            return;
+          }
           String? phone;
           try {
             phone = (await storage
@@ -499,6 +529,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           UserCredential userCredential = await auth
               .signInWithCredential(oauthCredential)
               .timeout(_authOperationTimeout);
+          await verifyRiderSurface(userCredential.user);
 
           emit(state.copyWith(
               username: userCredential.user?.displayName,
@@ -529,7 +560,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           );
           emit(state.copyWith(
             status: Status.failure,
-            errorMessage: 'Apple sign-in could not be completed. Try again.',
+            errorMessage: error is FirebaseAuthException
+                ? RiderAuthError.messageFor(error.code)
+                : 'Apple sign-in could not be completed. Try again.',
             clearSensitiveAuthFields: true,
           ));
         }
@@ -562,6 +595,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               await auth.signInWithCredential(credential).timeout(
                     _authOperationTimeout,
                   );
+          await verifyRiderSurface(userCredential.user);
 
           emit(state.copyWith(
               username: userCredential.user?.displayName,
@@ -584,7 +618,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           );
           emit(state.copyWith(
             status: Status.failure,
-            errorMessage: 'Google sign-in could not be completed. Try again.',
+            errorMessage: error is FirebaseAuthException
+                ? RiderAuthError.messageFor(error.code)
+                : 'Google sign-in could not be completed. Try again.',
             clearSensitiveAuthFields: true,
           ));
         }
@@ -1097,7 +1133,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         case 'drivers license':
           return 'driving_licence';
         case 'international passport':
-          return 'identity_document';
+          return 'identity';
         case 'work permit':
           return 'right_to_work';
         case 'vehicle registration':
@@ -1113,11 +1149,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       required String idempotencyKey,
       required List<Map<String, dynamic>> files,
     }) async {
-      await functions.httpsCallable('submitRiderDocument').call({
-        'documentType': documentKeyForIdType(idType),
-        'files': files,
-        'idempotencyKey': idempotencyKey,
-      }).timeout(_documentUploadOperationTimeout);
+      await submitRiderDocumentTransport(
+          timeout: _documentUploadOperationTimeout,
+          request: {
+            'documentType': documentKeyForIdType(idType),
+            'files': files,
+            'idempotencyKey': idempotencyKey,
+          },
+          call: (payload) async {
+            await functions.httpsCallable('submitRiderDocument').call(payload);
+          });
     }
 
     Future<Map<String, dynamic>> documentFile(String path, String side) async {
@@ -1382,6 +1423,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               .signInWithEmailAndPassword(
                   email: event.email, password: event.password)
               .timeout(_authOperationTimeout);
+          await verifyRiderSurface(userCredential.user);
           firebaseAuthenticationSucceeded = true;
           const storage = FlutterSecureStorage();
 

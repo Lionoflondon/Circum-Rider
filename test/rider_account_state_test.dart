@@ -127,6 +127,7 @@ void main() {
         rider: const {
           'approvalStatus': 'approved',
           'onboardingComplete': true,
+          'vehicleApproved': true,
         },
       );
 

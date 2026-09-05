@@ -1,3 +1,5 @@
+import '../onboarding/rider_onboarding_policy.dart';
+
 enum RiderAccountState {
   onboardingNotStarted,
   onboardingInProgress,
@@ -89,12 +91,18 @@ class RiderAccountStateResolver {
       return RiderAccountState.rejected;
     }
     if (_matches(approval, {
+          'needs_information',
+          'needs_attention',
           'more_information_required',
           'information_required',
           'action_required'
         }) ||
-        _matches(onboarding,
-            {'more_information_required', 'information_required'})) {
+        _matches(onboarding, {
+          'needs_information',
+          'needs_attention',
+          'more_information_required',
+          'information_required'
+        })) {
       return RiderAccountState.moreInformationRequired;
     }
     if (_matches(onboarding, {'roth_onboarding_required'}) ||
@@ -107,7 +115,8 @@ class RiderAccountStateResolver {
       return RiderAccountState.approved;
     }
     if (_matches(approval, {'submitted'}) ||
-        _matches(onboarding, {'application_submitted', 'submitted'})) {
+        _matches(onboarding,
+            {'application_submitted', 'submitted', 'resubmitted'})) {
       return RiderAccountState.submitted;
     }
     if (_matches(onboarding, {
@@ -191,6 +200,7 @@ class RiderApprovalProgress {
     required bool accountExists,
     required bool firebaseEmailVerified,
     required Map<String, dynamic> rider,
+    List<Map<String, dynamic>> documents = const [],
   }) {
     final approval = _normalised(
       rider['approvalStatus'] ?? rider['verificationStatus'],
@@ -201,15 +211,17 @@ class RiderApprovalProgress {
     final approved = approval == 'approved' || rider['approvedAt'] != null;
     final applicationSubmitted = rider['applicationSubmittedAt'] != null ||
         rider['submittedAt'] != null ||
+        rider['onboardingSubmittedAt'] != null ||
+        const {'submitted', 'resubmitted', 'under_review', 'approved'}
+            .contains(rider['status']) ||
         const {
           'submitted',
-          'pending',
           'pending_review',
           'under_review',
-          'reviewing',
           'approved',
         }.contains(approval) ||
-        const {'application_submitted', 'submitted'}.contains(onboarding);
+        const {'application_submitted', 'submitted', 'resubmitted'}
+            .contains(onboarding);
     final underReview = rider['reviewStartedAt'] != null ||
         rider['reviewedAt'] != null ||
         const {
@@ -227,21 +239,24 @@ class RiderApprovalProgress {
         rider['phoneNumberVerified'] == true ||
         rider['phoneVerifiedAt'] != null ||
         _normalised(rider['phoneStatus']) == 'verified';
-    final documentsSubmitted = rider['documentsSubmittedAt'] != null ||
-        rider['identityVerified'] == true ||
-        rider['documentsVerified'] == true ||
-        const {
-          'submitted',
-          'pending',
-          'under_review',
-          'approved',
-          'verified',
-        }.contains(_normalised(rider['verificationStatus']));
-    final vehicleDetails = rider['vehicle'] != null ||
-        rider['vehicles'] is List && (rider['vehicles'] as List).isNotEmpty ||
-        '${rider['vehicleType'] ?? rider['typeOfVehicle'] ?? ''}'
-            .trim()
-            .isNotEmpty;
+    final persistedDocuments = documents.isNotEmpty
+        ? documents
+        : (rider['verificationDocuments'] is Map
+            ? (rider['verificationDocuments'] as Map)
+                .values
+                .whereType<Map>()
+                .map((record) => Map<String, dynamic>.from(record))
+                .toList()
+            : <Map<String, dynamic>>[]);
+    final documentsSubmitted =
+        latestRiderDocuments(persistedDocuments).any(riderDocumentSubmitted) ||
+            rider['documentsSubmittedAt'] != null ||
+            rider['identityVerified'] == true ||
+            rider['documentsVerified'] == true;
+    final vehicleDetails = riderVehicleValue(rider['vehicleType'] ??
+            rider['typeOfVehicle'] ??
+            (rider['vehicle'] is Map ? rider['vehicle']['type'] : null)) !=
+        null;
     final rothWalletSetup = rider['rothOnboardingComplete'] == true ||
         rider['rothWalletId'] != null ||
         const {'complete', 'completed', 'connected', 'active'}
@@ -262,7 +277,8 @@ class RiderApprovalProgress {
       applicationSubmitted: applicationSubmitted,
       underReview: underReview,
       approved: approved,
-      readyToDeliver: approved && onboardingComplete,
+      readyToDeliver:
+          approved && onboardingComplete && riderVehicleApproved(rider),
     );
   }
 

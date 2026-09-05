@@ -1,3 +1,4 @@
+import '../verification/rider_document_transport.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -18,6 +19,7 @@ import '../rider_design/rider_ui.dart';
 import '../stripe/rider_payout_account_view.dart';
 import '../verification/rider_document_selection.dart';
 import 'rider_roth_onboarding.dart';
+import 'rider_onboarding_policy.dart';
 
 enum RiderApplicationSectionStatus {
   notStarted,
@@ -59,10 +61,13 @@ RiderApplicationSectionStatus riderApplicationStatusFrom(Object? raw) {
   final value = '${raw ?? ''}'.trim().toLowerCase();
   return switch (value) {
     'approved' || 'verified' => RiderApplicationSectionStatus.approved,
+    'needs_information' ||
     'needs_attention' ||
     'action_required' ||
     'rejected' =>
       RiderApplicationSectionStatus.needsAttention,
+    'uploaded' ||
+    'pending' ||
     'submitted' ||
     'under_review' ||
     'reviewing' =>
@@ -125,87 +130,100 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
             return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
               stream: _db.collection('riders').doc(uid).snapshots(),
               builder: (context, riderSnapshot) {
-                return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                  stream: _db
-                      .collection(RiderApplicationCentre.documentsCollection)
-                      .where('riderId', isEqualTo: uid)
-                      .snapshots(),
-                  builder: (context, documentSnapshot) {
-                    final rider = riderSnapshot.data?.data() ?? const {};
-                    final application =
-                        applicationSnapshot.data?.data() ?? const {};
-                    final documents = documentSnapshot.data?.docs
-                            .map((doc) => {'id': doc.id, ...doc.data()})
-                            .toList() ??
-                        const <Map<String, dynamic>>[];
-                    final progress = RiderApprovalProgress.fromBackend(
-                      accountExists: true,
-                      firebaseEmailVerified:
-                          _auth.currentUser?.emailVerified == true,
-                      rider: {...application, ...rider},
-                    );
-                    final sections = _sections(
-                      rider: rider,
-                      application: application,
-                      documents: documents,
-                    );
-                    final requiredProgress = _requiredProgress(
-                      sections,
-                      applicationSubmitted: progress.applicationSubmitted,
-                    );
-                    return RefreshIndicator(
-                      color: RiderPalette.blue,
-                      backgroundColor: RiderPalette.panel,
-                      onRefresh: () async => setState(() {}),
-                      child: CustomScrollView(
-                        slivers: [
-                          SliverPadding(
-                            padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
-                            sliver: SliverList.list(
-                              children: [
-                                if (Navigator.canPop(context))
-                                  _TopBar(
-                                    onBack: () => Navigator.maybePop(context),
-                                  ),
-                                const SizedBox(height: 16),
-                                _ApplicationHero(
-                                  progress: progress,
-                                  requiredProgress: requiredProgress,
-                                  status: _overallStatus(application, rider),
-                                  busy: _busy,
-                                  onSubmit: () => _submitApplication(uid),
+                return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                  stream: _db.collection('riderProfiles').doc(uid).snapshots(),
+                  builder: (context, profileSnapshot) {
+                    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                      stream: _db
+                          .collection(
+                              RiderApplicationCentre.documentsCollection)
+                          .where('riderId', isEqualTo: uid)
+                          .snapshots(),
+                      builder: (context, documentSnapshot) {
+                        final rider = <String, dynamic>{
+                          ...?riderSnapshot.data?.data(),
+                          ...?profileSnapshot.data?.data()
+                        };
+                        final application =
+                            applicationSnapshot.data?.data() ?? const {};
+                        final documents = documentSnapshot.data?.docs
+                                .map((doc) => {'id': doc.id, ...doc.data()})
+                                .toList() ??
+                            const <Map<String, dynamic>>[];
+                        final progress = RiderApprovalProgress.fromBackend(
+                          accountExists: true,
+                          firebaseEmailVerified:
+                              _auth.currentUser?.emailVerified == true,
+                          rider: {...rider, ...application},
+                          documents: documents,
+                        );
+                        final sections = _sections(
+                          rider: rider,
+                          application: application,
+                          documents: documents,
+                        );
+                        final requiredProgress = _requiredProgress(
+                          sections,
+                          applicationSubmitted: progress.applicationSubmitted,
+                        );
+                        return RefreshIndicator(
+                          color: RiderPalette.blue,
+                          backgroundColor: RiderPalette.panel,
+                          onRefresh: () async => setState(() {}),
+                          child: CustomScrollView(
+                            slivers: [
+                              SliverPadding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(20, 12, 20, 30),
+                                sliver: SliverList.list(
+                                  children: [
+                                    if (Navigator.canPop(context))
+                                      _TopBar(
+                                        onBack: () =>
+                                            Navigator.maybePop(context),
+                                      ),
+                                    const SizedBox(height: 16),
+                                    _ApplicationHero(
+                                      progress: progress,
+                                      requiredProgress: requiredProgress,
+                                      status:
+                                          _overallStatus(application, rider),
+                                      busy: _busy,
+                                      onSubmit: () => _submitApplication(uid),
+                                    ),
+                                    if (_message != null) ...[
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        _message!,
+                                        style: const TextStyle(
+                                          color: RiderPalette.amber,
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 18),
+                                    for (final section in sections) ...[
+                                      _ApplicationSectionRow(
+                                        section: section,
+                                        onTap: () => _openSection(
+                                          uid,
+                                          section,
+                                          application: application,
+                                          rider: rider,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 10),
+                                    ],
+                                    const SizedBox(height: 12),
+                                    _ProgressChecklist(progress: progress),
+                                  ],
                                 ),
-                                if (_message != null) ...[
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    _message!,
-                                    style: const TextStyle(
-                                      color: RiderPalette.amber,
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(height: 18),
-                                for (final section in sections) ...[
-                                  _ApplicationSectionRow(
-                                    section: section,
-                                    onTap: () => _openSection(
-                                      uid,
-                                      section,
-                                      application: application,
-                                      rider: rider,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                ],
-                                const SizedBox(height: 12),
-                                _ProgressChecklist(progress: progress),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        );
+                      },
                     );
                   },
                 );
@@ -221,12 +239,20 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     Map<String, dynamic> application,
     Map<String, dynamic> rider,
   ) {
-    final state = RiderAccountStateResolver.resolve({...application, ...rider});
+    final state = RiderAccountStateResolver.resolve({
+      ...rider,
+      ...application,
+      if (application['status'] != null)
+        'onboardingStatus': application['status']
+    });
+    if (state == RiderAccountState.approved && !riderVehicleApproved(rider)) {
+      return 'Vehicle details need attention';
+    }
     return switch (state) {
-      RiderAccountState.approved => 'Approved and ready',
-      RiderAccountState.moreInformationRequired => 'Changes requested',
-      RiderAccountState.submitted => 'Application submitted',
-      RiderAccountState.pendingReview => 'Admin review in progress',
+      RiderAccountState.approved => 'Approved. You can go online',
+      RiderAccountState.moreInformationRequired => 'More information needed',
+      RiderAccountState.submitted => 'Application received',
+      RiderAccountState.pendingReview => 'Documents under review',
       RiderAccountState.rejected => 'Application rejected',
       RiderAccountState.suspended => 'Suspended review',
       _ => 'Continue application',
@@ -291,6 +317,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
         icon: Icons.verified_user_outlined,
         documents: documents,
         match: const {
+          'identity',
           'passport',
           'drivers_license',
           'driving_licence',
@@ -324,6 +351,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
         icon: Icons.description_outlined,
         documents: documents,
         match: const {
+          'registration_v5c',
           'vehicle_registration',
           'v5c',
           'mot',
@@ -382,11 +410,10 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     required List<Map<String, dynamic>> documents,
     required Set<String> match,
   }) {
-    final docs = documents.where((doc) {
-      final type = _normalise(
-        doc['documentType'] ?? doc['idType'] ?? doc['type'],
-      );
-      return match.contains(type);
+    final docs = latestRiderDocuments(documents).where((doc) {
+      final type = riderDocumentType(
+          doc['documentType'] ?? doc['idType'] ?? doc['type']);
+      return match.map(riderDocumentType).contains(type);
     }).toList();
     final hasAttention = docs.any(
       (doc) =>
@@ -412,7 +439,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
           ? RiderApplicationSectionStatus.needsAttention
           : approved
               ? RiderApplicationSectionStatus.approved
-              : docs.isEmpty
+              : !docs.any(riderDocumentSubmitted)
                   ? RiderApplicationSectionStatus.notStarted
                   : RiderApplicationSectionStatus.submitted,
     );
@@ -466,97 +493,109 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     required Map<String, dynamic> application,
     required Map<String, dynamic> rider,
   }) async {
-    switch (section.key) {
-      case 'personal_details':
-      case 'home_address':
-      case 'contact_details':
-        final riderData =
-            (await _db.collection('riders').doc(uid).get()).data();
-        final profileData =
-            (await _db.collection('riderProfiles').doc(uid).get()).data();
-        if (!mounted) return;
-        final saved = await Navigator.push<bool>(
-          context,
-          MaterialPageRoute(
-            builder: (_) => _PersonalApplicationForm(
-              sectionKey: section.key,
-              title: section.title,
-              initialData: {...?riderData, ...?profileData},
-              save: (patch) => _saveApplicationPatch(uid, section.key, patch),
+    try {
+      switch (section.key) {
+        case 'personal_details':
+        case 'home_address':
+        case 'contact_details':
+          final riderData = (await _db
+                  .collection('riders')
+                  .doc(uid)
+                  .get()
+                  .timeout(_applicationOperationTimeout))
+              .data();
+          final profileData = (await _db
+                  .collection('riderProfiles')
+                  .doc(uid)
+                  .get()
+                  .timeout(_applicationOperationTimeout))
+              .data();
+          if (!mounted) return;
+          final saved = await Navigator.push<bool>(
+            context,
+            MaterialPageRoute(
+              builder: (_) => _PersonalApplicationForm(
+                sectionKey: section.key,
+                title: section.title,
+                initialData: {...?riderData, ...?profileData},
+                save: (patch) => _saveApplicationPatch(uid, section.key, patch),
+              ),
             ),
-          ),
-        );
-        if (saved == true && mounted) {
-          setState(() => _message = '${section.title} saved successfully.');
-        }
-      case 'vehicle_details':
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => _VehicleApplicationForm(
-              load: () async {
-                final rider = await _db.collection('riders').doc(uid).get();
-                return _vehicleList(rider.data() ?? const {});
-              },
-              save: (vehicles) => _saveVehicles(uid, vehicles),
-            ),
-          ),
-        );
-      case 'identity_verification':
-      case 'right_to_work':
-      case 'vehicle_documents':
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => _DocumentUploadSection(
-              section: section,
-              upload: (type, file) =>
-                  _uploadDocument(uid, section.key, type, file),
-            ),
-          ),
-        );
-      case 'roth_wallet_setup':
-        await _runGuard(() async {
-          await _roth.ensureWalletForRider(
-            riderId: uid,
-            email: _auth.currentUser?.email,
           );
-          await _saveSectionStatus(
-            uid,
-            section.key,
-            RiderApplicationSectionStatus.submitted,
+          if (saved == true && mounted) {
+            setState(() => _message = '${section.title} saved successfully.');
+          }
+        case 'vehicle_details':
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => RiderVehicleApplicationForm(
+                load: () async {
+                  final rider = await _db.collection('riders').doc(uid).get();
+                  return _vehicleList(rider.data() ?? const {});
+                },
+                save: (vehicles) => _saveVehicles(uid, vehicles),
+              ),
+            ),
           );
-        }, success: 'Roth wallet connected.');
-      case 'application_messages':
-        if (!mounted) return;
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => RiderConversationView(
-              chatId: 'admin_rider_${uid}_application',
-              title: 'Application messages',
-              subtitle: 'Admin review conversation',
+        case 'identity_verification':
+        case 'right_to_work':
+        case 'vehicle_documents':
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => _DocumentUploadSection(
+                section: section,
+                upload: (type, file) =>
+                    _uploadDocument(uid, section.key, type, file),
+              ),
             ),
-          ),
-        );
-      case 'payout_details':
-        if (!mounted) return;
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const RiderPayoutAccountView()),
-        );
-      case 'review_status':
-        if (!mounted) return;
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => _ApplicationReviewStatusView(
-              status: _overallStatus(application, rider),
-              application: application,
-              rider: rider,
+          );
+        case 'roth_wallet_setup':
+          await _runGuard(() async {
+            await _roth.ensureWalletForRider(
+              riderId: uid,
+              email: _auth.currentUser?.email,
+            );
+            await _saveSectionStatus(
+              uid,
+              section.key,
+              RiderApplicationSectionStatus.submitted,
+            );
+          }, success: 'Roth wallet connected.');
+        case 'application_messages':
+          if (!mounted) return;
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => RiderConversationView(
+                chatId: 'admin_rider_${uid}_application',
+                title: 'Application messages',
+                subtitle: 'Admin review conversation',
+              ),
             ),
-          ),
-        );
+          );
+        case 'payout_details':
+          if (!mounted) return;
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const RiderPayoutAccountView()),
+          );
+        case 'review_status':
+          if (!mounted) return;
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => _ApplicationReviewStatusView(
+                status: _overallStatus(application, rider),
+                application: application,
+                rider: rider,
+              ),
+            ),
+          );
+      }
+    } catch (error) {
+      if (mounted) setState(() => _message = _friendlyOnboardingError(error));
     }
   }
 
@@ -573,7 +612,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
       await _functions.httpsCallable('updateRiderProfile').call({
         ...patch,
         'section': section,
-      });
+      }).timeout(_applicationOperationTimeout);
       await _saveSectionStatus(
         uid,
         section,
@@ -605,7 +644,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
         if (primary['registration'] != null)
           'vehicleRegistration': primary['registration'],
         'section': 'vehicle_details',
-      });
+      }).timeout(_applicationOperationTimeout);
       await _saveSectionStatus(
         uid,
         'vehicle_details',
@@ -629,37 +668,36 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
       if (!allowed.contains(extension)) {
         throw StateError('Please upload JPG, PNG, WEBP or PDF files.');
       }
-      final length = await file.length();
-      if (length > maxRiderDocumentUploadBytes) {
-        throw StateError('Document must be smaller than 8 MiB.');
-      }
+      final validation = riderUploadError(name, await file.length());
+      if (validation != null) throw StateError(validation);
       final bytes = await file.readAsBytes();
-      final safeType = _normalise(documentType);
+      final safeType = riderDocumentType(documentType);
       final idempotencyKey = sha256.convert(
           [...utf8.encode('$uid:$section:$safeType:'), ...bytes]).toString();
-      await _functions.httpsCallable('submitRiderDocument').call({
-        'documentType': safeType,
-        'idempotencyKey': idempotencyKey,
-        'notes': 'Application Centre section: $section',
-        'fileName': name,
-        'contentType': extension == 'pdf'
-            ? 'application/pdf'
-            : 'image/${extension == 'jpg' ? 'jpeg' : extension}',
-        'fileBase64': base64Encode(bytes),
-      }).timeout(_applicationOperationTimeout);
-      await _saveSectionStatus(
-        uid,
-        section,
-        RiderApplicationSectionStatus.submitted,
-      );
-    }, success: 'Document uploaded for Admin review.');
+      await submitRiderDocumentTransport(
+          request: {
+            'documentType': safeType,
+            'idempotencyKey': idempotencyKey,
+            'notes': 'Application Centre section: $section',
+            'fileName': name,
+            'contentType': extension == 'pdf'
+                ? 'application/pdf'
+                : 'image/${extension == 'jpg' ? 'jpeg' : extension}',
+            'fileBase64': base64Encode(bytes),
+          },
+          call: (payload) async {
+            await _functions.httpsCallable('submitRiderDocument').call(payload);
+          });
+    },
+        success: 'Document uploaded for Admin review.',
+        timeout: const Duration(minutes: 2));
   }
 
   Future<void> _submitApplication(String uid) async {
     await _runGuard(() async {
       await _functions.httpsCallable('submitRiderApplication').call({
         'idempotencyKey': 'rider_application:$uid',
-      });
+      }).timeout(_applicationOperationTimeout);
     }, success: 'Application submitted for Admin review.');
   }
 
@@ -671,12 +709,13 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     await _functions.httpsCallable('updateRiderApplicationSection').call({
       'section': section,
       'status': status.storageValue,
-    });
+    }).timeout(_applicationOperationTimeout);
   }
 
   Future<bool> _runGuard(
     Future<void> Function() action, {
     required String success,
+    Duration? timeout,
   }) async {
     setState(() {
       _busy = true;
@@ -685,7 +724,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     try {
       await runBoundedRiderOperation(
         action(),
-        timeout: _applicationOperationTimeout,
+        timeout: timeout ?? _applicationOperationTimeout,
       );
       if (mounted) setState(() => _message = success);
       return true;
@@ -705,6 +744,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
         'unauthenticated' => 'Sign in again to continue your application.',
         'permission-denied' =>
           'This account cannot change that application section.',
+        'failed-precondition' ||
         'invalid-argument' =>
           error.message ?? 'Check the details and try again.',
         'resource-exhausted' =>
@@ -714,6 +754,9 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
           'The connection dropped. Your progress is safe; try again.',
         _ => 'We could not save this application section. Please try again.',
       };
+    }
+    if (error is TimeoutException) {
+      return 'The connection timed out. Your entered details are kept. Try again.';
     }
     if (error is StateError) return error.message;
     return 'We could not save this application section. Please try again.';
@@ -743,31 +786,6 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     }
     return const [];
   }
-
-  static String _normalise(Object? value) => '${value ?? ''}'
-      .trim()
-      .toLowerCase()
-      .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
-      .replaceAll(RegExp(r'_+$'), '');
-
-  static String _documentLabel(String type) => switch (type) {
-        'passport' => 'Passport',
-        'drivers_license' || 'driving_licence' => 'Driving licence',
-        'national_identity_card' => 'National identity card',
-        'right_to_work' || 'work_permit' => 'Right-to-work evidence',
-        'proof_of_address' => 'Proof of address',
-        'identity_selfie' => 'Selfie verification image',
-        'vehicle_registration' || 'v5c' || 'mot' => 'V5C or MOT evidence',
-        'insurance' => 'Insurance evidence',
-        _ => type
-            .split('_')
-            .map(
-              (part) => part.isEmpty
-                  ? part
-                  : '${part[0].toUpperCase()}${part.substring(1)}',
-            )
-            .join(' '),
-      };
 }
 
 class _ApplicationSection {
@@ -977,7 +995,7 @@ class _ProgressChecklist extends StatelessWidget {
       ('Vehicle details', progress.vehicleDetails),
       ('Roth wallet setup', progress.rothWalletSetup),
       ('Payout setup', progress.payoutSetup),
-      ('Application submitted', progress.applicationSubmitted),
+      ('Application received', progress.applicationSubmitted),
       ('Admin review', progress.underReview),
       ('Approved', progress.approved),
     ];
@@ -1218,38 +1236,55 @@ class _DateOfBirthField extends StatelessWidget {
   }
 }
 
-class _VehicleApplicationForm extends StatefulWidget {
-  const _VehicleApplicationForm({required this.load, required this.save});
-
+class RiderVehicleApplicationForm extends StatefulWidget {
+  const RiderVehicleApplicationForm(
+      {super.key, required this.load, required this.save});
   final Future<List<Map<String, dynamic>>> Function() load;
   final Future<void> Function(List<Map<String, dynamic>> vehicles) save;
-
   @override
-  State<_VehicleApplicationForm> createState() =>
+  State<RiderVehicleApplicationForm> createState() =>
       _VehicleApplicationFormState();
 }
 
-class _VehicleApplicationFormState extends State<_VehicleApplicationForm> {
+class _VehicleApplicationFormState extends State<RiderVehicleApplicationForm> {
   final _vehicles = <Map<String, TextEditingController>>[];
   bool _saving = false;
   String? _error;
-
+  static const fields = [
+    'type',
+    'make',
+    'model',
+    'colour',
+    'registration',
+    'year',
+    'ownershipStatus'
+  ];
   @override
   void initState() {
     super.initState();
-    widget.load().then((vehicles) {
+    widget.load().timeout(const Duration(seconds: 20)).then((vehicles) {
       if (!mounted) return;
       setState(() {
-        for (final vehicle in vehicles.take(
-          RiderApplicationCentre.maxVehicles,
-        )) {
+        for (final vehicle
+            in vehicles.take(RiderApplicationCentre.maxVehicles)) {
           _vehicles.add(_controllersFor(vehicle));
         }
         if (_vehicles.isEmpty) _vehicles.add(_controllersFor(const {}));
       });
+    }).catchError((Object error) {
+      if (mounted) {
+        setState(() =>
+            _error = 'Vehicle details could not load. Close and try again.');
+      }
     });
   }
 
+  Map<String, TextEditingController> _controllersFor(
+          Map<String, dynamic> data) =>
+      {
+        for (final key in fields)
+          key: TextEditingController(text: '${data[key] ?? ''}'),
+      };
   @override
   void dispose() {
     for (final vehicle in _vehicles) {
@@ -1261,115 +1296,100 @@ class _VehicleApplicationFormState extends State<_VehicleApplicationForm> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return _SectionScaffold(
-      title: 'Vehicle details',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+  Widget build(BuildContext context) => _SectionScaffold(
+        title: 'Vehicle details',
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           const Text(
-            'Add up to two vehicles. V5C or MOT evidence can satisfy the initial vehicle evidence requirement; insurance can be supplied later unless Admin requests it.',
-            style: TextStyle(color: RiderPalette.muted, height: 1.45),
-          ),
-          const SizedBox(height: 14),
+              'Add up to two vehicles. Documents can be uploaded after your application is received.',
+              style: TextStyle(color: RiderPalette.muted)),
           for (var i = 0; i < _vehicles.length; i++) ...[
-            Text(
-              'Vehicle ${i + 1}',
-              style: const TextStyle(
-                color: RiderPalette.paper,
-                fontWeight: FontWeight.w900,
-              ),
+            const SizedBox(height: 14),
+            Text('Vehicle ${i + 1}',
+                style: const TextStyle(color: RiderPalette.paper)),
+            DropdownButtonFormField<String>(
+              isExpanded: true,
+              initialValue: riderVehicleValue(_vehicles[i]['type']!.text),
+              decoration: const InputDecoration(labelText: 'Vehicle type'),
+              hint: const Text('Choose Motorbike, Car or Van'),
+              items: riderVehicleChoices.entries
+                  .map((entry) => DropdownMenuItem(
+                      value: entry.key, child: Text(entry.value)))
+                  .toList(),
+              onChanged: _saving
+                  ? null
+                  : (value) =>
+                      setState(() => _vehicles[i]['type']!.text = value ?? ''),
             ),
-            const SizedBox(height: 8),
-            for (final key in [
-              'type',
-              'make',
-              'model',
-              'colour',
-              'registration',
-              'year',
-              'ownershipStatus',
-            ]) ...[
+            for (final key in fields.where((key) => key != 'type')) ...[
               TextField(
-                controller: _vehicles[i][key],
-                style: const TextStyle(color: RiderPalette.paper),
-                decoration: InputDecoration(
-                  labelText: _vehicleLabel(key),
-                  labelStyle: const TextStyle(color: RiderPalette.muted),
-                ),
-              ),
+                  controller: _vehicles[i][key],
+                  style: const TextStyle(color: RiderPalette.paper),
+                  decoration: InputDecoration(
+                      labelText: key == 'ownershipStatus'
+                          ? 'Ownership status'
+                          : '${key[0].toUpperCase()}${key.substring(1)}')),
               const SizedBox(height: 9),
             ],
-            const SizedBox(height: 12),
           ],
           if (_vehicles.length < RiderApplicationCentre.maxVehicles)
             OutlinedButton.icon(
-              onPressed: () => setState(() {
-                _vehicles.add(_controllersFor(const {}));
-              }),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Add second vehicle'),
-            ),
-          const SizedBox(height: 12),
+                onPressed: _saving
+                    ? null
+                    : () => setState(
+                        () => _vehicles.add(_controllersFor(const {}))),
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Add second vehicle')),
           FilledButton(
-            onPressed: _saving
-                ? null
-                : () async {
-                    if (_saving) return;
-                    setState(() => _saving = true);
-                    try {
-                      await widget.save([
-                        for (var i = 0; i < _vehicles.length; i++)
-                          {
-                            for (final entry in _vehicles[i].entries)
-                              if (entry.value.text.trim().isNotEmpty)
-                                entry.key: entry.value.text.trim(),
-                            'primary': i == 0,
-                          },
-                      ]).timeout(const Duration(seconds: 15));
-                      if (context.mounted) Navigator.pop(context, true);
-                    } catch (_) {
-                      if (mounted) {
-                        setState(
-                          () => _error =
-                              'Saving took too long or failed. Please try again.',
-                        );
+              onPressed: _saving
+                  ? null
+                  : () async {
+                      setState(() {
+                        _saving = true;
+                        _error = null;
+                      });
+                      try {
+                        if (_vehicles.isEmpty) {
+                          throw StateError(
+                              'Vehicle details could not load. Close and try again.');
+                        }
+                        for (final vehicle in _vehicles) {
+                          if (riderVehicleValue(vehicle['type']!.text) ==
+                              null) {
+                            throw StateError('Choose Motorbike, Car or Van.');
+                          }
+                          if (vehicle['registration']!.text.trim().isEmpty) {
+                            throw StateError(
+                                'Enter your vehicle registration.');
+                          }
+                        }
+                        await widget.save([
+                          for (var i = 0; i < _vehicles.length; i++)
+                            {
+                              for (final entry in _vehicles[i].entries)
+                                if (entry.value.text.trim().isNotEmpty)
+                                  entry.key: entry.key == 'type'
+                                      ? riderVehicleValue(entry.value.text)
+                                      : entry.value.text.trim(),
+                              'primary': i == 0,
+                            },
+                        ]).timeout(const Duration(seconds: 25));
+                        if (context.mounted) Navigator.pop(context, true);
+                      } catch (error) {
+                        if (mounted) {
+                          setState(() => _error = error is StateError
+                              ? error.message
+                              : 'Saving took too long or failed. Please try again.');
+                        }
+                      } finally {
+                        if (mounted) setState(() => _saving = false);
                       }
-                    } finally {
-                      if (mounted) setState(() => _saving = false);
-                    }
-                  },
-            child: Text(_saving ? 'Saving…' : 'Save vehicles'),
-          ),
+                    },
+              child: Text(_saving ? 'Saving…' : 'Save vehicles')),
           if (_error != null)
             Text(_error!, style: const TextStyle(color: RiderPalette.red)),
-        ],
-      ),
-    );
-  }
-
-  Map<String, TextEditingController> _controllersFor(
-    Map<String, dynamic> data,
-  ) {
-    return {
-      for (final key in [
-        'type',
-        'make',
-        'model',
-        'colour',
-        'registration',
-        'year',
-        'ownershipStatus',
-      ])
-        key: TextEditingController(text: '${data[key] ?? ''}'),
-    };
-  }
-
-  String _vehicleLabel(String key) => switch (key) {
-        'type' => 'Vehicle type',
-        'ownershipStatus' => 'Ownership status',
-        _ => '${key[0].toUpperCase()}${key.substring(1)}',
-      };
+        ]),
+      );
 }
 
 class _DocumentUploadSection extends StatefulWidget {
@@ -1392,29 +1412,29 @@ class _DocumentUploadSectionState extends State<_DocumentUploadSection> {
   Future<void> _pickDocument() async {
     try {
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
-        allowMultiple: false,
-      );
+          type: FileType.custom,
+          allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+          allowMultiple: false,
+          withData: true);
       if (result == null || !mounted) return;
-      final path = result.files.single.path;
-      if (path == null) {
-        setState(() =>
-            _error = 'The selected file could not be opened. Choose it again.');
-        return;
+      final selected = result.files.single;
+      final validation = riderUploadError(selected.name, selected.size);
+      if (validation != null) throw RiderDocumentSelectionException(validation);
+      final bytes = selected.bytes;
+      final path = selected.path;
+      if (bytes == null && path == null) {
+        throw const RiderDocumentSelectionException(
+            'The selected file could not be opened. Choose it again.');
       }
-      await RiderDocumentSelection.fromPath(
-        path,
-        fileName: result.files.single.name,
-      );
-      if (mounted) setState(() => _file = XFile(path));
+      setState(() {
+        _file = bytes != null
+            ? XFile.fromData(bytes, name: selected.name)
+            : XFile(path!, name: selected.name);
+        _submitted = false;
+        _error = null;
+      });
     } on RiderDocumentSelectionException catch (error) {
       if (mounted) setState(() => _error = error.message);
-    } on PlatformException {
-      if (mounted) {
-        setState(() =>
-            _error = 'The document picker could not open. Please try again.');
-      }
     } catch (_) {
       if (mounted) {
         setState(() =>
@@ -1446,7 +1466,8 @@ class _DocumentUploadSectionState extends State<_DocumentUploadSection> {
       final file =
           await ImagePicker().pickImage(source: source, imageQuality: 90);
       if (file == null || !mounted) return;
-      await RiderDocumentSelection.fromPath(file.path, fileName: file.name);
+      final validation = riderUploadError(file.name, await file.length());
+      if (validation != null) throw RiderDocumentSelectionException(validation);
       if (mounted) setState(() => _file = file);
     } on PlatformException catch (error) {
       final denied = error.code.toLowerCase().contains('permission') ||
@@ -1479,12 +1500,10 @@ class _DocumentUploadSectionState extends State<_DocumentUploadSection> {
             'v5c',
             'mot',
             'insurance',
-            'vehicle_supporting_document',
           ],
         _ => [
             'passport',
             'national_identity_card',
-            'proof_of_address',
             'identity_selfie',
           ],
       };

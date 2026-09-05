@@ -3,6 +3,10 @@ class RiderAuthError {
 
   static String messageFor(String code) {
     switch (code) {
+      case 'wrong-surface':
+        return 'This account belongs to another Circum app. Sign in with a Rider account.';
+      case 'email-already-in-use':
+        return 'Account already exists. Sign in instead.';
       case 'invalid-email':
         return 'Enter a valid email address.';
       case 'wrong-password':
