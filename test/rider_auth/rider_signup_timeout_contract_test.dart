@@ -29,12 +29,16 @@ void main() {
   test('bounds Rider session restore and profile enrichment operations', () {
     expect(authBloc, contains('_authRestoreTimeout'));
     expect(authBloc, contains('.readAll()'));
-    expect(authBloc, contains('.timeout(_authOperationTimeout))["phone"]'));
+    expect(
+        authBloc,
+        matches(RegExp(
+            r'\.timeout\(\s*_authOperationTimeout\s*,?\s*\)\s*\)\["phone"\]')));
     expect(authBloc, contains('Future.wait(['));
     expect(authBloc, contains(']).timeout(_authRestoreTimeout)'));
     expect(authBloc, contains('vehicleRegistrationDocumentStatus'));
     expect(authBloc, contains('SharedPreferences.getInstance().timeout'));
-    expect(authBloc, contains("setString('riderId', user.uid).timeout"));
+    expect(authBloc,
+        matches(RegExp(r"setString\('riderId', user.uid\)\s*\.timeout")));
     expect(authBloc, contains("step: 'session_restore_preferences'"));
   });
 

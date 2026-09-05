@@ -62,6 +62,7 @@ class AuthState extends AuthInitial {
   final String? otp;
   final String? otpCode;
   final String? resetPasswordOtp;
+  final String? referralMessage;
   final String? errorMessage;
   final bool isPhoneOtpSent;
   final bool isPhoneVerified;
@@ -78,7 +79,7 @@ class AuthState extends AuthInitial {
   final bool? hasLocationPermission;
   final String? vehicleRegistrationDocumentStatus;
 
-// information extracted when the uses 0Auth sign in method
+  // information extracted when the uses 0Auth sign in method
   final String? oAuthFirstName;
   final String? oAuthLastName;
   final String? oAuthEmail;
@@ -119,6 +120,7 @@ class AuthState extends AuthInitial {
         otpCode,
         resetPasswordOtp,
         errorMessage,
+        referralMessage,
         isPhoneOtpSent,
         isPhoneVerified,
         otpErrorMessage,
@@ -172,6 +174,7 @@ class AuthState extends AuthInitial {
     this.pin,
     this.isLoading = false,
     this.errorMessage,
+    this.referralMessage,
     this.isPhoneOtpSent = false,
     this.isPhoneVerified = false,
     this.otpErrorMessage,
@@ -224,6 +227,7 @@ class AuthState extends AuthInitial {
       String? pin,
       bool? isLoading,
       String? errorMessage,
+      String? referralMessage,
       bool? isPhoneOtpSent,
       bool? isPhoneVerified,
       String? otpErrorMessage,
@@ -275,6 +279,7 @@ class AuthState extends AuthInitial {
         pin: pin ?? this.pin,
         isLoading: isLoading ?? this.isLoading,
         errorMessage: errorMessage,
+        referralMessage: referralMessage ?? this.referralMessage,
         isPhoneOtpSent: isPhoneOtpSent ?? this.isPhoneOtpSent,
         isPhoneVerified: isPhoneVerified ?? this.isPhoneVerified,
         otpErrorMessage: otpErrorMessage,

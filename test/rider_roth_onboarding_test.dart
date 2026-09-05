@@ -79,8 +79,10 @@ void main() {
       expect(handler, isNot(contains("collection('riderOnboardingEvents')")));
       expect(handler, isNot(contains("eventType': 'account_created'")));
       expect(handler, contains('runRiderAuthBootstrap('));
-      expect(handler,
-          contains('initializeRothWallet: () => ensureRiderRothWallet(user!)'));
+      expect(
+          handler,
+          contains(
+              'initializeRothWallet: () => ensureRiderRothWallet(accountUser)'));
     });
 
     test('Roth onboarding required keeps Rider in onboarding', () {

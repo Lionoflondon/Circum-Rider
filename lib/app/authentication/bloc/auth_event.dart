@@ -125,7 +125,12 @@ class SignInWithEmail extends AuthEvent {
 class SignUpWithEmail extends AuthEvent {
   final String email;
   final String password;
-  const SignUpWithEmail({required this.email, required this.password});
+  final String referralCode;
+  const SignUpWithEmail({
+    required this.email,
+    required this.password,
+    this.referralCode = '',
+  });
 }
 
 class UpdatePhoneNumber extends AuthEvent {
