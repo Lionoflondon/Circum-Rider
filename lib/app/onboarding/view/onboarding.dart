@@ -1,3 +1,4 @@
+import '../../referrals/rider_referral.dart';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:ui';
@@ -26,9 +27,13 @@ class _OnboardingViewState extends State<OnboardingView> {
   final _email = TextEditingController();
   final _phone = TextEditingController();
   final _password = TextEditingController();
+  final _referral = TextEditingController(
+    text: Uri.base.queryParameters['referral'] ?? '',
+  );
   final _signInEmail = TextEditingController();
   final _signInPassword = TextEditingController();
   final _otp = TextEditingController();
+  String? _shownReferralMessage;
   bool _terms = false;
   bool _privacy = false;
   bool _showPassword = false;
@@ -40,6 +45,7 @@ class _OnboardingViewState extends State<OnboardingView> {
     _email.dispose();
     _phone.dispose();
     _password.dispose();
+    _referral.dispose();
     _signInEmail.dispose();
     _signInPassword.dispose();
     _otp.dispose();
@@ -50,10 +56,24 @@ class _OnboardingViewState extends State<OnboardingView> {
   Widget build(BuildContext context) {
     return BlocConsumer<AuthBloc, AuthState>(
       listenWhen: (previous, current) =>
+          previous.referralMessage != current.referralMessage ||
           previous.status != current.status ||
           previous.isPhoneOtpSent != current.isPhoneOtpSent ||
           previous.isPhoneVerified != current.isPhoneVerified,
       listener: (context, state) {
+        if (state.referralMessage?.isEmpty == true) {
+          _shownReferralMessage = null;
+        }
+        if ((state.referralMessage?.isNotEmpty ?? false) &&
+            state.referralMessage != _shownReferralMessage) {
+          _shownReferralMessage = state.referralMessage;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.referralMessage!),
+              duration: const Duration(seconds: 12),
+            ),
+          );
+        }
         if (state.isPhoneOtpSent && !state.isPhoneVerified) {
           setState(() => _step = _RiderAuthStep.phoneOtp);
         }
@@ -131,6 +151,7 @@ class _OnboardingViewState extends State<OnboardingView> {
           email: _email,
           phone: _phone,
           password: _password,
+          referral: _referral,
           showPassword: _showPassword,
           terms: _terms,
           privacy: _privacy,
@@ -234,6 +255,7 @@ class _OnboardingViewState extends State<OnboardingView> {
     context.read<AuthBloc>().add(SignUpWithEmail(
           email: _email.text.trim(),
           password: _password.text,
+          referralCode: _referral.text,
         ));
   }
 
@@ -499,6 +521,7 @@ class _CreateAccountStep extends StatelessWidget {
     required this.email,
     required this.phone,
     required this.password,
+    required this.referral,
     required this.showPassword,
     required this.terms,
     required this.privacy,
@@ -516,6 +539,7 @@ class _CreateAccountStep extends StatelessWidget {
   final TextEditingController email;
   final TextEditingController phone;
   final TextEditingController password;
+  final TextEditingController referral;
   final bool showPassword;
   final bool terms;
   final bool privacy;
@@ -574,6 +598,12 @@ class _CreateAccountStep extends StatelessWidget {
               ),
             ),
             _PasswordStrength(password: password.text),
+            _AuthField(
+              label: 'REFERRAL CODE (OPTIONAL)',
+              controller: referral,
+              onChanged: onChanged,
+            ),
+            const Text(riderReferralHelper, style: _AuthText.sub),
             const SizedBox(height: 12),
             _ConsentTile(
               value: terms,

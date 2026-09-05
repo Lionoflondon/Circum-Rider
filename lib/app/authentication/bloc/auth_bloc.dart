@@ -1,3 +1,4 @@
+import '../../referrals/rider_referral.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -104,6 +105,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           .timeout(_authRestoreTimeout);
       final status = rider.data()?['onboardingStatus']?.toString();
       if (!riderOnboardingNeedsProfileStart(status)) return;
+      await functions.httpsCallable('updateRiderProfile').call({
+        if (name != null && name.isNotEmpty) 'fullName': name
+      }).timeout(_authOperationTimeout);
       await upsertRiderOnboarding(user: user, data: {
         if (name != null && name.isNotEmpty) 'name': name,
         'onboardingStatus': 'profile_started',
@@ -148,6 +152,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           }
           String? riderPhone = phone;
           bool phoneVerified = false;
+          bool riderAccessVerified = false;
           String? vehicleDocStatus;
           String? riderPhoto;
           var authenticatedStatus = AuthenticatedStatus.authenticated;
@@ -172,6 +177,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 db.collection('riderProfiles').doc(user.uid).get(),
               ]).timeout(_authRestoreTimeout);
             }
+            riderAccessVerified = records[0].exists || records[1].exists;
             final riderRecord = records[0].data() ?? const <String, dynamic>{};
             final riderProfile = records[1].data() ?? const <String, dynamic>{};
             final riderData = <String, dynamic>{
@@ -201,6 +207,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             vehicleDocStatus =
                 await vehicleRegistrationDocumentStatus(user.uid);
           } catch (error) {
+            final cause =
+                error is RiderBootstrapException ? error.cause : error;
+            if (cause is FirebaseException &&
+                cause.code == 'permission-denied') {
+              try {
+                await auth.signOut().timeout(_authOperationTimeout);
+              } catch (_) {}
+              emit(
+                state.copyWith(
+                  status: Status.failure,
+                  currentState: AppState.unauthenticated,
+                  errorMessage:
+                      'This account belongs to Sender or Admin. Sign in on the correct Circum app.',
+                  clearSensitiveAuthFields: true,
+                ),
+              );
+              return;
+            }
             logRiderAuthError(
               error: error,
               path: 'riders/${user.uid}',
@@ -209,6 +233,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             );
           }
 
+          if (!riderAccessVerified) {
+            emit(state.copyWith(
+                status: Status.failure,
+                currentState: AppState.unauthenticated,
+                errorMessage:
+                    'We could not verify Rider access. Sign in again to retry.',
+                clearSensitiveAuthFields: true));
+            return;
+          }
           try {
             final prefs = await SharedPreferences.getInstance()
                 .timeout(_authOperationTimeout);
@@ -1376,6 +1409,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<SignInWithEmail>(
       (event, emit) async {
         var firebaseAuthenticationSucceeded = false;
+        var riderAccessVerified = false;
         try {
           emit(state.copyWith(status: Status.loading));
           final UserCredential userCredential = await auth
@@ -1420,6 +1454,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               );
               documentSnapshot =
                   await documentReference.get().timeout(_authRestoreTimeout);
+            }
+            riderAccessVerified = documentSnapshot.exists;
+            if (!riderAccessVerified) {
+              throw StateError('Rider account setup is incomplete.');
             }
             String? riderPhone = userCredential.user?.phoneNumber;
             var authenticatedStatus = AuthenticatedStatus.authenticated;
@@ -1466,13 +1504,31 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             clearSensitiveAuthFields: true,
           ));
         } catch (error) {
+          final cause = error is RiderBootstrapException ? error.cause : error;
+          if (cause is FirebaseException && cause.code == 'permission-denied') {
+            try {
+              await auth.signOut().timeout(_authOperationTimeout);
+            } catch (_) {}
+            emit(
+              state.copyWith(
+                status: Status.failure,
+                currentState: AppState.unauthenticated,
+                errorMessage:
+                    'This account belongs to Sender or Admin. Sign in on the correct Circum app.',
+                clearSensitiveAuthFields: true,
+              ),
+            );
+            return;
+          }
           logRiderAuthError(
             error: error,
             path: 'riders/${auth.currentUser?.uid ?? 'unknown'}',
             step: 'email_sign_in_enrichment',
             riderDocumentId: auth.currentUser?.uid,
           );
-          if (firebaseAuthenticationSucceeded && auth.currentUser != null) {
+          if (firebaseAuthenticationSucceeded &&
+              riderAccessVerified &&
+              auth.currentUser != null) {
             emit(state.copyWith(
               status: Status.success,
               currentState: AppState.authenticated,
@@ -1484,7 +1540,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           } else {
             emit(state.copyWith(
               status: Status.failure,
-              errorMessage: RiderAuthError.messageFor('unknown'),
+              errorMessage:
+                  'We could not verify Rider access. Sign in again to retry.',
               clearSensitiveAuthFields: true,
             ));
           }
@@ -1507,7 +1564,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         //     // minimumVersion
         //     androidMinimumVersion: '12');
         try {
-          emit(state.copyWith(status: Status.loading));
+          emit(state.copyWith(status: Status.loading, referralMessage: ''));
+          var createdNewAccount = false;
           User? user = auth.currentUser;
           final normalizedEmail = event.email.trim().toLowerCase();
           if (user?.email?.trim().toLowerCase() != normalizedEmail) {
@@ -1516,24 +1574,42 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                     email: event.email, password: event.password)
                 .timeout(_signupOperationTimeout);
             user = userCredential.user;
+            createdNewAccount = true;
           }
 
           final fullName =
               '${state.firstName ?? ''} ${state.lastName ?? ''}'.trim();
-          if (user != null && fullName.isNotEmpty) {
-            await runRiderAuthBootstrap(
-              timeout: _signupBootstrapTimeout,
-              updateDisplayName: () => user!.updateDisplayName(fullName),
-              initializeProfile: () => ensureRiderOnboardingStarted(
-                user: user!,
-                name: fullName,
-              ),
-              initializeRothWallet: () => ensureRiderRothWallet(user!),
-            );
+          if (user == null) {
+            throw StateError('Account creation did not complete.');
           }
+          final accountUser = user;
+          await runRiderAuthBootstrap(
+            timeout: _signupBootstrapTimeout,
+            updateDisplayName: () async {
+              if (createdNewAccount && fullName.isNotEmpty) {
+                await accountUser.updateDisplayName(fullName);
+              }
+            },
+            initializeProfile: () => ensureRiderOnboardingStarted(
+              user: accountUser,
+              name: createdNewAccount ? fullName : accountUser.displayName,
+            ),
+            initializeRothWallet: () => ensureRiderRothWallet(accountUser),
+          );
+
+          final referralMessage = await applyRiderReferral(
+            code: event.referralCode,
+            attach: (code) async {
+              final result = await functions
+                  .httpsCallable('attachReferralCode')
+                  .call({'referralCode': code, 'program': 'rider'});
+              return '${(result.data as Map)['status']}';
+            },
+          );
 
           emit(state.copyWith(
-            username: fullName.isEmpty ? state.username : fullName,
+            referralMessage: referralMessage,
+            username: createdNewAccount ? fullName : accountUser.displayName,
             status: Status.initial,
             clearSensitiveAuthFields: true,
           ));

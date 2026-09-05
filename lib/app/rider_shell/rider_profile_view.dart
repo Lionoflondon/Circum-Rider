@@ -1,3 +1,4 @@
+import '../referrals/rider_referral_view.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -142,6 +143,13 @@ class _RiderProfileScreen extends StatelessWidget {
                       _ProfileSection(
                         title: 'Account',
                         rows: [
+                          _ProfileRow(
+                            icon: Icons.card_giftcard,
+                            title: 'Rider Referrals',
+                            description: 'Invite a Rider and earn 5 Roth',
+                            onTap: () =>
+                                _open(context, const RiderReferralView()),
+                          ),
                           _ProfileRow(
                             icon: Icons.badge_outlined,
                             title: 'Personal Details',
