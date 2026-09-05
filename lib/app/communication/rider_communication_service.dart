@@ -240,38 +240,32 @@ class RiderCommunicationService {
   }
 
   Future<void> markNotificationRead(String id) =>
-      firestore.collection('notifications').doc(id).set({
-        'read': true,
-        'isRead': true,
-        'readAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      _updateNotificationState([id], 'mark_read');
 
-  Future<void> markAllNotificationsRead(Iterable<String> ids) async {
-    final batch = firestore.batch();
-    for (final id in ids) {
-      batch.set(
-        firestore.collection('notifications').doc(id),
-        {
-          'read': true,
-          'isRead': true,
-          'readAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-    }
-    await batch.commit();
-  }
+  Future<void> markAllNotificationsRead(Iterable<String> ids) =>
+      _updateNotificationState(ids, 'mark_read');
 
   Future<void> archiveNotification(String id) =>
-      firestore.collection('notifications').doc(id).set({
-        'archived': true,
-        'archivedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      _updateNotificationState([id], 'archive');
 
   Future<void> deleteNotification(String id) =>
-      firestore.collection('notifications').doc(id).set({
-        'deletedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      _updateNotificationState([id], 'delete');
+
+  Future<void> _updateNotificationState(
+      Iterable<String> ids, String action) async {
+    final notificationIds = ids
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    // The callable accepts at most 100 notification IDs per transaction.
+    for (var offset = 0; offset < notificationIds.length; offset += 100) {
+      await functions.httpsCallable('updateRiderNotificationState').call({
+        'notificationIds': notificationIds.skip(offset).take(100).toList(),
+        'action': action,
+      }).timeout(const Duration(seconds: 20));
+    }
+  }
 }
 
 class RiderTypingController {
