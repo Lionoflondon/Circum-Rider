@@ -44,12 +44,17 @@ class _MapsViewState extends State<MapsView> {
     try {
       final GoogleMapController mapController =
           await _controller.future.timeout(_mapControllerTimeout);
-      await mapController.animateCamera(CameraUpdate.newLatLngBounds(
-          LatLngBounds(
-              southwest: LatLng(minLat, minLong),
-              northeast: LatLng(maxLat, maxLong)),
-          70));
+      await mapController
+          .animateCamera(CameraUpdate.newLatLngBounds(
+              LatLngBounds(
+                  southwest: LatLng(minLat, minLong),
+                  northeast: LatLng(maxLat, maxLong)),
+              70))
+          .timeout(_mapControllerTimeout);
     } on TimeoutException {
+      return;
+    } catch (_) {
+      // A disposed or unavailable native map must not escape into the UI.
       return;
     }
   }
@@ -58,10 +63,15 @@ class _MapsViewState extends State<MapsView> {
     try {
       final GoogleMapController mapController =
           await _controller.future.timeout(_mapControllerTimeout);
-      await mapController.animateCamera(
-        CameraUpdate.newCameraPosition(cameraPosition),
-      );
+      await mapController
+          .animateCamera(
+            CameraUpdate.newCameraPosition(cameraPosition),
+          )
+          .timeout(_mapControllerTimeout);
     } on TimeoutException {
+      return;
+    } catch (_) {
+      // A disposed or unavailable native map must not escape into the UI.
       return;
     }
   }
