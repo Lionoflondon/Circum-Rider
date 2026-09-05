@@ -44,7 +44,8 @@ void main() {
 
   test('every Application Centre mutation is bounded by the shared guard', () {
     expect(source, contains('runBoundedRiderOperation('));
-    expect(source, contains('timeout: _applicationOperationTimeout'));
+    expect(
+        source, contains('timeout: timeout ?? _applicationOperationTimeout'));
     expect(source, contains('finally {'));
     expect(source, contains('setState(() => _busy = false)'));
   });

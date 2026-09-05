@@ -21,7 +21,7 @@ void main() {
         contains(
             "allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf']"));
     expect(auth, contains("httpsCallable('submitRiderDocument')"));
-    expect(auth, contains('.timeout(_documentUploadOperationTimeout)'));
+    expect(auth, contains('timeout: _documentUploadOperationTimeout'));
     expect(applicationCentre, contains('FilePicker.platform.pickFiles'));
     expect(applicationCentre, contains("'Upload Document'"));
     expect(applicationCentre, contains("'Photo / Camera'"));

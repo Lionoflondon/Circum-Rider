@@ -50,7 +50,12 @@ class RiderAccountStatusView extends StatelessWidget {
                       style: const TextStyle(
                           color: Color(0xFFD1D5DB), height: 1.45)),
                   const SizedBox(height: 22),
-                  if (accountState == RiderAccountState.moreInformationRequired)
+                  if (accountState ==
+                          RiderAccountState.moreInformationRequired ||
+                      accountState == RiderAccountState.pendingReview ||
+                      accountState == RiderAccountState.submitted ||
+                      accountState == RiderAccountState.onboardingInProgress ||
+                      accountState == RiderAccountState.onboardingNotStarted)
                     RiderPrimaryButton(
                       label: 'Continue application',
                       onPressed: () => Navigator.pushReplacement(
