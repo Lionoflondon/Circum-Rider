@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../authentication/bloc/auth_bloc.dart';
+import 'rider_vehicle_updates.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
 
@@ -680,7 +681,8 @@ class RiderVehicleManagerView extends StatelessWidget {
                       Wrap(spacing: 8, children: [
                         if (!active)
                           TextButton(
-                              onPressed: () => _setActive(vehicles, index),
+                              onPressed: () => _runChange(
+                                  context, () => _setActive(vehicles, index)),
                               child: const Text('Set active')),
                         TextButton(
                             onPressed: () =>
@@ -700,39 +702,31 @@ class RiderVehicleManagerView extends StatelessWidget {
         ),
       );
 
-  List<Map<String, dynamic>> _vehicles(Map<String, dynamic> data) {
-    final value = data['vehicles'];
-    if (value is Iterable) {
-      return value
-          .whereType<Map>()
-          .map((e) => Map<String, dynamic>.from(e))
-          .toList();
-    }
-    if (data['vehicle'] is Map) {
-      return [Map<String, dynamic>.from(data['vehicle'] as Map)];
-    }
-    return [];
-  }
+  List<Map<String, dynamic>> _vehicles(Map<String, dynamic> data) =>
+      riderEditableVehicles(data);
 
-  Future<void> _persist(List<Map<String, dynamic>> vehicles) async {
-    final active = vehicles.cast<Map<String, dynamic>?>().firstWhere(
-        (v) => v?['primary'] == true,
-        orElse: () => vehicles.isEmpty ? null : vehicles.first);
-    final patch = <String, dynamic>{
-      'vehicles': vehicles,
-      if (active != null) 'vehicle': active,
-      if (active != null) 'vehicleType': active['type'],
-      if (active != null) 'vehicleRegistration': active['registration'],
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-    final batch = FirebaseFirestore.instance.batch();
-    batch.set(FirebaseFirestore.instance.collection('riders').doc(userId),
-        patch, SetOptions(merge: true));
-    batch.set(
-        FirebaseFirestore.instance.collection('riderProfiles').doc(userId),
-        patch,
-        SetOptions(merge: true));
-    await batch.commit();
+  Future<void> _persist(List<Map<String, dynamic>> vehicles) =>
+      saveRiderVehicles(FirebaseFunctions.instance, vehicles);
+
+  Future<void> _runChange(
+      BuildContext context, Future<void> Function() change) async {
+    try {
+      await change();
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Vehicle details saved. Changes may need review.'),
+        ));
+      }
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(error is StateError
+            ? error.message
+            : 'Vehicle details could not be saved. Please retry.'),
+        action: SnackBarAction(
+            label: 'Retry', onPressed: () => _runChange(context, change)),
+      ));
+    }
   }
 
   Future<void> _setActive(
@@ -768,7 +762,7 @@ class RiderVehicleManagerView extends StatelessWidget {
     if (next.isNotEmpty && !next.any((v) => v['primary'] == true)) {
       next[0] = {...next[0], 'primary': true, 'active': true};
     }
-    await _persist(next);
+    if (context.mounted) await _runChange(context, () => _persist(next));
   }
 
   Future<void> _editVehicle(BuildContext context, Map<String, dynamic>? source,
@@ -780,18 +774,25 @@ class RiderVehicleManagerView extends StatelessWidget {
       builder: (_) => _VehicleEditor(source: source),
     );
     if (result == null) return;
-    final snap = await FirebaseFirestore.instance
-        .collection('riderProfiles')
-        .doc(userId)
-        .get();
-    final vehicles = _vehicles(snap.data() ?? const {});
-    if (index == null) {
-      vehicles.add(
-          {...result, 'primary': vehicles.isEmpty, 'active': vehicles.isEmpty});
-    } else if (index < vehicles.length) {
-      vehicles[index] = {...vehicles[index], ...result};
-    }
-    await _persist(vehicles);
+    if (!context.mounted) return;
+    List<Map<String, dynamic>>? pendingVehicles;
+    await _runChange(context, () async {
+      if (pendingVehicles == null) {
+        final snap = await FirebaseFirestore.instance
+            .collection('riderProfiles')
+            .doc(userId)
+            .get()
+            .timeout(const Duration(seconds: 20));
+        final vehicles = _vehicles(snap.data() ?? const {});
+        if (index == null) {
+          vehicles.add({...result, 'primary': vehicles.isEmpty});
+        } else if (index < vehicles.length) {
+          vehicles[index] = {...vehicles[index], ...result};
+        }
+        pendingVehicles = vehicles;
+      }
+      await _persist(pendingVehicles!);
+    });
   }
 
   String _vehicleName(Map<String, dynamic> v) => [

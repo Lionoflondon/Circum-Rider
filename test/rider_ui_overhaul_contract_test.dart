@@ -252,8 +252,14 @@ void main() {
       expect(File('lib/app/support/view/faq.dart').existsSync(), isFalse);
       expect(profileDetails, contains('Add vehicle'));
       expect(profileDetails, contains('Set active'));
-      expect(profileDetails, contains("'vehicles': vehicles"));
-      expect(profileDetails, contains("'vehicle': active"));
+      final vehicleManager = profileDetails
+          .split('class RiderVehicleManagerView')
+          .last
+          .split('class _VehicleEditor')
+          .first;
+      expect(vehicleManager, contains('saveRiderVehicles('));
+      expect(vehicleManager, isNot(contains('batch.commit')));
+      expect(vehicleManager, isNot(contains('batch.set')));
       expect(profileDetails, contains("_field(_phone, 'Phone',"));
       expect(profileDetails, contains('readOnly: true'));
       expect(profileDetails, isNot(contains("'phoneNumber': _phone.text")));
