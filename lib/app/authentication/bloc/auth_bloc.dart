@@ -30,6 +30,7 @@ import '../apple_auth_nonce.dart';
 import '../rider_auth_error.dart';
 import '../rider_auth_bootstrap.dart';
 import '../rider_terminal_operations.dart';
+import '../phone_verification_deadline.dart';
 // import '../../onboarding/view/onboarding.dart';
 
 part 'auth_event.dart';
@@ -370,33 +371,36 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
         try {
           emit(state.copyWith(status: Status.loading, otpErrorMessage: null));
-          await auth.verifyPhoneNumber(
-            phoneNumber: phoneNumber,
-            forceResendingToken:
-                event is ResendPhoneOtp ? state.resendToken : null,
-            verificationCompleted: (credential) {},
-            verificationFailed: (error) {
-              logRiderAuthError(
-                error: error,
-                path: 'riders/${auth.currentUser?.uid ?? 'unknown'}',
-                step: 'phone_otp_send',
-                riderDocumentId: auth.currentUser?.uid,
-              );
-              if (!completer.isCompleted) completer.completeError(error);
-            },
-            codeSent: (id, token) {
-              verificationId = id;
-              resendToken = token;
-              if (!completer.isCompleted) completer.complete();
-            },
-            codeAutoRetrievalTimeout: (id) {
-              verificationId = id;
-              if (!completer.isCompleted) {
-                completer.completeError(TimeoutException('phone_otp_send'));
-              }
-            },
+          await awaitPhoneVerification(
+            start: () => auth.verifyPhoneNumber(
+              phoneNumber: phoneNumber,
+              forceResendingToken:
+                  event is ResendPhoneOtp ? state.resendToken : null,
+              verificationCompleted: (credential) {},
+              verificationFailed: (error) {
+                logRiderAuthError(
+                  error: error,
+                  path: 'riders/${auth.currentUser?.uid ?? 'unknown'}',
+                  step: 'phone_otp_send',
+                  riderDocumentId: auth.currentUser?.uid,
+                );
+                if (!completer.isCompleted) completer.completeError(error);
+              },
+              codeSent: (id, token) {
+                verificationId = id;
+                resendToken = token;
+                if (!completer.isCompleted) completer.complete();
+              },
+              codeAutoRetrievalTimeout: (id) {
+                verificationId = id;
+                if (!completer.isCompleted) {
+                  completer.completeError(TimeoutException('phone_otp_send'));
+                }
+              },
+            ),
+            completion: completer.future,
+            timeout: _authOperationTimeout,
           );
-          await completer.future.timeout(_authOperationTimeout);
           emit(state.copyWith(
             verificationId: verificationId,
             resendToken: resendToken ?? state.resendToken,
@@ -641,24 +645,28 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
         try {
           emit(state.copyWith(status: Status.loading));
-          await auth.verifyPhoneNumber(
-            phoneNumber: state.phoneNumber,
-            verificationCompleted: (_) {},
-            verificationFailed: (error) {
-              if (!completer.isCompleted) completer.completeError(error);
-            },
-            codeSent: (String verificationId, int? resendToken) async {
-              verificationIdValue = verificationId;
-              resendTokenValue = resendToken;
-              if (!completer.isCompleted) completer.complete(true);
-            },
-            codeAutoRetrievalTimeout: (_) {
-              if (!completer.isCompleted) {
-                completer.completeError(TimeoutException('phone_otp_request'));
-              }
-            },
+          await awaitPhoneVerification(
+            start: () => auth.verifyPhoneNumber(
+              phoneNumber: state.phoneNumber,
+              verificationCompleted: (_) {},
+              verificationFailed: (error) {
+                if (!completer.isCompleted) completer.completeError(error);
+              },
+              codeSent: (String verificationId, int? resendToken) async {
+                verificationIdValue = verificationId;
+                resendTokenValue = resendToken;
+                if (!completer.isCompleted) completer.complete(true);
+              },
+              codeAutoRetrievalTimeout: (_) {
+                if (!completer.isCompleted) {
+                  completer
+                      .completeError(TimeoutException('phone_otp_request'));
+                }
+              },
+            ),
+            completion: completer.future,
+            timeout: _authOperationTimeout,
           );
-          await completer.future.timeout(_authOperationTimeout);
           emit(state.copyWith(
               verificationId: verificationIdValue,
               resendToken: resendTokenValue,
