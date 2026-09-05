@@ -6,6 +6,22 @@ import 'package:circum_rider/app/home/bloc/home_bloc.dart';
 void main() {
   final source = File('lib/app/home/bloc/home_bloc.dart').readAsStringSync();
 
+  test('all native presence permission queries have deadlines', () {
+    for (final method in [
+      'isLocationServiceEnabled',
+      'checkPermission',
+      'requestPermission'
+    ]) {
+      final calls =
+          RegExp('Geolocator\\.$method\\(\\)').allMatches(source).length;
+      final bounded = RegExp('Geolocator\\.$method\\(\\)\\s*\\.timeout\\(')
+          .allMatches(source)
+          .length;
+      expect(calls, greaterThan(0));
+      expect(bounded, calls, reason: method);
+    }
+  });
+
   test('HomeBloc owns lifecycle-aware presence heartbeat recovery', () {
     expect(source, contains('with WidgetsBindingObserver'));
     expect(source, contains('WidgetsBinding.instance.addObserver(this)'));

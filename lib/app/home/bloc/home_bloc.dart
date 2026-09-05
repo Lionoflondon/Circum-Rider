@@ -1079,9 +1079,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   }) async {
     var permission = LocationPermission.denied;
     try {
-      final servicesEnabled = await Geolocator.isLocationServiceEnabled();
+      final servicesEnabled = await Geolocator.isLocationServiceEnabled()
+          .timeout(const Duration(seconds: 20));
       if (!servicesEnabled) return null;
-      permission = await Geolocator.checkPermission();
+      permission = await Geolocator.checkPermission()
+          .timeout(const Duration(seconds: 20));
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         return null;
@@ -1114,14 +1116,17 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   Future<Map<String, dynamic>> _freshPresenceLocationPayload(
     Emitter<HomeState> emit,
   ) async {
-    if (!await Geolocator.isLocationServiceEnabled()) {
+    if (!await Geolocator.isLocationServiceEnabled()
+        .timeout(const Duration(seconds: 20))) {
       throw const RiderLocationException(
         'Location Services are off. Enable them in Settings to go online.',
       );
     }
-    var permission = await Geolocator.checkPermission();
+    var permission =
+        await Geolocator.checkPermission().timeout(const Duration(seconds: 20));
     if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
+      permission = await Geolocator.requestPermission()
+          .timeout(const Duration(seconds: 20));
     }
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
