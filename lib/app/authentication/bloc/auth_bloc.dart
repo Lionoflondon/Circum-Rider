@@ -84,9 +84,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     Future<void> verifyRiderSurface(User? user) async {
       if (user == null) throw FirebaseAuthException(code: 'user-not-found');
       try {
-        await functions
+        final access = await functions
             .httpsCallable('verifyRiderAccountAccess')
             .call({}).timeout(_authOperationTimeout);
+        if (access.data is Map && access.data['profileExists'] == false) {
+          await functions
+              .httpsCallable('updateRiderProfile')
+              .call({}).timeout(_authOperationTimeout);
+        }
       } on FirebaseFunctionsException catch (error) {
         if (error.code == 'permission-denied') {
           try {

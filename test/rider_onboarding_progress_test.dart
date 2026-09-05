@@ -140,5 +140,11 @@ void main() {
         source.split('await verifyRiderSurface(userCredential.user);').length,
         4);
     expect(source, contains('await verifyRiderSurface(user);'));
+    final guard = source.substring(
+        source.indexOf('Future<void> verifyRiderSurface('),
+        source.indexOf('Future<void> upsertRiderOnboarding('));
+    expect(guard, contains("access.data['profileExists'] == false"));
+    expect(guard.indexOf("httpsCallable('verifyRiderAccountAccess')"),
+        lessThan(guard.indexOf("httpsCallable('updateRiderProfile')")));
   });
 }
