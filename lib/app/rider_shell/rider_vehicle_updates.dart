@@ -16,7 +16,12 @@ List<Map<String, dynamic>> riderEditableVehicles(Map<String, dynamic> profile) {
   if (primary > 0) vehicles.insert(0, vehicles.removeAt(primary));
   return [
     for (final vehicle in vehicles)
-      {...vehicle, 'make': vehicle['make'] ?? vehicle['manufacturer'] ?? ''},
+      {
+        ...vehicle,
+        'make': vehicle['make'] ?? vehicle['manufacturer'] ?? '',
+        'manufacturer': vehicle['manufacturer'] ?? vehicle['make'] ?? '',
+        'registration': vehicle['registration'] ?? vehicle['plateNumber'] ?? '',
+      },
   ];
 }
 
@@ -44,7 +49,7 @@ Future<void> saveRiderVehicles(
       'registration': registration,
       for (final key in ['make', 'model', 'colour', 'year', 'ownershipStatus'])
         key:
-            '${vehicle[key] ?? (key == 'make' ? vehicle['manufacturer'] : '') ?? ''}'
+            '${(key == 'make' ? vehicle['manufacturer'] ?? vehicle['make'] : vehicle[key]) ?? ''}'
                 .trim(),
       'primary': i == 0,
     });

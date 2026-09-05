@@ -78,6 +78,34 @@ void main() {
           'vehicleMakeModel'
         ]));
   });
+  test(
+      'canonical vehicle data rehydrates and edits preserve the chosen primary',
+      () async {
+    final functions = _Functions();
+    final values = riderEditableVehicles({
+      'vehicles': [
+        {
+          'type': 'car',
+          'registration': 'CAR 1',
+          'make': 'Old',
+          'primary': true
+        },
+        {'type': 'van', 'registration': 'VAN 2', 'make': 'Van'},
+      ]
+    });
+    expect(values.first['manufacturer'], 'Old');
+    values[0]['primary'] = false;
+    values[1]['primary'] = true;
+    values[1]['manufacturer'] = 'Edited';
+    await saveRiderVehicles(functions, values);
+    expect(functions.payload!['vehicleType'], 'van');
+    expect(functions.payload!['vehicleMakeModel'], 'Edited');
+    expect(
+        riderEditableVehicles({
+          'vehicle': {'type': 'car', 'plateNumber': 'LEGACY'}
+        }).single['registration'],
+        'LEGACY');
+  });
   test('backend errors propagate so the form can retain values for retry',
       () async {
     final functions = _Functions()
