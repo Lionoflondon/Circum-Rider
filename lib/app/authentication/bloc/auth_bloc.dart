@@ -1098,35 +1098,81 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<UpdateFirstName>(((event, emit) async {
       try {
-        User? user = auth.currentUser;
+        final user = auth.currentUser;
+        if (user == null) {
+          throw const RiderOperationFailure(
+              'Sign in again to update your name.');
+        }
         final lastName = state.username?.trim().split(' ').last;
 
         if (lastName != null) {
-          await user?.updateDisplayName('${event.value} $lastName');
+          await user
+              .updateDisplayName('${event.value} $lastName')
+              .timeout(_authOperationTimeout);
           emit(state.copyWith(username: '${event.value} $lastName'));
         } else {
-          await user?.updateDisplayName(event.value);
+          await user
+              .updateDisplayName(event.value)
+              .timeout(_authOperationTimeout);
           emit(state.copyWith(username: event.value));
         }
+      } on TimeoutException {
+        emit(state.copyWith(
+          status: Status.failure,
+          isLoading: false,
+          errorMessage:
+              'Name update took too long. Check your profile before retrying.',
+        ));
+      } on RiderOperationFailure catch (error) {
+        emit(state.copyWith(
+            status: Status.failure,
+            isLoading: false,
+            errorMessage: error.safeMessage));
       } catch (_) {
-        emit(state.copyWith(status: Status.failure));
+        emit(state.copyWith(
+            status: Status.failure,
+            isLoading: false,
+            errorMessage: 'Your name could not be updated. Please try again.'));
       }
     }));
 
     on<UpdateLastName>(((event, emit) async {
       try {
-        User? user = auth.currentUser;
+        final user = auth.currentUser;
+        if (user == null) {
+          throw const RiderOperationFailure(
+              'Sign in again to update your name.');
+        }
         final firstName = state.username?.trim().split(' ').first;
 
         if (firstName != null) {
-          await user?.updateDisplayName('$firstName ${event.value}');
+          await user
+              .updateDisplayName('$firstName ${event.value}')
+              .timeout(_authOperationTimeout);
           emit(state.copyWith(username: '$firstName ${event.value}'));
         } else {
-          await user?.updateDisplayName(event.value);
+          await user
+              .updateDisplayName(event.value)
+              .timeout(_authOperationTimeout);
           emit(state.copyWith(username: event.value));
         }
+      } on TimeoutException {
+        emit(state.copyWith(
+          status: Status.failure,
+          isLoading: false,
+          errorMessage:
+              'Name update took too long. Check your profile before retrying.',
+        ));
+      } on RiderOperationFailure catch (error) {
+        emit(state.copyWith(
+            status: Status.failure,
+            isLoading: false,
+            errorMessage: error.safeMessage));
       } catch (_) {
-        emit(state.copyWith(status: Status.failure));
+        emit(state.copyWith(
+            status: Status.failure,
+            isLoading: false,
+            errorMessage: 'Your name could not be updated. Please try again.'));
       }
     }));
 
@@ -1782,23 +1828,31 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     });
 
     on<ResetPassword>((event, emit) async {
+      emit(state.copyWith(
+          status: Status.loading, isLoading: true, errorMessage: ''));
       try {
-        emit(state.copyWith(status: Status.loading));
         await auth
-            .sendPasswordResetEmail(email: event.email)
+            .sendPasswordResetEmail(email: event.email.trim())
             .timeout(_authOperationTimeout);
-        emit(state.copyWith(status: Status.passwordResetEmailSent));
-      } on FirebaseAuthException catch (err) {
-        emit(state.copyWith(status: Status.failure));
-        if (err.code == 'invalid-email') {
-          emit(state.copyWith(errorMessage: 'Invalid email'));
-        }
-
-        if (err.code == 'user-not-found') {
-          emit(state.copyWith(errorMessage: 'User not found'));
-        }
-      } catch (err) {
-        emit(state.copyWith(status: Status.failure));
+        emit(state.copyWith(
+            status: Status.passwordResetEmailSent, isLoading: false));
+      } on FirebaseAuthException catch (error) {
+        emit(state.copyWith(
+            status: Status.failure,
+            isLoading: false,
+            errorMessage: RiderAuthError.messageFor(error.code)));
+      } on TimeoutException {
+        emit(state.copyWith(
+            status: Status.failure,
+            isLoading: false,
+            errorMessage:
+                'Password reset took too long. Check your email before trying again.'));
+      } catch (_) {
+        emit(state.copyWith(
+            status: Status.failure,
+            isLoading: false,
+            errorMessage:
+                'We could not send the reset email. Please try again.'));
       }
     });
   }
