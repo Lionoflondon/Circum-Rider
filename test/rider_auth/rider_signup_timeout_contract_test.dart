@@ -45,7 +45,8 @@ void main() {
     );
     expect(authBloc, contains("TimeoutException('phone_otp_send')"));
     expect(authBloc, contains("TimeoutException('phone_otp_request')"));
-    expect(authBloc, contains('await awaitPhoneVerification('));
+    expect(
+        authBloc, contains('completer.future.timeout(_authOperationTimeout)'));
     expect(otpHandler, contains('if (!completer.isCompleted)'));
     expect(otpHandler, contains("step: 'request_phone_otp'"));
     expect(otpHandler,
