@@ -92,7 +92,7 @@ void main() {
       expect(dashboard, contains("collection('riderEarnings')"));
       expect(dashboard, contains("collection('deliveryRequests')"));
       expect(dashboard, contains('watchUnreadNotificationCount'));
-      expect(dashboard, contains("where('status', isEqualTo: 'requested')"));
+      expect(dashboard, contains("stream: _authorizedOffers"));
       expect(dashboard, contains('Good '));
       expect(dashboard, contains('Go online'));
       expect(dashboard, contains('Available deliveries'));

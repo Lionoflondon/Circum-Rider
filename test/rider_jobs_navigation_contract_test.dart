@@ -43,7 +43,10 @@ void main() {
       expect(dashboard, contains('onAction: () => onSelectTab(1)'));
       expect(dashboard, contains('onTap: () => onSelectTab(1)'));
       expect(dashboard, contains("label: 'Jobs'"));
-      expect(dashboard, contains("where('status', isEqualTo: 'requested')"));
+      expect(dashboard,
+          matches(RegExp(r"RiderOfferFeed\(\)\s*\.watch\(riderId: uid\)")));
+      expect(dashboard,
+          isNot(contains("where('status', isEqualTo: 'requested')")));
       expect(dashboard, contains('Open delivery offers'));
       expect(dashboard, isNot(contains('Open the marketplace')));
       expect(dashboard, isNot(contains('MarketplaceView')));
@@ -56,7 +59,9 @@ void main() {
       expect(offers, contains('RiderOfferStack'));
       expect(offers, contains("import 'rider_offer_card.dart'"));
       expect(offerCard, contains('Accept Delivery'));
-      expect(offers, contains("where('status', isEqualTo: 'requested')"));
+      expect(offers, contains("RiderOfferFeed().watch(riderId: user.uid)"));
+      expect(
+          offers, isNot(contains("where('status', isEqualTo: 'requested')")));
       expect(offers, contains('No offers nearby'));
       expect(
           offers,

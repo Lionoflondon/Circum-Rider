@@ -439,12 +439,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         'getAvailableRequests',
       );
       final response = await callable.call();
-      final dispatchRequests = (response.data['nearestRequests'] as List)
-          .map((doc) => DispatchRequest.fromJson(doc))
-          .toList();
+      // Offer cards are owned by RiderOfferFeed. This legacy bloc retains only
+      // assigned delivery DTOs; projected offers intentionally lack private GPS/contact fields.
+      if (response.data['riderId'] != auth.currentUser?.uid) {
+        throw StateError(
+            'Offer authorization does not match the signed-in Rider');
+      }
       emit(
         state.copyWith(
-          dispatchRequests: dispatchRequests,
+          dispatchRequests: const [],
           requestStatus: RequestStatus.success,
         ),
       );
@@ -607,7 +610,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         final requestID = requests[event.selectedRequestIndex].requestId;
         final docReference = db
             .collection('deliveryRequests')
-            .where('requestId', isEqualTo: requestID);
+            .where('requestId', isEqualTo: requestID)
+            .where('riderId', isEqualTo: user.uid);
 
         try {
           final docResponse = await docReference.get().timeout(
