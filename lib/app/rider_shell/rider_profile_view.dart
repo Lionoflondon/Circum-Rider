@@ -434,7 +434,9 @@ class _RiderProfileData {
 
   String get customerRating {
     final rating = number('rating', fallback: number('customerRating'));
-    return rating <= 0 ? '—' : rating.toStringAsFixed(1);
+    return rating <= 0
+        ? '—'
+        : '${rating.toStringAsFixed(1)} (${whole('totalRatings', fallback: '0')})';
   }
 
   String get acceptanceRate => percent('acceptanceRate');
