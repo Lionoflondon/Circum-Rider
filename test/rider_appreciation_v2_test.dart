@@ -9,7 +9,7 @@ void main() {
     final view =
         File('lib/app/ratings/rider_appreciation.dart').readAsStringSync();
     expect(shell, contains('RiderAppreciationListener'));
-    expect(view, contains("collection('driverRatings')"));
+    expect(view, contains("collection('publishedDriverRatings')"));
     expect(view, contains("collection('deliveryTips')"));
     expect(view, contains("collection('riderEarnings')"));
   });

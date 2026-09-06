@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -33,11 +34,35 @@ class _RiderAppreciationListenerState extends State<RiderAppreciationListener> {
     if (riderId == null) return;
     final prefs = await SharedPreferences.getInstance();
     _lastSeenMillis = prefs.getInt('lastSeenRiderRatingAt') ?? 0;
+    unawaited(_repairFeedback());
     _subscription = FirebaseFirestore.instance
-        .collection('driverRatings')
+        .collection('publishedDriverRatings')
         .where('riderId', isEqualTo: riderId)
         .snapshots()
         .listen(_onRatings);
+  }
+
+  Future<void> _repairFeedback() async {
+    try {
+      var cursors = <String, dynamic>{};
+      var hasMore = true;
+      while (hasMore && mounted) {
+        final result = await FirebaseFunctions.instanceFor(
+                region: 'us-central1')
+            .httpsCallable('repairRiderRatingFeedback')
+            .call({'cursors': cursors}).timeout(const Duration(seconds: 20));
+        final data = Map<String, dynamic>.from(result.data as Map);
+        cursors = Map<String, dynamic>.from(data['cursors'] as Map);
+        hasMore = data['hasMore'] == true;
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
+          content: Text(
+              'Older feedback could not be loaded. Please try again later.'),
+        ));
+      }
+    }
   }
 
   Future<void> _onRatings(QuerySnapshot<Map<String, dynamic>> snapshot) async {
@@ -120,14 +145,26 @@ class RiderAppreciationView extends StatelessWidget {
                       .doc(riderId)
                       .snapshots(),
                   builder: (context, profileSnapshot) {
-                    return _AppreciationSurface(
-                      rating: rating,
-                      tip: tip,
-                      earnings: {
-                        ...earnings,
-                        ...?profileSnapshot.data?.data(),
-                      },
-                      onContinue: () => Navigator.of(context).pop(),
+                    return StreamBuilder<
+                        DocumentSnapshot<Map<String, dynamic>>>(
+                      stream: FirebaseFirestore.instance
+                          .collection('publishedDriverRatings')
+                          .doc(ratingId)
+                          .snapshots(),
+                      builder: (context, feedbackSnapshot) =>
+                          RiderAppreciationSurface(
+                        rating: feedbackSnapshot.data?.data() ??
+                            {
+                              ...rating,
+                              'feedbackText': '',
+                            },
+                        tip: tip,
+                        earnings: {
+                          ...earnings,
+                          ...?profileSnapshot.data?.data(),
+                        },
+                        onContinue: () => Navigator.of(context).pop(),
+                      ),
                     );
                   },
                 );
@@ -140,8 +177,9 @@ class RiderAppreciationView extends StatelessWidget {
   }
 }
 
-class _AppreciationSurface extends StatelessWidget {
-  const _AppreciationSurface({
+class RiderAppreciationSurface extends StatelessWidget {
+  const RiderAppreciationSurface({
+    super.key,
     required this.rating,
     required this.tip,
     required this.earnings,
@@ -156,14 +194,12 @@ class _AppreciationSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stars = (rating['starRating'] as num? ?? 0).toInt().clamp(0, 5);
-    final feedback = '${rating['feedbackText'] ?? ''}'.trim();
+    final feedback = rating['hiddenByAdmin'] == true
+        ? ''
+        : '${rating['feedbackText'] ?? ''}'.trim();
     final amount = tip['status'] == 'succeeded'
         ? (tip['amount'] as num? ?? 0).toDouble()
         : 0.0;
-    final fare = (earnings['lastDeliveryFare'] as num? ??
-            earnings['latestDeliveryAmount'] as num? ??
-            0)
-        .toDouble();
     final today = (earnings['todayEarnings'] as num? ??
             earnings['availableToday'] as num? ??
             0)
@@ -173,7 +209,7 @@ class _AppreciationSurface extends StatelessWidget {
         pinned: true,
         backgroundColor: RiderPalette.background.withValues(alpha: .94),
         foregroundColor: Colors.white,
-        title: const Text('Delivery appreciation'),
+        title: const Text('Delivery feedback'),
       ),
       SliverPadding(
         padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
@@ -191,18 +227,24 @@ class _AppreciationSurface extends StatelessWidget {
                     color: RiderPalette.green, size: 30),
               ),
               const SizedBox(width: 13),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("You made someone's day.",
-                        style: TextStyle(
+                    Text(
+                        stars >= 4
+                            ? "You made someone's day."
+                            : "Your delivery feedback",
+                        style: const TextStyle(
                             color: Colors.white,
                             fontSize: 20,
                             fontWeight: FontWeight.w800)),
-                    SizedBox(height: 5),
-                    Text('A Sender appreciated your delivery.',
-                        style: TextStyle(color: RiderPalette.muted)),
+                    const SizedBox(height: 5),
+                    Text(
+                        stars >= 4
+                            ? 'A Sender appreciated your delivery.'
+                            : 'Feedback from a completed delivery.',
+                        style: const TextStyle(color: RiderPalette.muted)),
                   ],
                 ),
               ),
@@ -213,11 +255,10 @@ class _AppreciationSurface extends StatelessWidget {
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text('Ref ${rating['deliveryId'] ?? 'Delivery'}',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.w700)),
+                const Expanded(
+                    child: Text('Delivery feedback',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w700))),
                 Text(_time(rating['createdAt']),
                     style: const TextStyle(
                         color: RiderPalette.muted, fontSize: 12)),
@@ -232,19 +273,25 @@ class _AppreciationSurface extends StatelessWidget {
                             : Colors.white.withValues(alpha: .18),
                         size: 25)),
                 const SizedBox(width: 8),
-                Text(_title(stars),
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w700)),
+                Expanded(
+                    child: Text(_title(stars),
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w700))),
               ]),
+              Text(
+                  (rating['deliveryCategories'] as List? ?? ['Delivery'])
+                      .join(' + '),
+                  style: const TextStyle(color: RiderPalette.muted)),
+              TextButton(
+                  onPressed: () => reportRiderFeedback(
+                      context, '${rating['ratingId'] ?? rating['deliveryId']}'),
+                  style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFFAACFFF)),
+                  child: const Text('Report feedback')),
               if (feedback.isNotEmpty) ...[
                 const SizedBox(height: 15),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(15),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: .18),
-                    borderRadius: BorderRadius.circular(13),
-                  ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
                   child: Text('“$feedback”',
                       style: const TextStyle(
                           color: RiderPalette.muted,
@@ -289,7 +336,6 @@ class _AppreciationSurface extends StatelessWidget {
                   style: TextStyle(
                       color: Colors.white, fontWeight: FontWeight.w800)),
               const SizedBox(height: 12),
-              _row('Delivery', fare),
               _row('Tip', amount, positive: amount > 0),
               Divider(color: Colors.white.withValues(alpha: .08)),
               _row("Today's Earnings", today, strong: true),
@@ -413,7 +459,7 @@ class RiderRatingsHistoryView extends StatelessWidget {
               profileSnapshot.data?.data() ?? const <String, dynamic>{};
           return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
             stream: FirebaseFirestore.instance
-                .collection('driverRatings')
+                .collection('publishedDriverRatings')
                 .where('riderId', isEqualTo: riderId)
                 .snapshots(),
             builder: (context, ratingsSnapshot) {
@@ -529,9 +575,24 @@ class RiderRatingsHistoryView extends StatelessWidget {
                                         style: const TextStyle(
                                             color: Color(0xFFFBBF24),
                                             fontSize: 18)),
-                                    if ('${value['feedbackText'] ?? ''}'
-                                        .trim()
-                                        .isNotEmpty) ...[
+                                    Text(
+                                        (value['deliveryCategories'] as List? ??
+                                                ['Delivery'])
+                                            .join(' + '),
+                                        style: const TextStyle(
+                                            color: RiderPalette.muted)),
+                                    TextButton(
+                                        onPressed: () => reportRiderFeedback(
+                                            context,
+                                            '${value['ratingId'] ?? doc.id}'),
+                                        style: TextButton.styleFrom(
+                                            foregroundColor:
+                                                const Color(0xFFAACFFF)),
+                                        child: const Text('Report feedback')),
+                                    if (value['hiddenByAdmin'] != true &&
+                                        '${value['feedbackText'] ?? ''}'
+                                            .trim()
+                                            .isNotEmpty) ...[
                                       const SizedBox(height: 7),
                                       Text('“${value['feedbackText']}”',
                                           style: const TextStyle(
@@ -627,5 +688,45 @@ class RiderRatingsHistoryView extends StatelessWidget {
     if (total <= 0) return 0;
     return ((profile[_countKey(star)] as num? ?? 0).toDouble() / total)
         .clamp(0, 1);
+  }
+}
+
+Future<void> reportRiderFeedback(BuildContext context, String ratingId) async {
+  final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+            backgroundColor: RiderPalette.background,
+            title: const Text('Report feedback',
+                style: TextStyle(color: Colors.white)),
+            children: [
+              'Abusive or threatening',
+              'Discriminatory',
+              'Private information',
+              'Other policy violation'
+            ]
+                .map((reason) => SimpleDialogOption(
+                      onPressed: () => Navigator.pop(dialogContext, reason),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 16),
+                      child: Text(reason,
+                          style: const TextStyle(color: RiderPalette.muted)),
+                    ))
+                .toList(),
+          ));
+  if (reason == null || !context.mounted) return;
+  try {
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('reportRating')
+        .call({'ratingId': ratingId, 'reason': reason}).timeout(
+            const Duration(seconds: 20));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Feedback reported to Circum support.')));
+    }
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not send your report. Please try again.')));
+    }
   }
 }
