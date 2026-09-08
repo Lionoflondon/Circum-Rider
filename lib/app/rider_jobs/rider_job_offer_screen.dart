@@ -216,7 +216,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                             activeIndex: safeIndex,
                             accepting: _accepting,
                             accepted: _accepted,
-                            riderRank: rider.riderRank ?? 'Sentinel',
+                            riderRank: rider.riderRank ?? 'Rank unavailable',
                             statusMessage: _statusMessage,
                             acceptStatus: _acceptStatus,
                             onBackToFeed: _resetTakenState,
@@ -306,7 +306,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
             offer: offer,
             firestore: _firestore,
             riderId: rider.riderId,
-            riderRank: rider.riderRank ?? 'Agent',
+            riderRank: rider.riderRank ?? 'Rank unavailable',
             onNavigateTab: widget.onNavigateTab,
           ),
         ),
@@ -1290,7 +1290,7 @@ class RiderAcceptedJobScreen extends StatefulWidget {
   const RiderAcceptedJobScreen({
     super.key,
     required this.offer,
-    this.riderRank = 'Sentinel',
+    this.riderRank = 'Rank unavailable',
     this.riderId = 'preview-rider',
     this.firestore,
     this.deliveryController,
@@ -1928,7 +1928,96 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
     }
   }
 
+  String? _releaseKey;
+  bool _released = false;
+  bool _releaseConfirming = false;
+
+  Future<void> _releaseJob() async {
+    if (_transitioning || _arrivalTransitioning || _releaseConfirming) return;
+    _releaseConfirming = true;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF121723),
+        title: const Text('Release this job?'),
+        content: const Text(
+            'The delivery will be offered to another Rider. The Sender’s delivery is not cancelled. Your reliability may be affected.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Keep job')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Release job')),
+        ],
+      ),
+    );
+    _releaseConfirming = false;
+    if (!mounted || confirmed != true || _transitioning) return;
+    _releaseKey ??=
+        '${widget.offer.id}:release:${DateTime.now().microsecondsSinceEpoch}';
+    setState(() {
+      _transitioning = true;
+      _transitionError = null;
+    });
+    try {
+      await (widget.deliveryController ?? CallableRiderDeliveryController())
+          .releaseJob(
+        deliveryId: widget.offer.id,
+        idempotencyKey: _releaseKey!,
+      );
+      if (!mounted) return;
+      setState(() => _released = true);
+      if (context.read<HomeBloc?>() case final home?) {
+        home.add(SetRideStatus(status: RideStatus.offline));
+      }
+      widget.onNavigateTab?.call(0);
+      if (Navigator.canPop(context)) Navigator.pop(context);
+    } on TimeoutException {
+      if (mounted)
+        setState(() => _transitionError =
+            'Release confirmation timed out. Retry to safely confirm the same request.');
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted)
+        setState(() => _transitionError = error.code == 'unavailable'
+            ? 'You appear to be offline. Reconnect and retry releasing this job.'
+            : error.message ??
+                'This job cannot be released. Refresh or contact Support.');
+    } catch (_) {
+      if (mounted)
+        setState(() => _transitionError =
+            'Could not confirm the release. Check your connection and retry.');
+    } finally {
+      if (mounted) setState(() => _transitioning = false);
+    }
+  }
+
   Widget _buildExperience(BuildContext context, Map<String, dynamic> live) {
+    if (_released) {
+      return Scaffold(
+        backgroundColor: const Color(0xFF07090F),
+        body: SafeArea(
+            child: Center(
+                child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(Icons.check_circle_outline,
+                color: Colors.white, size: 48),
+            const SizedBox(height: 16),
+            const Text('Job released',
+                style: TextStyle(color: Colors.white, fontSize: 24)),
+            const SizedBox(height: 12),
+            const Text(
+                'You are offline. The delivery will be offered to another Rider.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.white70)),
+            TextButton(
+                onPressed: () => widget.onNavigateTab?.call(0),
+                child: const Text('Return home')),
+          ]),
+        ))),
+      );
+    }
     if (_stage == RiderDeliveryStage.delivered)
       return _DeliveryCompleteView(
           offer: widget.offer,
@@ -1966,7 +2055,31 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
               child: Column(
                 children: [
-                  _AcceptedTopPill(chips: widget.offer.warningChips),
+                  Row(children: [
+                    Expanded(
+                        child:
+                            _AcceptedTopPill(chips: widget.offer.warningChips)),
+                    if (_stage.index < RiderDeliveryStage.collected.index &&
+                        const {
+                          'accepted',
+                          'assigned',
+                          'rider_assigned',
+                          'navigating_to_pickup',
+                          'en_route_to_pickup',
+                          'arrived_at_pickup',
+                          'waiting',
+                          'waiting_for_collection'
+                        }.contains('${live['status'] ?? ''}'))
+                      PopupMenuButton<String>(
+                        tooltip: 'Job options',
+                        enabled: !_transitioning && !_arrivalTransitioning,
+                        onSelected: (_) => _releaseJob(),
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(
+                              value: 'release', child: Text('Release job'))
+                        ],
+                      ),
+                  ]),
                   const SizedBox(height: 14),
                   if (_trackingController != null) ...[
                     _TrackingStatusPill(
@@ -3543,12 +3656,14 @@ class _AcceptedBottomPanel extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              _AcceptedEssentialSummary(
+              Flexible(
+                  child: SingleChildScrollView(
+                      child: _AcceptedEssentialSummary(
                 offer: offer,
                 riderRank: riderRank,
                 cta: cta,
                 onPrimary: onPrimary,
-              ),
+              ))),
               if (expanded) ...[
                 const SizedBox(height: 14),
                 Expanded(
@@ -3661,11 +3776,14 @@ class _AcceptedEssentialSummary extends StatelessWidget {
                       fontSize: 30,
                       fontWeight: FontWeight.w900)),
             ),
-            Text(riderRank,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900)),
+            Flexible(
+                child: Text(riderRank,
+                    maxLines: 2,
+                    textAlign: TextAlign.end,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900))),
           ],
         ),
         const SizedBox(height: 2),

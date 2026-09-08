@@ -15,6 +15,9 @@ class RiderDeliveryTransitionResult {
 }
 
 abstract class RiderDeliveryController {
+  Future<void> releaseJob(
+      {required String deliveryId, required String idempotencyKey});
+
   Future<RiderDeliveryTransitionResult> transition({
     required String deliveryId,
     required String action,
@@ -50,6 +53,20 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
   CallableRiderDeliveryController({FirebaseFunctions? functions})
       : functions =
             functions ?? FirebaseFunctions.instanceFor(region: 'us-central1');
+
+  @override
+  Future<void> releaseJob(
+      {required String deliveryId, required String idempotencyKey}) async {
+    final result =
+        await functions.httpsCallable('requestRiderCancellation').call({
+      'deliveryId': deliveryId,
+      'idempotencyKey': idempotencyKey,
+      'reason': 'cannot_complete',
+    }).timeout(_riderDeliveryOperationTimeout);
+    if (result.data is! Map || result.data['success'] != true) {
+      throw StateError('Release could not be confirmed. Please retry.');
+    }
+  }
 
   @override
   Future<RiderDeliveryTransitionResult> transition({

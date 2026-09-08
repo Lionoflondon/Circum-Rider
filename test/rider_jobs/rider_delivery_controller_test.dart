@@ -2,6 +2,10 @@ import 'package:circum_rider/app/rider_jobs/rider_delivery_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class _RecordingController implements RiderDeliveryController {
+  @override
+  Future<void> releaseJob(
+      {required String deliveryId, required String idempotencyKey}) async {}
+
   int calls = 0;
   String? deliveryId;
   String? action;

@@ -5,8 +5,20 @@ import 'package:circum_rider/app/rider_jobs/rider_offer_stack.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'dart:io';
+import 'dart:async';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class _BackendStageController implements RiderDeliveryController {
+  @override
+  Future<void> releaseJob(
+      {required String deliveryId, required String idempotencyKey}) async {
+    releaseKeys.add(idempotencyKey);
+    if (releaseError != null) throw releaseError!;
+  }
+
+  final List<String> releaseKeys = [];
+  Object? releaseError;
+
   _BackendStageController(this.results);
 
   final List<String> results;
@@ -268,7 +280,8 @@ void main() {
       expect(find.text('Navigate to Drop-off'), findsNothing);
       expect(find.text(_offers.first.dropoffAddress), findsNothing);
       expect(find.text('£12.00'), findsOneWidget);
-      expect(find.text('Sentinel'), findsOneWidget);
+      expect(find.text('Rank unavailable'), findsOneWidget);
+      expect(find.text('Sentinel'), findsNothing);
       expect(find.text('+6 Trust'), findsOneWidget);
       expect(find.text('Marylebone → Chelsea'), findsOneWidget);
       expect(find.textContaining('Reject'), findsNothing);
@@ -276,6 +289,53 @@ void main() {
       expect(find.textContaining('Cancel Delivery'), findsNothing);
       expect(find.textContaining('Roth'), findsNothing);
       expect(find.textContaining('Admin'), findsNothing);
+    });
+
+    testWidgets(
+        'release confirms, retries same key after timeout, and exits active job',
+        (tester) async {
+      final controller = _BackendStageController([])
+        ..releaseError = TimeoutException('network');
+      final offer = RiderJobOffer.fromFirestore(
+          docId: 'release-test',
+          data: {..._offers.first.raw, 'status': 'accepted'});
+      await tester.pumpWidget(MaterialApp(
+          home: RiderAcceptedJobScreen(
+              offer: offer, deliveryController: controller)));
+      Future<void> confirm() async {
+        await tester.tap(find.byTooltip('Job options'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Release job'));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('Sender’s delivery is not cancelled'),
+            findsOneWidget);
+        await tester.tap(find.widgetWithText(TextButton, 'Release job'));
+        await tester.pumpAndSettle();
+      }
+
+      await confirm();
+      expect(find.textContaining('Release confirmation timed out'),
+          findsOneWidget);
+      controller.releaseError =
+          FirebaseFunctionsException(code: 'unavailable', message: 'Offline');
+      await confirm();
+      expect(find.textContaining('You appear to be offline'), findsOneWidget);
+      controller.releaseError = null;
+      await confirm();
+      expect(controller.releaseKeys.toSet(), hasLength(1));
+      expect(controller.releaseKeys, hasLength(3));
+      expect(find.text('Job released'), findsOneWidget);
+      expect(find.byTooltip('Job options'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('custody hides release action', (tester) async {
+      final offer = RiderJobOffer.fromFirestore(
+          docId: 'custody-test',
+          data: {..._offers.first.raw, 'status': 'collected'});
+      await tester
+          .pumpWidget(MaterialApp(home: RiderAcceptedJobScreen(offer: offer)));
+      expect(find.byTooltip('Job options'), findsNothing);
     });
 
     testWidgets('expanded accepted panel reveals operational detail',
