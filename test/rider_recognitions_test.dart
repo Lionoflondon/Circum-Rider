@@ -45,7 +45,7 @@ void main() {
       },
     });
 
-    expect(rank?.rank, 'Agent');
+    expect(rank?.rank, 'Rank unavailable');
     expect(rank?.trustPoints, 0);
     expect(recognitions.foundingRider.awarded, isTrue);
   });

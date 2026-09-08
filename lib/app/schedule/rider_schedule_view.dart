@@ -418,7 +418,7 @@ class _ScheduledJobCard extends StatelessWidget {
                 data: job.raw,
               ),
               riderId: uid,
-              riderRank: 'Agent',
+              riderRank: 'Rank unavailable',
             ),
           ),
         );
