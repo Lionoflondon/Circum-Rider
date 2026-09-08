@@ -13,15 +13,16 @@ class RiderRankSnapshot {
     final rawTrust = data['trustPoints'] ?? data['riderTrustPoints'];
     if (rawTrust is! num) return null;
     final trust = rawTrust.toInt();
-    final calculated = rankForTrust(trust);
-    final rawRank = '${data['riderRank'] ?? data['rank'] ?? ''}'.trim();
+
+    final override = data['rankOverride'] == true ||
+        '${data['rankSource'] ?? ''}'.toLowerCase() == 'manual';
+    final rawRank =
+        '${data['riderRank'] ?? (override ? data['rank'] : null) ?? ''}'.trim();
     final validRank = ranks
         .where((rank) => rank.toLowerCase() == rawRank.toLowerCase())
         .firstOrNull;
-    final override = data['rankOverride'] == true ||
-        '${data['rankSource'] ?? ''}'.toLowerCase() == 'manual';
     return RiderRankSnapshot(
-      rank: override && validRank != null ? validRank : calculated,
+      rank: validRank ?? 'Rank unavailable',
       trustPoints: trust,
       overrideReason: override && validRank != null
           ? '${data['rankOverrideReason'] ?? 'Manual rank override'}'

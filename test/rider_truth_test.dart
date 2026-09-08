@@ -1,12 +1,32 @@
+import 'package:circum_rider/app/rider_design/rider_ui.dart';
+import 'package:flutter/material.dart';
 import 'package:circum_rider/app/rider_jobs/rider_points_rules.dart';
 import 'package:circum_rider/app/rider_truth/rider_truth.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('zero trust resolves to Agent and never Veteran', () {
+  testWidgets('missing rank renders unavailable without a fabricated badge',
+      (tester) async {
+    await tester.pumpWidget(const MaterialApp(
+        home: Scaffold(
+            body: RiderRankProgress(
+                rank: 'Rank unavailable', trustPoints: 999))));
+    expect(find.textContaining('Rank unavailable'), findsOneWidget);
+    expect(find.text('AGENT'), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
+  });
+
+  test('missing canonical rank is unavailable rather than inferred from trust',
+      () {
     final value = RiderRankSnapshot.from({'trustPoints': 0, 'rank': 'Veteran'});
-    expect(value?.rank, 'Agent');
+    expect(value?.rank, 'Rank unavailable');
     expect(value?.trustPoints, 0);
+  });
+
+  test('canonical rank is displayed without client recalculation', () {
+    final value =
+        RiderRankSnapshot.from({'trustPoints': 0, 'riderRank': 'Sentinel'});
+    expect(value?.rank, 'Sentinel');
   });
 
   test('missing trust remains unavailable', () {

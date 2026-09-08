@@ -347,7 +347,10 @@ class RiderRankProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     var index = _ranks
         .indexWhere((item) => item.toLowerCase() == rank.trim().toLowerCase());
-    if (index < 0) index = 0;
+    if (index < 0) {
+      return Text('Rank unavailable · $trustPoints Trust Points',
+          style: const TextStyle(color: RiderPalette.muted));
+    }
     final current = _thresholds[index];
     final next =
         index == _ranks.length - 1 ? _thresholds.last : _thresholds[index + 1];
