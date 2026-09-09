@@ -682,7 +682,15 @@ class _AvailabilityCard extends StatelessWidget {
       OnlineTransition.registeringOnline => 'Connecting…',
       OnlineTransition.reconnecting => 'Reconnecting…',
       OnlineTransition.blocked => 'Location unavailable',
-      _ => online ? 'Online and available' : 'You are currently offline',
+      _ => home.riderIntentOnline
+          ? switch (home.dispatchReason) {
+              'approval_required' => 'Online — approval required before jobs',
+              'vehicle_required' => 'Online — vehicle review required',
+              _ => home.dispatchEligible
+                  ? 'Online — ready for jobs'
+                  : 'Online — getting your location',
+            }
+          : 'You are currently offline',
     };
     return RiderGlassSurface(
       opacity: .66,
@@ -743,14 +751,9 @@ class _AvailabilityCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 16),
-          FutureBuilder<bool>(
-            future: RiderInternalAccess.enabled(),
-            builder: (context, internalAccess) {
-              final allowed = !starting &&
-                  (internalAccess.data == true ||
-                      home.canGoOnline ||
-                      online ||
-                      home.riderIntentOnline);
+          Builder(
+            builder: (context) {
+              final allowed = !starting;
               return SizedBox(
                 height: 52,
                 width: double.infinity,

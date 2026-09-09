@@ -22,7 +22,6 @@ import '../../../helper/formatted_string_after_seconds.dart';
 import '../../../helper/messaging_server.dart';
 import '../../../utils/theme/theme.dart';
 import '../../communication/rider_communication_service.dart';
-import '../../rider_account/rider_account_state.dart';
 import '../models/dispatch_request.m..dart';
 import '../models/message.m.dart';
 import '../models/place_coordinates.m.dart';
@@ -108,20 +107,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         .get()
         .timeout(const Duration(seconds: 15));
     return _remainingVerificationItems(riderDoc.data());
-  }
-
-  Future<RiderAccountState> _loadAccountState(String? uid) async {
-    if (uid == null || uid.isEmpty) {
-      return RiderAccountState.onboardingNotStarted;
-    }
-    final records = await Future.wait([
-      db.collection('riders').doc(uid).get(),
-      db.collection('riderProfiles').doc(uid).get(),
-    ]).timeout(const Duration(seconds: 15));
-    return RiderAccountStateResolver.resolve({
-      ...(records[1].data() ?? const <String, dynamic>{}),
-      ...(records[0].data() ?? const <String, dynamic>{}),
-    });
   }
 
   HomeBloc() : super(HomeState()) {
@@ -223,21 +208,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   ) async {
     final operation = ++_availabilityOperation;
     final User? user = auth.currentUser;
-    var internalAccess = false;
     if (user == null) {
       emit(
         state.copyWith(message: 'Sign in before changing Rider availability.'),
       );
       return;
-    }
-    try {
-      internalAccess = (await user.getIdTokenResult().timeout(
-                    const Duration(seconds: 15),
-                  ))
-              .claims?['founderRider'] ==
-          true;
-    } catch (_) {
-      internalAccess = false;
     }
     if (event.status == RideStatus.offline) {
       try {
@@ -280,10 +255,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       }
       return;
     } else {
-      RiderAccountState accountState;
       List<String> remaining;
       try {
-        accountState = await _loadAccountState(user.uid);
         remaining = await _loadRemainingVerificationItems(user.uid);
       } catch (_) {
         emit(
@@ -291,31 +264,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
             rideStatus: RideStatus.offline,
             onlineTransition: OnlineTransition.blocked,
             message: 'Rider status could not be checked. Try again.',
-          ),
-        );
-        return;
-      }
-      if (!internalAccess &&
-          !RiderAccountStateResolver.canOperate(accountState)) {
-        emit(
-          state.copyWith(
-            rideStatus: RideStatus.offline,
-            canGoOnline: false,
-            message:
-                'Your Rider account is not approved for operational access.',
-          ),
-        );
-        return;
-      }
-      if (!internalAccess &&
-          event.status == RideStatus.online &&
-          remaining.isNotEmpty) {
-        emit(
-          state.copyWith(
-            rideStatus: RideStatus.offline,
-            canGoOnline: false,
-            verificationChecklist: remaining,
-            message: 'Complete your verification to start earning.',
           ),
         );
         return;
@@ -332,7 +280,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
               clearMessage: true,
             ),
           );
-          final locationPayload = await _freshPresenceLocationPayload(emit);
+          final locationPayload = await _currentPresenceLocationPayload(
+            highAccuracy: true,
+          );
           if (operation != _availabilityOperation) return;
           emit(
             state.copyWith(
@@ -343,12 +293,18 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
           final response =
               await FirebaseFunctions.instanceFor(region: 'us-central1')
                   .httpsCallable('goOnline')
-                  .call(<String, dynamic>{'location': locationPayload}).timeout(
-                      const Duration(seconds: 20));
+                  .call(<String, dynamic>{
+            if (locationPayload != null) 'location': locationPayload,
+          }).timeout(const Duration(seconds: 20));
           if (operation != _availabilityOperation) return;
           if (!isPresenceRegistrationAcknowledged(response.data)) {
             throw StateError('Online registration was not acknowledged.');
           }
+          final responseData = response.data is Map
+              ? Map<String, dynamic>.from(response.data as Map)
+              : const <String, dynamic>{};
+          final dispatchEligible = responseData['dispatchEligible'] == true;
+          final dispatchReason = responseData['reason']?.toString();
           _stopPresenceReconnect();
           emit(
             state.copyWith(
@@ -356,7 +312,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
               onlineTransition: OnlineTransition.online,
               riderIntentOnline: true,
               canGoOnline: true,
-              clearMessage: true,
+              verificationChecklist: remaining,
+              dispatchEligible: dispatchEligible,
+              dispatchReason: dispatchReason,
+              message: _onlineStatusMessage(
+                dispatchEligible: dispatchEligible,
+                reason: dispatchReason,
+              ),
             ),
           );
           _startPresenceHeartbeat();
@@ -368,19 +330,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
             ),
           );
           add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
-        } on RiderLocationException catch (error) {
-          _stopPresenceHeartbeat();
-          _stopPresenceReconnect();
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool(_desiredOnlineStateKey, false);
-          emit(
-            state.copyWith(
-              rideStatus: RideStatus.offline,
-              onlineTransition: OnlineTransition.blocked,
-              riderIntentOnline: false,
-              message: error.message,
-            ),
-          );
         } on FirebaseFunctionsException catch (error) {
           debugPrint('Rider presence registration failed code=${error.code}');
           if (_isTransientPresenceFailure(error.code)) {
@@ -443,7 +392,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       // assigned delivery DTOs; projected offers intentionally lack private GPS/contact fields.
       if (response.data['riderId'] != auth.currentUser?.uid) {
         throw StateError(
-            'Offer authorization does not match the signed-in Rider');
+          'Offer authorization does not match the signed-in Rider',
+        );
       }
       emit(
         state.copyWith(
@@ -999,10 +949,14 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         onlineTransition: event.succeeded
             ? OnlineTransition.online
             : OnlineTransition.reconnecting,
+        dispatchEligible: event.dispatchEligible,
+        dispatchReason: event.dispatchReason,
         message: event.succeeded
-            ? null
+            ? _onlineStatusMessage(
+                dispatchEligible: event.dispatchEligible,
+                reason: event.dispatchReason,
+              )
             : 'Connection interrupted. Reconnecting automatically…',
-        clearMessage: event.succeeded,
       ),
     );
     if (event.succeeded) {
@@ -1063,6 +1017,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         add(
           PresenceHeartbeatResult(
             succeeded: result is Map && result['success'] == true,
+            dispatchEligible:
+                result is Map && result['dispatchEligible'] == true,
+            dispatchReason: result is Map ? result['reason']?.toString() : null,
           ),
         );
       }
@@ -1082,8 +1039,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       final servicesEnabled = await Geolocator.isLocationServiceEnabled()
           .timeout(const Duration(seconds: 20));
       if (!servicesEnabled) return null;
-      permission = await Geolocator.checkPermission()
-          .timeout(const Duration(seconds: 20));
+      permission = await Geolocator.checkPermission().timeout(
+        const Duration(seconds: 20),
+      );
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         return null;
@@ -1111,49 +1069,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       return _presenceLocationPayload(cached, permission);
     }
     return null;
-  }
-
-  Future<Map<String, dynamic>> _freshPresenceLocationPayload(
-    Emitter<HomeState> emit,
-  ) async {
-    if (!await Geolocator.isLocationServiceEnabled()
-        .timeout(const Duration(seconds: 20))) {
-      throw const RiderLocationException(
-        'Location Services are off. Enable them in Settings to go online.',
-      );
-    }
-    var permission =
-        await Geolocator.checkPermission().timeout(const Duration(seconds: 20));
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission()
-          .timeout(const Duration(seconds: 20));
-    }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      throw const RiderLocationException(
-        'Location permission is required. Allow location access in Settings.',
-      );
-    }
-    emit(
-      state.copyWith(
-        onlineTransition: OnlineTransition.acquiringLocation,
-        message: 'Getting your location…',
-      ),
-    );
-    final position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    ).timeout(const Duration(seconds: 20));
-    final capturedAt = position.timestamp;
-    if (!isFreshDispatchLocation(
-      capturedAt: capturedAt,
-      accuracyMeters: position.accuracy,
-    )) {
-      throw const RiderLocationException(
-        'We could not get an accurate current location. Move to an open area and try again.',
-      );
-    }
-    _lastPresencePosition = position;
-    return _presenceLocationPayload(position, permission);
   }
 
   Map<String, dynamic> _presenceLocationPayload(
@@ -1188,6 +1103,18 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       default:
         return 'Could not go online. Check your connection and retry.';
     }
+  }
+
+  String _onlineStatusMessage({
+    required bool dispatchEligible,
+    required String? reason,
+  }) {
+    if (dispatchEligible) return 'Online — ready for jobs';
+    return switch (reason) {
+      'approval_required' => 'Online — approval required before jobs',
+      'vehicle_required' => 'Online — vehicle review required',
+      _ => 'Online — getting your location',
+    };
   }
 
   bool _isTransientPresenceFailure(String code) => const {
@@ -1282,8 +1209,7 @@ bool isFreshDispatchLocation({
 }
 
 bool isPresenceRegistrationAcknowledged(Object? value) {
-  if (value is! Map || value['success'] != true) return false;
-  final presence = value['presence'];
-  if (presence is Map) return presence['dispatchEligible'] == true;
-  return value['dispatchEligible'] == true;
+  return value is Map &&
+      value['success'] == true &&
+      value['onlineIntent'] != false;
 }

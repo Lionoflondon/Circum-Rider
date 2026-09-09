@@ -7,11 +7,7 @@ void main() {
   final source = File('lib/app/home/bloc/home_bloc.dart').readAsStringSync();
 
   test('all native presence permission queries have deadlines', () {
-    for (final method in [
-      'isLocationServiceEnabled',
-      'checkPermission',
-      'requestPermission'
-    ]) {
+    for (final method in ['isLocationServiceEnabled', 'checkPermission']) {
       final calls =
           RegExp('Geolocator\\.$method\\(\\)').allMatches(source).length;
       final bounded = RegExp('Geolocator\\.$method\\(\\)\\s*\\.timeout\\(')
@@ -20,6 +16,8 @@ void main() {
       expect(calls, greaterThan(0));
       expect(bounded, calls, reason: method);
     }
+    expect(source, isNot(contains('Geolocator.requestPermission()')),
+        reason: 'online intent must not be gated by a permission prompt');
   });
 
   test('HomeBloc owns lifecycle-aware presence heartbeat recovery', () {
@@ -121,20 +119,22 @@ void main() {
     );
   });
 
-  test('go-online acknowledgement reads the deployed nested presence result',
+  test('go-online acknowledgement accepts intent without dispatch eligibility',
       () {
     expect(
         isPresenceRegistrationAcknowledged({
           'success': true,
+          'onlineIntent': true,
           'presence': {'dispatchEligible': true},
         }),
         isTrue);
     expect(
         isPresenceRegistrationAcknowledged({
           'success': true,
+          'onlineIntent': true,
           'presence': {'dispatchEligible': false},
         }),
-        isFalse);
+        isTrue);
     expect(isPresenceRegistrationAcknowledged({'success': false}), isFalse);
   });
 
