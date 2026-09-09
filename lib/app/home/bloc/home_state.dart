@@ -160,9 +160,8 @@ class HomeState {
       onlineTransition: onlineTransition ?? this.onlineTransition,
       riderIntentOnline: riderIntentOnline ?? this.riderIntentOnline,
       dispatchEligible: dispatchEligible ?? this.dispatchEligible,
-      dispatchReason: clearDispatchReason
-          ? null
-          : dispatchReason ?? this.dispatchReason,
+      dispatchReason:
+          clearDispatchReason ? null : dispatchReason ?? this.dispatchReason,
     );
   }
 }

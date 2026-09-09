@@ -57,7 +57,8 @@ void main() {
     expect(nav, contains('const _CentralAction()'));
     expect(home, contains("httpsCallable('goOnline')"));
     expect(home, contains("httpsCallable('goOffline')"));
-    expect(home, isNot(contains('RiderAccountStateResolver.canOperate(accountState)')));
+    expect(home,
+        isNot(contains('RiderAccountStateResolver.canOperate(accountState)')));
     expect(home, contains("responseData['dispatchEligible'] == true"));
   });
 

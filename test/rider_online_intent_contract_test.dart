@@ -8,15 +8,20 @@ void main() {
   final dashboard =
       File('lib/app/rider_shell/rider_dashboard_view.dart').readAsStringSync();
 
-  test('Go online records intent without client-side approval or GPS gating', () {
-    expect(bloc, isNot(contains('RiderAccountStateResolver.canOperate(accountState)')));
-    expect(bloc, isNot(contains('Complete your verification to start earning.')));
-    expect(bloc, contains("if (locationPayload != null) 'location': locationPayload"));
+  test('Go online records intent without client-side approval or GPS gating',
+      () {
+    expect(bloc,
+        isNot(contains('RiderAccountStateResolver.canOperate(accountState)')));
+    expect(
+        bloc, isNot(contains('Complete your verification to start earning.')));
+    expect(bloc,
+        contains("if (locationPayload != null) 'location': locationPayload"));
     expect(bloc, contains(".httpsCallable('goOnline')"));
     expect(dashboard, contains('final allowed = !starting;'));
   });
 
-  test('Rider UI keeps online intent separate from backend dispatch authority', () {
+  test('Rider UI keeps online intent separate from backend dispatch authority',
+      () {
     expect(state, contains('bool riderIntentOnline;'));
     expect(state, contains('bool dispatchEligible;'));
     expect(state, contains('String? dispatchReason;'));
@@ -33,7 +38,8 @@ void main() {
     }
   });
 
-  test('heartbeat receives backend dispatch projection and never self-promotes', () {
+  test('heartbeat receives backend dispatch projection and never self-promotes',
+      () {
     expect(bloc, contains(".httpsCallable('updateRiderPresence')"));
     expect(bloc, contains("result['dispatchEligible'] == true"));
     expect(bloc, contains("result['reason']?.toString()"));
