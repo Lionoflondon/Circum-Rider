@@ -70,6 +70,8 @@ class HomeState {
   RequestStatus requestStatus;
   OnlineTransition onlineTransition;
   bool riderIntentOnline;
+  bool dispatchEligible;
+  String? dispatchReason;
 
   HomeState({
     this.ongoingRequests = const [],
@@ -96,6 +98,8 @@ class HomeState {
     this.requestStatus = RequestStatus.initial,
     this.onlineTransition = OnlineTransition.offline,
     this.riderIntentOnline = false,
+    this.dispatchEligible = false,
+    this.dispatchReason,
   });
 
   HomeState copyWith({
@@ -123,6 +127,9 @@ class HomeState {
     RequestStatus? requestStatus,
     OnlineTransition? onlineTransition,
     bool? riderIntentOnline,
+    bool? dispatchEligible,
+    String? dispatchReason,
+    bool clearDispatchReason = false,
     bool clearMessage = false,
   }) {
     return HomeState(
@@ -152,6 +159,10 @@ class HomeState {
       requestStatus: requestStatus ?? this.requestStatus,
       onlineTransition: onlineTransition ?? this.onlineTransition,
       riderIntentOnline: riderIntentOnline ?? this.riderIntentOnline,
+      dispatchEligible: dispatchEligible ?? this.dispatchEligible,
+      dispatchReason: clearDispatchReason
+          ? null
+          : dispatchReason ?? this.dispatchReason,
     );
   }
 }

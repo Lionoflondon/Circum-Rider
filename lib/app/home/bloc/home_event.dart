@@ -12,7 +12,13 @@ class SetRideStatus extends HomeEvent {
 
 class PresenceHeartbeatResult extends HomeEvent {
   final bool succeeded;
-  PresenceHeartbeatResult({required this.succeeded});
+  final bool dispatchEligible;
+  final String? dispatchReason;
+  PresenceHeartbeatResult({
+    required this.succeeded,
+    this.dispatchEligible = false,
+    this.dispatchReason,
+  });
 }
 
 class GetAvailableRequests extends HomeEvent {}
@@ -29,10 +35,11 @@ class AcceptRide extends HomeEvent {
   final String topic;
   final String code;
   final int selectedRequestIndex;
-  AcceptRide(
-      {required this.topic,
-      required this.code,
-      required this.selectedRequestIndex});
+  AcceptRide({
+    required this.topic,
+    required this.code,
+    required this.selectedRequestIndex,
+  });
 }
 
 class SetSourceAndDestinationStatus extends HomeEvent {
@@ -48,8 +55,10 @@ class SetMapCameraStatus extends HomeEvent {
 class SetDrawerHeight extends HomeEvent {
   final double minDrawerHeight;
   final double maxDrawerHeight;
-  SetDrawerHeight(
-      {required this.minDrawerHeight, required this.maxDrawerHeight});
+  SetDrawerHeight({
+    required this.minDrawerHeight,
+    required this.maxDrawerHeight,
+  });
 }
 
 class SetPanelControlStatus extends HomeEvent {
@@ -65,8 +74,10 @@ class CancelRequest extends HomeEvent {
 class GetPolylines extends HomeEvent {
   final PlaceCoordinate pickupCoordinate;
   final PlaceCoordinate desinationCoordinate;
-  GetPolylines(
-      {required this.pickupCoordinate, required this.desinationCoordinate});
+  GetPolylines({
+    required this.pickupCoordinate,
+    required this.desinationCoordinate,
+  });
 }
 
 class BroadcastLocation extends HomeEvent {}

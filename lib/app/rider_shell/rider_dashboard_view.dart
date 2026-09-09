@@ -82,8 +82,9 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
           return _DashboardSurface(
             data: data,
             home: homeState.copyWith(
-              rideStatus:
-                  widget.reviewOnline ? RideStatus.online : RideStatus.offline,
+              rideStatus: widget.reviewOnline
+                  ? RideStatus.online
+                  : RideStatus.offline,
               canGoOnline: true,
               message: null,
             ),
@@ -146,23 +147,26 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                               presence:
                                   presenceSnapshot.data?.data() ?? const {},
                               eligibleOffers: offersSnapshot.data ?? const [],
-                              scheduled: assigned
-                                  .where(
-                                    (item) =>
-                                        _isScheduled(item) &&
-                                        !_isFinished(item),
-                                  )
-                                  .toList()
-                                ..sort(
-                                  (a, b) => _time(a).compareTo(_time(b)),
-                                ),
+                              scheduled:
+                                  assigned
+                                      .where(
+                                        (item) =>
+                                            _isScheduled(item) &&
+                                            !_isFinished(item),
+                                      )
+                                      .toList()
+                                    ..sort(
+                                      (a, b) => _time(a).compareTo(_time(b)),
+                                    ),
                               recent: assigned.where(_isFinished).toList()
                                 ..sort((a, b) => _time(b).compareTo(_time(a))),
-                              loading: profileSnapshot.connectionState ==
+                              loading:
+                                  profileSnapshot.connectionState ==
                                       ConnectionState.waiting &&
                                   riderSnapshot.connectionState ==
                                       ConnectionState.waiting,
-                              hasDataError: profileSnapshot.hasError ||
+                              hasDataError:
+                                  profileSnapshot.hasError ||
                                   riderSnapshot.hasError ||
                                   earningsSnapshot.hasError ||
                                   presenceSnapshot.hasError ||
@@ -172,7 +176,8 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                             );
                             return BlocBuilder<HomeBloc, HomeState>(
                               builder: (context, homeState) {
-                                final online = (homeState.onlineTransition ==
+                                final online =
+                                    (homeState.onlineTransition ==
                                             OnlineTransition.online ||
                                         homeState.onlineTransition ==
                                             OnlineTransition.reconnecting) &&
@@ -188,13 +193,12 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
                                   onSelectTab: widget.onSelectTab,
                                   onToggleAvailability: () =>
                                       context.read<HomeBloc>().add(
-                                            SetRideStatus(
-                                              status:
-                                                  homeState.riderIntentOnline
-                                                      ? RideStatus.offline
-                                                      : RideStatus.online,
-                                            ),
-                                          ),
+                                        SetRideStatus(
+                                          status: homeState.riderIntentOnline
+                                              ? RideStatus.offline
+                                              : RideStatus.online,
+                                        ),
+                                      ),
                                   reviewFixture: null,
                                 );
                               },
@@ -221,24 +225,23 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
           .toList() ??
       const <Map<String, dynamic>>[];
 
-  static bool _isScheduled(Map<String, dynamic> item) => item['deliveryTime']
-          is Map
+  static bool _isScheduled(Map<String, dynamic> item) =>
+      item['deliveryTime'] is Map
       ? '${(item['deliveryTime'] as Map)['type'] ?? ''}'.trim().toLowerCase() ==
-          'scheduled'
+            'scheduled'
       : item['scheduled'] == true || item['isScheduled'] == true;
 
   static bool _isFinished(Map<String, dynamic> item) => {
-        'completed',
-        'delivered',
-      }.contains(
-          '${item['deliveryState'] ?? item['status'] ?? ''}'.toLowerCase());
+    'completed',
+    'delivered',
+  }.contains('${item['deliveryState'] ?? item['status'] ?? ''}'.toLowerCase());
 
   static int _time(Map<String, dynamic> item) {
     final deliveryTime = item['deliveryTime'];
     final value = deliveryTime is Map
         ? deliveryTime['scheduledAt'] ??
-            deliveryTime['scheduledTime'] ??
-            deliveryTime['scheduledDate']
+              deliveryTime['scheduledTime'] ??
+              deliveryTime['scheduledDate']
         : item['scheduledAt'] ?? item['collectionStart'];
     return value is Timestamp ? value.millisecondsSinceEpoch : 0;
   }
@@ -254,7 +257,8 @@ class _RiderDashboardViewState extends State<RiderDashboardView> {
         return window.isNotEmpty && window != 'null' ? '$date · $window' : date;
       }
     }
-    final legacy = item['pickupWindow'] ??
+    final legacy =
+        item['pickupWindow'] ??
         item['scheduledTime'] ??
         _formatTime(item['scheduledAt']);
     return '$legacy' == 'null' ? 'Collection time pending' : '$legacy';
@@ -286,8 +290,7 @@ String _firstProfileText(
   Map<String, dynamic> source,
   List<String> keys, {
   String fallback = '',
-}) =>
-    _firstProfileTextFromSources([source], keys, fallback: fallback);
+}) => _firstProfileTextFromSources([source], keys, fallback: fallback);
 
 String _firstProfileTextFromSources(
   List<Map<String, dynamic>> sources,
@@ -506,16 +509,13 @@ class _DashboardHeader extends StatelessWidget {
         '${profile['firstName'] ?? profile['name'] ?? auth.username ?? ''}'
             .trim();
     final firstName = rawName.isEmpty ? 'Rider' : rawName.split(' ').first;
-    final photo = _firstProfileText(
-        profile,
-        [
-          'profileThumbnailUrl',
-          'profilePhotoUrl',
-          'profilePhoto',
-          'photoURL',
-          'photoUrl',
-        ],
-        fallback: auth.profilePhoto ?? '');
+    final photo = _firstProfileText(profile, [
+      'profileThumbnailUrl',
+      'profilePhotoUrl',
+      'profilePhoto',
+      'photoURL',
+      'photoUrl',
+    ], fallback: auth.profilePhoto ?? '');
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -671,18 +671,28 @@ class _AvailabilityCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final starting =
         home.onlineTransition == OnlineTransition.acquiringPermission ||
-            home.onlineTransition == OnlineTransition.acquiringLocation ||
-            home.onlineTransition == OnlineTransition.registeringOnline;
+        home.onlineTransition == OnlineTransition.acquiringLocation ||
+        home.onlineTransition == OnlineTransition.registeringOnline;
     final reconnecting =
         home.onlineTransition == OnlineTransition.reconnecting &&
-            home.riderIntentOnline;
+        home.riderIntentOnline;
     final statusTitle = switch (home.onlineTransition) {
       OnlineTransition.acquiringPermission => 'Checking location permission…',
       OnlineTransition.acquiringLocation => 'Getting your location…',
       OnlineTransition.registeringOnline => 'Connecting…',
       OnlineTransition.reconnecting => 'Reconnecting…',
       OnlineTransition.blocked => 'Location unavailable',
-      _ => online ? 'Online and available' : 'You are currently offline',
+      _ =>
+        home.riderIntentOnline
+            ? switch (home.dispatchReason) {
+                'approval_required' => 'Online — approval required before jobs',
+                'vehicle_required' => 'Online — vehicle review required',
+                _ =>
+                  home.dispatchEligible
+                      ? 'Online — ready for jobs'
+                      : 'Online — getting your location',
+              }
+            : 'You are currently offline',
     };
     return RiderGlassSurface(
       opacity: .66,
@@ -726,8 +736,8 @@ class _AvailabilityCard extends StatelessWidget {
             reconnecting
                 ? 'Connection interrupted. Circum is reconnecting automatically.'
                 : online
-                    ? 'Circum is checking eligible delivery opportunities near you.'
-                    : 'Go online when you are ready to receive eligible jobs.',
+                ? 'Circum is checking eligible delivery opportunities near you.'
+                : 'Go online when you are ready to receive eligible jobs.',
             style: const TextStyle(
               color: RiderPalette.muted,
               fontFamily: RiderTypography.body,
@@ -743,14 +753,9 @@ class _AvailabilityCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 16),
-          FutureBuilder<bool>(
-            future: RiderInternalAccess.enabled(),
-            builder: (context, internalAccess) {
-              final allowed = !starting &&
-                  (internalAccess.data == true ||
-                      home.canGoOnline ||
-                      online ||
-                      home.riderIntentOnline);
+          Builder(
+            builder: (context) {
+              final allowed = !starting;
               return SizedBox(
                 height: 52,
                 width: double.infinity,
@@ -766,8 +771,8 @@ class _AvailabilityCard extends StatelessWidget {
                     starting
                         ? 'Getting location…'
                         : home.riderIntentOnline
-                            ? 'Go offline'
-                            : 'Go online',
+                        ? 'Go offline'
+                        : 'Go online',
                   ),
                   style: FilledButton.styleFrom(
                     backgroundColor: home.riderIntentOnline
@@ -1097,14 +1102,14 @@ class _RecognitionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Text(
-        label.trim(),
-        style: const TextStyle(
-          color: RiderPalette.blue,
-          fontSize: 11,
-          fontWeight: FontWeight.w900,
-          letterSpacing: .2,
-        ),
-      );
+    label.trim(),
+    style: const TextStyle(
+      color: RiderPalette.blue,
+      fontSize: 11,
+      fontWeight: FontWeight.w900,
+      letterSpacing: .2,
+    ),
+  );
 }
 
 class _TodaySection extends StatelessWidget {
@@ -1252,13 +1257,13 @@ class _PriorityJobsCard extends StatelessWidget {
     final title = !online
         ? 'Go online for jobs'
         : count == 0
-            ? 'No deliveries available'
-            : '$count eligible ${count == 1 ? 'job' : 'jobs'}';
+        ? 'No deliveries available'
+        : '$count eligible ${count == 1 ? 'job' : 'jobs'}';
     final message = !online
         ? 'Go online to receive eligible delivery offers.'
         : count == 0
-            ? 'New offers will appear here automatically.'
-            : 'Open delivery offers to review the swipeable card stack.';
+        ? 'New offers will appear here automatically.'
+        : 'Open delivery offers to review the swipeable card stack.';
     return _ActionRow(
       icon: Icons.map_outlined,
       iconColor: RiderPalette.blue,
@@ -1753,11 +1758,13 @@ class _SmallLabel extends StatelessWidget {
 }
 
 String _route(Map<String, dynamic> item) {
-  final pickup = item['pickupArea'] ??
+  final pickup =
+      item['pickupArea'] ??
       item['pickupPostcode'] ??
       item['pickupShortAddress'] ??
       'Pickup';
-  final dropoff = item['dropoffArea'] ??
+  final dropoff =
+      item['dropoffArea'] ??
       item['dropoffPostcode'] ??
       item['dropoffShortAddress'] ??
       'Drop-off';
