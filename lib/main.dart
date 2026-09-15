@@ -56,6 +56,7 @@ Future<void> _initializeRiderNative() async {
     iOS: DarwinInitializationSettings(),
   );
   await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  await _createRiderNotificationChannel();
   await Firebase.initializeApp();
   if (!await initializeRiderAppCheck()) {
     throw StateError('Rider security verification is not configured.');
@@ -78,6 +79,7 @@ Future<void> _initializeRiderNative() async {
 
   foregoundMessage();
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  _configureRiderNotificationOpenRouting();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -256,8 +258,7 @@ class CircumRider extends StatelessWidget {
       builder: (_, __) {
         final botToastBuilder = BotToastInit();
         return MaterialApp(
-          // navigatorKey: NavKey.navKey,
-          // onGenerateRoute: (_) => null,
+          navigatorKey: NavKey.navKey,
           debugShowCheckedModeBanner: false,
           title: 'Circum Rider',
           builder: (context, child) {

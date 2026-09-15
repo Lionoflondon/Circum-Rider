@@ -7,13 +7,15 @@ import '../main.dart';
 import '../utils/theme/theme.dart';
 
 class NotificationService {
-  Future<void> showNotification(
-      {required String title, required String body}) async {
+  Future<void> showNotification({
+    required String title,
+    required String body,
+  }) async {
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
-      'notifications_updates',
-      'Notifications Updates',
-      channelDescription: 'Notifications',
+      'rider_job_offers',
+      'New delivery offers',
+      channelDescription: 'New delivery offers available for you.',
       importance: Importance.max,
       priority: Priority.high,
       showWhen: true,
