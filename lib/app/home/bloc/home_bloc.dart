@@ -50,6 +50,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   bool _presenceHeartbeatInFlight = false;
   int _availabilityOperation = 0;
   int _presenceReconnectAttempt = 0;
+  bool _pushTokenRefreshBound = false;
 
   bool get _isLogicallyOnline {
     if (state.riderIntentOnline) return true;
@@ -166,11 +167,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         internalAccess = false;
       }
     }
-    if (!kIsWeb && Platform.isIOS) {
+    if (!kIsWeb && (Platform.isIOS || Platform.isAndroid)) {
       await firebaseMessaging.requestPermission();
     }
     if (!kIsWeb && Platform.isIOS) {
       await firebaseMessaging.getAPNSToken();
+    }
+    if (!_pushTokenRefreshBound) {
+      _pushTokenRefreshBound = true;
+      firebaseMessaging.onTokenRefresh.listen((_) => add(CheckForPushToken()));
     }
     final fcmToken = await firebaseMessaging.getToken();
     if (fcmToken != null) {
