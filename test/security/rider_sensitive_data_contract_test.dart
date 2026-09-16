@@ -37,7 +37,8 @@ void main() {
         File('${root.path}/lib/app/account/bloc/account_bloc.dart')
             .readAsStringSync();
 
-    expect(accountBloc, contains("httpsCallable('cancelRiderWithdrawal')"));
+    expect(accountBloc, contains('RiderProductionPaymentApi.payout'));
+    expect(accountBloc, contains("'cancelRiderWithdrawal'"));
     expect(accountBloc,
         isNot(contains(".collection('payoutRequests').doc(doc.id).delete()")));
   });
