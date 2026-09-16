@@ -231,7 +231,6 @@ class _OnboardingViewState extends State<OnboardingView> {
     }
     context.read<AuthBloc>().add(ResetPassword(email: email));
   }
-
 }
 
 class _PhoneShell extends StatelessWidget {
