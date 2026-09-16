@@ -27,7 +27,7 @@ jobs:
         run: |
           set -euo pipefail
           base="${{ github.event.pull_request.base.sha || github.event.before }}"
-          files=$(git diff --name-only "$base"...HEAD -- '*.dart')
+          files=$(git diff --name-only --diff-filter=ACM "$base"...HEAD -- '*.dart')
           if [ -n "$files" ]; then
             dart format --output=none --set-exit-if-changed $files
           fi
