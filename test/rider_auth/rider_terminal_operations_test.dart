@@ -91,24 +91,6 @@ void main() {
     });
   });
 
-  test('OTP failures are action-specific and never expose provider text', () {
-    expect(
-      riderOtpFailureMessage('invalid-verification-code'),
-      contains('not correct'),
-    );
-    expect(riderOtpFailureMessage('session-expired'), contains('expired'));
-    expect(riderOtpFailureMessage('quota-exceeded'), contains('Too many'));
-    expect(riderOtpFailureMessage('too-many-requests'), contains('Too many'));
-    expect(
-      riderOtpFailureMessage('network-request-failed'),
-      contains('connection'),
-    );
-    expect(
-      riderOtpFailureMessage('provider-secret'),
-      isNot(contains('provider-secret')),
-    );
-  });
-
   group('sign out', () {
     test('success clears the local session', () async {
       var cleared = false;

@@ -79,20 +79,6 @@ class SetOTP extends AuthEvent {
   SetOTP({required this.otp});
 }
 
-class SendPhoneOtp extends AuthEvent {}
-
-class VerifyPhoneOtp extends AuthEvent {
-  final String otpCode;
-  const VerifyPhoneOtp({required this.otpCode});
-}
-
-class ResendPhoneOtp extends AuthEvent {}
-
-class PhoneOtpChanged extends AuthEvent {
-  final String otpCode;
-  const PhoneOtpChanged({required this.otpCode});
-}
-
 class ResendVerificationEmail extends AuthEvent {}
 
 class CompleteRiderApplication extends AuthEvent {
@@ -147,8 +133,6 @@ class SetVerificationMethod extends AuthEvent {
   SetVerificationMethod({required this.method});
 }
 
-class RequestForOTP extends AuthEvent {}
-
 class RegisterUser extends AuthEvent {}
 
 class LoginUser extends AuthEvent {}
@@ -186,8 +170,6 @@ class ValidatePhoneNumber extends AuthEvent {
 
   const ValidatePhoneNumber({required this.val});
 }
-
-class VerifySentCode extends AuthEvent {}
 
 class UpdateUserProfile extends AuthEvent {
   final String username;
