@@ -1,7 +1,7 @@
 import 'package:circum_rider/app/account/repo/earnings_repo.dart';
+import 'package:circum_rider/app/stripe/rider_production_payment_api.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../models/earnings.m.dart';
@@ -45,11 +45,10 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
         emit(state.copyWith(status: AccountStatus.loading, message: ''));
         try {
           final uid = requireUid();
-          final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
-              .httpsCallable('requestRiderWithdrawal');
-          final response = await callable.call(
-              {'amount': double.parse(event.amount)}).timeout(operationTimeout);
-          final data = Map<String, dynamic>.from(response.data as Map);
+          final data = await RiderProductionPaymentApi.payout(
+            'requestRiderWithdrawal',
+            {'amount': double.parse(event.amount)},
+          ).timeout(operationTimeout);
           final request = WithdrawRequestModel(
             accountNumber: '',
             bankName: 'Stripe Connect',
@@ -117,9 +116,10 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
           final doc = docRes.docs.firstOrNull;
 
           if (doc != null) {
-            await FirebaseFunctions.instanceFor(region: 'us-central1')
-                .httpsCallable('cancelRiderWithdrawal')
-                .call({'requestId': doc.id}).timeout(operationTimeout);
+            await RiderProductionPaymentApi.payout(
+              'cancelRiderWithdrawal',
+              {'requestId': doc.id},
+            ).timeout(operationTimeout);
             emit(state.clearWihdrawalRequest());
           } else {
             emit(state.copyWith(status: AccountStatus.initialized));

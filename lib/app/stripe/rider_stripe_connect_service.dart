@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:cloud_functions/cloud_functions.dart';
+import 'package:circum_rider/app/stripe/rider_production_payment_api.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 typedef RiderStripeCall = Future<Map<String, dynamic>> Function(String name);
@@ -69,12 +69,7 @@ class RiderStripeConnectService {
       _call(name).timeout(timeout);
 
   static Future<Map<String, dynamic>> _firebaseCall(String name) async {
-    final response = await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable(name)
-        .call(const <String, dynamic>{});
-    return response.data is Map
-        ? Map<String, dynamic>.from(response.data as Map)
-        : const <String, dynamic>{};
+    return RiderProductionPaymentApi.connect(name);
   }
 
   static Future<bool> _launchExternal(Uri url) =>
