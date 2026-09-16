@@ -149,8 +149,6 @@ class _ForgotPasswordViewState extends State<ForgotPasswordView> {
                 //     MaterialPageRoute(
                 //         builder: (_) =>
                 //             EnterOTPView(authBlocContext: authBlocContext)));
-                // context.read<AuthBloc>().add(RequestForOTP());
-                // context.read<AuthBloc>().add(RequestForOTP());
                 if (state.isEmailValid == false) {
                   context.read<AuthBloc>().add(const SetErrorMessage(
                       errorMessage: 'Invalid email address'));

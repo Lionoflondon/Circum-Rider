@@ -8,13 +8,11 @@ void main() {
   final authBloc =
       File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
 
-  test('normalizes both UK mobile entry forms exactly once', () {
-    expect(onboarding, contains("digits.startsWith('07')"));
-    expect(
-        onboarding, contains("digits.startsWith('7') && digits.length == 10"));
-    expect(onboarding, contains(r"'+44${digits.substring(1)}'"));
-    expect(onboarding, contains(r"return '+44$digits';"));
-    expect(onboarding, isNot(contains("'+440")));
+  test('signup contains no phone OTP entry or normalization', () {
+    expect(onboarding, isNot(contains('PhoneNumberChanged')));
+    expect(onboarding, isNot(contains('VerifyPhoneOtp')));
+    expect(onboarding, isNot(contains('ResendPhoneOtp')));
+    expect(onboarding, isNot(contains("digits.startsWith('07')")));
   });
 
   test('bounds every signup operation that can strand loading', () {
@@ -38,20 +36,13 @@ void main() {
     expect(authBloc, contains("step: 'session_restore_preferences'"));
   });
 
-  test('Rider OTP paths cannot leave completers unresolved forever', () {
-    final otpHandler = authBloc.substring(
-      authBloc.indexOf('if (event is RequestForOTP)'),
-      authBloc.indexOf('if (event is VerifySentCode)'),
-    );
-    expect(authBloc, contains("TimeoutException('phone_otp_send')"));
-    expect(authBloc, contains("TimeoutException('phone_otp_request')"));
-    expect(
-        authBloc, contains('completer.future.timeout(_authOperationTimeout)'));
-    expect(otpHandler, contains('if (!completer.isCompleted)'));
-    expect(otpHandler, contains("step: 'request_phone_otp'"));
-    expect(otpHandler,
-        contains('Verification code could not be sent. Try again.'));
-    expect(otpHandler, isNot(contains("e.toString().split(':').last.trim()")));
+  test('Rider auth bloc has no phone OTP provider paths', () {
+    expect(authBloc, isNot(contains('verifyPhoneNumber')));
+    expect(authBloc, isNot(contains('PhoneAuthProvider.credential')));
+    expect(authBloc, isNot(contains('SendPhoneOtp')));
+    expect(authBloc, isNot(contains('VerifyPhoneOtp')));
+    expect(authBloc, isNot(contains('RequestForOTP')));
+    expect(authBloc, isNot(contains('VerifySentCode')));
   });
 
   test('Rider OAuth and password reset failures terminate safely', () {

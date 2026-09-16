@@ -10,7 +10,7 @@ import '../../authentication/bloc/auth_bloc.dart';
 import '../rider_guide_view.dart';
 import '../../rider_design/rider_ui.dart';
 
-enum _RiderAuthStep { welcome, createAccount, signIn, location }
+enum _RiderAuthStep { welcome, createAccount, signIn }
 
 class OnboardingView extends StatefulWidget {
   const OnboardingView({super.key});
@@ -23,7 +23,6 @@ class _OnboardingViewState extends State<OnboardingView> {
   _RiderAuthStep _step = _RiderAuthStep.welcome;
   final _fullName = TextEditingController();
   final _email = TextEditingController();
-  final _phone = TextEditingController();
   final _password = TextEditingController();
   final _signInEmail = TextEditingController();
   final _signInPassword = TextEditingController();
@@ -36,7 +35,6 @@ class _OnboardingViewState extends State<OnboardingView> {
   void dispose() {
     _fullName.dispose();
     _email.dispose();
-    _phone.dispose();
     _password.dispose();
     _signInEmail.dispose();
     _signInPassword.dispose();
@@ -46,13 +44,7 @@ class _OnboardingViewState extends State<OnboardingView> {
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<AuthBloc, AuthState>(
-      listenWhen: (previous, current) => previous.status != current.status,
-      listener: (context, state) {
-        if (state.status == Status.success &&
-            _step == _RiderAuthStep.createAccount) {
-          setState(() => _step = _RiderAuthStep.location);
-        }
-      },
+      listener: (context, state) {},
       builder: (context, state) {
         if (_showGuide) {
           return RiderGuideView(
@@ -121,7 +113,6 @@ class _OnboardingViewState extends State<OnboardingView> {
       _RiderAuthStep.createAccount => _CreateAccountStep(
           fullName: _fullName,
           email: _email,
-          phone: _phone,
           password: _password,
           showPassword: _showPassword,
           terms: _terms,
@@ -146,15 +137,6 @@ class _OnboardingViewState extends State<OnboardingView> {
           onReset: _resetPassword,
           onCreate: () => setState(() => _step = _RiderAuthStep.createAccount),
         ),
-      _RiderAuthStep.location => _LocationStep(
-          loading: state.status == Status.locationRequested ||
-              state.status == Status.loading,
-          error: _message(state),
-          onEnable: () => context.read<AuthBloc>().add(RequestLocationData()),
-          onMaybeLater: () => context
-              .read<AuthBloc>()
-              .add(const CompleteRiderApplication(locationEnabled: false)),
-        ),
     };
   }
 
@@ -166,7 +148,6 @@ class _OnboardingViewState extends State<OnboardingView> {
         _RiderAuthStep.createAccount ||
         _RiderAuthStep.signIn =>
           _RiderAuthStep.welcome,
-        _RiderAuthStep.location => _RiderAuthStep.createAccount,
         _RiderAuthStep.welcome => _RiderAuthStep.welcome,
       };
     });
@@ -191,7 +172,6 @@ class _OnboardingViewState extends State<OnboardingView> {
     bloc.add(FirstNameChanged(firstName: first));
     bloc.add(LastNameChanged(lastName: last));
     bloc.add(SignupEmailChanged(email: _email.text.trim()));
-    bloc.add(PhoneNumberChanged(phoneNumber: _formatPhone(_phone.text)));
     bloc.add(SignupPasswordChanged(password: _password.text));
     setState(() {});
   }
@@ -214,7 +194,6 @@ class _OnboardingViewState extends State<OnboardingView> {
       return 'Add your full name.';
     }
     if (!_email.text.trim().contains('@')) return 'Enter a valid email.';
-    if (!_validUkPhone(_phone.text)) return 'Enter a valid UK mobile number.';
     if (_passwordScore(_password.text) < 2) {
       return 'Use a stronger password to protect your Rider account.';
     }
@@ -253,20 +232,6 @@ class _OnboardingViewState extends State<OnboardingView> {
     context.read<AuthBloc>().add(ResetPassword(email: email));
   }
 
-  bool _validUkPhone(String value) {
-    final digits = value.replaceAll(RegExp(r'\D'), '');
-    return digits.startsWith('07') && digits.length == 11 ||
-        digits.startsWith('447') && digits.length == 12 ||
-        digits.startsWith('7') && digits.length == 10;
-  }
-
-  String _formatPhone(String value) {
-    final digits = value.replaceAll(RegExp(r'\D'), '');
-    if (digits.startsWith('447') && digits.length == 12) return '+$digits';
-    if (digits.startsWith('0')) return '+44${digits.substring(1)}';
-    if (digits.startsWith('7') && digits.length == 10) return '+44$digits';
-    return value.trim();
-  }
 }
 
 class _PhoneShell extends StatelessWidget {
@@ -345,7 +310,6 @@ class _TopBar extends StatelessWidget {
     final index = switch (step) {
       _RiderAuthStep.createAccount => 1,
       _RiderAuthStep.signIn => 1,
-      _RiderAuthStep.location => 2,
       _RiderAuthStep.welcome => 0,
     };
     return Padding(
@@ -357,11 +321,11 @@ class _TopBar extends StatelessWidget {
           Expanded(
             child: Row(
               children: List.generate(
-                3,
+                1,
                 (i) => Expanded(
                   child: Container(
                     height: 4,
-                    margin: EdgeInsets.only(right: i == 2 ? 0 : 6),
+                    margin: EdgeInsets.zero,
                     decoration: BoxDecoration(
                       color: i < index
                           ? RiderPalette.blue
@@ -375,7 +339,7 @@ class _TopBar extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           Text(
-            '$index/3',
+            '$index/1',
             style: const TextStyle(
               color: RiderPalette.muted,
               fontSize: 11,
@@ -468,7 +432,6 @@ class _CreateAccountStep extends StatelessWidget {
   const _CreateAccountStep({
     required this.fullName,
     required this.email,
-    required this.phone,
     required this.password,
     required this.showPassword,
     required this.terms,
@@ -485,7 +448,6 @@ class _CreateAccountStep extends StatelessWidget {
 
   final TextEditingController fullName;
   final TextEditingController email;
-  final TextEditingController phone;
   final TextEditingController password;
   final bool showPassword;
   final bool terms;
@@ -520,14 +482,6 @@ class _CreateAccountStep extends StatelessWidget {
               controller: email,
               keyboardType: TextInputType.emailAddress,
               autofillHints: const [AutofillHints.email],
-              onChanged: onChanged,
-            ),
-            _AuthField(
-              label: 'UK mobile number',
-              controller: phone,
-              keyboardType: TextInputType.phone,
-              autofillHints: const [AutofillHints.telephoneNumber],
-              prefix: '+44',
               onChanged: onChanged,
             ),
             _AuthField(
@@ -635,48 +589,6 @@ class _SignInStep extends StatelessWidget {
       );
 }
 
-class _LocationStep extends StatelessWidget {
-  const _LocationStep({
-    required this.loading,
-    required this.onEnable,
-    required this.onMaybeLater,
-    this.error,
-  });
-
-  final bool loading;
-  final VoidCallback onEnable;
-  final VoidCallback onMaybeLater;
-  final String? error;
-
-  @override
-  Widget build(BuildContext context) => _StepScroll(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Icon(Icons.location_searching_rounded,
-                color: RiderPalette.blue, size: 48),
-            const SizedBox(height: 20),
-            const Text('Enable location', style: _AuthText.h1),
-            const Text(
-              'Circum Rider needs location for active deliveries, arrival checks and safe live tracking. You can finish account setup now, but going online requires location access.',
-              style: _AuthText.sub,
-            ),
-            if (error != null) _AuthError(error!),
-            const SizedBox(height: 22),
-            _PrimaryAuthButton(
-              label: 'Enable location',
-              onPressed: onEnable,
-              loading: loading,
-            ),
-            TextButton(
-              onPressed: onMaybeLater,
-              child: const Text('Maybe later'),
-            ),
-          ],
-        ),
-      );
-}
-
 class _StepScroll extends StatelessWidget {
   const _StepScroll({required this.child});
 
@@ -728,7 +640,6 @@ class _AuthField extends StatelessWidget {
     this.keyboardType,
     this.obscureText = false,
     this.autofillHints,
-    this.prefix,
     this.suffix,
   });
 
@@ -738,7 +649,6 @@ class _AuthField extends StatelessWidget {
   final TextInputType? keyboardType;
   final bool obscureText;
   final Iterable<String>? autofillHints;
-  final String? prefix;
   final Widget? suffix;
 
   @override
@@ -763,19 +673,7 @@ class _AuthField extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      if (prefix != null) ...[
-                        Padding(
-                          padding: const EdgeInsets.only(left: 14),
-                          child: Text(prefix!, style: _AuthText.inputPrefix),
-                        ),
-                        Container(
-                          height: 24,
-                          width: 1,
-                          margin: const EdgeInsets.symmetric(horizontal: 10),
-                          color: Colors.white.withValues(alpha: .10),
-                        ),
-                      ] else
-                        const SizedBox(width: 14),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: TextField(
                           controller: controller,
@@ -1063,11 +961,6 @@ class _AuthText {
     height: 1.35,
   );
   static const input = TextStyle(color: RiderPalette.paper, fontSize: 14);
-  static const inputPrefix = TextStyle(
-    color: RiderPalette.muted,
-    fontSize: 13,
-    fontWeight: FontWeight.w800,
-  );
   static const consent = TextStyle(
     color: RiderPalette.muted,
     fontSize: 12,

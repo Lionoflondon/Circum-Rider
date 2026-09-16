@@ -34,21 +34,6 @@ Future<bool> runRiderEmailVerification({
   }
 }
 
-String riderOtpFailureMessage(String code) {
-  return switch (code) {
-    'invalid-verification-code' =>
-      'That verification code is not correct. Try again.',
-    'session-expired' =>
-      'That verification code has expired. Request a new code.',
-    'quota-exceeded' ||
-    'too-many-requests' =>
-      'Too many verification attempts. Wait a moment and try again.',
-    'network-request-failed' =>
-      'The connection dropped. Check your network and try again.',
-    _ => 'Your verification code could not be confirmed. Please try again.',
-  };
-}
-
 class RiderSignOutResult {
   const RiderSignOutResult({
     required this.remoteSignedOut,

@@ -16,9 +16,8 @@ void main() {
     expect(entry, contains('How Rider works'));
     expect(entry, contains('Create Rider account'));
     expect(entry, contains('Full name'));
-    expect(entry, contains('UK mobile number'));
+    expect(entry, isNot(contains('UK mobile number')));
     expect(entry, isNot(contains('Verify your mobile')));
-    expect(entry, contains('Enable location'));
     expect(entry, isNot(contains("What's your email?")));
     expect(entry, isNot(contains('phone number or email')));
     expect(entry, isNot(contains('RiderGuideView.hasViewedIntro')));
@@ -82,21 +81,32 @@ void main() {
     expect(source, contains('ResetPassword(email: email)'));
   });
 
-  test('new registration uses email auth, consents and location step', () {
+  test('new registration uses email auth without phone OTP', () {
     final source =
         File('lib/app/onboarding/view/onboarding.dart').readAsStringSync();
     expect(source, contains('SignUpWithEmail('));
-    expect(source, contains('PhoneNumberChanged'));
+    expect(source, isNot(contains('PhoneNumberChanged')));
     expect(source, isNot(contains('VerifyPhoneOtp')));
     expect(source, isNot(contains('ResendPhoneOtp')));
-    expect(source, isNot(contains('_RiderAuthStep.phoneOtp')));
+    expect(source, isNot(contains('Change number')));
     expect(source, contains('Accept the Rider Terms'));
     expect(source, contains('Accept the Privacy Policy'));
     expect(source, isNot(contains('legally entitled to work in the UK')));
     expect(source, isNot(contains('workEntitledUk')));
-    expect(source, contains('RequestLocationData'));
-    expect(
-        source, contains('CompleteRiderApplication(locationEnabled: false)'));
+    expect(source, isNot(contains('RequestLocationData')));
+  });
+
+  test('post-auth Rider phone remains business contact data', () {
+    final source =
+        File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
+    final handler = source.substring(
+      source.indexOf('on<UpdatePhoneNumber>'),
+      source.indexOf('on<ConfirmEmailVerification>'),
+    );
+    expect(handler, contains('.update({'));
+    expect(handler, contains("'phone': event.value"));
+    expect(handler, contains("write(key: 'phone', value: event.value)"));
+    expect(handler, contains('phoneNumber: event.value'));
   });
 
   test('Firebase auth errors have clear customer-safe messages', () {

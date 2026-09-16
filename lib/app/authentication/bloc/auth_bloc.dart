@@ -30,7 +30,6 @@ import '../apple_auth_nonce.dart';
 import '../rider_auth_error.dart';
 import '../rider_auth_bootstrap.dart';
 import '../rider_terminal_operations.dart';
-import '../phone_verification_deadline.dart';
 // import '../../onboarding/view/onboarding.dart';
 
 part 'auth_event.dart';
@@ -352,146 +351,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(otp: event.otp, otpCode: event.otp));
       }
 
-      if (event is PhoneOtpChanged) {
-        emit(state.copyWith(otpCode: event.otpCode, otpErrorMessage: null));
-      }
-
-      if (event is SendPhoneOtp || event is ResendPhoneOtp) {
-        final phoneNumber = state.phoneNumber;
-        if (phoneNumber == null || phoneNumber.trim().isEmpty) {
-          emit(state.copyWith(
-              status: Status.failure,
-              otpErrorMessage: 'Add a mobile number to continue.'));
-          return;
-        }
-
-        final completer = Completer<void>();
-        String? verificationId;
-        int? resendToken;
-
-        try {
-          emit(state.copyWith(status: Status.loading, otpErrorMessage: null));
-          await awaitPhoneVerification(
-            start: () => auth.verifyPhoneNumber(
-              phoneNumber: phoneNumber,
-              forceResendingToken:
-                  event is ResendPhoneOtp ? state.resendToken : null,
-              verificationCompleted: (credential) {},
-              verificationFailed: (error) {
-                logRiderAuthError(
-                  error: error,
-                  path: 'riders/${auth.currentUser?.uid ?? 'unknown'}',
-                  step: 'phone_otp_send',
-                  riderDocumentId: auth.currentUser?.uid,
-                );
-                if (!completer.isCompleted) completer.completeError(error);
-              },
-              codeSent: (id, token) {
-                verificationId = id;
-                resendToken = token;
-                if (!completer.isCompleted) completer.complete();
-              },
-              codeAutoRetrievalTimeout: (id) {
-                verificationId = id;
-                if (!completer.isCompleted) {
-                  completer.completeError(TimeoutException('phone_otp_send'));
-                }
-              },
-            ),
-            completion: completer.future.timeout(_authOperationTimeout),
-            timeout: _authOperationTimeout,
-          );
-          emit(state.copyWith(
-            verificationId: verificationId,
-            resendToken: resendToken ?? state.resendToken,
-            isPhoneOtpSent: true,
-            status: Status.success,
-            otpErrorMessage: null,
-          ));
-        } catch (error) {
-          emit(state.copyWith(
-            status: Status.failure,
-            otpErrorMessage:
-                'We could not send the code. Please check the number.',
-          ));
-        }
-      }
-
-      if (event is VerifyPhoneOtp) {
-        final user = auth.currentUser;
-        final verificationId = state.verificationId;
-        if (user == null || verificationId == null) {
-          emit(state.copyWith(
-            status: Status.failure,
-            otpErrorMessage: 'We could not verify this session. Try again.',
-          ));
-          return;
-        }
-
-        try {
-          emit(state.copyWith(status: Status.loading, otpErrorMessage: null));
-          final credential = PhoneAuthProvider.credential(
-            verificationId: verificationId,
-            smsCode: event.otpCode,
-          );
-          try {
-            await user
-                .linkWithCredential(credential)
-                .timeout(_authOperationTimeout);
-          } on FirebaseAuthException catch (error) {
-            if (error.code != 'provider-already-linked' &&
-                error.code != 'credential-already-in-use') {
-              rethrow;
-            }
-            logRiderAuthError(
-              error: error,
-              path: 'riders/${user.uid}',
-              step: 'phone_credential_already_linked',
-              riderDocumentId: user.uid,
-            );
-          }
-
-          await upsertRiderOnboarding(user: user, data: {
-            'phone': state.phoneNumber,
-            'phoneVerified': true,
-            'phoneVerifiedAt': FieldValue.serverTimestamp(),
-            'onboardingStatus': 'phone_verified',
-          }).timeout(_authOperationTimeout);
-          await user.sendEmailVerification().timeout(_authOperationTimeout);
-
-          emit(state.copyWith(
-            otpCode: event.otpCode,
-            isPhoneVerified: true,
-            status: Status.unverifiedEmail,
-            otpErrorMessage: null,
-          ));
-        } on FirebaseAuthException catch (error) {
-          logRiderAuthError(
-            error: error,
-            path: 'riders/${user.uid}',
-            step: 'phone_otp_verify',
-            riderDocumentId: user.uid,
-          );
-          emit(state.copyWith(
-            status: Status.failure,
-            otpErrorMessage: error.code == 'invalid-verification-code'
-                ? 'That code is invalid or expired.'
-                : 'We could not verify that code. Please try again.',
-          ));
-        } catch (error) {
-          logRiderAuthError(
-            error: error,
-            path: 'riders/${user.uid}',
-            step: 'phone_otp_verify',
-            riderDocumentId: user.uid,
-          );
-          emit(state.copyWith(
-            status: Status.failure,
-            otpErrorMessage: 'We could not verify that code. Please try again.',
-          ));
-        }
-      }
-
       if (event is ResendVerificationEmail) {
         try {
           emit(state.copyWith(status: Status.loading));
@@ -632,118 +491,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 : 'Google sign-in could not be completed. Try again.',
             clearSensitiveAuthFields: true,
           ));
-        }
-      }
-
-      if (event is RequestForOTP) {
-        // emit(state.copyWith(isLoading: true, status: Status.loading));
-
-        final completer = Completer<bool>();
-
-        String? verificationIdValue;
-        int? resendTokenValue;
-
-        try {
-          emit(state.copyWith(status: Status.loading));
-          await awaitPhoneVerification(
-            start: () => auth.verifyPhoneNumber(
-              phoneNumber: state.phoneNumber,
-              verificationCompleted: (_) {},
-              verificationFailed: (error) {
-                if (!completer.isCompleted) completer.completeError(error);
-              },
-              codeSent: (String verificationId, int? resendToken) async {
-                verificationIdValue = verificationId;
-                resendTokenValue = resendToken;
-                if (!completer.isCompleted) completer.complete(true);
-              },
-              codeAutoRetrievalTimeout: (_) {
-                if (!completer.isCompleted) {
-                  completer
-                      .completeError(TimeoutException('phone_otp_request'));
-                }
-              },
-            ),
-            completion: completer.future.timeout(_authOperationTimeout),
-            timeout: _authOperationTimeout,
-          );
-          emit(state.copyWith(
-              verificationId: verificationIdValue,
-              resendToken: resendTokenValue,
-              status: Status.success));
-        } catch (e) {
-          logRiderAuthError(
-            error: e,
-            path: 'phone/request_otp',
-            step: 'request_phone_otp',
-            riderDocumentId: auth.currentUser?.uid,
-          );
-          emit(state.copyWith(
-              errorMessage: 'Verification code could not be sent. Try again.',
-              isLoading: false,
-              status: Status.failure));
-        }
-      }
-
-      if (event is VerifySentCode) {
-        try {
-          // Create a PhoneAuthCredential with the code
-          PhoneAuthCredential credential = PhoneAuthProvider.credential(
-              verificationId: state.verificationId!, smsCode: '${state.otp}');
-          if (auth.currentUser != null) {
-            await auth.currentUser
-                ?.linkWithCredential(credential)
-                .timeout(_authOperationTimeout);
-          } else {
-            // Sign the user in (or link) with the credential
-            final UserCredential userCredential = await auth
-                .signInWithCredential(credential)
-                .timeout(_authOperationTimeout);
-
-            if (userCredential.user?.displayName == null) {
-              if (state.oAuthFirstName == null) {
-                emit(state.copyWith(
-                    authenticatedStatus: AuthenticatedStatus.incompleteData,
-                    currentState: AppState.authenticated));
-              } else {
-                add(UpdateUserProfile(
-                    username:
-                        "${state.oAuthFirstName} ${state.oAuthLastName}"));
-                emit(state.copyWith(
-                    status: Status.success,
-                    username: "${state.oAuthFirstName} ${state.oAuthLastName}",
-                    profilePhoto: state.oAuthPhotoURL,
-                    email: state.oAuthEmail,
-                    phoneNumber: userCredential.user?.phoneNumber,
-                    currentState: AppState.authenticated));
-              }
-            } else {
-              emit(state.copyWith(
-                  status: Status.success,
-                  username: userCredential.user?.displayName,
-                  profilePhoto: userCredential.user?.photoURL,
-                  email: userCredential.user?.email,
-                  phoneNumber: userCredential.user?.phoneNumber,
-                  currentState: AppState.authenticated));
-            }
-          }
-        } on FirebaseAuthException catch (error) {
-          emit(state.copyWith(
-              status: Status.failure,
-              isLoading: false,
-              errorMessage: riderOtpFailureMessage(error.code)));
-        } on TimeoutException {
-          emit(state.copyWith(
-              status: Status.failure,
-              isLoading: false,
-              errorMessage:
-                  'Verification took too long. Check your connection and try again.'));
-        } catch (_) {
-          emit(state.copyWith(
-              status: Status.failure,
-              isLoading: false,
-              errorMessage:
-                  'Your verification code could not be confirmed. Please try again.'));
         }
       }
 
@@ -1636,6 +1383,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(state.copyWith(
             username: fullName.isEmpty ? state.username : fullName,
             status: Status.success,
+            currentState: AppState.authenticated,
+            authenticatedStatus: AuthenticatedStatus.incompleteData,
             clearSensitiveAuthFields: true,
           ));
         } on FirebaseAuthException catch (e) {
