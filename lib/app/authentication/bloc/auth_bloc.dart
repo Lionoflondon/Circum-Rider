@@ -1635,10 +1635,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
           emit(state.copyWith(
             username: fullName.isEmpty ? state.username : fullName,
-            status: Status.initial,
+            status: Status.success,
             clearSensitiveAuthFields: true,
           ));
-          add(SendPhoneOtp());
         } on FirebaseAuthException catch (e) {
           final message = switch (e.code) {
             'invalid-email' => 'Enter a valid email address.',
