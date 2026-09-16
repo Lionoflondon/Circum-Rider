@@ -1,5 +1,4 @@
 import 'dart:io' show Platform;
-import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -11,7 +10,7 @@ import '../../authentication/bloc/auth_bloc.dart';
 import '../rider_guide_view.dart';
 import '../../rider_design/rider_ui.dart';
 
-enum _RiderAuthStep { welcome, createAccount, signIn, phoneOtp, location }
+enum _RiderAuthStep { welcome, createAccount, signIn, location }
 
 class OnboardingView extends StatefulWidget {
   const OnboardingView({super.key});
@@ -28,7 +27,6 @@ class _OnboardingViewState extends State<OnboardingView> {
   final _password = TextEditingController();
   final _signInEmail = TextEditingController();
   final _signInPassword = TextEditingController();
-  final _otp = TextEditingController();
   bool _terms = false;
   bool _privacy = false;
   bool _showPassword = false;
@@ -42,22 +40,16 @@ class _OnboardingViewState extends State<OnboardingView> {
     _password.dispose();
     _signInEmail.dispose();
     _signInPassword.dispose();
-    _otp.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return BlocConsumer<AuthBloc, AuthState>(
-      listenWhen: (previous, current) =>
-          previous.status != current.status ||
-          previous.isPhoneOtpSent != current.isPhoneOtpSent ||
-          previous.isPhoneVerified != current.isPhoneVerified,
+      listenWhen: (previous, current) => previous.status != current.status,
       listener: (context, state) {
-        if (state.isPhoneOtpSent && !state.isPhoneVerified) {
-          setState(() => _step = _RiderAuthStep.phoneOtp);
-        }
-        if (state.isPhoneVerified) {
+        if (state.status == Status.success &&
+            _step == _RiderAuthStep.createAccount) {
           setState(() => _step = _RiderAuthStep.location);
         }
       },
@@ -154,25 +146,6 @@ class _OnboardingViewState extends State<OnboardingView> {
           onReset: _resetPassword,
           onCreate: () => setState(() => _step = _RiderAuthStep.createAccount),
         ),
-      _RiderAuthStep.phoneOtp => _OtpStep(
-          phone: _formatPhone(_phone.text),
-          otp: _otp,
-          countdown: state.countdown,
-          loading: state.status == Status.loading,
-          error: state.otpErrorMessage,
-          onChanged: () {
-            context.read<AuthBloc>().add(PhoneOtpChanged(otpCode: _otp.text));
-            setState(() {});
-          },
-          onSubmit: () => context
-              .read<AuthBloc>()
-              .add(VerifyPhoneOtp(otpCode: _otp.text.trim())),
-          onResend: state.countdown > 0
-              ? null
-              : () => context.read<AuthBloc>().add(ResendPhoneOtp()),
-          onChangeNumber: () =>
-              setState(() => _step = _RiderAuthStep.createAccount),
-        ),
       _RiderAuthStep.location => _LocationStep(
           loading: state.status == Status.locationRequested ||
               state.status == Status.loading,
@@ -193,8 +166,7 @@ class _OnboardingViewState extends State<OnboardingView> {
         _RiderAuthStep.createAccount ||
         _RiderAuthStep.signIn =>
           _RiderAuthStep.welcome,
-        _RiderAuthStep.phoneOtp => _RiderAuthStep.createAccount,
-        _RiderAuthStep.location => _RiderAuthStep.phoneOtp,
+        _RiderAuthStep.location => _RiderAuthStep.createAccount,
         _RiderAuthStep.welcome => _RiderAuthStep.welcome,
       };
     });
@@ -373,8 +345,7 @@ class _TopBar extends StatelessWidget {
     final index = switch (step) {
       _RiderAuthStep.createAccount => 1,
       _RiderAuthStep.signIn => 1,
-      _RiderAuthStep.phoneOtp => 2,
-      _RiderAuthStep.location => 3,
+      _RiderAuthStep.location => 2,
       _RiderAuthStep.welcome => 0,
     };
     return Padding(
@@ -658,69 +629,6 @@ class _SignInStep extends StatelessWidget {
             TextButton(
               onPressed: onCreate,
               child: const Text('Back to create account'),
-            ),
-          ],
-        ),
-      );
-}
-
-class _OtpStep extends StatelessWidget {
-  const _OtpStep({
-    required this.phone,
-    required this.otp,
-    required this.countdown,
-    required this.loading,
-    required this.onChanged,
-    required this.onSubmit,
-    required this.onResend,
-    required this.onChangeNumber,
-    this.error,
-  });
-
-  final String phone;
-  final TextEditingController otp;
-  final int countdown;
-  final bool loading;
-  final VoidCallback onChanged;
-  final VoidCallback onSubmit;
-  final VoidCallback? onResend;
-  final VoidCallback onChangeNumber;
-  final String? error;
-
-  @override
-  Widget build(BuildContext context) => _StepScroll(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('Verify your mobile', style: _AuthText.h1),
-            Text('Enter the 6-digit code sent to $phone.',
-                style: _AuthText.sub),
-            _AuthField(
-              label: 'Verification code',
-              controller: otp,
-              keyboardType: TextInputType.number,
-              autofillHints: const [AutofillHints.oneTimeCode],
-              onChanged: onChanged,
-            ),
-            if (error != null) _AuthError(error!),
-            const SizedBox(height: 16),
-            _PrimaryAuthButton(
-              label: 'Verify code',
-              onPressed: otp.text.trim().length >= 6 ? onSubmit : null,
-              loading: loading,
-            ),
-            const SizedBox(height: 10),
-            TextButton(
-              onPressed: onResend,
-              child: Text(
-                onResend == null
-                    ? 'Resend code in ${math.max(0, countdown)}s'
-                    : 'Resend code',
-              ),
-            ),
-            TextButton(
-              onPressed: onChangeNumber,
-              child: const Text('Change number'),
             ),
           ],
         ),
