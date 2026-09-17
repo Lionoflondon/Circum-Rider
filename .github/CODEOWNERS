@@ -1,0 +1,8 @@
+# Default repository ownership.
+* @Lionoflondon
+
+# Architecture isolation controls require independent review.
+/docs/PERMANENT_ARCHITECTURE_CHARTER.md @Lionoflondon
+/deploy-manifest.json @Lionoflondon
+/scripts/absolute_product_ownership.js @Lionoflondon
+/.github/workflows/ @Lionoflondon
