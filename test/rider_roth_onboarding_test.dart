@@ -56,7 +56,7 @@ void main() {
         () {
       final handler = authBloc.substring(
         authBloc.indexOf('if (event is UpdateUserProfile)'),
-        authBloc.indexOf('if (event is SubmitOTP)'),
+        authBloc.indexOf('if (event is FirstNameChanged)'),
       );
       expect(handler, contains("httpsCallable('updateRiderProfile')"));
       expect(handler, contains('ensureRiderOnboardingStarted('));

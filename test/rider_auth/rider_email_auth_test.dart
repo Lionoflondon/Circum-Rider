@@ -113,11 +113,11 @@ void main() {
     expect(RiderAuthError.messageFor('invalid-email'),
         'Enter a valid email address.');
     expect(RiderAuthError.messageFor('wrong-password'),
-        'The password is incorrect. Try again or reset it.');
+        'Email or password is incorrect.');
     expect(RiderAuthError.messageFor('invalid-credential'),
-        'The email or password is incorrect.');
+        'Email or password is incorrect.');
     expect(RiderAuthError.messageFor('user-not-found'),
-        'No Rider account was found for that email.');
+        'Email or password is incorrect.');
     expect(RiderAuthError.messageFor('user-disabled'),
         'This Rider account is disabled. Contact Circum Support.');
     expect(RiderAuthError.messageFor('network-request-failed'),
@@ -134,6 +134,7 @@ void main() {
       source.indexOf('if (event is SetShowPassword)'),
     );
     expect(handler, contains('sendPasswordResetEmail'));
+    expect(handler, isNot(contains('No Rider account was found')));
     expect(handler, contains('timeout(_authOperationTimeout)'));
     expect(handler, contains('Status.passwordResetEmailSent'));
     expect(handler, contains('isLoading: false'));

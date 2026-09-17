@@ -76,9 +76,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
           riderData?['${key}Approved'] == true;
     }
 
-    if (riderData?['phoneVerified'] != true) {
-      remaining.add('Phone verification');
-    }
     if (!approved('identityDocument')) remaining.add('Identity document');
     if (!approved('rightToWork')) remaining.add('Right to work');
     if (!approved('drivingLicence')) remaining.add('Driving licence');

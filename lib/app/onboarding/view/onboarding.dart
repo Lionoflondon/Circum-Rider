@@ -194,8 +194,8 @@ class _OnboardingViewState extends State<OnboardingView> {
       return 'Add your full name.';
     }
     if (!_email.text.trim().contains('@')) return 'Enter a valid email.';
-    if (_passwordScore(_password.text) < 2) {
-      return 'Use a stronger password to protect your Rider account.';
+    if (_passwordScore(_password.text) < 1) {
+      return 'Use at least 10 characters to protect your Rider account.';
     }
     if (!_terms) return 'Accept the Rider Terms to continue.';
     if (!_privacy) return 'Accept the Privacy Policy to continue.';
@@ -730,9 +730,9 @@ class _PasswordStrength extends StatelessWidget {
   Widget build(BuildContext context) {
     final score = _passwordScore(password);
     final label = switch (score) {
-      0 => 'Use at least 8 characters',
-      1 => 'Password strength: fair',
-      2 => 'Password strength: good',
+      0 => 'Use at least 10 characters',
+      1 => 'Password strength: good',
+      2 => 'Password strength: strong',
       _ => 'Password strength: strong',
     };
     return Padding(
@@ -767,13 +767,9 @@ class _PasswordStrength extends StatelessWidget {
 
 int _passwordScore(String value) {
   var score = 0;
-  if (value.length >= 8) score++;
-  if (RegExp(r'[A-Z]').hasMatch(value) &&
-      RegExp(r'[a-z]').hasMatch(value) &&
-      RegExp(r'\d').hasMatch(value)) {
-    score++;
-  }
-  if (value.length >= 12 && RegExp(r'[^A-Za-z0-9]').hasMatch(value)) score++;
+  if (value.length >= 10) score++;
+  if (value.length >= 12) score++;
+  if (value.length >= 14) score++;
   return score;
 }
 
