@@ -118,9 +118,10 @@ jobs:
           FINE_LOCATION="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath='/manifest/uses-permission[@android:name="android.permission.ACCESS_FINE_LOCATION"]/@android:name')"
           BACKGROUND_LOCATION="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath='/manifest/uses-permission[@android:name="android.permission.ACCESS_BACKGROUND_LOCATION"]/@android:name')"
           LOCATION_FGS_PERMISSION="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath='/manifest/uses-permission[@android:name="android.permission.FOREGROUND_SERVICE_LOCATION"]/@android:name')"
-          LOCATION_SERVICE="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath='/manifest/application/service[@android:name="com.baseflow.geolocator.GeolocatorLocationService" and @android:foregroundServiceType="location"]/@android:name')"
-          printf 'package=%s versionName=%s versionCode=%s minSdk=%s targetSdk=%s launchers=%s fineLocation=%s backgroundLocation=%s locationFgsPermission=%s locationService=%s\n' \
-            "$PACKAGE" "$VERSION_NAME" "$VERSION_CODE" "$MIN_SDK" "$TARGET_SDK" "$LAUNCHERS" "$FINE_LOCATION" "$BACKGROUND_LOCATION" "$LOCATION_FGS_PERMISSION" "$LOCATION_SERVICE"
+          LOCATION_SERVICE="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath='/manifest/application/service[@android:name="com.baseflow.geolocator.GeolocatorLocationService"]/@android:name')"
+          LOCATION_SERVICE_TYPE="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath='/manifest/application/service[@android:name="com.baseflow.geolocator.GeolocatorLocationService"]/@android:foregroundServiceType')"
+          printf 'package=%s versionName=%s versionCode=%s minSdk=%s targetSdk=%s launchers=%s fineLocation=%s backgroundLocation=%s locationFgsPermission=%s locationService=%s locationServiceType=%s\n' \
+            "$PACKAGE" "$VERSION_NAME" "$VERSION_CODE" "$MIN_SDK" "$TARGET_SDK" "$LAUNCHERS" "$FINE_LOCATION" "$BACKGROUND_LOCATION" "$LOCATION_FGS_PERMISSION" "$LOCATION_SERVICE" "$LOCATION_SERVICE_TYPE"
           test "$PACKAGE" = "com.circum.rider"
           test "$VERSION_NAME" = "1.0.7"
           test "$VERSION_CODE" = "${{ inputs.build_number }}"
@@ -131,6 +132,10 @@ jobs:
           test "$BACKGROUND_LOCATION" = "android.permission.ACCESS_BACKGROUND_LOCATION"
           test "$LOCATION_FGS_PERMISSION" = "android.permission.FOREGROUND_SERVICE_LOCATION"
           test "$LOCATION_SERVICE" = "com.baseflow.geolocator.GeolocatorLocationService"
+          case "$LOCATION_SERVICE_TYPE" in
+            location|8|0x8|0x00000008) ;;
+            *) echo "Unexpected Rider location service type: $LOCATION_SERVICE_TYPE" >&2; exit 1 ;;
+          esac
           unzip -p "$AAB" 'META-INF/*.RSA' > /tmp/rider-aab-cert.rsa
           ACTUAL_SHA1="$(keytool -printcert -file /tmp/rider-aab-cert.rsa | awk -F': ' '/SHA1:/{print $2}')"
           ACTUAL_SHA256="$(keytool -printcert -file /tmp/rider-aab-cert.rsa | awk -F': ' '/SHA256:/{print $2}')"
