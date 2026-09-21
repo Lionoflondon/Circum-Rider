@@ -255,6 +255,14 @@ void main() {
       );
       expect(manifest, contains('ACCESS_FINE_LOCATION'));
       expect(manifest, contains('FOREGROUND_SERVICE'));
+      expect(manifest, contains('FOREGROUND_SERVICE_LOCATION'));
+      expect(manifest, contains('ACCESS_BACKGROUND_LOCATION'));
+      expect(
+        manifest,
+        contains('com.baseflow.geolocator.GeolocatorLocationService'),
+      );
+      expect(manifest, contains('android:foregroundServiceType="location"'));
+      expect(source, contains('Geolocator.getPositionStream'));
     });
   });
 }
