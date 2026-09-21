@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../account_bootstrap_api.dart';
 import '../authentication/bloc/auth_bloc.dart';
 import 'rider_vehicle_updates.dart';
 import '../rider_design/rider_ui.dart';
@@ -102,9 +103,7 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
         'updatedAt': FieldValue.serverTimestamp(),
       };
       patch.remove('updatedAt');
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('updateRiderProfile')
-          .call(patch)
+      await updateRiderProfileViaCloudRun(patch)
           .timeout(const Duration(seconds: 20));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -706,7 +705,7 @@ class RiderVehicleManagerView extends StatelessWidget {
       riderEditableVehicles(data);
 
   Future<void> _persist(List<Map<String, dynamic>> vehicles) =>
-      saveRiderVehicles(FirebaseFunctions.instance, vehicles);
+      saveRiderVehicles(vehicles);
 
   Future<void> _runChange(
       BuildContext context, Future<void> Function() change) async {

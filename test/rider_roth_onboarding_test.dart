@@ -58,7 +58,7 @@ void main() {
         authBloc.indexOf('if (event is UpdateUserProfile)'),
         authBloc.indexOf('if (event is SubmitOTP)'),
       );
-      expect(handler, contains("httpsCallable('updateRiderProfile')"));
+      expect(handler, contains('updateRiderProfileViaCloudRun('));
       expect(handler, contains('ensureRiderOnboardingStarted('));
       expect(handler, contains("section': 'profile_details'"));
       expect(handler, isNot(contains('documentReference.get()')));

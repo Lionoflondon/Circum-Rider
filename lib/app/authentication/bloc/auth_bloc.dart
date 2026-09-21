@@ -26,6 +26,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 import '../../rider_account/rider_account_state.dart';
+import '../../account_bootstrap_api.dart';
 import '../apple_auth_nonce.dart';
 import '../rider_auth_error.dart';
 import '../rider_auth_bootstrap.dart';
@@ -88,9 +89,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             .httpsCallable('verifyRiderAccountAccess')
             .call({}).timeout(_authOperationTimeout);
         if (access.data is Map && access.data['profileExists'] == false) {
-          await functions
-              .httpsCallable('updateRiderProfile')
-              .call({}).timeout(_authOperationTimeout);
+          await updateRiderProfileViaCloudRun(const {})
+              .timeout(_authOperationTimeout);
         }
       } on FirebaseFunctionsException catch (error) {
         if (error.code == 'permission-denied') {
@@ -524,7 +524,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 _authOperationTimeout,
               );
 
-          await functions.httpsCallable('updateRiderProfile').call({
+          await updateRiderProfileViaCloudRun({
             'name': event.username,
             'phone': user.phoneNumber ?? state.phoneNumber,
             'phoneVerified': state.isPhoneVerified,
@@ -586,7 +586,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 }
               },
               initializeProfile: () async {
-                await functions.httpsCallable('updateRiderProfile').call({
+                await updateRiderProfileViaCloudRun({
                   if (name.isNotEmpty) 'name': name,
                   'phone': user.phoneNumber ?? state.phoneNumber,
                   'phoneVerified': state.isPhoneVerified,

@@ -6,42 +6,10 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-class _Functions implements FirebaseFunctions {
-  Map<String, dynamic>? payload;
-  Future<HttpsCallableResult<dynamic>> Function()? operation;
-  @override
-  HttpsCallable httpsCallable(String name, {HttpsCallableOptions? options}) {
-    expect(name, 'updateRiderProfile');
-    return _Callable(this);
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
-}
-
-class _Callable implements HttpsCallable {
-  _Callable(this.owner);
-  final _Functions owner;
-  @override
-  Future<HttpsCallableResult<T>> call<T>([dynamic parameters]) async {
-    owner.payload = Map<String, dynamic>.from(parameters as Map);
-    if (owner.operation != null) await owner.operation!();
-    return _Result<T>();
-  }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
-}
-
-class _Result<T> implements HttpsCallableResult<T> {
-  @override
-  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
-}
-
 void main() {
   test('vehicle save calls backend with editable fields only', () async {
-    final functions = _Functions();
-    await saveRiderVehicles(functions, [
+    Map<String, dynamic>? payload;
+    await saveRiderVehicles([
       {
         'type': 'Motorcycle',
         'registration': ' AB12 CDE ',
@@ -54,11 +22,14 @@ void main() {
         'trustPoints': 100,
         'primary': false,
       }
-    ]);
-    final payload = functions.payload!;
-    expect(payload['vehicleType'], 'motorbike');
-    expect(payload['vehicleRegistration'], 'AB12 CDE');
-    expect((payload['vehicles'] as List).single, {
+    ], updateProfile: (data) async {
+      payload = data;
+      return {'ok': true};
+    });
+    final savedPayload = payload!;
+    expect(savedPayload['vehicleType'], 'motorbike');
+    expect(savedPayload['vehicleRegistration'], 'AB12 CDE');
+    expect((savedPayload['vehicles'] as List).single, {
       'type': 'motorbike',
       'registration': 'AB12 CDE',
       'make': 'Test',
@@ -69,7 +40,7 @@ void main() {
       'primary': true,
     });
     expect(
-        payload.keys,
+        savedPayload.keys,
         unorderedEquals([
           'vehicles',
           'vehicleType',
@@ -81,7 +52,6 @@ void main() {
   test(
       'canonical vehicle data rehydrates and edits preserve the chosen primary',
       () async {
-    final functions = _Functions();
     final values = riderEditableVehicles({
       'vehicles': [
         {
@@ -97,9 +67,13 @@ void main() {
     values[0]['primary'] = false;
     values[1]['primary'] = true;
     values[1]['manufacturer'] = 'Edited';
-    await saveRiderVehicles(functions, values);
-    expect(functions.payload!['vehicleType'], 'van');
-    expect(functions.payload!['vehicleMakeModel'], 'Edited');
+    Map<String, dynamic>? payload;
+    await saveRiderVehicles(values, updateProfile: (data) async {
+      payload = data;
+      return {'ok': true};
+    });
+    expect(payload!['vehicleType'], 'van');
+    expect(payload!['vehicleMakeModel'], 'Edited');
     expect(
         riderEditableVehicles({
           'vehicle': {'type': 'car', 'plateNumber': 'LEGACY'}
@@ -108,21 +82,24 @@ void main() {
   });
   test('backend errors propagate so the form can retain values for retry',
       () async {
-    final functions = _Functions()
-      ..operation = () async => throw FirebaseFunctionsException(
-          code: 'unavailable', message: 'Offline');
     final vehicles = [
       {'type': 'car', 'registration': 'AB12 CDE'}
     ];
-    await expectLater(saveRiderVehicles(functions, vehicles),
+    await expectLater(
+        saveRiderVehicles(vehicles, updateProfile: (_) async {
+          throw FirebaseFunctionsException(
+              code: 'unavailable', message: 'Offline');
+        }),
         throwsA(isA<FirebaseFunctionsException>()));
-    functions.operation = null;
-    await saveRiderVehicles(functions, vehicles);
-    expect(functions.payload!['vehicleType'], 'car');
+    Map<String, dynamic>? payload;
+    await saveRiderVehicles(vehicles, updateProfile: (data) async {
+      payload = data;
+      return {'ok': true};
+    });
+    expect(payload!['vehicleType'], 'car');
   });
   test('empty, excessive, and invalid vehicles cannot be silently truncated',
       () async {
-    final functions = _Functions();
     for (final vehicles in <List<Map<String, dynamic>>>[
       [],
       List.generate(3, (_) => {'type': 'car', 'registration': 'AB12 CDE'}),
@@ -133,10 +110,8 @@ void main() {
         {'type': 'van'}
       ],
     ]) {
-      await expectLater(
-          saveRiderVehicles(functions, vehicles), throwsStateError);
+      await expectLater(saveRiderVehicles(vehicles), throwsStateError);
     }
-    expect(functions.payload, isNull);
   });
   test('rehydration preserves primary ordering and legacy manufacturer', () {
     final values = riderEditableVehicles({
@@ -149,12 +124,11 @@ void main() {
     expect(values.first['make'], 'Test');
   });
   testWidgets('callable timeout is bounded', (tester) async {
-    final functions = _Functions()
-      ..operation = () => Completer<HttpsCallableResult<dynamic>>().future;
     Object? failure;
-    final pending = saveRiderVehicles(functions, [
+    final pending = saveRiderVehicles([
       {'type': 'car', 'registration': 'AB12 CDE'}
-    ]).catchError((Object error) {
+    ], updateProfile: (_) => Completer<Map<String, dynamic>>().future)
+        .catchError((Object error) {
       failure = error;
     });
     await tester.pump(const Duration(seconds: 21));
