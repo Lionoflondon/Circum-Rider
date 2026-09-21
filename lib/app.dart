@@ -4,7 +4,6 @@ import '../app/authentication/bloc/auth_bloc.dart';
 import '../app/onboarding/onboarding.dart';
 import 'app/rider_internal_access/rider_internal_access.dart';
 import 'app/review/rider_review_fixture_service.dart';
-import 'utils/nav/nav_key.dart';
 
 import '../app/bottom_nav/view/app_nav.dart';
 import 'utils/app_state/index.dart';
@@ -44,7 +43,6 @@ class App extends StatelessWidget {
     ];
 
     return Navigator(
-      key: NavKey.navKey,
       pages: pages.isEmpty
           ? [MaterialPage(child: _RiderBootSurface(onRetry: onRetry))]
           : pages,
