@@ -103,6 +103,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
     }
 
+    Future<void> verifyRiderSurfaceAfterAuthentication(
+      User? user, {
+      required String step,
+    }) async {
+      try {
+        await verifyRiderSurface(user);
+      } on FirebaseAuthException {
+        rethrow;
+      } catch (error) {
+        logRiderAuthError(
+          error: error,
+          path: 'riders/${user?.uid ?? 'unknown'}',
+          step: step,
+          riderDocumentId: user?.uid,
+        );
+      }
+    }
+
     Future<void> upsertRiderOnboarding({
       required User user,
       required Map<String, dynamic> data,
@@ -157,15 +175,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
         if (user != null) {
           try {
-            await verifyRiderSurface(user);
-          } catch (error) {
+            await verifyRiderSurfaceAfterAuthentication(
+              user,
+              step: 'session_restore_surface_check',
+            );
+          } on FirebaseAuthException catch (error) {
             emit(state.copyWith(
                 currentState: AppState.unauthenticated,
                 status: Status.failure,
                 isLoading: false,
-                errorMessage: error is FirebaseAuthException
-                    ? RiderAuthError.messageFor(error.code)
-                    : 'Account access could not be checked. Check your connection and sign in again.'));
+                errorMessage: RiderAuthError.messageFor(error.code)));
             return;
           }
           String? phone;
@@ -397,7 +416,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           UserCredential userCredential = await auth
               .signInWithCredential(oauthCredential)
               .timeout(_authOperationTimeout);
-          await verifyRiderSurface(userCredential.user);
+          await verifyRiderSurfaceAfterAuthentication(
+            userCredential.user,
+            step: 'apple_sign_in_surface_check',
+          );
 
           emit(state.copyWith(
               username: userCredential.user?.displayName,
@@ -463,7 +485,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               await auth.signInWithCredential(credential).timeout(
                     _authOperationTimeout,
                   );
-          await verifyRiderSurface(userCredential.user);
+          await verifyRiderSurfaceAfterAuthentication(
+            userCredential.user,
+            step: 'google_sign_in_surface_check',
+          );
 
           emit(state.copyWith(
               username: userCredential.user?.displayName,
@@ -1229,8 +1254,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               .signInWithEmailAndPassword(
                   email: event.email, password: event.password)
               .timeout(_authOperationTimeout);
-          await verifyRiderSurface(userCredential.user);
           firebaseAuthenticationSucceeded = true;
+          await verifyRiderSurfaceAfterAuthentication(
+            userCredential.user,
+            step: 'email_sign_in_surface_check',
+          );
           const storage = FlutterSecureStorage();
 
           if (auth.currentUser?.emailVerified == false) {
@@ -1417,7 +1445,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             riderDocumentId: auth.currentUser?.uid,
           );
           emit(state.copyWith(
-            status: Status.failure,
+            status: auth.currentUser == null ? Status.failure : Status.success,
+            currentState: auth.currentUser == null
+                ? AppState.unauthenticated
+                : AppState.authenticated,
+            authenticatedStatus: AuthenticatedStatus.incompleteData,
             errorMessage:
                 'Your account was created, but setup did not finish. Try again to continue.',
             clearSensitiveAuthFields: true,
@@ -1430,7 +1462,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             riderDocumentId: auth.currentUser?.uid,
           );
           emit(state.copyWith(
-            status: Status.failure,
+            status: auth.currentUser == null ? Status.failure : Status.success,
+            currentState: auth.currentUser == null
+                ? AppState.unauthenticated
+                : AppState.authenticated,
+            authenticatedStatus: AuthenticatedStatus.incompleteData,
             errorMessage: auth.currentUser == null
                 ? "We couldn't create your account. Please try again."
                 : 'Your account was created, but setup did not finish. Try again to continue.',

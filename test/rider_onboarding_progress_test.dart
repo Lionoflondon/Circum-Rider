@@ -136,9 +136,9 @@ void main() {
     final source =
         File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
     expect(source, contains("httpsCallable('verifyRiderAccountAccess')"));
-    expect(
-        source.split('await verifyRiderSurface(userCredential.user);').length,
-        4);
+    final guardedAuthCalls =
+        source.split('await verifyRiderSurfaceAfterAuthentication(').length;
+    expect(guardedAuthCalls, 5);
     expect(source, contains('await verifyRiderSurface(user);'));
     final guard = source.substring(
         source.indexOf('Future<void> verifyRiderSurface('),
