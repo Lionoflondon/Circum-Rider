@@ -27,4 +27,14 @@ void main() {
     expect(manifest, contains('NSPrivacyAccessedAPITypes'));
     expect(project, contains('PrivacyInfo.xcprivacy in Resources'));
   });
+
+  test('Rider Maps uses a release-injected iOS configuration', () {
+    final info = File('ios/Runner/Info.plist').readAsStringSync();
+    final delegate = File('ios/Runner/AppDelegate.swift').readAsStringSync();
+
+    expect(info, contains('<key>GoogleMapsApiKey</key>'));
+    expect(info, contains(r'$(GOOGLE_MAPS_API_KEY)'));
+    expect(delegate, contains('GoogleMapsApiKey'));
+    expect(delegate, isNot(contains(RegExp(r'AIza[0-9A-Za-z_-]+'))));
+  });
 }
