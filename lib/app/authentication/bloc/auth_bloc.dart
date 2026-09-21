@@ -1451,7 +1451,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 : AppState.authenticated,
             authenticatedStatus: AuthenticatedStatus.incompleteData,
             errorMessage:
-                'Your account was created. Some account details are still loading.',
+                'Your account was created, but setup did not finish. Try again to continue.',
             clearSensitiveAuthFields: true,
           ));
         } catch (e) {
@@ -1469,7 +1469,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             authenticatedStatus: AuthenticatedStatus.incompleteData,
             errorMessage: auth.currentUser == null
                 ? "We couldn't create your account. Please try again."
-                : 'Your account was created. Some account details are still loading.',
+                : 'Your account was created, but setup did not finish. Try again to continue.',
             clearSensitiveAuthFields: true,
           ));
         }
