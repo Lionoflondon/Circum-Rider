@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 
 import '../rider_design/rider_ui.dart';
 import '../tracking/rider_location_disclosure.dart';
+import '../tracking/rider_location_settings.dart';
 
 class RiderReviewFixtureScreen extends StatefulWidget {
   const RiderReviewFixtureScreen({super.key, required this.fixture});
@@ -54,12 +55,10 @@ class _RiderReviewFixtureScreenState extends State<RiderReviewFixtureScreen> {
             'Location permission is blocked. Open settings to continue.');
         return;
       }
+      await requestRiderTrackingNotificationPermission();
       setState(() => _started = true);
       _positionSub = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.bestForNavigation,
-          distanceFilter: 8,
-        ),
+        locationSettings: riderLocationSettings(),
       ).listen((position) {
         if (mounted) setState(() => _position = position);
       });

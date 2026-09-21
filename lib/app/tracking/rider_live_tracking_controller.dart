@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
 import 'rider_location_disclosure.dart';
+import 'rider_location_settings.dart';
 
 const _riderTrackingWriteTimeout = Duration(seconds: 15);
 
@@ -364,6 +365,7 @@ class RiderLiveTrackingController {
       _emit(permissionState);
       return;
     }
+    await requestRiderTrackingNotificationPermission();
 
     _deliverySub = _firestore
         .collection('deliveryRequests')
@@ -376,17 +378,8 @@ class RiderLiveTrackingController {
       ));
     });
 
-    const settings = kIsWeb
-        ? LocationSettings(
-            accuracy: LocationAccuracy.high,
-            distanceFilter: 10,
-          )
-        : LocationSettings(
-            accuracy: LocationAccuracy.bestForNavigation,
-            distanceFilter: 8,
-          );
     _positionSub = Geolocator.getPositionStream(
-      locationSettings: settings,
+      locationSettings: riderLocationSettings(),
     ).listen(_handlePosition, onError: (Object error) {
       _emit(_snapshot.copyWith(
         status: RiderLiveTrackingStatus.error,
