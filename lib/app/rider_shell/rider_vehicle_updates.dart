@@ -1,5 +1,4 @@
-import 'package:cloud_functions/cloud_functions.dart';
-
+import '../account_bootstrap_api.dart';
 import '../onboarding/rider_onboarding_policy.dart';
 
 List<Map<String, dynamic>> riderEditableVehicles(Map<String, dynamic> profile) {
@@ -25,10 +24,14 @@ List<Map<String, dynamic>> riderEditableVehicles(Map<String, dynamic> profile) {
   ];
 }
 
+typedef RiderProfileUpdater = Future<Map<String, dynamic>> Function(
+  Map<String, dynamic> data,
+);
+
 Future<void> saveRiderVehicles(
-  FirebaseFunctions functions,
-  List<Map<String, dynamic>> vehicles,
-) async {
+  List<Map<String, dynamic>> vehicles, {
+  RiderProfileUpdater? updateProfile,
+}) async {
   if (vehicles.isEmpty || vehicles.length > 2) {
     throw StateError('Keep one or two vehicles on your Rider profile.');
   }
@@ -54,7 +57,7 @@ Future<void> saveRiderVehicles(
       'primary': i == 0,
     });
   }
-  await functions.httpsCallable('updateRiderProfile').call({
+  final payload = <String, dynamic>{
     'vehicles': editable,
     'vehicleType': editable.first['type'],
     'vehicleRegistration': editable.first['registration'],
@@ -62,5 +65,7 @@ Future<void> saveRiderVehicles(
     'vehicleMakeModel': [editable.first['make'], editable.first['model']]
         .where((value) => value != '')
         .join(' '),
-  }).timeout(const Duration(seconds: 20));
+  };
+  await (updateProfile ?? updateRiderProfileViaCloudRun)(payload)
+      .timeout(const Duration(seconds: 20));
 }

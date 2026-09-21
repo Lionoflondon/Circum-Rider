@@ -145,6 +145,6 @@ void main() {
         source.indexOf('Future<void> upsertRiderOnboarding('));
     expect(guard, contains("access.data['profileExists'] == false"));
     expect(guard.indexOf("httpsCallable('verifyRiderAccountAccess')"),
-        lessThan(guard.indexOf("httpsCallable('updateRiderProfile')")));
+        lessThan(guard.indexOf('updateRiderProfileViaCloudRun(')));
   });
 }

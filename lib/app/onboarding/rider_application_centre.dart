@@ -12,6 +12,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import '../account_bootstrap_api.dart';
 import '../communication/rider_conversation_view.dart';
 import '../authentication/rider_terminal_operations.dart';
 import '../rider_account/rider_account_state.dart';
@@ -609,7 +610,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
       _message = null;
     });
     try {
-      await _functions.httpsCallable('updateRiderProfile').call({
+      await updateRiderProfileViaCloudRun({
         ...patch,
         'section': section,
       }).timeout(_applicationOperationTimeout);
@@ -637,7 +638,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
         (vehicle) => vehicle['primary'] == true,
         orElse: () => capped.isEmpty ? const {} : capped.first,
       );
-      await _functions.httpsCallable('updateRiderProfile').call({
+      await updateRiderProfileViaCloudRun({
         'vehicles': capped,
         if (primary.isNotEmpty) 'vehicle': primary,
         if (primary['type'] != null) 'vehicleType': primary['type'],
