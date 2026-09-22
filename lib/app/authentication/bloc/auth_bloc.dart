@@ -297,31 +297,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(status: Status.initial));
       }
 
-      if (event is StartCountDown) {
-        int countdown = state.countdown;
-        const oneSec = Duration(seconds: 1);
-        Timer.periodic(
-          oneSec,
-          (Timer timer) {
-            if (state.countdown == 0) {
-              timer.cancel();
-            } else {
-              emit(state.copyWith(countdown: countdown--));
-            }
-          },
-        );
-      }
-
-      if (event is ResetCountdown) {
-        if (state.countdown < 30) {
-          emit(state.copyWith(countdown: 59));
-          add(StartCountDown());
-        } else {
-          emit(state.copyWith(countdown: 30));
-          add(StartCountDown());
-        }
-      }
-
       if (event is SignupEmailChanged) {
         emit(state.copyWith(email: event.email));
         if (event.email!.isValidEmail()) {
@@ -366,10 +341,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         }
       }
 
-      if (event is SetOTP) {
-        emit(state.copyWith(otp: event.otp, otpCode: event.otp));
-      }
-
       if (event is ResendVerificationEmail) {
         try {
           emit(state.copyWith(status: Status.loading));
@@ -382,11 +353,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               status: Status.failure,
               errorMessage: 'We could not resend the email. Try again.'));
         }
-      }
-
-      if (event is SetPin) {
-        emit(state.copyWith(pin: event.pin));
-        add(SubmitOTP());
       }
 
       if (event is SignInWithAppleAuth) {
@@ -552,7 +518,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           await updateRiderProfileViaCloudRun({
             'name': event.username,
             'phone': user.phoneNumber ?? state.phoneNumber,
-            'phoneVerified': state.isPhoneVerified,
             'vehicle': {
               'type': state.vehicleType?.trim(),
               'makeModel': state.vehicleMakeModel?.trim(),
@@ -614,7 +579,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 await updateRiderProfileViaCloudRun({
                   if (name.isNotEmpty) 'name': name,
                   'phone': user.phoneNumber ?? state.phoneNumber,
-                  'phoneVerified': state.isPhoneVerified,
                   'section': 'profile_details',
                 });
                 await ensureRiderOnboardingStarted(user: user, name: name);
@@ -644,10 +608,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           }
         }
       }
-      if (event is SubmitOTP) {
-        emit(state.copyWith(isLoading: true, status: Status.success));
-      }
-
       if (event is FirstNameChanged) {
         emit(state.copyWith(firstName: event.firstName));
       }
@@ -664,11 +624,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         return emit(state.copyWith(gender: event.gender.toUpperCase().trim()));
       }
 
-      if (event is SetVerificationMethod) {
-        emit(state.copyWith(verificationType: event.method));
-        // return;
-      }
-
       if (event is LoginUser) {
         emit(state.copyWith(isLoading: true, status: Status.loading));
         emit(state.copyWith(
@@ -677,10 +632,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           errorMessage: 'Please use the secure email sign-in flow.',
         ));
       }
-      if (event is SetResetPasswordOTP) {
-        emit(state.copyWith(resetPasswordOtp: event.otp));
-      }
-
       if (event is ForgotPassword) {
         final email = state.email?.trim() ?? '';
         if (email.isEmpty) {
@@ -710,7 +661,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             isLoading: false,
             errorMessage: switch (error.code) {
               'invalid-email' => 'Enter a valid email address.',
-              'user-not-found' => 'No Rider account was found for that email.',
+              'user-not-found' =>
+                'Password reset could not be completed. Please try again.',
               'network-request-failed' =>
                 'Check your connection and try again.',
               'too-many-requests' =>
@@ -1329,8 +1281,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 username: user.displayName,
                 profilePhoto: user.photoURL,
                 email: user.email,
-                verificationId: '',
-                otp: '',
                 phoneNumber: riderPhone,
                 currentState: AppState.authenticated,
                 clearSensitiveAuthFields: true));
@@ -1414,6 +1364,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             await user.sendEmailVerification().timeout(_authOperationTimeout);
           }
 
+          if (user != null && !user.emailVerified) {
+            await user.sendEmailVerification().timeout(_authOperationTimeout);
+            emit(state.copyWith(
+              username: fullName.isEmpty ? state.username : fullName,
+              email: user.email,
+              status: Status.unverifiedEmail,
+              currentState: AppState.unauthenticated,
+              authenticatedStatus: AuthenticatedStatus.incompleteData,
+              clearSensitiveAuthFields: true,
+            ));
+            return;
+          }
+
           emit(state.copyWith(
             username: fullName.isEmpty ? state.username : fullName,
             status:
@@ -1426,8 +1389,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           final message = switch (e.code) {
             'invalid-email' => 'Enter a valid email address.',
             'email-already-in-use' =>
-              'An account already exists for this email. Sign in to continue setup.',
-            'weak-password' => 'Use a stronger password and try again.',
+              'Account creation could not be completed. If you already have an account, sign in or reset your password.',
+            'weak-password' => 'Use a password with at least 10 characters.',
             'network-request-failed' => 'Check your connection and try again.',
             'too-many-requests' =>
               'Too many attempts. Wait a moment and try again.',

@@ -59,20 +59,11 @@ class AuthState extends AuthInitial {
   final String? dateOfBirth;
   final String? gender;
   final String? pin;
-  final String? otp;
-  final String? otpCode;
-  final String? resetPasswordOtp;
   final String? errorMessage;
-  final bool isPhoneOtpSent;
   final bool isPhoneVerified;
-  final String? otpErrorMessage;
-  final int? verificationCode;
-  final String? verificationType;
   final bool showPassword;
   final bool isPhoneNumberValid;
   final bool isEmailValid;
-  final String? verificationId;
-  final int? resendToken;
   final Position? locationData;
   final bool? isLocationEnabled;
   final bool? hasLocationPermission;
@@ -89,8 +80,6 @@ class AuthState extends AuthInitial {
   final VerificationUploadStatus verificationUploadStatus;
   final AuthenticatedStatus authenticatedStatus;
   final RiderAccountState riderAccountState;
-
-  final int countdown;
 
   final String? profilePhoto;
 
@@ -115,22 +104,12 @@ class AuthState extends AuthInitial {
         dateOfBirth,
         gender,
         pin,
-        otp,
-        otpCode,
-        resetPasswordOtp,
         errorMessage,
-        isPhoneOtpSent,
         isPhoneVerified,
-        otpErrorMessage,
-        verificationCode,
-        verificationType,
         status,
-        countdown,
         showPassword,
         isPhoneNumberValid,
         isEmailValid,
-        verificationId,
-        resendToken,
         locationData,
         isLocationEnabled,
         hasLocationPermission,
@@ -166,24 +145,14 @@ class AuthState extends AuthInitial {
     this.confirmPassword,
     this.dateOfBirth,
     this.gender,
-    this.otp,
-    this.otpCode,
-    this.resetPasswordOtp,
     this.pin,
     this.isLoading = false,
     this.errorMessage,
-    this.isPhoneOtpSent = false,
     this.isPhoneVerified = false,
-    this.otpErrorMessage,
-    this.verificationCode,
-    this.verificationType,
     this.status = Status.initial,
-    this.countdown = 30,
     this.showPassword = false,
     this.isPhoneNumberValid = false,
     this.isEmailValid = false,
-    this.verificationId,
-    this.resendToken,
     this.locationData,
     this.isLocationEnabled,
     this.hasLocationPermission,
@@ -218,24 +187,14 @@ class AuthState extends AuthInitial {
       bool clearSensitiveAuthFields = false,
       String? dateOfBirth,
       String? gender,
-      String? otp,
-      String? otpCode,
-      String? resetPasswordOtp,
       String? pin,
       bool? isLoading,
       String? errorMessage,
-      bool? isPhoneOtpSent,
       bool? isPhoneVerified,
-      String? otpErrorMessage,
-      int? verificationCode,
-      String? verificationType,
       Status? status,
-      int? countdown,
       bool? showPassword,
       bool? isPhoneNumberValid,
       bool? isEmailValid,
-      String? verificationId,
-      int? resendToken,
       Position? locationData,
       bool? isLocationEnabled,
       bool? hasLocationPermission,
@@ -269,24 +228,14 @@ class AuthState extends AuthInitial {
         confirmPassword: clearSensitiveAuthFields ? null : null,
         dateOfBirth: dateOfBirth ?? this.dateOfBirth,
         gender: gender ?? this.gender,
-        otp: otp ?? this.otp,
-        otpCode: otpCode ?? this.otpCode,
-        resetPasswordOtp: resetPasswordOtp ?? this.resetPasswordOtp,
         pin: pin ?? this.pin,
         isLoading: isLoading ?? this.isLoading,
         errorMessage: errorMessage,
-        isPhoneOtpSent: isPhoneOtpSent ?? this.isPhoneOtpSent,
         isPhoneVerified: isPhoneVerified ?? this.isPhoneVerified,
-        otpErrorMessage: otpErrorMessage,
-        verificationCode: verificationCode ?? this.verificationCode,
-        verificationType: verificationType ?? this.verificationType,
         status: status ?? this.status,
-        countdown: countdown ?? this.countdown,
         showPassword: showPassword ?? this.showPassword,
         isPhoneNumberValid: isPhoneNumberValid ?? this.isPhoneNumberValid,
         isEmailValid: isEmailValid ?? this.isEmailValid,
-        verificationId: verificationId ?? this.verificationId,
-        resendToken: resendToken ?? this.resendToken,
         locationData: locationData ?? this.locationData,
         isLocationEnabled: isLocationEnabled ?? this.isLocationEnabled,
         hasLocationPermission:
