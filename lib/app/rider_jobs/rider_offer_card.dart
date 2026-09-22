@@ -195,6 +195,11 @@ class RiderJobOffer {
     if (serviceType.contains('vanguard') && !chips.contains('Vanguard')) {
       chips.add('Vanguard');
     }
+    final serviceLevel =
+        '${data['serviceLevel'] ?? data['selectedServiceLevel'] ?? data['selectedTier'] ?? (data['urgent'] == true ? 'Express' : 'Standard')}'
+            .trim()
+            .toLowerCase();
+    chips.add(serviceLevel == 'express' ? 'Express' : 'Standard');
     final deliveryTime = data['deliveryTime'] is Map
         ? Map<String, dynamic>.from(data['deliveryTime'] as Map)
         : <String, dynamic>{};
@@ -203,7 +208,6 @@ class RiderJobOffer {
         ? canonicalType == 'scheduled'
         : data['isScheduled'] == true || data['scheduled'] == true;
     addIf(scheduled, 'Scheduled');
-    if (chips.isEmpty) chips.add('Standard');
     return chips;
   }
 
@@ -402,9 +406,8 @@ class RiderOfferCard extends StatelessWidget {
                 onPressed: accepting ? null : onAccept,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF3B82F6),
-                  disabledBackgroundColor: const Color(
-                    0xFF3B82F6,
-                  ).withValues(alpha: 0.42),
+                  disabledBackgroundColor:
+                      const Color(0xFF3B82F6).withValues(alpha: 0.42),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
