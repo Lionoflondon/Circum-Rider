@@ -58,16 +58,13 @@ class RiderJobOffer {
     );
     final requestId = '${data['requestId'] ?? data['code'] ?? docId}'.trim();
     final price = data['riderEarning'] ?? data['riderPay'] ?? 0;
-    final distance =
-        data['distanceText'] ??
+    final distance = data['distanceText'] ??
         data['estimatedDistanceText'] ??
         data['distance'];
-    final duration =
-        data['durationText'] ??
+    final duration = data['durationText'] ??
         data['estimatedDurationText'] ??
         data['duration'];
-    final item =
-        data['normalizedItemName'] ??
+    final item = data['normalizedItemName'] ??
         data['packageDescription'] ??
         data['originalDescription'] ??
         data['itemName'] ??
@@ -151,16 +148,14 @@ class RiderJobOffer {
         value['address'],
         value['locality'],
         [
-              value['addressLine1'],
-              value['addressLine2'],
-              value['city'],
-              value['postcode'],
-            ]
-            .where((part) {
-              final text = '$part'.trim();
-              return part != null && text.isNotEmpty && text != 'null';
-            })
-            .join(', '),
+          value['addressLine1'],
+          value['addressLine2'],
+          value['city'],
+          value['postcode'],
+        ].where((part) {
+          final text = '$part'.trim();
+          return part != null && text.isNotEmpty && text != 'null';
+        }).join(', '),
       ]);
     }
     for (final candidate in candidates) {
@@ -217,8 +212,7 @@ class RiderJobOffer {
   }
 
   static String _weightText(Map<String, dynamic> data) {
-    final value =
-        data['weightKg'] ??
+    final value = data['weightKg'] ??
         data['finalPricingWeightKg'] ??
         data['irisEstimatedWeightKg'] ??
         data['estimatedWeightKg'];
@@ -249,8 +243,7 @@ class RiderJobOffer {
       if (date.isNotEmpty && date != 'null') return date;
     }
     if (hasCanonicalDeliveryTime && canonicalType.isNotEmpty) return 'ASAP';
-    final scheduled =
-        data['scheduledTime'] ??
+    final scheduled = data['scheduledTime'] ??
         data['pickupWindow'] ??
         data['pickupTiming'] ??
         data['scheduledAt'];
@@ -413,9 +406,8 @@ class RiderOfferCard extends StatelessWidget {
                 onPressed: accepting ? null : onAccept,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF3B82F6),
-                  disabledBackgroundColor: const Color(
-                    0xFF3B82F6,
-                  ).withValues(alpha: 0.42),
+                  disabledBackgroundColor:
+                      const Color(0xFF3B82F6).withValues(alpha: 0.42),
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
@@ -547,9 +539,8 @@ class _Chip extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          color: highlighted
-              ? Colors.white
-              : Colors.white.withValues(alpha: 0.76),
+          color:
+              highlighted ? Colors.white : Colors.white.withValues(alpha: 0.76),
           fontWeight: FontWeight.w700,
           fontSize: 12,
         ),
