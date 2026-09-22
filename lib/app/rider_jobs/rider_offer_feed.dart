@@ -1,5 +1,4 @@
-import 'package:cloud_functions/cloud_functions.dart';
-
+import '../rider_delivery_authority_api.dart';
 import 'rider_offer_card.dart';
 
 /// Every refresh is authorized on the backend before any offer data is returned.
@@ -9,12 +8,8 @@ class RiderOfferFeed {
 
   final Future<Map<String, dynamic>> Function() _load;
 
-  static Future<Map<String, dynamic>> _loadFromBackend() async {
-    final response = await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('getAvailableRequests')
-        .call(<String, dynamic>{}).timeout(const Duration(seconds: 15));
-    return Map<String, dynamic>.from(response.data as Map);
-  }
+  static Future<Map<String, dynamic>> _loadFromBackend() =>
+      loadRiderOffersViaCloudRun();
 
   Future<List<RiderJobOffer>> refresh({required String riderId}) async {
     final response = await _load();
