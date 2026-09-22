@@ -698,7 +698,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
 
   Future<void> _submitApplication(String uid) async {
     await _runGuard(() async {
-      await _functions.httpsCallable('submitRiderApplication').call({
+      await submitRiderApplicationViaCloudRun({
         'idempotencyKey': 'rider_application:$uid',
       }).timeout(_applicationOperationTimeout);
     }, success: 'Application submitted for Admin review.');

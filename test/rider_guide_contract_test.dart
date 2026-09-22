@@ -150,8 +150,9 @@ void main() {
       expect(
           applicationCentre, isNot(contains("'approvalStatus': 'approved'")));
       expect(applicationCentre, isNot(contains("'approvedAt'")));
+      expect(applicationCentre, contains('submitRiderApplicationViaCloudRun('));
       expect(applicationCentre,
-          contains("httpsCallable('submitRiderApplication')"));
+          isNot(contains("httpsCallable('submitRiderApplication')")));
       expect(
           applicationCentre, isNot(contains("'approvalStatus': 'submitted'")));
     });
