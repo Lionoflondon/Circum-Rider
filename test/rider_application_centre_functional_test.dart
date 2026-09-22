@@ -37,7 +37,8 @@ void main() {
   test(
       'submission stays unavailable until required onboarding work is complete',
       () {
-    expect(source, contains("httpsCallable('submitRiderApplication')"));
+    expect(source, contains('submitRiderApplicationViaCloudRun('));
+    expect(source, isNot(contains("httpsCallable('submitRiderApplication')")));
     expect(source, contains("'idempotencyKey': 'rider_application:\$uid'"));
     expect(source, contains('requiredProgress.completed >='));
     expect(

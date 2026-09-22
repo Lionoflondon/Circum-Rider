@@ -73,6 +73,36 @@ void main() {
     );
   });
 
+  test('Rider application submission uses the authenticated Cloud Run route',
+      () async {
+    late http.Request captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        jsonEncode({
+          'result': {'applicationId': 'rider-1', 'status': 'submitted'},
+        }),
+        200,
+      );
+    });
+
+    final result = await invokeSubmitRiderApplicationViaCloudRun(
+      const {'idempotencyKey': 'rider_application:rider-1'},
+      idToken: 'id-token',
+      appCheckToken: 'app-check-token',
+      client: client,
+    );
+
+    expect(captured.method, 'POST');
+    expect(captured.url.path, '/submitRiderApplication');
+    expect(captured.headers['authorization'], 'Bearer id-token');
+    expect(captured.headers['x-firebase-appcheck'], 'app-check-token');
+    expect(jsonDecode(captured.body), {
+      'data': {'idempotencyKey': 'rider_application:rider-1'},
+    });
+    expect(result, {'applicationId': 'rider-1', 'status': 'submitted'});
+  });
+
   test('all active Rider profile callers use the shared Cloud Run client', () {
     final sources = Directory('lib')
         .listSync(recursive: true)
