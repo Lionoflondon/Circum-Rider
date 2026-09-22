@@ -190,6 +190,8 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
                                       status:
                                           _overallStatus(application, rider),
                                       busy: _busy,
+                                      canSubmit: requiredProgress.completed >=
+                                          requiredProgress.total - 1,
                                       onSubmit: () => _submitApplication(uid),
                                     ),
                                     if (_message != null) ...[
@@ -853,6 +855,7 @@ class _ApplicationHero extends StatelessWidget {
     required this.requiredProgress,
     required this.status,
     required this.busy,
+    required this.canSubmit,
     required this.onSubmit,
   });
 
@@ -860,6 +863,7 @@ class _ApplicationHero extends StatelessWidget {
   final _RequiredApplicationProgress requiredProgress;
   final String status;
   final bool busy;
+  final bool canSubmit;
   final VoidCallback onSubmit;
 
   @override
@@ -901,7 +905,7 @@ class _ApplicationHero extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           FilledButton.icon(
-            onPressed: busy ? null : onSubmit,
+            onPressed: busy || !canSubmit ? null : onSubmit,
             icon: busy
                 ? const SizedBox(
                     width: 16,
@@ -918,6 +922,13 @@ class _ApplicationHero extends StatelessWidget {
               foregroundColor: Colors.white,
             ),
           ),
+          if (!canSubmit) ...[
+            const SizedBox(height: 10),
+            const Text(
+              'Complete every required section and upload the required documents before submitting.',
+              style: TextStyle(color: RiderPalette.amber, fontSize: 12.5),
+            ),
+          ],
         ],
       ),
     );

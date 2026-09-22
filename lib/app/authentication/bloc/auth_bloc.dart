@@ -1407,10 +1407,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               initializeRothWallet: () => ensureRiderRothWallet(user!),
             );
           }
+          if (user == null) {
+            throw FirebaseAuthException(code: 'user-not-found');
+          }
+          if (!user.emailVerified) {
+            await user.sendEmailVerification().timeout(_authOperationTimeout);
+          }
 
           emit(state.copyWith(
             username: fullName.isEmpty ? state.username : fullName,
-            status: Status.success,
+            status:
+                user.emailVerified ? Status.success : Status.unverifiedEmail,
             currentState: AppState.authenticated,
             authenticatedStatus: AuthenticatedStatus.incompleteData,
             clearSensitiveAuthFields: true,

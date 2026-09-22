@@ -34,12 +34,16 @@ void main() {
         contains('applicationSubmitted: progress.applicationSubmitted'));
   });
 
-  test('submission is available independently of completion or declarations',
+  test(
+      'submission stays unavailable until required onboarding work is complete',
       () {
     expect(source, contains("httpsCallable('submitRiderApplication')"));
     expect(source, contains("'idempotencyKey': 'rider_application:\$uid'"));
-    expect(source, isNot(contains('rightToWorkConfirmed')));
-    expect(source, isNot(contains('sealedPackageConsent')));
+    expect(source, contains('requiredProgress.completed >='));
+    expect(
+        source,
+        contains(
+            'Complete every required section and upload the required documents'));
   });
 
   test('every Application Centre mutation is bounded by the shared guard', () {
