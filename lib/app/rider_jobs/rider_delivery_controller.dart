@@ -6,6 +6,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../rider_delivery_authority_api.dart';
+
 const _riderDeliveryOperationTimeout = Duration(seconds: 30);
 
 class RiderDeliveryTransitionResult {
@@ -103,6 +105,14 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
         );
       }
       return RiderDeliveryTransitionResult('${decision['state'] ?? ''}');
+    }
+    if (action == 'verify_receiver_pin') {
+      final data = await completeDeliveryViaCloudRun(<String, dynamic>{
+        'deliveryId': deliveryId,
+        if (pin != null) 'deliveryPin': pin,
+        if (evidence != null) 'evidence': evidence,
+      }).timeout(_riderDeliveryOperationTimeout);
+      return RiderDeliveryTransitionResult('${data['status'] ?? ''}');
     }
     final result = await functions
         .httpsCallable('updateDeliveryTrackingStatus')

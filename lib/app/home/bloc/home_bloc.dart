@@ -22,6 +22,7 @@ import '../../../helper/formatted_string_after_seconds.dart';
 import '../../../helper/messaging_server.dart';
 import '../../../utils/theme/theme.dart';
 import '../../communication/rider_communication_service.dart';
+import '../../rider_delivery_authority_api.dart';
 import '../models/dispatch_request.m..dart';
 import '../models/message.m.dart';
 import '../models/place_coordinates.m.dart';
@@ -388,14 +389,10 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
           requestStatus: RequestStatus.loading,
         ),
       );
-      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-      final HttpsCallable callable = functions.httpsCallable(
-        'getAvailableRequests',
-      );
-      final response = await callable.call();
+      final response = await loadRiderOffersViaCloudRun();
       // Offer cards are owned by RiderOfferFeed. This legacy bloc retains only
       // assigned delivery DTOs; projected offers intentionally lack private GPS/contact fields.
-      if (response.data['riderId'] != auth.currentUser?.uid) {
+      if (response['riderId'] != auth.currentUser?.uid) {
         throw StateError(
           'Offer authorization does not match the signed-in Rider',
         );
