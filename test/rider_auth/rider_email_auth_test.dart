@@ -96,6 +96,18 @@ void main() {
     expect(source, isNot(contains('RequestLocationData')));
   });
 
+  test('new registration sends verification before leaving the auth journey',
+      () {
+    final source =
+        File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
+    final signup = source.substring(
+      source.indexOf('on<SignUpWithEmail>'),
+      source.indexOf('on<UpdatePhoneNumber>'),
+    );
+    expect(signup, contains('sendEmailVerification()'));
+    expect(signup, contains('Status.unverifiedEmail'));
+  });
+
   test('post-auth Rider phone remains business contact data', () {
     final source =
         File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
