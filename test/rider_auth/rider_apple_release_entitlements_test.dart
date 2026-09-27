@@ -37,4 +37,11 @@ void main() {
     expect(delegate, contains('GoogleMapsApiKey'));
     expect(delegate, isNot(contains(RegExp(r'AIza[0-9A-Za-z_-]+'))));
   });
+
+  test('Rider native source exposes chat-only communication permissions', () {
+    final info = File('ios/Runner/Info.plist').readAsStringSync();
+    expect(info, isNot(contains('NSMicrophoneUsageDescription')));
+    expect(info, isNot(contains('<string>sms</string>')));
+    expect(info, isNot(contains('<string>tel</string>')));
+  });
 }

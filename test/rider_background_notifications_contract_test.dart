@@ -29,8 +29,10 @@ void main() {
       () {
     final manifest = read('android/app/src/main/AndroidManifest.xml');
     final notifications = read('lib/helper/notifications_helper.dart');
+    final messaging = read('lib/messaging.dart');
     expect(manifest, contains('android.permission.POST_NOTIFICATIONS'));
     expect(notifications, contains("'rider_job_offers'"));
+    expect(messaging, contains("'notifications_updates'"));
     expect(notifications, contains('Importance.max'));
   });
 }

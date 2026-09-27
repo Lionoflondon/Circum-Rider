@@ -21,6 +21,7 @@ void main() {
         source, contains('The document was not submitted. Please try again.'));
     expect(source,
         contains('Future<bool> Function(String type, XFile file) upload'));
+    expect(source, contains("'driving_licence'"));
   });
 
   test('application progress is derived from required persisted sections', () {

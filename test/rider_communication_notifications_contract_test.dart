@@ -20,6 +20,7 @@ void main() {
     final acceptedDelivery =
         File('lib/app/rider_jobs/rider_job_offer_screen.dart')
             .readAsStringSync();
+    final messaging = File('lib/messaging.dart').readAsStringSync();
 
     test('Rider sends messages through canonical communication callables', () {
       expect(serviceSource, contains("httpsCallable('sendCircumMessage')"));
@@ -96,6 +97,15 @@ void main() {
       expect(normalizeNotificationCategory('document_required'), 'account');
       expect(normalizeNotificationCategory('scheduled_pickup'), 'schedule');
       expect(normalizeNotificationCategory('new_delivery'), 'jobs');
+    });
+
+    test('FCM routes Rider chat and status taps beyond offer pushes', () {
+      expect(messaging,
+          contains("message.data['notificationType'] == 'chat_message'"));
+      expect(messaging, contains('RiderConversationView'));
+      expect(messaging, contains('RiderNotificationsView'));
+      expect(messaging, contains('FirebaseMessaging.onMessageOpenedApp'));
+      expect(messaging, contains('getInitialMessage'));
     });
   });
 
