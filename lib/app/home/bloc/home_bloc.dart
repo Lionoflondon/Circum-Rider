@@ -867,9 +867,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
     if (desiredOnline || presenceOnline || statusString == 'online') {
       add(SetRideStatus(status: RideStatus.online));
     }
-    final documentReference = db
-        .collection('deliveryRequests')
-        .where('riderId', isEqualTo: user.uid);
+    final documentReference =
+        db.collection('deliveryRequests').where('riderId', isEqualTo: user.uid);
 
     final docResponse = await documentReference.get();
     // final doc = docResponse.docs.firstOrNull;
@@ -991,7 +990,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
                     permission: LocationPermission.whileInUse,
                     hasFreshLocation: false,
                   )
-            : 'Connection interrupted. Reconnecting automatically…',
+                : 'Connection interrupted. Reconnecting automatically…',
       ),
     );
     if (event.succeeded) {

@@ -18,8 +18,8 @@ Future<void> _createRiderNotificationChannel() async {
       importance: Importance.high,
     ),
   ];
-  final android = flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<
+  final android =
+      flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
           AndroidFlutterLocalNotificationsPlugin>();
   for (final channel in channels) {
     await android?.createNotificationChannel(channel);

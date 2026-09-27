@@ -180,7 +180,8 @@ void main() {
 
   test('active-request restore exits cleanly after sign-out', () {
     final handlerStart = source.indexOf('void _handleCheckForActiveRequest');
-    final handlerEnd = source.indexOf('void _handleIncomingMessage', handlerStart);
+    final handlerEnd =
+        source.indexOf('void _handleIncomingMessage', handlerStart);
     final handler = source.substring(handlerStart, handlerEnd);
     expect(handler, contains('if (user == null)'));
     expect(handler, isNot(contains('user!.uid')));
