@@ -3,7 +3,9 @@ import 'package:circum_rider/app/rider_jobs/rider_offer_feed.dart';
 
 void main() {
   Map<String, dynamic> response(
-          {String rider = 'rider', bool eligible = true, bool qaOnly = false}) =>
+          {String rider = 'rider',
+          bool eligible = true,
+          bool qaOnly = false}) =>
       {
         'riderId': rider,
         'eligible': eligible,
