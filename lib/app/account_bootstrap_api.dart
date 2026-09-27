@@ -23,6 +23,21 @@ Future<Map<String, dynamic>> updateRiderProfileViaCloudRun(
   );
 }
 
+Future<Map<String, dynamic>> advanceRiderOnboardingViaCloudRun(
+  Map<String, dynamic> data, {
+  FirebaseAuth? auth,
+  FirebaseAppCheck? appCheck,
+  http.Client? client,
+}) async {
+  return _callRiderAccountViaCloudRun(
+    'advanceRiderOnboarding',
+    data,
+    auth: auth,
+    appCheck: appCheck,
+    client: client,
+  );
+}
+
 Future<Map<String, dynamic>> submitRiderApplicationViaCloudRun(
   Map<String, dynamic> data, {
   FirebaseAuth? auth,
@@ -78,6 +93,21 @@ Future<Map<String, dynamic>> invokeRiderProfileUpdateViaCloudRun(
 }) async {
   return _invokeRiderAccountViaCloudRun(
     'updateRiderProfile',
+    data,
+    idToken: idToken,
+    appCheckToken: appCheckToken,
+    client: client,
+  );
+}
+
+Future<Map<String, dynamic>> invokeAdvanceRiderOnboardingViaCloudRun(
+  Map<String, dynamic> data, {
+  required String idToken,
+  required String appCheckToken,
+  http.Client? client,
+}) async {
+  return _invokeRiderAccountViaCloudRun(
+    'advanceRiderOnboarding',
     data,
     idToken: idToken,
     appCheckToken: appCheckToken,
