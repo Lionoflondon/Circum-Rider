@@ -11,6 +11,13 @@ class RiderOfferFeed {
   static Future<Map<String, dynamic>> _loadFromBackend() =>
       loadRiderOffersViaCloudRun();
 
+  Future<bool> qaOnlyAccess({required String riderId}) async {
+    final response = await _load();
+    return response['riderId'] == riderId &&
+        response['qaOnly'] == true &&
+        response['eligible'] == true;
+  }
+
   Future<List<RiderJobOffer>> refresh({required String riderId}) async {
     final response = await _load();
     if (response['riderId'] != riderId || response['eligible'] != true) {

@@ -3,10 +3,11 @@ import 'package:circum_rider/app/rider_jobs/rider_offer_feed.dart';
 
 void main() {
   Map<String, dynamic> response(
-          {String rider = 'rider', bool eligible = true}) =>
+          {String rider = 'rider', bool eligible = true, bool qaOnly = false}) =>
       {
         'riderId': rider,
         'eligible': eligible,
+        'qaOnly': qaOnly,
         'nearestRequests': [
           {
             'deliveryId': 'job',
@@ -47,5 +48,23 @@ void main() {
   test('failed authorization refresh first clears any offer list', () async {
     final feed = RiderOfferFeed(load: () async => throw StateError('offline'));
     expect(await feed.watch(riderId: 'rider').first, isEmpty);
+  });
+
+  test('QA-only access is server-reported and remains rider-scoped', () async {
+    expect(
+      await RiderOfferFeed(load: () async => response(qaOnly: true))
+          .qaOnlyAccess(riderId: 'rider'),
+      isTrue,
+    );
+    expect(
+      await RiderOfferFeed(load: () async => response(qaOnly: true))
+          .qaOnlyAccess(riderId: 'other'),
+      isFalse,
+    );
+    expect(
+      await RiderOfferFeed(load: () async => response())
+          .qaOnlyAccess(riderId: 'rider'),
+      isFalse,
+    );
   });
 }

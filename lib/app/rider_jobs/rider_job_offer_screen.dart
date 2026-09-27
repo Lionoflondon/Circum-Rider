@@ -63,6 +63,7 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
   bool _accepted = false;
   String? _statusMessage;
   RiderAcceptStatus? _acceptStatus;
+  Future<bool>? _qaOnlyAccess;
 
   @override
   void initState() {
@@ -118,13 +119,25 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
     if (_offerFeedRider != user.uid) {
       _offerFeedRider = user.uid;
       _offerFeed = RiderOfferFeed().watch(riderId: user.uid);
+      _qaOnlyAccess = RiderOfferFeed().qaOnlyAccess(riderId: user.uid);
     }
     context.watch<HomeBloc>().state;
     return FutureBuilder<bool>(
-        future: RiderInternalAccess.enabled(),
+        future: Future.wait<bool>([
+          RiderInternalAccess.enabled(),
+          _qaOnlyAccess ?? Future<bool>.value(false),
+        ]).then((values) => values[0] || values[1]),
         builder: (context, internalAccessSnapshot) {
           final internalAccess = internalAccessSnapshot.data == true;
-          return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          final qaOnly = _qaOnlyAccess != null &&
+                  internalAccessSnapshot.connectionState == ConnectionState.done
+              ? _qaOnlyAccess!
+              : Future<bool>.value(false);
+          return FutureBuilder<bool>(
+            future: qaOnly,
+            builder: (context, qaSnapshot) {
+              final qaOnlyAccess = qaSnapshot.data == true;
+              return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
             stream: _firestore.collection('riders').doc(user.uid).snapshots(),
             builder: (context, riderSnapshot) {
               return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
@@ -144,18 +157,18 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                         ...?riderSnapshot.data?.data()
                       };
                       final rider = _riderProfile(user.uid, riderData,
-                          internalAccess: internalAccess);
+                          internalAccess: internalAccess || qaOnlyAccess);
                       final presence =
                           presenceSnapshot.data?.data() ?? const {};
                       final online =
                           isAuthoritativeRiderPresenceDispatchable(presence);
 
-                      if (!rider.canAcceptJobs)
+                      if (!qaOnlyAccess && !rider.canAcceptJobs)
                         return _JobsStateScaffold(
                             title: 'Account action required',
                             message: rider.blockedReason ??
                                 'Your Rider account cannot receive jobs right now.');
-                      if (!online)
+                      if (!qaOnlyAccess && !online)
                         return _JobsStateScaffold(
                             title: "You're not available",
                             message:
@@ -237,8 +250,10 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                 },
               );
             },
+              );
+            },
           );
-        });
+            });
   }
 
   RiderProfileSnapshot _riderProfile(String uid, Map<String, dynamic> riderData,
