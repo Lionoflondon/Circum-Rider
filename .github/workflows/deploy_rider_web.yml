@@ -43,7 +43,7 @@ jobs:
       - name: Build and push Rider Web image
         env:
           IMAGE: us-central1-docker.pkg.dev/circum-2797c/cloud-run-source-deploy/circum-rider-web:${{ github.sha }}
-        run: gcloud builds submit --project circum-2797c --tag "$IMAGE" .
+        run: gcloud builds submit --suppress-logs --project circum-2797c --tag "$IMAGE" .
       - name: Deploy Rider Web to Cloud Run
         env:
           IMAGE: us-central1-docker.pkg.dev/circum-2797c/cloud-run-source-deploy/circum-rider-web:${{ github.sha }}
