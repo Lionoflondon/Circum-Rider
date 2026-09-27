@@ -108,6 +108,25 @@ void main() {
     expect(signup, contains('Status.unverifiedEmail'));
   });
 
+  test('new registration shows the verification journey after account creation',
+      () {
+    final app = File('lib/app.dart').readAsStringSync();
+    expect(app, contains("import '../app/authentication/view/verify_email.dart';"));
+    expect(app, contains('state.status == Status.unverifiedEmail'));
+    expect(app, contains('return const VerifyEmailView();'));
+  });
+
+  test('successful signup preserves the created account email for confirmation',
+      () {
+    final source = File('lib/app/authentication/bloc/auth_bloc.dart')
+        .readAsStringSync();
+    final signup = source.substring(
+      source.indexOf('on<SignUpWithEmail>'),
+      source.indexOf('on<UpdatePhoneNumber>'),
+    );
+    expect(signup, contains('email: user.email'));
+  });
+
   test('post-auth Rider phone remains business contact data', () {
     final source =
         File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();

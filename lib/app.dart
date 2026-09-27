@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../app/authentication/bloc/auth_bloc.dart';
+import '../app/authentication/view/verify_email.dart';
 import '../app/onboarding/onboarding.dart';
 import 'app/rider_internal_access/rider_internal_access.dart';
 import 'app/review/rider_review_fixture_service.dart';
@@ -14,6 +15,10 @@ class App extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<AuthBloc, AuthState>(
       builder: (context, state) {
+        if (state.currentState == AppState.authenticated &&
+            state.status == Status.unverifiedEmail) {
+          return const VerifyEmailView();
+        }
         if (state.currentState == AppState.authenticated) {
           return _AuthenticatedStartupGate(state: state);
         }

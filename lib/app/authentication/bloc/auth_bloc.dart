@@ -1416,6 +1416,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
           emit(state.copyWith(
             username: fullName.isEmpty ? state.username : fullName,
+            email: user.email,
             status:
                 user.emailVerified ? Status.success : Status.unverifiedEmail,
             currentState: AppState.authenticated,
