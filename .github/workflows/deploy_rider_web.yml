@@ -43,7 +43,30 @@ jobs:
       - name: Build and push Rider Web image
         env:
           IMAGE: us-central1-docker.pkg.dev/circum-2797c/cloud-run-source-deploy/circum-rider-web:${{ github.sha }}
-        run: gcloud builds submit --suppress-logs --project circum-2797c --tag "$IMAGE" .
+        run: |
+          BUILD_ID="$(gcloud builds submit \
+            --async \
+            --suppress-logs \
+            --project circum-2797c \
+            --tag "$IMAGE" \
+            --format='value(id)' \
+            .)"
+          test -n "$BUILD_ID"
+          for attempt in $(seq 1 60); do
+            STATUS="$(gcloud builds describe "$BUILD_ID" \
+              --project circum-2797c \
+              --format='value(status)')"
+            case "$STATUS" in
+              SUCCESS) exit 0 ;;
+              FAILURE|INTERNAL_ERROR|TIMEOUT|CANCELLED|EXPIRED)
+                echo "Cloud Build failed with status: $STATUS"
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+          echo 'Cloud Build did not finish within the bounded wait.'
+          exit 1
       - name: Deploy Rider Web to Cloud Run
         env:
           IMAGE: us-central1-docker.pkg.dev/circum-2797c/cloud-run-source-deploy/circum-rider-web:${{ github.sha }}
