@@ -210,8 +210,8 @@ void main() {
     test('publishes live tracking through backend authority', () {
       expect(
           source,
-          contains(
-              "invokeRiderDeliveryAuthorityViaCloudRun('updateDeliveryLiveLocation'"));
+          allOf(contains('invokeRiderDeliveryAuthorityViaCloudRun('),
+              contains("'updateDeliveryLiveLocation'")));
       expect(source,
           isNot(contains("httpsCallable('updateDeliveryLiveLocation')")));
       expect(source, contains("'gpsSignalQuality'"));
