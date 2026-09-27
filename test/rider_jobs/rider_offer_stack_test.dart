@@ -526,8 +526,7 @@ void main() {
       expect(source, isNot(contains('FieldValue.arrayUnion')));
       expect(source, contains('CallableRiderDeliveryController'));
       expect(controller, contains("httpsCallable('recordRiderArrival')"));
-      expect(controller,
-          contains("invokeRiderDeliveryAuthorityViaCloudRun("));
+      expect(controller, contains("invokeRiderDeliveryAuthorityViaCloudRun("));
       expect(controller, contains("httpsCallable('markRiderNoShow')"));
       expect(
           controller, contains("httpsCallable('confirmRiderIrisAssessment')"));

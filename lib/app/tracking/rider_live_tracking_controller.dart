@@ -726,7 +726,8 @@ class RiderLiveTrackingController {
     final gpsStatus = RiderLiveTrackingPolicy.isUsableAccuracy(position)
         ? 'active'
         : 'poorAccuracy';
-    await invokeRiderDeliveryAuthorityViaCloudRun('updateDeliveryLiveLocation', {
+    await invokeRiderDeliveryAuthorityViaCloudRun(
+        'updateDeliveryLiveLocation', {
       'deliveryId': deliveryId,
       'status': update.trackingStatus,
       'location': {

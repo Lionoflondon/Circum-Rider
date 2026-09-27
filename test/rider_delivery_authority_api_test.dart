@@ -70,7 +70,11 @@ void main() {
     final requests = <http.Request>[];
     final client = MockClient((request) async {
       requests.add(request);
-      return http.Response(jsonEncode({'result': {'status': 'accepted'}}), 200);
+      return http.Response(
+          jsonEncode({
+            'result': {'status': 'accepted'}
+          }),
+          200);
     });
     for (final route in [
       'updateDeliveryTrackingStatus',
@@ -92,7 +96,9 @@ void main() {
     for (final request in requests) {
       expect(request.headers['authorization'], 'Bearer id-token');
       expect(request.headers['x-firebase-appcheck'], 'app-check-token');
-      expect(jsonDecode(request.body), {'data': {'deliveryId': 'qa-delivery'}});
+      expect(jsonDecode(request.body), {
+        'data': {'deliveryId': 'qa-delivery'}
+      });
     }
   });
 
@@ -108,7 +114,8 @@ void main() {
       expect(source,
           isNot(contains("httpsCallable('updateDeliveryTrackingStatus')")),
           reason: file.path);
-      expect(source, isNot(contains("httpsCallable('updateDeliveryLiveLocation')")),
+      expect(source,
+          isNot(contains("httpsCallable('updateDeliveryLiveLocation')")),
           reason: file.path);
     }
     final controller = File('lib/app/rider_jobs/rider_delivery_controller.dart')
