@@ -527,7 +527,7 @@ void main() {
       expect(source, contains('CallableRiderDeliveryController'));
       expect(controller, contains("httpsCallable('recordRiderArrival')"));
       expect(controller,
-          contains("httpsCallable('updateDeliveryTrackingStatus')"));
+          contains("invokeRiderDeliveryAuthorityViaCloudRun("));
       expect(controller, contains("httpsCallable('markRiderNoShow')"));
       expect(
           controller, contains("httpsCallable('confirmRiderIrisAssessment')"));
@@ -549,7 +549,6 @@ void main() {
       );
       for (final callable in [
         "httpsCallable('recordRiderArrival')",
-        "httpsCallable('updateDeliveryTrackingStatus')",
         "httpsCallable('reportLoadDiscrepancy')",
         "httpsCallable('markRiderNoShow')",
         "httpsCallable('reportWaitingContext')",
@@ -557,6 +556,7 @@ void main() {
       ]) {
         expect(controller, contains(callable));
       }
+      expect(controller, contains("'updateDeliveryTrackingStatus'"));
       expect(controller, contains('.timeout(_riderDeliveryOperationTimeout)'));
       expect(controller, contains('readAsBytes().timeout'));
       expect(controller, contains('putData('));

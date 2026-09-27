@@ -114,16 +114,14 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
       }).timeout(_riderDeliveryOperationTimeout);
       return RiderDeliveryTransitionResult('${data['status'] ?? ''}');
     }
-    final result = await functions
-        .httpsCallable('updateDeliveryTrackingStatus')
-        .call(<String, dynamic>{
+    final data = await invokeRiderDeliveryAuthorityViaCloudRun(
+        'updateDeliveryTrackingStatus', <String, dynamic>{
       'deliveryId': deliveryId,
       'action': action,
       if (pin != null) 'pin': pin,
       if (evidence != null) 'evidence': evidence,
       if (issue != null) 'issue': issue,
     }).timeout(_riderDeliveryOperationTimeout);
-    final data = Map<String, dynamic>.from(result.data as Map);
     return RiderDeliveryTransitionResult('${data['status'] ?? ''}');
   }
 

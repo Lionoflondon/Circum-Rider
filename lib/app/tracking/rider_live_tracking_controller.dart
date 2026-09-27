@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../rider_delivery_authority_api.dart';
 import 'rider_location_disclosure.dart';
 import 'rider_location_settings.dart';
 
@@ -297,13 +297,9 @@ class RiderLiveTrackingPolicy {
 class RiderLiveTrackingController {
   RiderLiveTrackingController({
     FirebaseFirestore? firestore,
-    FirebaseFunctions? functions,
-  })  : _firestore = firestore ?? FirebaseFirestore.instance,
-        _functions =
-            functions ?? FirebaseFunctions.instanceFor(region: 'us-central1');
+  }) : _firestore = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseFirestore _firestore;
-  final FirebaseFunctions _functions;
   final _states = StreamController<RiderLiveTrackingSnapshot>.broadcast();
   final Queue<_QueuedLocationUpdate> _queue = Queue<_QueuedLocationUpdate>();
   final Queue<DateTime> _pickupArrivalHits = Queue<DateTime>();
@@ -730,7 +726,7 @@ class RiderLiveTrackingController {
     final gpsStatus = RiderLiveTrackingPolicy.isUsableAccuracy(position)
         ? 'active'
         : 'poorAccuracy';
-    await _functions.httpsCallable('updateDeliveryLiveLocation').call({
+    await invokeRiderDeliveryAuthorityViaCloudRun('updateDeliveryLiveLocation', {
       'deliveryId': deliveryId,
       'status': update.trackingStatus,
       'location': {

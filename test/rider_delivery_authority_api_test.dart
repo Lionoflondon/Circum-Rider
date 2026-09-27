@@ -65,6 +65,37 @@ void main() {
     );
   });
 
+  test('tracking operations retain Firebase Auth and App Check headers',
+      () async {
+    final requests = <http.Request>[];
+    final client = MockClient((request) async {
+      requests.add(request);
+      return http.Response(jsonEncode({'result': {'status': 'accepted'}}), 200);
+    });
+    for (final route in [
+      'updateDeliveryTrackingStatus',
+      'updateDeliveryLiveLocation',
+    ]) {
+      final result = await invokeRiderDeliveryAuthorityWithTokens(
+        route,
+        const {'deliveryId': 'qa-delivery'},
+        idToken: 'id-token',
+        appCheckToken: 'app-check-token',
+        client: client,
+      );
+      expect(result['status'], 'accepted');
+    }
+    expect(requests.map((request) => request.url.path), [
+      '/updateDeliveryTrackingStatus',
+      '/updateDeliveryLiveLocation',
+    ]);
+    for (final request in requests) {
+      expect(request.headers['authorization'], 'Bearer id-token');
+      expect(request.headers['x-firebase-appcheck'], 'app-check-token');
+      expect(jsonDecode(request.body), {'data': {'deliveryId': 'qa-delivery'}});
+    }
+  });
+
   test('all active migrated Rider callers use Cloud Run', () {
     final sources = Directory('lib')
         .listSync(recursive: true)
@@ -74,12 +105,17 @@ void main() {
       final source = file.readAsStringSync();
       expect(source, isNot(contains("httpsCallable('getAvailableRequests')")),
           reason: file.path);
+      expect(source,
+          isNot(contains("httpsCallable('updateDeliveryTrackingStatus')")),
+          reason: file.path);
+      expect(source, isNot(contains("httpsCallable('updateDeliveryLiveLocation')")),
+          reason: file.path);
     }
     final controller = File('lib/app/rider_jobs/rider_delivery_controller.dart')
         .readAsStringSync();
     expect(controller, contains("action == 'verify_receiver_pin'"));
     expect(controller, contains('completeDeliveryViaCloudRun'));
-    expect(
-        controller, contains("httpsCallable('updateDeliveryTrackingStatus')"));
+    expect(controller, contains('invokeRiderDeliveryAuthorityViaCloudRun('));
+    expect(controller, contains("'updateDeliveryTrackingStatus'"));
   });
 }
