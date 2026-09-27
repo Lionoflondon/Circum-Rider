@@ -125,7 +125,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       required User user,
       required Map<String, dynamic> data,
     }) async {
-      await functions.httpsCallable('advanceRiderOnboarding').call({
+      await advanceRiderOnboardingViaCloudRun({
         'stage': data['onboardingStatus'] ?? data['stage'] ?? 'profile_started',
         if (data['name'] != null) 'name': data['name'],
         if (data['locationEnabled'] != null)

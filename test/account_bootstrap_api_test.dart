@@ -41,6 +41,35 @@ void main() {
     },
   );
 
+  test('Rider onboarding uses the authenticated Cloud Run route', () async {
+    late http.Request captured;
+    final client = MockClient((request) async {
+      captured = request;
+      return http.Response(
+        jsonEncode({
+          'result': {'ok': true, 'onboardingStatus': 'profile_started'},
+        }),
+        200,
+      );
+    });
+
+    final result = await invokeAdvanceRiderOnboardingViaCloudRun(
+      const {'stage': 'profile_started', 'name': 'Rider'},
+      idToken: 'id-token',
+      appCheckToken: 'app-check-token',
+      client: client,
+    );
+
+    expect(captured.method, 'POST');
+    expect(captured.url.path, '/advanceRiderOnboarding');
+    expect(captured.headers['authorization'], 'Bearer id-token');
+    expect(captured.headers['x-firebase-appcheck'], 'app-check-token');
+    expect(jsonDecode(captured.body), {
+      'data': {'stage': 'profile_started', 'name': 'Rider'},
+    });
+    expect(result, {'ok': true, 'onboardingStatus': 'profile_started'});
+  });
+
   test('Cloud Run errors retain callable status and message', () async {
     final client = MockClient(
       (_) async => http.Response(
@@ -129,6 +158,14 @@ void main() {
         reason: path,
       );
     }
+  });
+
+  test('Rider onboarding no longer calls the legacy callable directly', () {
+    final source = File(
+      'lib/app/authentication/bloc/auth_bloc.dart',
+    ).readAsStringSync();
+    expect(source, contains('advanceRiderOnboardingViaCloudRun'));
+    expect(source, isNot(contains("httpsCallable('advanceRiderOnboarding')")));
   });
 
   test('shared client obtains Auth and required App Check tokens', () {
