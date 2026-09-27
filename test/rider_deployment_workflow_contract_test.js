@@ -15,7 +15,8 @@ test('Rider deployment checks out the approved ref and deploys Cloud Run', () =>
     workflow,
     /credentials_json: \$\{\{ secrets\.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C \}\}/,
   );
-  assert.match(workflow, /gcloud builds submit --project circum-2797c/);
+  assert.match(workflow, /gcloud builds submit .*--project circum-2797c/);
+  assert.match(workflow, /gcloud builds submit --suppress-logs --project circum-2797c/);
   assert.match(workflow, /gcloud run deploy circum-rider-web/);
   assert.match(workflow, /--allow-unauthenticated/);
   assert.match(workflow, /CIRCUM_SOURCE_SHA=\$\{\{ github\.sha \}\}/);
