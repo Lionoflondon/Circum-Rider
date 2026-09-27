@@ -32,7 +32,7 @@ void main() {
       expect(authBloc, isNot(contains('ensureWalletForRider')));
       expect(authBloc, isNot(contains("collection('riderRothWallets')")));
       expect(authBloc, contains("'onboardingStatus': 'profile_complete'"));
-      expect(authBloc, contains("httpsCallable('advanceRiderOnboarding')"));
+      expect(authBloc, contains('advanceRiderOnboardingViaCloudRun'));
       for (final field in [
         'role',
         'roles',
