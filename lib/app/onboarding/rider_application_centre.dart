@@ -1515,6 +1515,7 @@ class _DocumentUploadSectionState extends State<_DocumentUploadSection> {
           ],
         _ => [
             'passport',
+            'driving_licence',
             'national_identity_card',
             'identity_selfie',
           ],

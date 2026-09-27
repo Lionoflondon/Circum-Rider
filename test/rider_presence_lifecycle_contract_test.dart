@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:circum_rider/app/home/bloc/home_bloc.dart';
+import 'package:geolocator/geolocator.dart';
 
 void main() {
   final source = File('lib/app/home/bloc/home_bloc.dart').readAsStringSync();
@@ -138,12 +139,61 @@ void main() {
     expect(isPresenceRegistrationAcknowledged({'success': false}), isFalse);
   });
 
+  test('location blockers are explicit and never presented as connectivity',
+      () {
+    expect(
+      riderLocationRequirementMessage(
+        servicesEnabled: false,
+        permission: LocationPermission.whileInUse,
+        hasFreshLocation: false,
+      ),
+      contains('Turn on Location Services'),
+    );
+    expect(
+      riderLocationRequirementMessage(
+        servicesEnabled: true,
+        permission: LocationPermission.denied,
+        hasFreshLocation: false,
+      ),
+      contains('Allow Location access'),
+    );
+    expect(
+      riderLocationRequirementMessage(
+        servicesEnabled: true,
+        permission: LocationPermission.deniedForever,
+        hasFreshLocation: false,
+      ),
+      contains('in Settings'),
+    );
+    expect(
+      riderLocationRequirementMessage(
+        servicesEnabled: true,
+        permission: LocationPermission.whileInUse,
+        hasFreshLocation: false,
+      ),
+      contains('within 100 metres'),
+    );
+    expect(source, contains('on RiderLocationException catch'));
+    expect(source, contains('dispatchReason:'));
+    expect(source, contains("'location_required'"));
+  });
+
+  test('active-request restore exits cleanly after sign-out', () {
+    final handlerStart = source.indexOf('void _handleCheckForActiveRequest');
+    final handlerEnd =
+        source.indexOf('void _handleIncomingMessage', handlerStart);
+    final handler = source.substring(handlerStart, handlerEnd);
+    expect(handler, contains('if (user == null)'));
+    expect(handler, isNot(contains('user!.uid')));
+  });
+
   test('presence heartbeat is bounded, singular, and reconnects', () {
     expect(source, contains('_presenceHeartbeatInFlight'));
     expect(source, contains('if (_presenceHeartbeatInFlight) return;'));
     expect(source, contains('.timeout(const Duration(seconds: 20))'));
     expect(source, contains('OnlineTransition.reconnecting'));
-    expect(source, contains('PresenceHeartbeatResult(succeeded: false)'));
+    expect(source, contains('PresenceHeartbeatResult('));
+    expect(source, contains('succeeded: false'));
     final onlineEmit =
         source.indexOf('onlineTransition: OnlineTransition.online,');
     final heartbeatStart =

@@ -277,12 +277,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       if (event.status == RideStatus.online) {
         try {
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool(_desiredOnlineStateKey, true);
           emit(
             state.copyWith(
-              rideStatus: RideStatus.online,
-              onlineTransition: OnlineTransition.acquiringPermission,
-              riderIntentOnline: true,
+              rideStatus: RideStatus.offline,
+              onlineTransition: OnlineTransition.acquiringLocation,
+              riderIntentOnline: false,
               clearMessage: true,
             ),
           );
@@ -290,9 +289,12 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
             highAccuracy: true,
           );
           if (operation != _availabilityOperation) return;
+          await prefs.setBool(_desiredOnlineStateKey, true);
           emit(
             state.copyWith(
+              rideStatus: RideStatus.online,
               onlineTransition: OnlineTransition.registeringOnline,
+              riderIntentOnline: true,
               message: 'Registering your availability…',
             ),
           );
@@ -336,6 +338,21 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
             ),
           );
           add(SetPanelControlStatus(status: PanelControlStatus.isOpened));
+        } on RiderLocationException catch (error) {
+          _stopPresenceHeartbeat();
+          _stopPresenceReconnect();
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool(_desiredOnlineStateKey, false);
+          emit(
+            state.copyWith(
+              rideStatus: RideStatus.offline,
+              onlineTransition: OnlineTransition.blocked,
+              riderIntentOnline: false,
+              dispatchEligible: false,
+              clearDispatchReason: true,
+              message: error.message,
+            ),
+          );
         } on FirebaseFunctionsException catch (error) {
           debugPrint('Rider presence registration failed code=${error.code}');
           if (_isTransientPresenceFailure(error.code)) {
@@ -824,15 +841,25 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
     Emitter emit,
   ) async {
     User? user = auth.currentUser;
+    if (user == null) {
+      emit(
+        state.copyWith(
+          rideStatus: RideStatus.offline,
+          onlineTransition: OnlineTransition.offline,
+          riderIntentOnline: false,
+          clearMessage: true,
+        ),
+      );
+      return;
+    }
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final desiredOnline = prefs.getBool(_desiredOnlineStateKey) == true;
     final double? riderLng = prefs.getDouble('longitude');
     final double? riderLat = prefs.getDouble('latitude');
     String? statusString = prefs.getString('status');
     RideStatus? status;
-    final presenceSnapshot = user == null
-        ? null
-        : await db.collection('riderPresence').doc(user.uid).get();
+    final presenceSnapshot =
+        await db.collection('riderPresence').doc(user.uid).get();
     final presence = presenceSnapshot?.data();
     final presenceOnline = presence?['isOnline'] == true &&
         '${presence?['availabilityStatus'] ?? ''}'.toLowerCase() != 'offline';
@@ -840,9 +867,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
     if (desiredOnline || presenceOnline || statusString == 'online') {
       add(SetRideStatus(status: RideStatus.online));
     }
-    final documentReference = db
-        .collection('deliveryRequests')
-        .where('riderId', isEqualTo: user!.uid);
+    final documentReference =
+        db.collection('deliveryRequests').where('riderId', isEqualTo: user.uid);
 
     final docResponse = await documentReference.get();
     // final doc = docResponse.docs.firstOrNull;
@@ -958,7 +984,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
                 dispatchEligible: event.dispatchEligible,
                 reason: event.dispatchReason,
               )
-            : 'Connection interrupted. Reconnecting automatically…',
+            : event.dispatchReason == 'location_required'
+                ? riderLocationRequirementMessage(
+                    servicesEnabled: true,
+                    permission: LocationPermission.whileInUse,
+                    hasFreshLocation: false,
+                  )
+                : 'Connection interrupted. Reconnecting automatically…',
       ),
     );
     if (event.succeeded) {
@@ -1027,7 +1059,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       }
     } catch (error) {
       debugPrint('Rider presence heartbeat failed type=${error.runtimeType}');
-      if (!isClosed) add(PresenceHeartbeatResult(succeeded: false));
+      if (!isClosed) {
+        add(
+          PresenceHeartbeatResult(
+            succeeded: false,
+            dispatchReason:
+                error is RiderLocationException ? 'location_required' : null,
+          ),
+        );
+      }
     } finally {
       _presenceHeartbeatInFlight = false;
     }
@@ -1036,22 +1076,34 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   Future<Map<String, dynamic>?> _currentPresenceLocationPayload({
     required bool highAccuracy,
   }) async {
-    var permission = LocationPermission.denied;
+    var permission = LocationPermission.unableToDetermine;
+    var receivedLocationFix = false;
     try {
       final servicesEnabled = await Geolocator.isLocationServiceEnabled()
           .timeout(const Duration(seconds: 20));
-      if (!servicesEnabled) return null;
+      if (!servicesEnabled) {
+        throw const RiderLocationException(
+          'Turn on Location Services to go online and receive delivery jobs.',
+        );
+      }
       permission = await Geolocator.checkPermission().timeout(
         const Duration(seconds: 20),
       );
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        return null;
+      if (permission == LocationPermission.denied) {
+        throw const RiderLocationException(
+          'Allow Location access for Circum Rider to go online and receive delivery jobs.',
+        );
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw const RiderLocationException(
+          'Allow Location access for Circum Rider in Settings to go online and receive delivery jobs.',
+        );
       }
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy:
             highAccuracy ? LocationAccuracy.high : LocationAccuracy.medium,
       ).timeout(const Duration(seconds: 15));
+      receivedLocationFix = true;
       if (isFreshDispatchLocation(
         capturedAt: position.timestamp,
         accuracyMeters: position.accuracy,
@@ -1059,6 +1111,16 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         _lastPresencePosition = position;
         return _presenceLocationPayload(position, permission);
       }
+    } on RiderLocationException {
+      rethrow;
+    } on LocationServiceDisabledException {
+      throw const RiderLocationException(
+        'Turn on Location Services to go online and receive delivery jobs.',
+      );
+    } on PermissionDeniedException {
+      throw const RiderLocationException(
+        'Allow Location access for Circum Rider to go online and receive delivery jobs.',
+      );
     } catch (_) {
       // A recent valid fix can bridge one transient GPS refresh failure.
     }
@@ -1070,7 +1132,11 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         )) {
       return _presenceLocationPayload(cached, permission);
     }
-    return null;
+    throw RiderLocationException(
+      receivedLocationFix
+          ? 'A current location accurate to within 100 metres is required to go online.'
+          : 'A current location is unavailable. Check your GPS signal and try again.',
+    );
   }
 
   Map<String, dynamic> _presenceLocationPayload(
@@ -1196,6 +1262,26 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
 class RiderLocationException implements Exception {
   const RiderLocationException(this.message);
   final String message;
+}
+
+String riderLocationRequirementMessage({
+  required bool servicesEnabled,
+  required LocationPermission permission,
+  required bool hasFreshLocation,
+}) {
+  if (!servicesEnabled) {
+    return 'Turn on Location Services to go online and receive delivery jobs.';
+  }
+  if (permission == LocationPermission.denied) {
+    return 'Allow Location access for Circum Rider to go online and receive delivery jobs.';
+  }
+  if (permission == LocationPermission.deniedForever) {
+    return 'Allow Location access for Circum Rider in Settings to go online and receive delivery jobs.';
+  }
+  if (!hasFreshLocation) {
+    return 'A current location accurate to within 100 metres is required to go online.';
+  }
+  return 'Location is ready for Rider availability.';
 }
 
 bool isFreshDispatchLocation({

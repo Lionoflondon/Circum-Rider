@@ -4,29 +4,83 @@ const _riderOfferPushType = 'broadcast-request';
 const _riderJobChannelId = 'rider_job_offers';
 
 Future<void> _createRiderNotificationChannel() async {
-  const channel = AndroidNotificationChannel(
-    _riderJobChannelId,
-    'New delivery offers',
-    description: 'New delivery offers available for you.',
-    importance: Importance.high,
-  );
-  await flutterLocalNotificationsPlugin
-      .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(channel);
+  const channels = [
+    AndroidNotificationChannel(
+      _riderJobChannelId,
+      'New delivery offers',
+      description: 'New delivery offers available for you.',
+      importance: Importance.high,
+    ),
+    AndroidNotificationChannel(
+      'notifications_updates',
+      'Delivery updates',
+      description: 'Delivery, message and account updates.',
+      importance: Importance.high,
+    ),
+  ];
+  final android =
+      flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+  for (final channel in channels) {
+    await android?.createNotificationChannel(channel);
+  }
 }
 
 bool _isOfferMessage(RemoteMessage message) =>
     message.data['type'] == _riderOfferPushType;
 
+bool _isChatNotification(RemoteMessage message) =>
+    message.data['type'] == 'message' ||
+    message.data['notificationType'] == 'chat_message' ||
+    message.data['route'] == 'conversation';
+
+String _notificationChatId(RemoteMessage message) {
+  final direct = message.data['chatId'] ??
+      message.data['bookingId'] ??
+      message.data['requestId'];
+  if (direct != null && '$direct'.trim().isNotEmpty) return '$direct'.trim();
+  final encoded = message.data['data'];
+  if (encoded is String) {
+    try {
+      final decoded = jsonDecode(encoded);
+      if (decoded is Map) {
+        return '${decoded['chatId'] ?? decoded['requestId'] ?? ''}'.trim();
+      }
+    } catch (_) {
+      // A malformed legacy payload is safely handled by the notification centre.
+    }
+  }
+  return '';
+}
+
 Future<void> _routeRiderNotification(RemoteMessage message) async {
-  if (!_isOfferMessage(message)) return;
   // The offer feed remains backend-authoritative. A push only opens the feed.
   final navigator = NavKey.navKey.currentState;
   if (navigator == null) return;
-  navigator.pushNamedAndRemoveUntil(
-    RiderJobOfferScreen.routeName,
-    (route) => route.isFirst,
+  if (_isOfferMessage(message)) {
+    navigator.pushNamedAndRemoveUntil(
+      RiderJobOfferScreen.routeName,
+      (route) => route.isFirst,
+    );
+    return;
+  }
+  final route = '${message.data['route'] ?? ''}'.toLowerCase();
+  final chatId = _notificationChatId(message);
+  if ((route == 'conversation' || _isChatNotification(message)) &&
+      chatId.isNotEmpty) {
+    navigator.push(
+      MaterialPageRoute(
+        builder: (_) => RiderConversationView(
+          chatId: chatId,
+          title: 'Delivery chat',
+          subtitle: 'Opened from notification',
+        ),
+      ),
+    );
+    return;
+  }
+  navigator.push(
+    MaterialPageRoute(builder: (_) => const RiderNotificationsView()),
   );
 }
 
@@ -42,10 +96,20 @@ void _configureRiderNotificationOpenRouting() {
 
 void foregoundMessage() {
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-    if (message.data['type'] == 'message') {
-      final msg = jsonDecode(message.data['data']);
-      homeBloc.add(IncomingMessage(data: msg));
-      notifyUser(body: msg['message'], title: 'New message');
+    if (_isChatNotification(message)) {
+      final encoded = message.data['data'];
+      if (message.data['type'] == 'message' && encoded is String) {
+        try {
+          final msg = jsonDecode(encoded);
+          if (msg is Map) homeBloc.add(IncomingMessage(data: msg));
+        } catch (_) {
+          // The notification centre remains the safe source for malformed data.
+        }
+      }
+      notifyUser(
+        body: message.notification?.body ?? 'You have a new message.',
+        title: message.notification?.title ?? 'New message',
+      );
       return;
     }
     if (_isOfferMessage(message)) {
@@ -60,6 +124,13 @@ void foregoundMessage() {
       notifyUser(
         body: 'You have a new delivery request waiting!',
         title: 'Circum',
+      );
+      return;
+    }
+    if (message.notification != null || message.data.isNotEmpty) {
+      notifyUser(
+        body: message.notification?.body ?? 'You have a new Circum update.',
+        title: message.notification?.title ?? 'Circum Rider',
       );
     }
   });

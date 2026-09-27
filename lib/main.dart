@@ -17,6 +17,8 @@ import 'app/authentication/bloc/auth_bloc.dart';
 import 'app/bottom_nav/bloc/navbar_bloc.dart';
 import 'app/home/bloc/home_bloc.dart';
 import 'app/history/bloc/history_bloc.dart';
+import 'app/communication/rider_conversation_view.dart';
+import 'app/notifications/rider_notifications_view.dart';
 import 'app/rider_jobs/rider_job_offer_screen.dart';
 import 'app/support/bloc/support_bloc.dart';
 import 'app/verification/bloc/verification_bloc.dart';
