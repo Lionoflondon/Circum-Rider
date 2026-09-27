@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
-test('Rider deployment checks out the approved ref and authenticates Firebase', () => {
+test('Rider deployment checks out the approved ref and deploys Cloud Run', () => {
   const workflow = fs.readFileSync(
     path.join(process.cwd(), '.github/workflows/deploy_rider_web.yml'),
     'utf8',
@@ -15,6 +15,8 @@ test('Rider deployment checks out the approved ref and authenticates Firebase', 
     workflow,
     /credentials_json: \$\{\{ secrets\.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C \}\}/,
   );
-  assert.match(workflow, /npm install -g firebase-tools/);
-  assert.match(workflow, /firebase deploy --only hosting --project circum-2797c/);
+  assert.match(workflow, /gcloud builds submit --project circum-2797c/);
+  assert.match(workflow, /gcloud run deploy circum-rider-web/);
+  assert.match(workflow, /--allow-unauthenticated/);
+  assert.match(workflow, /CIRCUM_SOURCE_SHA=\$\{\{ github\.sha \}\}/);
 });

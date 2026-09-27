@@ -1,4 +1,4 @@
-name: Deploy Rider Web
+name: Deploy Rider Web to Cloud Run
 
 on:
   workflow_dispatch:
@@ -40,5 +40,20 @@ jobs:
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
-      - run: npm install -g firebase-tools
-      - run: firebase deploy --only hosting --project circum-2797c
+      - name: Build and push Rider Web image
+        env:
+          IMAGE: us-central1-docker.pkg.dev/circum-2797c/cloud-run-source-deploy/circum-rider-web:${{ github.sha }}
+        run: gcloud builds submit --project circum-2797c --tag "$IMAGE" .
+      - name: Deploy Rider Web to Cloud Run
+        env:
+          IMAGE: us-central1-docker.pkg.dev/circum-2797c/cloud-run-source-deploy/circum-rider-web:${{ github.sha }}
+        run: |
+          gcloud run deploy circum-rider-web \
+            --project circum-2797c \
+            --region us-central1 \
+            --platform managed \
+            --image "$IMAGE" \
+            --port 8080 \
+            --allow-unauthenticated \
+            --set-env-vars "CIRCUM_SOURCE_SHA=${{ github.sha }}" \
+            --labels "circum-source-sha=${{ github.sha }},circum-surface=rider-web"

@@ -58,6 +58,10 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
   late final RiderAcceptController _acceptController;
   Stream<List<RiderJobOffer>>? _offerFeed;
   String? _offerFeedRider;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _riderSnapshotStream;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _profileSnapshotStream;
+  Stream<DocumentSnapshot<Map<String, dynamic>>>? _presenceSnapshotStream;
+  Future<bool>? _internalAccess;
   int _activeIndex = 0;
   bool _accepting = false;
   bool _accepted = false;
@@ -120,39 +124,35 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
       _offerFeedRider = user.uid;
       _offerFeed = RiderOfferFeed().watch(riderId: user.uid);
       _qaOnlyAccess = RiderOfferFeed().qaOnlyAccess(riderId: user.uid);
+      // Keep Firestore streams stable across rebuilds. Creating snapshots()
+      // inside build repeatedly tears down and recreates Web listeners, which
+      // can trip Firestore Web's internal assertion and blank this tab.
+      _riderSnapshotStream =
+          _firestore.collection('riders').doc(user.uid).snapshots();
+      _profileSnapshotStream =
+          _firestore.collection('riderProfiles').doc(user.uid).snapshots();
+      _presenceSnapshotStream =
+          _firestore.collection('riderPresence').doc(user.uid).snapshots();
+      _internalAccess = RiderInternalAccess.enabled();
     }
     context.watch<HomeBloc>().state;
     return FutureBuilder<bool>(
-        future: Future.wait<bool>([
-          RiderInternalAccess.enabled(),
-          _qaOnlyAccess ?? Future<bool>.value(false),
-        ]).then((values) => values[0] || values[1]),
+        future: _internalAccess,
         builder: (context, internalAccessSnapshot) {
           final internalAccess = internalAccessSnapshot.data == true;
-          final qaOnly = _qaOnlyAccess != null &&
-                  internalAccessSnapshot.connectionState == ConnectionState.done
-              ? _qaOnlyAccess!
-              : Future<bool>.value(false);
           return FutureBuilder<bool>(
-            future: qaOnly,
+            future: _qaOnlyAccess,
             builder: (context, qaSnapshot) {
               final qaOnlyAccess = qaSnapshot.data == true;
               return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                stream:
-                    _firestore.collection('riders').doc(user.uid).snapshots(),
+                stream: _riderSnapshotStream,
                 builder: (context, riderSnapshot) {
                   return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                    stream: _firestore
-                        .collection('riderProfiles')
-                        .doc(user.uid)
-                        .snapshots(),
+                    stream: _profileSnapshotStream,
                     builder: (context, profileSnapshot) {
                       return StreamBuilder<
                           DocumentSnapshot<Map<String, dynamic>>>(
-                        stream: _firestore
-                            .collection('riderPresence')
-                            .doc(user.uid)
-                            .snapshots(),
+                        stream: _presenceSnapshotStream,
                         builder: (context, presenceSnapshot) {
                           final riderData = <String, dynamic>{
                             ...?profileSnapshot.data?.data(),
