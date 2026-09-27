@@ -55,8 +55,8 @@ void main() {
     expect(app, contains('if (state.currentState == AppState.authenticated)'));
     expect(app, isNot(contains('state.riderAccountState ==')));
     expect(nav, contains('const _CentralAction()'));
-    expect(home, contains("httpsCallable('goOnline')"));
-    expect(home, contains("httpsCallable('goOffline')"));
+    expect(home, contains("invokeRiderDeliveryAuthorityViaCloudRun('goOnline'"));
+    expect(home, contains("invokeRiderDeliveryAuthorityViaCloudRun('goOffline'"));
     expect(home,
         isNot(contains('RiderAccountStateResolver.canOperate(accountState)')));
     expect(home, contains("responseData['dispatchEligible'] == true"));
