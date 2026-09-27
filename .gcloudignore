@@ -1,0 +1,10 @@
+.gcloudignore
+.git
+.git/**
+.dart_tool
+.dart_tool/**
+.pub-cache
+.pub-cache/**
+build/*
+!build/web
+!build/web/**

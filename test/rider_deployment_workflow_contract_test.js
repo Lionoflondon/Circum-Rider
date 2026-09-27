@@ -20,3 +20,11 @@ test('Rider deployment checks out the approved ref and deploys Cloud Run', () =>
   assert.match(workflow, /--allow-unauthenticated/);
   assert.match(workflow, /CIRCUM_SOURCE_SHA=\$\{\{ github\.sha \}\}/);
 });
+
+test('Cloud Build upload includes the generated Rider Web bundle', () => {
+  const ignore = fs.readFileSync(
+    path.join(process.cwd(), '.gcloudignore'),
+    'utf8',
+  );
+  assert.match(ignore, /!build\/web\/\*\*/);
+});
