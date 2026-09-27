@@ -35,6 +35,9 @@ Future<Map<String, dynamic>> completeDeliveryViaCloudRun(
       client: client,
     );
 
+bool isQaPublicDeliveryId(String deliveryId) =>
+    deliveryId.startsWith('qa_public_');
+
 Future<Map<String, dynamic>> invokeRiderDeliveryAuthorityViaCloudRun(
   String route,
   Map<String, dynamic> data, {
@@ -43,6 +46,8 @@ Future<Map<String, dynamic>> invokeRiderDeliveryAuthorityViaCloudRun(
   http.Client? client,
 }) async {
   if (route != 'completeDelivery' &&
+      route != 'acceptRideRequests' &&
+      route != 'recordRiderArrival' &&
       route != 'getAvailableRequests' &&
       route != 'updateDeliveryTrackingStatus' &&
       route != 'updateDeliveryLiveLocation') {

@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
+import '../rider_delivery_authority_api.dart';
+
 class RiderProfileSnapshot {
   final String riderId;
   final String? riderName;
@@ -225,10 +227,15 @@ class CallableRiderJobTransactionStore implements RiderJobTransactionStore {
     required RiderProfileSnapshot rider,
   }) async {
     try {
-      final response = await functions
-          .httpsCallable('acceptRideRequests')
-          .call({'requestId': jobId}).timeout(_acceptTimeout);
-      final data = Map<String, dynamic>.from(response.data as Map);
+      final data = isQaPublicDeliveryId(jobId)
+          ? await invokeRiderDeliveryAuthorityViaCloudRun(
+              'acceptRideRequests',
+              {'requestId': jobId},
+            ).timeout(_acceptTimeout)
+          : Map<String, dynamic>.from((await functions
+                  .httpsCallable('acceptRideRequests')
+                  .call({'requestId': jobId}).timeout(_acceptTimeout))
+              .data as Map);
       return RiderAcceptResult(
         status: RiderAcceptStatus.accepted,
         message: 'Delivery accepted.',

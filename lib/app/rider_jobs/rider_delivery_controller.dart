@@ -79,6 +79,16 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
     Map<String, dynamic>? issue,
   }) async {
     if (action == 'arrived_at_pickup' || action == 'arrived_at_dropoff') {
+      if (isQaPublicDeliveryId(deliveryId)) {
+        final data = await invokeRiderDeliveryAuthorityViaCloudRun(
+          'recordRiderArrival',
+          {
+            'deliveryId': deliveryId,
+            'phase': action == 'arrived_at_dropoff' ? 'dropoff' : 'pickup',
+          },
+        ).timeout(_riderDeliveryOperationTimeout);
+        return RiderDeliveryTransitionResult('${data['status'] ?? ''}');
+      }
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 15),
