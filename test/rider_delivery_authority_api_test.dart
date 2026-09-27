@@ -77,6 +77,8 @@ void main() {
           200);
     });
     for (final route in [
+      'acceptRideRequests',
+      'recordRiderArrival',
       'updateDeliveryTrackingStatus',
       'updateDeliveryLiveLocation',
     ]) {
@@ -90,6 +92,8 @@ void main() {
       expect(result['status'], 'accepted');
     }
     expect(requests.map((request) => request.url.path), [
+      '/acceptRideRequests',
+      '/recordRiderArrival',
       '/updateDeliveryTrackingStatus',
       '/updateDeliveryLiveLocation',
     ]);
