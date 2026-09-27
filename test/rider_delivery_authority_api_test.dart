@@ -81,6 +81,9 @@ void main() {
       'recordRiderArrival',
       'updateDeliveryTrackingStatus',
       'updateDeliveryLiveLocation',
+      'goOnline',
+      'goOffline',
+      'updateRiderPresence',
     ]) {
       final result = await invokeRiderDeliveryAuthorityWithTokens(
         route,
@@ -96,6 +99,9 @@ void main() {
       '/recordRiderArrival',
       '/updateDeliveryTrackingStatus',
       '/updateDeliveryLiveLocation',
+      '/goOnline',
+      '/goOffline',
+      '/updateRiderPresence',
     ]);
     for (final request in requests) {
       expect(request.headers['authorization'], 'Bearer id-token');
@@ -120,6 +126,12 @@ void main() {
           reason: file.path);
       expect(source,
           isNot(contains("httpsCallable('updateDeliveryLiveLocation')")),
+          reason: file.path);
+      expect(source, isNot(contains("httpsCallable('goOnline')")),
+          reason: file.path);
+      expect(source, isNot(contains("httpsCallable('goOffline')")),
+          reason: file.path);
+      expect(source, isNot(contains("httpsCallable('updateRiderPresence')")),
           reason: file.path);
     }
     final controller = File('lib/app/rider_jobs/rider_delivery_controller.dart')

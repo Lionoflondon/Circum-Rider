@@ -234,9 +234,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
             clearMessage: true,
           ),
         );
-        await FirebaseFunctions.instanceFor(region: 'us-central1')
-            .httpsCallable('goOffline')
-            .call()
+        await invokeRiderDeliveryAuthorityViaCloudRun('goOffline', const {})
             .timeout(const Duration(seconds: 20));
         if (operation != _availabilityOperation) return;
         emit(
@@ -298,19 +296,15 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
               message: 'Registering your availability…',
             ),
           );
-          final response =
-              await FirebaseFunctions.instanceFor(region: 'us-central1')
-                  .httpsCallable('goOnline')
-                  .call(<String, dynamic>{
+          final response = await invokeRiderDeliveryAuthorityViaCloudRun(
+              'goOnline', <String, dynamic>{
             if (locationPayload != null) 'location': locationPayload,
           }).timeout(const Duration(seconds: 20));
           if (operation != _availabilityOperation) return;
-          if (!isPresenceRegistrationAcknowledged(response.data)) {
+          if (!isPresenceRegistrationAcknowledged(response)) {
             throw StateError('Online registration was not acknowledged.');
           }
-          final responseData = response.data is Map
-              ? Map<String, dynamic>.from(response.data as Map)
-              : const <String, dynamic>{};
+          final responseData = Map<String, dynamic>.from(response);
           final dispatchEligible = responseData['dispatchEligible'] == true;
           final dispatchReason = responseData['reason']?.toString();
           _stopPresenceReconnect();
@@ -1041,19 +1035,16 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
           'A current location is unavailable.',
         );
       }
-      final response =
-          await FirebaseFunctions.instanceFor(region: 'us-central1')
-              .httpsCallable('updateRiderPresence')
-              .call(<String, dynamic>{'location': locationPayload}).timeout(
-                  const Duration(seconds: 20));
-      final result = response.data;
+      final result = await invokeRiderDeliveryAuthorityViaCloudRun(
+        'updateRiderPresence',
+        <String, dynamic>{'location': locationPayload},
+      ).timeout(const Duration(seconds: 20));
       if (!isClosed) {
         add(
           PresenceHeartbeatResult(
-            succeeded: result is Map && result['success'] == true,
-            dispatchEligible:
-                result is Map && result['dispatchEligible'] == true,
-            dispatchReason: result is Map ? result['reason']?.toString() : null,
+            succeeded: result['success'] == true,
+            dispatchEligible: result['dispatchEligible'] == true,
+            dispatchReason: result['reason']?.toString(),
           ),
         );
       }

@@ -16,7 +16,8 @@ void main() {
         bloc, isNot(contains('Complete your verification to start earning.')));
     expect(bloc,
         contains("if (locationPayload != null) 'location': locationPayload"));
-    expect(bloc, contains(".httpsCallable('goOnline')"));
+    expect(bloc, contains('invokeRiderDeliveryAuthorityViaCloudRun('));
+    expect(bloc, contains("'goOnline'"));
     expect(dashboard, contains('final allowed = !starting;'));
   });
 
@@ -40,7 +41,8 @@ void main() {
 
   test('heartbeat receives backend dispatch projection and never self-promotes',
       () {
-    expect(bloc, contains(".httpsCallable('updateRiderPresence')"));
+    expect(bloc, contains('invokeRiderDeliveryAuthorityViaCloudRun('));
+    expect(bloc, contains("'updateRiderPresence'"));
     expect(bloc, contains("result['dispatchEligible'] == true"));
     expect(bloc, contains("result['reason']?.toString()"));
     expect(bloc, isNot(contains('dispatchEligible: true,')));
