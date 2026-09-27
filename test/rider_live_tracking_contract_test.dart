@@ -208,7 +208,12 @@ void main() {
         File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
 
     test('publishes live tracking through backend authority', () {
-      expect(source, contains("httpsCallable('updateDeliveryLiveLocation')"));
+      expect(
+          source,
+          allOf(contains('invokeRiderDeliveryAuthorityViaCloudRun('),
+              contains("'updateDeliveryLiveLocation'")));
+      expect(source,
+          isNot(contains("httpsCallable('updateDeliveryLiveLocation')")));
       expect(source, contains("'gpsSignalQuality'"));
       expect(source, contains("'accuracyMeters'"));
       expect(source, contains("'backgroundCapable'"));

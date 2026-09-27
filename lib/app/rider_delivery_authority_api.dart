@@ -42,7 +42,10 @@ Future<Map<String, dynamic>> invokeRiderDeliveryAuthorityViaCloudRun(
   FirebaseAppCheck? appCheck,
   http.Client? client,
 }) async {
-  if (route != 'completeDelivery' && route != 'getAvailableRequests') {
+  if (route != 'completeDelivery' &&
+      route != 'getAvailableRequests' &&
+      route != 'updateDeliveryTrackingStatus' &&
+      route != 'updateDeliveryLiveLocation') {
     throw ArgumentError.value(route, 'route', 'Unsupported Rider authority');
   }
   final user = (auth ?? FirebaseAuth.instance).currentUser;
