@@ -296,8 +296,8 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
               message: 'Registering your availability…',
             ),
           );
-          final response =
-              await invokeRiderDeliveryAuthorityViaCloudRun('goOnline', <String, dynamic>{
+          final response = await invokeRiderDeliveryAuthorityViaCloudRun(
+              'goOnline', <String, dynamic>{
             if (locationPayload != null) 'location': locationPayload,
           }).timeout(const Duration(seconds: 20));
           if (operation != _availabilityOperation) return;
