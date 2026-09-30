@@ -123,7 +123,7 @@ jobs:
           printf 'package=%s versionName=%s versionCode=%s minSdk=%s targetSdk=%s launchers=%s fineLocation=%s backgroundLocation=%s locationFgsPermission=%s locationService=%s locationServiceType=%s\n' \
             "$PACKAGE" "$VERSION_NAME" "$VERSION_CODE" "$MIN_SDK" "$TARGET_SDK" "$LAUNCHERS" "$FINE_LOCATION" "$BACKGROUND_LOCATION" "$LOCATION_FGS_PERMISSION" "$LOCATION_SERVICE" "$LOCATION_SERVICE_TYPE"
           test "$PACKAGE" = "com.circum.rider"
-          test "$VERSION_NAME" = "1.0.7"
+          test "$VERSION_NAME" = "1.0.8"
           test "$VERSION_CODE" = "${{ inputs.build_number }}"
           test "$MIN_SDK" = "24"
           test "$TARGET_SDK" = "36"
