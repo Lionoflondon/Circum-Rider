@@ -179,3 +179,29 @@ String _callableCode(String status) => switch (status.toUpperCase()) {
       'DEADLINE_EXCEEDED' => 'deadline-exceeded',
       _ => 'internal',
     };
+
+Future<Map<String, dynamic>> sendRiderVerificationEmailViaCloudRun({
+  FirebaseAuth? auth,
+  FirebaseAppCheck? appCheck,
+  http.Client? client,
+}) =>
+    _callRiderAccountViaCloudRun(
+      'sendCircumVerificationEmail',
+      const {},
+      auth: auth,
+      appCheck: appCheck,
+      client: client,
+    );
+
+Future<Map<String, dynamic>> invokeRiderVerificationEmailViaCloudRun({
+  required String idToken,
+  required String appCheckToken,
+  http.Client? client,
+}) =>
+    _invokeRiderAccountViaCloudRun(
+      'sendCircumVerificationEmail',
+      const {},
+      idToken: idToken,
+      appCheckToken: appCheckToken,
+      client: client,
+    );
