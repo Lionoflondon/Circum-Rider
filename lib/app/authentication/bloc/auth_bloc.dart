@@ -1262,7 +1262,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
           if (auth.currentUser?.emailVerified == false) {
             await sendRiderVerificationEmailViaCloudRun(auth: auth)
-              .timeout(_authOperationTimeout);
+                .timeout(_authOperationTimeout);
             emit(state.copyWith(
               status: Status.unverifiedEmail,
               clearSensitiveAuthFields: true,
