@@ -373,8 +373,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (event is ResendVerificationEmail) {
         try {
           emit(state.copyWith(status: Status.loading));
-          await auth.currentUser
-              ?.sendEmailVerification()
+          await sendRiderVerificationEmailViaCloudRun(auth: auth)
               .timeout(_authOperationTimeout);
           emit(state.copyWith(status: Status.success));
         } catch (error) {
@@ -1262,9 +1261,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           const storage = FlutterSecureStorage();
 
           if (auth.currentUser?.emailVerified == false) {
-            await auth.currentUser
-                ?.sendEmailVerification()
-                .timeout(_authOperationTimeout);
+            await sendRiderVerificationEmailViaCloudRun(auth: auth)
+              .timeout(_authOperationTimeout);
             emit(state.copyWith(
               status: Status.unverifiedEmail,
               clearSensitiveAuthFields: true,
@@ -1411,7 +1409,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             throw FirebaseAuthException(code: 'user-not-found');
           }
           if (!user.emailVerified) {
-            await user.sendEmailVerification().timeout(_authOperationTimeout);
+            await sendRiderVerificationEmailViaCloudRun(auth: auth)
+                .timeout(_authOperationTimeout);
           }
 
           emit(state.copyWith(

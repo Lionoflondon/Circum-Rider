@@ -104,7 +104,7 @@ void main() {
       source.indexOf('on<SignUpWithEmail>'),
       source.indexOf('on<UpdatePhoneNumber>'),
     );
-    expect(signup, contains('sendEmailVerification()'));
+    expect(signup, contains('sendRiderVerificationEmailViaCloudRun(auth: auth)'));
     expect(signup, contains('Status.unverifiedEmail'));
   });
 

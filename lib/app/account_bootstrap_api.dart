@@ -68,8 +68,8 @@ Future<Map<String, dynamic>> _callRiderAccountViaCloudRun(
       message: 'Sign in to continue.',
     );
   }
-  final appCheckToken =
-      await (appCheck ?? FirebaseAppCheck.instance).getToken();
+  final appCheckToken = await (appCheck ?? FirebaseAppCheck.instance)
+      .getToken();
   if (appCheckToken == null || appCheckToken.isEmpty) {
     throw FirebaseFunctionsException(
       code: 'failed-precondition',
@@ -170,12 +170,36 @@ Future<Map<String, dynamic>> _invokeRiderAccountViaCloudRun(
 }
 
 String _callableCode(String status) => switch (status.toUpperCase()) {
-      'INVALID_ARGUMENT' => 'invalid-argument',
-      'UNAUTHENTICATED' => 'unauthenticated',
-      'PERMISSION_DENIED' => 'permission-denied',
-      'FAILED_PRECONDITION' => 'failed-precondition',
-      'RESOURCE_EXHAUSTED' => 'resource-exhausted',
-      'UNAVAILABLE' => 'unavailable',
-      'DEADLINE_EXCEEDED' => 'deadline-exceeded',
-      _ => 'internal',
-    };
+  'INVALID_ARGUMENT' => 'invalid-argument',
+  'UNAUTHENTICATED' => 'unauthenticated',
+  'PERMISSION_DENIED' => 'permission-denied',
+  'FAILED_PRECONDITION' => 'failed-precondition',
+  'RESOURCE_EXHAUSTED' => 'resource-exhausted',
+  'UNAVAILABLE' => 'unavailable',
+  'DEADLINE_EXCEEDED' => 'deadline-exceeded',
+  _ => 'internal',
+};
+
+Future<Map<String, dynamic>> sendRiderVerificationEmailViaCloudRun({
+  FirebaseAuth? auth,
+  FirebaseAppCheck? appCheck,
+  http.Client? client,
+}) => _callRiderAccountViaCloudRun(
+  'sendCircumVerificationEmail',
+  const {},
+  auth: auth,
+  appCheck: appCheck,
+  client: client,
+);
+
+Future<Map<String, dynamic>> invokeRiderVerificationEmailViaCloudRun({
+  required String idToken,
+  required String appCheckToken,
+  http.Client? client,
+}) => _invokeRiderAccountViaCloudRun(
+  'sendCircumVerificationEmail',
+  const {},
+  idToken: idToken,
+  appCheckToken: appCheckToken,
+  client: client,
+);
