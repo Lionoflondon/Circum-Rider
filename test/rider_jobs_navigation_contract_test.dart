@@ -29,9 +29,16 @@ void main() {
           nav,
           contains(
               "final semantic = online ? 'Rider online. Go offline' : 'Go online'"));
-      expect(nav, contains('SetRideStatus('));
-      expect(nav, contains('RideStatus.online'));
-      expect(nav, contains('RideStatus.offline'));
+      expect(nav, contains('toggleRiderAvailability(context,'));
+      final availabilityAction =
+          File('lib/app/home/rider_availability_action.dart')
+              .readAsStringSync();
+      expect(availabilityAction,
+          contains('SetRideStatus(status: RideStatus.online)'));
+      expect(availabilityAction,
+          contains('SetRideStatus(status: RideStatus.offline)'));
+      expect(availabilityAction, contains('RideStatus.online'));
+      expect(availabilityAction, contains('RideStatus.offline'));
       expect(nav, contains('_showAvailabilitySheet'));
       expect(nav, contains('Go offline'));
       expect(nav, isNot(contains("label: 'Open delivery offers'")));
