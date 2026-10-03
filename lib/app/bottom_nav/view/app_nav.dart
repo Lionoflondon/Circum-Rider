@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../account/view/earnings.dart';
 import '../../home/bloc/home_bloc.dart';
+import '../../home/rider_availability_action.dart';
 import '../../rider_design/rider_ui.dart';
 import '../../rider_jobs/rider_job_offer_screen.dart';
 import '../../ratings/rider_appreciation.dart';
@@ -444,15 +445,8 @@ class _CentralAction extends StatelessWidget {
                         FilledButton(
                           onPressed: busy
                               ? null
-                              : () {
-                                  context.read<HomeBloc>().add(
-                                        SetRideStatus(
-                                          status: liveOnline
-                                              ? RideStatus.offline
-                                              : RideStatus.online,
-                                        ),
-                                      );
-                                },
+                              : () => toggleRiderAvailability(context,
+                                  online: liveOnline),
                           style: FilledButton.styleFrom(
                             backgroundColor: liveOnline
                                 ? Colors.white.withValues(alpha: .10)
