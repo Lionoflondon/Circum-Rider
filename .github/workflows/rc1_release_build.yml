@@ -123,7 +123,9 @@ jobs:
           printf 'package=%s versionName=%s versionCode=%s minSdk=%s targetSdk=%s launchers=%s fineLocation=%s backgroundLocation=%s locationFgsPermission=%s locationService=%s locationServiceType=%s\n' \
             "$PACKAGE" "$VERSION_NAME" "$VERSION_CODE" "$MIN_SDK" "$TARGET_SDK" "$LAUNCHERS" "$FINE_LOCATION" "$BACKGROUND_LOCATION" "$LOCATION_FGS_PERMISSION" "$LOCATION_SERVICE" "$LOCATION_SERVICE_TYPE"
           test "$PACKAGE" = "com.circum.rider"
-          test "$VERSION_NAME" = "1.0.8"
+          EXPECTED_VERSION_NAME="$(sed -n 's/^version: *\([^+]*\)+.*/\1/p' pubspec.yaml)"
+          test -n "$EXPECTED_VERSION_NAME"
+          test "$VERSION_NAME" = "$EXPECTED_VERSION_NAME"
           test "$VERSION_CODE" = "${{ inputs.build_number }}"
           test "$MIN_SDK" = "24"
           test "$TARGET_SDK" = "36"
