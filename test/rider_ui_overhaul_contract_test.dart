@@ -45,7 +45,14 @@ void main() {
           nav, contains("['Home', 'Jobs', 'Action', 'Earnings', 'Profile']"));
       expect(nav, contains('const _CentralAction()'));
       expect(nav, contains('_showAvailabilitySheet'));
-      expect(nav, contains('SetRideStatus('));
+      expect(nav, contains('toggleRiderAvailability(context,'));
+      final availabilityAction =
+          File('lib/app/home/rider_availability_action.dart')
+              .readAsStringSync();
+      expect(availabilityAction,
+          contains('SetRideStatus(status: RideStatus.online)'));
+      expect(availabilityAction,
+          contains('SetRideStatus(status: RideStatus.offline)'));
       expect(nav, isNot(contains('_CentralAction(onTap: () => onSelect(1))')));
       expect(nav, isNot(contains("label: 'History'")));
       expect(nav, isNot(contains("label: 'Live Chat'")));
