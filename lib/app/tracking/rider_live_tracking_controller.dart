@@ -348,6 +348,7 @@ class RiderLiveTrackingController {
       return;
     }
     await stop(status: 'switching', publishStop: false);
+    final generation = _generation;
     _started = true;
     _stopping = false;
     _deliveryId = deliveryId;
@@ -358,6 +359,7 @@ class RiderLiveTrackingController {
     _beforePermission = beforePermission;
     _assignmentValidated = false;
     await _restoreQueue();
+    if (generation != _generation) return;
     _arrivalPickupSignalled = false;
     _arrivalDropoffSignalled = false;
     _emit(const RiderLiveTrackingSnapshot(
@@ -367,17 +369,22 @@ class RiderLiveTrackingController {
     ));
 
     final permissionState = await _ensurePermission();
+    if (generation != _generation) return;
     if (permissionState != null) {
       _emit(permissionState);
       return;
     }
     await requestRiderTrackingNotificationPermission();
+    if (generation != _generation) return;
 
     _deliverySub = _firestore
         .collection('deliveryRequests')
         .doc(deliveryId)
         .snapshots()
-        .listen(_handleDeliverySnapshot, onError: (_) {
+        .listen((snapshot) {
+      if (generation == _generation) _handleDeliverySnapshot(snapshot);
+    }, onError: (_) {
+      if (generation != _generation) return;
       _emit(_snapshot.copyWith(
         status: RiderLiveTrackingStatus.reconnecting,
         message: 'Reconnecting to delivery state',
@@ -388,7 +395,10 @@ class RiderLiveTrackingController {
         Timer.periodic(const Duration(seconds: 10), (_) => _scheduleFlush());
     _positionSub = Geolocator.getPositionStream(
       locationSettings: riderLocationSettings(),
-    ).listen(_handlePosition, onError: (Object error) {
+    ).listen((position) {
+      if (generation == _generation) _handlePosition(position);
+    }, onError: (Object error) {
+      if (generation != _generation) return;
       _emit(_snapshot.copyWith(
         status: RiderLiveTrackingStatus.error,
         message: 'GPS signal unavailable. Retry when your signal improves.',
