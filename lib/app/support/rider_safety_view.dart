@@ -58,6 +58,13 @@ class RiderSafetyView extends StatelessWidget {
             onTap: () async {
               final fix = position;
               if (fix == null) return;
+              if (DateTime.now().difference(fix.timestamp).abs() >=
+                  const Duration(minutes: 3)) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                    content:
+                        Text('Wait for a fresh GPS location before sharing.')));
+                return;
+              }
               final box = context.findRenderObject() as RenderBox?;
               try {
                 await Share.share(
