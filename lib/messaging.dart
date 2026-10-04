@@ -56,13 +56,42 @@ String _notificationChatId(RemoteMessage message) {
   return '';
 }
 
+const _riderOpenStorage = FlutterSecureStorage();
+final _pendingRiderOpens = RiderPendingOpen<RemoteMessage>(
+  ready: () => NavKey.navKey.currentState != null,
+  account: () => FirebaseAuth.instance.currentUser?.uid,
+  open: (message) async {
+    await _openRiderNotification(message);
+    unawaited(_recordRiderPushReceipt(message, 'mark_opened'));
+  },
+  read: () => _riderOpenStorage
+      .read(key: 'rider_pending_notification_opens')
+      .timeout(const Duration(seconds: 3)),
+  write: (value) => _riderOpenStorage
+      .write(key: 'rider_pending_notification_opens', value: value)
+      .timeout(const Duration(seconds: 3)),
+  encode: (message) => {
+    'data': riderPendingPushData(message.data),
+    'messageId': message.messageId
+  },
+  decode: (value) {
+    final stored = Map<String, dynamic>.from(value as Map);
+    return RemoteMessage(
+        data: Map<String, dynamic>.from(stored['data'] as Map),
+        messageId: stored['messageId'] as String?);
+  },
+  onError: (_) => FlutterError.reportError(FlutterErrorDetails(
+    exception: StateError('Rider notification target could not be opened'),
+    library: 'Rider notifications',
+  )),
+);
+
 Future<void> _routeRiderNotification(RemoteMessage message) async {
-  // Resolve the exact offer through the backend-authoritative offer feed.
-  var navigator = NavKey.navKey.currentState;
-  for (var attempt = 0; navigator == null && attempt < 100; attempt++) {
-    await Future<void>.delayed(const Duration(milliseconds: 100));
-    navigator = NavKey.navKey.currentState;
-  }
+  await _pendingRiderOpens.add(message);
+}
+
+Future<void> _openRiderNotification(RemoteMessage message) async {
+  final navigator = NavKey.navKey.currentState;
   if (navigator == null) return;
   final notificationId =
       '${message.data['notificationId'] ?? message.messageId ?? ''}';
@@ -111,7 +140,8 @@ Future<void> _routeRiderNotification(RemoteMessage message) async {
   );
 }
 
-void _configureRiderNotificationOpenRouting() {
+Future<void> _configureRiderNotificationOpenRouting() async {
+  await _pendingRiderOpens.restore();
   FirebaseMessaging.onMessageOpenedApp.listen(_routeRiderNotification);
   FirebaseMessaging.instance.getInitialMessage().then((message) {
     if (message == null) return;
@@ -121,8 +151,27 @@ void _configureRiderNotificationOpenRouting() {
   });
 }
 
+Future<void> _recordRiderPushReceipt(
+    RemoteMessage message, String action) async {
+  final id = '${message.data['notificationId'] ?? ''}'.trim();
+  if (id.isEmpty ||
+      id.contains('/') ||
+      FirebaseAuth.instance.currentUser == null) return;
+  try {
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .riderCallable('updateRiderNotificationState')
+        .call({'notificationId': id, 'action': action}).timeout(
+            const Duration(seconds: 10));
+  } catch (_) {
+    FlutterError.reportError(FlutterErrorDetails(
+        exception: StateError('Rider push receipt could not be recorded'),
+        library: 'Rider notifications'));
+  }
+}
+
 void foregoundMessage() {
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+    unawaited(_recordRiderPushReceipt(message, 'mark_received'));
     if (_isChatNotification(message)) {
       final encoded = message.data['data'];
       if (message.data['type'] == 'message' && encoded is String) {

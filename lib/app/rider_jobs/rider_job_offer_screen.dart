@@ -18,6 +18,7 @@ import '../rider_internal_access/rider_internal_access.dart';
 import '../rider_design/rider_ui.dart';
 import '../rider_truth/rider_truth.dart';
 import '../support/view/support.dart';
+import '../support/rider_safety_view.dart';
 import '../tracking/rider_live_tracking_controller.dart';
 import '../tracking/rider_location_disclosure.dart';
 import 'rider_accept_controller.dart';
@@ -2084,6 +2085,15 @@ class _RiderAcceptedJobScreenState extends State<RiderAcceptedJobScreen> {
                     Expanded(
                         child:
                             _AcceptedTopPill(chips: widget.offer.warningChips)),
+                    IconButton(
+                        tooltip: 'Safety and support',
+                        icon: const Icon(Icons.shield_outlined),
+                        onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => RiderSafetyView(
+                                    deliveryId: widget.offer.id,
+                                    position: _trackingSnapshot.position)))),
                     if (_stage.index < RiderDeliveryStage.collected.index &&
                         const {
                           'accepted',

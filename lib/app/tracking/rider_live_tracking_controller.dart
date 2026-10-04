@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -301,6 +303,10 @@ class RiderLiveTrackingController {
 
   final FirebaseFirestore _firestore;
   final _states = StreamController<RiderLiveTrackingSnapshot>.broadcast();
+  final _storage = const FlutterSecureStorage();
+  Future<void> _storageWrites = Future<void>.value();
+  bool _assignmentValidated = false;
+  Timer? _retryTimer;
   final Queue<_QueuedLocationUpdate> _queue = Queue<_QueuedLocationUpdate>();
   final Queue<DateTime> _pickupArrivalHits = Queue<DateTime>();
   final Queue<DateTime> _dropoffArrivalHits = Queue<DateTime>();
@@ -317,6 +323,8 @@ class RiderLiveTrackingController {
   Position? _lastPublishedPosition;
   DateTime? _lastPublishedAt;
   bool _started = false;
+  int _generation = 0;
+  Future<void> _writes = Future<void>.value();
   bool _stopping = false;
   bool _arrivalPickupSignalled = false;
   bool _arrivalDropoffSignalled = false;
@@ -348,6 +356,8 @@ class RiderLiveTrackingController {
     _pickup = pickup;
     _dropoff = dropoff;
     _beforePermission = beforePermission;
+    _assignmentValidated = false;
+    await _restoreQueue();
     _arrivalPickupSignalled = false;
     _arrivalDropoffSignalled = false;
     _emit(const RiderLiveTrackingSnapshot(
@@ -374,6 +384,8 @@ class RiderLiveTrackingController {
       ));
     });
 
+    _retryTimer =
+        Timer.periodic(const Duration(seconds: 10), (_) => _scheduleFlush());
     _positionSub = Geolocator.getPositionStream(
       locationSettings: riderLocationSettings(),
     ).listen(_handlePosition, onError: (Object error) {
@@ -390,13 +402,24 @@ class RiderLiveTrackingController {
   }) async {
     if (_stopping) return;
     _stopping = true;
+    _generation++;
+    _retryTimer?.cancel();
+    _retryTimer = null;
     final deliveryId = _deliveryId;
     final riderId = _riderId;
     await _positionSub?.cancel();
     await _deliverySub?.cancel();
     _positionSub = null;
     _deliverySub = null;
+    if (deliveryId != null &&
+        riderId != null &&
+        status != 'switching' &&
+        status != 'retrying' &&
+        status != 'disposed') {
+      await _persistQueue(clear: true);
+    }
     _queue.clear();
+    _assignmentValidated = false;
     _pickupArrivalHits.clear();
     _dropoffArrivalHits.clear();
     _started = false;
@@ -427,13 +450,17 @@ class RiderLiveTrackingController {
     final riderId = _riderId;
     final status = _trackingStatus;
     if (deliveryId == null || riderId == null || status == null) return;
+    final pickup = _pickup;
+    final dropoff = _dropoff;
+    final disclosure = _beforePermission!;
+    await stop(status: 'retrying', publishStop: false);
     await start(
       deliveryId: deliveryId,
       riderId: riderId,
       trackingStatus: status,
-      pickup: _pickup,
-      dropoff: _dropoff,
-      beforePermission: _beforePermission!,
+      pickup: pickup,
+      dropoff: dropoff,
+      beforePermission: disclosure,
     );
   }
 
@@ -503,7 +530,8 @@ class RiderLiveTrackingController {
       unawaited(stop(status: 'inactive_or_unassigned'));
       return;
     }
-    _flushQueue();
+    _assignmentValidated = true;
+    _scheduleFlush();
   }
 
   void _handlePosition(Position position) {
@@ -644,37 +672,22 @@ class RiderLiveTrackingController {
     }
   }
 
-  Future<void> _publish(Position position, DateTime now) async {
-    final deliveryId = _deliveryId;
-    final riderId = _riderId;
-    final status = _trackingStatus;
-    if (deliveryId == null || riderId == null || status == null) return;
-    final update = _QueuedLocationUpdate(
-      position: position,
-      createdAt: now,
-      trackingStatus: status,
-    );
-    try {
-      await _writeUpdate(
-        deliveryId: deliveryId,
-        riderId: riderId,
-        update: update,
-      );
-      _lastPublishedPosition = position;
-      _lastPublishedAt = now;
-      _emit(_snapshot.copyWith(
-        lastPublishedAt: now,
-        queueDepth: _queue.length,
-      ));
-      _flushQueue();
-    } catch (_) {
-      _enqueue(update);
-      _emit(_snapshot.copyWith(
-        status: RiderLiveTrackingStatus.offline,
-        message: 'Offline. Tracking will retry shortly.',
-        queueDepth: _queue.length,
-      ));
-    }
+  Future<void> _publish(Position position, DateTime now) {
+    final generation = _generation;
+    if (!_started || _trackingStatus == null) return Future<void>.value();
+    _enqueue(_QueuedLocationUpdate(
+        position: position, createdAt: now, trackingStatus: _trackingStatus!));
+    final persisted = _persistQueue();
+    _writes = _writes.then((_) async {
+      await persisted;
+      if (generation == _generation && _assignmentValidated)
+        await _flushQueue();
+    }).catchError((Object error) {
+      FlutterError.reportError(FlutterErrorDetails(
+          exception: StateError('Rider tracking publication failed'),
+          library: 'Rider tracking'));
+    });
+    return _writes;
   }
 
   void _enqueue(_QueuedLocationUpdate update) {
@@ -684,36 +697,128 @@ class RiderLiveTrackingController {
     }
   }
 
+  void _scheduleFlush() {
+    final generation = _generation;
+    _writes = _writes.then((_) async {
+      if (generation == _generation) await _flushQueue();
+    }).catchError((Object error) {
+      FlutterError.reportError(FlutterErrorDetails(
+        exception: StateError('Rider tracking retry failed'),
+        library: 'Rider tracking',
+      ));
+    });
+  }
+
+  Future<void> _persistQueue({bool clear = false}) {
+    final riderId = _riderId;
+    final deliveryId = _deliveryId;
+    if (riderId == null || deliveryId == null) return Future<void>.value();
+    final key = 'rider_tracking_pending_${riderId}_$deliveryId';
+    final empty = clear || _queue.isEmpty;
+    final value = jsonEncode(_queue
+        .map((update) => {
+              'position': update.position.toJson(),
+              'createdAt': update.createdAt.millisecondsSinceEpoch,
+              'trackingStatus': update.trackingStatus,
+            })
+        .toList());
+    _storageWrites = _storageWrites.then((_) async {
+      try {
+        if (empty) {
+          await _storage.delete(key: key);
+        } else {
+          await _storage.write(key: key, value: value);
+        }
+      } catch (_) {
+        FlutterError.reportError(FlutterErrorDetails(
+          exception: StateError('Rider tracking recovery storage unavailable'),
+          library: 'Rider tracking',
+        ));
+      }
+    });
+    return _storageWrites;
+  }
+
+  Future<void> _restoreQueue() async {
+    await _storageWrites;
+    try {
+      final key = 'rider_tracking_pending_${_riderId}_$_deliveryId';
+      final encoded = await _storage.read(key: key);
+      if (encoded == null) return;
+      final now = DateTime.now();
+      for (final raw in (jsonDecode(encoded) as List)) {
+        final data = Map<String, dynamic>.from(raw as Map);
+        final created =
+            DateTime.fromMillisecondsSinceEpoch(data['createdAt'] as int);
+        if (now.difference(created).abs() >
+            RiderLiveTrackingPolicy.staleUpdateAfter) continue;
+        _enqueue(_QueuedLocationUpdate(
+          position: Position.fromMap(
+              Map<String, dynamic>.from(data['position'] as Map)),
+          createdAt: created,
+          trackingStatus: data['trackingStatus'] as String,
+        ));
+      }
+      await _persistQueue();
+    } catch (_) {
+      FlutterError.reportError(FlutterErrorDetails(
+        exception:
+            StateError('Rider tracking recovery data could not be loaded'),
+        library: 'Rider tracking',
+      ));
+    }
+  }
+
+  bool _flushing = false;
+
   Future<void> _flushQueue() async {
+    if (_flushing || !_assignmentValidated) return;
+    final generation = _generation;
     final deliveryId = _deliveryId;
     final riderId = _riderId;
     if (deliveryId == null || riderId == null || _queue.isEmpty) return;
-    final now = DateTime.now();
-    while (_queue.isNotEmpty) {
-      final update = _queue.removeFirst();
-      if (now.difference(update.createdAt) >
-          RiderLiveTrackingPolicy.staleUpdateAfter) {
-        continue;
+    _flushing = true;
+    try {
+      final now = DateTime.now();
+      while (_queue.isNotEmpty && generation == _generation) {
+        final update = _queue.first;
+        if (now.difference(update.createdAt) >
+            RiderLiveTrackingPolicy.staleUpdateAfter) {
+          _queue.removeFirst();
+          continue;
+        }
+        try {
+          await _writeUpdate(
+            deliveryId: deliveryId,
+            riderId: riderId,
+            update: update,
+          );
+          if (generation != _generation) return;
+          if (_queue.isNotEmpty && identical(_queue.first, update))
+            _queue.removeFirst();
+          await _persistQueue();
+          _lastPublishedPosition = update.position;
+          _lastPublishedAt = now;
+        } catch (_) {
+          if (generation != _generation) return;
+          _emit(_snapshot.copyWith(
+              status: RiderLiveTrackingStatus.offline,
+              message: 'Offline. Tracking will retry shortly.',
+              queueDepth: _queue.length));
+          return;
+        }
       }
-      try {
-        await _writeUpdate(
-          deliveryId: deliveryId,
-          riderId: riderId,
-          update: update,
-        );
-        _lastPublishedPosition = update.position;
-        _lastPublishedAt = now;
-      } catch (_) {
-        _queue.addFirst(update);
-        return;
-      }
+      if (generation != _generation) return;
+      await _persistQueue();
+      _emit(_snapshot.copyWith(
+        status: _snapshot.status == RiderLiveTrackingStatus.offline
+            ? RiderLiveTrackingStatus.reconnecting
+            : _snapshot.status,
+        queueDepth: _queue.length,
+      ));
+    } finally {
+      _flushing = false;
     }
-    _emit(_snapshot.copyWith(
-      status: _snapshot.status == RiderLiveTrackingStatus.offline
-          ? RiderLiveTrackingStatus.reconnecting
-          : _snapshot.status,
-      queueDepth: _queue.length,
-    ));
   }
 
   Future<void> _writeUpdate({
