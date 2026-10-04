@@ -6,15 +6,13 @@ class RiderAuthError {
       case 'wrong-surface':
         return 'This account belongs to another Circum app. Sign in with a Rider account.';
       case 'email-already-in-use':
-        return 'Account already exists. Sign in instead.';
+        return 'Account creation could not be completed. If you already have an account, sign in or reset your password.';
       case 'invalid-email':
         return 'Enter a valid email address.';
       case 'wrong-password':
-        return 'The password is incorrect. Try again or reset it.';
       case 'invalid-credential':
-        return 'The email or password is incorrect.';
       case 'user-not-found':
-        return 'No Rider account was found for that email.';
+        return 'Email or password is incorrect.';
       case 'user-disabled':
         return 'This Rider account is disabled. Contact Circum Support.';
       case 'network-request-failed':
