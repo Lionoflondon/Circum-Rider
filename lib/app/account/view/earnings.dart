@@ -1,14 +1,17 @@
+import 'package:circum_rider/app/rider_callable_api.dart';
 import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import '../../notifications/rider_notification_entity_view.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../rider_design/rider_ui.dart';
 import '../../stripe/rider_payout_account_view.dart';
 import '../bloc/account_bloc.dart';
+import '../repo/rider_ledger_feed.dart';
 
 class EarningsView extends StatefulWidget {
   const EarningsView({
@@ -26,6 +29,11 @@ class EarningsView extends StatefulWidget {
 
 class _EarningsViewState extends State<EarningsView> {
   Future<Map<String, dynamic>>? _summary;
+  int _historyLimit = 40;
+  String? _ledgerUid;
+  int _ledgerRecords = 0;
+  Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>>? _payoutFeed;
+  Stream<List<QueryDocumentSnapshot<Map<String, dynamic>>>>? _transactionFeed;
 
   @override
   void initState() {
@@ -38,10 +46,13 @@ class _EarningsViewState extends State<EarningsView> {
   }
 
   Future<Map<String, dynamic>> _loadSummary() async {
+    final initiatingUid = FirebaseAuth.instance.currentUser?.uid;
     final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('getRiderEarningsSummary')
+        .riderCallable('getRiderEarningsSummary')
         .call()
         .timeout(const Duration(seconds: 25));
+    if (FirebaseAuth.instance.currentUser?.uid != initiatingUid)
+      throw StateError('Account changed. Refresh earnings.');
     return Map<String, dynamic>.from(result.data as Map);
   }
 
@@ -56,6 +67,16 @@ class _EarningsViewState extends State<EarningsView> {
       );
     }
 
+    if (!widget.isolatedZeroData &&
+        (_ledgerUid != uid || _ledgerRecords != _historyLimit)) {
+      if (_ledgerUid != null && _ledgerUid != uid) _summary = _loadSummary();
+      _ledgerUid = uid;
+      _ledgerRecords = _historyLimit;
+      _payoutFeed =
+          watchRiderLedger('payoutRequests', uid, records: _historyLimit);
+      _transactionFeed = watchRiderLedger('riderWalletTransactions', uid,
+          records: _historyLimit);
+    }
     final content = widget.isolatedZeroData
         ? _EarningsContent(
             summary: const {
@@ -88,19 +109,13 @@ class _EarningsViewState extends State<EarningsView> {
                     .doc(uid)
                     .snapshots(),
                 builder: (context, earningsSnapshot) {
-                  return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: FirebaseFirestore.instance
-                        .collection('payoutRequests')
-                        .where('riderId', isEqualTo: uid)
-                        .limit(30)
-                        .snapshots(),
+                  return StreamBuilder<
+                      List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
+                    stream: _payoutFeed,
                     builder: (context, payoutSnapshot) {
-                      return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                        stream: FirebaseFirestore.instance
-                            .collection('riderWalletTransactions')
-                            .where('riderId', isEqualTo: uid)
-                            .limit(40)
-                            .snapshots(),
+                      return StreamBuilder<
+                          List<QueryDocumentSnapshot<Map<String, dynamic>>>>(
+                        stream: _transactionFeed,
                         builder: (context, transactionSnapshot) {
                           if (earningsSnapshot.hasError ||
                               payoutSnapshot.hasError ||
@@ -116,12 +131,12 @@ class _EarningsViewState extends State<EarningsView> {
                             return const _EarningsLoading();
                           }
 
-                          final payouts = payoutSnapshot.data?.docs
-                                  .map((doc) => {'id': doc.id, ...doc.data()})
+                          final payouts = payoutSnapshot.data
+                                  ?.map((doc) => {...doc.data(), 'id': doc.id})
                                   .toList() ??
                               const <Map<String, dynamic>>[];
-                          final transactions = transactionSnapshot.data?.docs
-                                  .map((doc) => {'id': doc.id, ...doc.data()})
+                          final transactions = transactionSnapshot.data
+                                  ?.map((doc) => {...doc.data(), 'id': doc.id})
                                   .toList() ??
                               const <Map<String, dynamic>>[];
 
@@ -131,6 +146,8 @@ class _EarningsViewState extends State<EarningsView> {
                                 earningsSnapshot.data?.data() ?? const {},
                             payouts: payouts,
                             transactions: transactions,
+                            onLoadMore: () =>
+                                setState(() => _historyLimit += 40),
                             onRefresh: () async {
                               final next = _loadSummary();
                               setState(() => _summary = next);
@@ -164,6 +181,7 @@ class _EarningsContent extends StatelessWidget {
     required this.transactions,
     required this.onRefresh,
     this.showZeroValueSections = false,
+    this.onLoadMore,
   });
 
   final Map<String, dynamic> summary;
@@ -172,6 +190,7 @@ class _EarningsContent extends StatelessWidget {
   final List<Map<String, dynamic>> transactions;
   final Future<void> Function() onRefresh;
   final bool showZeroValueSections;
+  final VoidCallback? onLoadMore;
 
   @override
   Widget build(BuildContext context) {
@@ -298,6 +317,10 @@ class _EarningsContent extends StatelessWidget {
                 ),
                 rows: sortedPayouts.map(_PayoutRow.new).toList(),
               ),
+              if (onLoadMore != null)
+                TextButton(
+                    onPressed: onLoadMore,
+                    child: const Text('Load older activity')),
               const SizedBox(height: 24),
               _HistorySection(
                 title: 'Transactions',
@@ -730,27 +753,37 @@ class _PayoutRow extends StatelessWidget {
       if (reason.isNotEmpty) reason,
     ].join(' · ');
 
-    return _LedgerRow(
-      icon: failed
-          ? Icons.error_outline_rounded
-          : paid
-              ? Icons.check_rounded
-              : Icons.account_balance_wallet_outlined,
-      iconColor: failed
-          ? RiderPalette.red
-          : paid
-              ? RiderPalette.green
-              : RiderPalette.blue,
-      title: _title(status).isEmpty ? 'Processing' : _title(status),
-      subtitle: subtitle,
-      amount: _money(amount),
-      status: _title(status).toUpperCase(),
-      statusColor: failed
-          ? RiderPalette.red
-          : paid
-              ? RiderPalette.green
-              : RiderPalette.blue,
-    );
+    final id = '${item['id'] ?? ''}'.trim();
+    return InkWell(
+        onTap: id.isEmpty || id.contains('/')
+            ? null
+            : () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => RiderNotificationEntityView(
+                        target:
+                            RiderNotificationTarget('payoutRequests', id)))),
+        child: _LedgerRow(
+          icon: failed
+              ? Icons.error_outline_rounded
+              : paid
+                  ? Icons.check_rounded
+                  : Icons.account_balance_wallet_outlined,
+          iconColor: failed
+              ? RiderPalette.red
+              : paid
+                  ? RiderPalette.green
+                  : RiderPalette.blue,
+          title: _title(status).isEmpty ? 'Processing' : _title(status),
+          subtitle: subtitle,
+          amount: _money(amount),
+          status: _title(status).toUpperCase(),
+          statusColor: failed
+              ? RiderPalette.red
+              : paid
+                  ? RiderPalette.green
+                  : RiderPalette.blue,
+        ));
   }
 }
 

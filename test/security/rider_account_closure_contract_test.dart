@@ -15,7 +15,7 @@ void main() {
     );
     expect(profile, contains('Close your Circum account?'));
     expect(profile, contains('Type DELETE to confirm.'));
-    expect(profile, contains("httpsCallable('closeCircumAccount')"));
+    expect(profile, contains("riderCallable('closeCircumAccount')"));
     expect(profile, contains("'accountType': 'rider'"));
     expect(profile, contains('reauthenticateWithCredential'));
     expect(profile, contains('reauthenticateWithProvider'));

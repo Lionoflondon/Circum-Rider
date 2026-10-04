@@ -1,3 +1,4 @@
+import 'package:circum_rider/app/rider_callable_api.dart';
 import '../verification/rider_document_transport.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -689,7 +690,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
             'fileBase64': base64Encode(bytes),
           },
           call: (payload) async {
-            await _functions.httpsCallable('submitRiderDocument').call(payload);
+            await _functions.riderCallable('submitRiderDocument').call(payload);
           });
     },
         success: 'Document uploaded for Admin review.',
@@ -709,7 +710,7 @@ class _RiderApplicationCentreState extends State<RiderApplicationCentre> {
     String section,
     RiderApplicationSectionStatus status,
   ) async {
-    await _functions.httpsCallable('updateRiderApplicationSection').call({
+    await _functions.riderCallable('updateRiderApplicationSection').call({
       'section': section,
       'status': status.storageValue,
     }).timeout(_applicationOperationTimeout);

@@ -55,6 +55,28 @@ void main() {
     expect(attempts, 2);
   });
 
+  testWidgets('slow startup keeps one initialization and accepts late success',
+      (tester) async {
+    var attempts = 0;
+    final result = Completer<void>();
+    await tester.pumpWidget(RiderStartupApp(
+        timeout: const Duration(milliseconds: 10),
+        initializer: () {
+          attempts++;
+          return result.future;
+        },
+        appBuilder: (_) => const MaterialApp(home: Text('Late Rider ready'))));
+    await tester.pump(const Duration(milliseconds: 30));
+    expect(find.text('Rider is taking longer to start. Please wait.'),
+        findsOneWidget);
+    expect(find.text('Retry'), findsNothing);
+    expect(attempts, 1);
+    result.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Late Rider ready'), findsOneWidget);
+    expect(attempts, 1);
+  });
+
   test('Rider bootstrap avoids destructive cache races', () {
     final bootstrap = File('web/flutter_bootstrap.js').readAsStringSync();
     final index = File('web/index.html').readAsStringSync();

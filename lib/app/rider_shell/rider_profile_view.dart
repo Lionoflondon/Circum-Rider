@@ -1,3 +1,4 @@
+import 'package:circum_rider/app/rider_callable_api.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -1271,7 +1272,7 @@ Future<void> _confirmCloseAccount(BuildContext context) async {
       },
       closeAccount: () async {
         await FirebaseFunctions.instanceFor(region: 'us-central1')
-            .httpsCallable('closeCircumAccount')
+            .riderCallable('closeCircumAccount')
             .call({'accountType': 'rider'});
       },
       timeout: const Duration(seconds: 30),

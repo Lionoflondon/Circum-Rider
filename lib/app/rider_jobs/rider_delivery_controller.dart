@@ -1,3 +1,4 @@
+import 'package:circum_rider/app/rider_callable_api.dart';
 import 'dart:async';
 
 import 'package:cloud_functions/cloud_functions.dart';
@@ -17,8 +18,10 @@ class RiderDeliveryTransitionResult {
 }
 
 abstract class RiderDeliveryController {
-  Future<void> releaseJob(
-      {required String deliveryId, required String idempotencyKey});
+  Future<void> releaseJob({
+    required String deliveryId,
+    required String idempotencyKey,
+  });
 
   Future<RiderDeliveryTransitionResult> transition({
     required String deliveryId,
@@ -57,10 +60,12 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
             functions ?? FirebaseFunctions.instanceFor(region: 'us-central1');
 
   @override
-  Future<void> releaseJob(
-      {required String deliveryId, required String idempotencyKey}) async {
+  Future<void> releaseJob({
+    required String deliveryId,
+    required String idempotencyKey,
+  }) async {
     final result =
-        await functions.httpsCallable('requestRiderCancellation').call({
+        await functions.riderCallable('requestRiderCancellation').call({
       'deliveryId': deliveryId,
       'idempotencyKey': idempotencyKey,
       'reason': 'cannot_complete',
@@ -79,21 +84,9 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
     Map<String, dynamic>? issue,
   }) async {
     if (action == 'arrived_at_pickup' || action == 'arrived_at_dropoff') {
-      if (isQaPublicDeliveryId(deliveryId)) {
-        final data = await invokeRiderDeliveryAuthorityViaCloudRun(
-          'recordRiderArrival',
-          {
-            'deliveryId': deliveryId,
-            'phase': action == 'arrived_at_dropoff' ? 'dropoff' : 'pickup',
-          },
-        ).timeout(_riderDeliveryOperationTimeout);
-        return RiderDeliveryTransitionResult('${data['status'] ?? ''}');
-      }
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 15),
-      ).timeout(_riderDeliveryOperationTimeout);
-      final arrival = await functions.httpsCallable('recordRiderArrival').call({
+      final position = await Geolocator.getCurrentPosition()
+          .timeout(_riderDeliveryOperationTimeout);
+      final arrival = await functions.riderCallable('recordRiderArrival').call({
         'deliveryId': deliveryId,
         'phase': action == 'arrived_at_dropoff' ? 'dropoff' : 'pickup',
         'location': {
@@ -125,13 +118,15 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
       return RiderDeliveryTransitionResult('${data['status'] ?? ''}');
     }
     final data = await invokeRiderDeliveryAuthorityViaCloudRun(
-        'updateDeliveryTrackingStatus', <String, dynamic>{
-      'deliveryId': deliveryId,
-      'action': action,
-      if (pin != null) 'pin': pin,
-      if (evidence != null) 'evidence': evidence,
-      if (issue != null) 'issue': issue,
-    }).timeout(_riderDeliveryOperationTimeout);
+      'updateDeliveryTrackingStatus',
+      <String, dynamic>{
+        'deliveryId': deliveryId,
+        'action': action,
+        if (pin != null) 'pin': pin,
+        if (evidence != null) 'evidence': evidence,
+        if (issue != null) 'issue': issue,
+      },
+    ).timeout(_riderDeliveryOperationTimeout);
     return RiderDeliveryTransitionResult('${data['status'] ?? ''}');
   }
 
@@ -143,7 +138,7 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
     double? observedWeightKg,
     String? notes,
   }) async {
-    final result = await functions.httpsCallable('reportLoadDiscrepancy').call({
+    final result = await functions.riderCallable('reportLoadDiscrepancy').call({
       'requestId': deliveryId,
       'reason': reason,
       'evidencePhotos': evidencePhotos,
@@ -155,7 +150,7 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
 
   @override
   Future<Map<String, dynamic>> markNoShow({required String deliveryId}) async {
-    final result = await functions.httpsCallable('markRiderNoShow').call({
+    final result = await functions.riderCallable('markRiderNoShow').call({
       'deliveryId': deliveryId,
       'idempotencyKey': '$deliveryId:no_show',
     }).timeout(_riderDeliveryOperationTimeout);
@@ -168,7 +163,7 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
     required String type,
     String? note,
   }) async {
-    final result = await functions.httpsCallable('reportWaitingContext').call({
+    final result = await functions.riderCallable('reportWaitingContext').call({
       'deliveryId': deliveryId,
       'type': type,
       if (note != null) 'note': note,
@@ -181,7 +176,7 @@ class CallableRiderDeliveryController implements RiderDeliveryController {
     required String deliveryId,
   }) async {
     final result = await functions
-        .httpsCallable('confirmRiderIrisAssessment')
+        .riderCallable('confirmRiderIrisAssessment')
         .call({'deliveryId': deliveryId}).timeout(
             _riderDeliveryOperationTimeout);
     return Map<String, dynamic>.from(result.data as Map);
@@ -215,15 +210,16 @@ class RiderEvidenceUploader {
     );
     await ref
         .putData(
-            bytes,
-            SettableMetadata(
-              contentType: 'image/jpeg',
-              customMetadata: {
-                'deliveryId': deliveryId,
-                'uploadedBy': FirebaseAuth.instance.currentUser!.uid,
-                'evidenceType': 'weight_discrepancy',
-              },
-            ))
+          bytes,
+          SettableMetadata(
+            contentType: 'image/jpeg',
+            customMetadata: {
+              'deliveryId': deliveryId,
+              'uploadedBy': FirebaseAuth.instance.currentUser!.uid,
+              'evidenceType': 'weight_discrepancy',
+            },
+          ),
+        )
         .timeout(_riderDeliveryOperationTimeout);
     return ref.getDownloadURL().timeout(_riderDeliveryOperationTimeout);
   }

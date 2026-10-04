@@ -1,3 +1,4 @@
+import 'package:circum_rider/app/rider_callable_api.dart';
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -143,45 +144,80 @@ class RiderCommunicationService {
     FirebaseFirestore? firestore,
     FirebaseFunctions? functions,
     FirebaseAuth? auth,
-  })  : firestore = firestore ?? FirebaseFirestore.instance,
+    Future<dynamic> Function(String, Map<String, dynamic>)? callable,
+  })  : _callable = callable,
+        firestore = firestore ?? FirebaseFirestore.instance,
         functions =
             functions ?? FirebaseFunctions.instanceFor(region: 'us-central1'),
         auth = auth ?? FirebaseAuth.instance;
+
+  final Future<dynamic> Function(String, Map<String, dynamic>)? _callable;
+  Future<dynamic> _call(String name, Map<String, dynamic> data) async {
+    if (_callable != null) return _callable(name, data);
+    return (await functions.riderCallable(name).call(data)).data;
+  }
 
   final FirebaseFirestore firestore;
   final FirebaseFunctions functions;
   final FirebaseAuth auth;
 
-  Stream<RiderConversationSnapshot> watchConversation(String chatId) {
+  Stream<RiderConversationSnapshot> watchConversation(String chatId,
+      {int limit = 80}) {
     final chat = firestore.collection('chats').doc(chatId);
-    return chat.snapshots().asyncMap((chatSnapshot) async {
-      final data = chatSnapshot.data() ?? const <String, dynamic>{};
-      final messageSnapshot = await chat
-          .collection('messages')
-          .orderBy('createdAt', descending: false)
-          .limit(80)
-          .get();
-      final now = DateTime.now().millisecondsSinceEpoch;
-      final typing = data['typing'] is Map
-          ? Map<String, dynamic>.from(data['typing'] as Map)
-          : const <String, dynamic>{};
-      return RiderConversationSnapshot(
-        chatId: chatId,
-        readOnly: data['readOnly'] == true,
-        messages: messageSnapshot.docs
+    return Stream<RiderConversationSnapshot>.multi((output) {
+      Map<String, dynamic>? metadata;
+      List<RiderConversationMessage>? messages;
+      void publish() {
+        if (metadata == null || messages == null) return;
+        final data = metadata!;
+        final typing = data['typing'] is Map
+            ? Map<String, dynamic>.from(data['typing'])
+            : <String, dynamic>{};
+        final now = DateTime.now().millisecondsSinceEpoch;
+        output.add(RiderConversationSnapshot(
+            chatId: chatId,
+            readOnly: data['readOnly'] == true,
+            messages: messages!,
+            typingUserIds: typing.entries
+                .where((e) =>
+                    e.key != auth.currentUser?.uid &&
+                    e.value is num &&
+                    e.value > now)
+                .map((e) => e.key)
+                .toList(),
+            unreadBy: data['unreadBy'] is Iterable
+                ? (data['unreadBy'] as Iterable).map((e) => '$e').toList()
+                : const []));
+      }
+
+      final chatSubscription = chat.snapshots().listen((snapshot) {
+        metadata = snapshot.data() ?? {};
+        publish();
+      }, onError: output.addError);
+      final query =
+          chat.collection('messages').orderBy('createdAt', descending: true);
+      final messageSubscription =
+          query.limit(80).snapshots().asyncMap((head) async {
+        final documents = [...head.docs];
+        var page = head.docs;
+        while (documents.length < limit && page.length == 80) {
+          final next =
+              await query.startAfterDocument(page.last).limit(80).get();
+          page = next.docs;
+          documents.addAll(page);
+        }
+        return documents.take(limit).toList();
+      }).listen((documents) {
+        messages = documents.reversed
             .map(RiderConversationMessage.fromDocument)
             .where((message) => message.text.isNotEmpty || message.isSystem)
-            .toList(),
-        typingUserIds: typing.entries
-            .where((entry) => entry.key != auth.currentUser?.uid)
-            .where((entry) => entry.value is num && (entry.value as num) > now)
-            .map((entry) => entry.key)
-            .toList(),
-        unreadBy: data['unreadBy'] is Iterable
-            ? List<String>.from(
-                (data['unreadBy'] as Iterable).map((item) => '$item'))
-            : const [],
-      );
+            .toList();
+        publish();
+      }, onError: output.addError);
+      output.onCancel = () async {
+        await chatSubscription.cancel();
+        await messageSubscription.cancel();
+      };
     });
   }
 
@@ -191,7 +227,7 @@ class RiderCommunicationService {
   }) async {
     final trimmed = message.trim();
     if (trimmed.isEmpty) return;
-    await functions.httpsCallable('sendCircumMessage').call({
+    await _call('sendCircumMessage', {
       'chatId': chatId,
       'message': trimmed,
       'messageType': 'text',
@@ -202,7 +238,7 @@ class RiderCommunicationService {
     required String chatId,
     required bool typing,
   }) async {
-    await functions.httpsCallable('setConversationTyping').call({
+    await _call('setConversationTyping', {
       'chatId': chatId,
       'typing': typing,
     });
@@ -210,26 +246,32 @@ class RiderCommunicationService {
 
   Future<void> markRead(String chatId) async {
     await functions
-        .httpsCallable('markConversationRead')
+        .riderCallable('markConversationRead')
         .call({'chatId': chatId});
   }
 
-  Stream<List<RiderNotificationRecord>> watchNotifications() {
+  Stream<List<RiderNotificationRecord>> watchNotifications({int limit = 100}) {
     final uid = auth.currentUser?.uid;
     if (uid == null) return Stream.value(const []);
-    return firestore
+    final query = firestore
         .collection('notifications')
         .where('recipientId', isEqualTo: uid)
-        .limit(100)
-        .snapshots()
-        .map((snapshot) {
-      final records = snapshot.docs
-          .map(RiderNotificationRecord.fromDocument)
-          .where((record) => !record.archived && !record.deleted)
-          .toList();
-      records.sort((a, b) => (b.createdAt ?? DateTime(1970))
-          .compareTo(a.createdAt ?? DateTime(1970)));
-      return records;
+        .orderBy('createdAt', descending: true);
+    return query.limit(100).snapshots().asyncMap((head) async {
+      final documents = [...head.docs];
+      var page = head.docs;
+      while (documents.length < limit && page.length == 100) {
+        final next = await query.startAfterDocument(page.last).limit(100).get();
+        page = next.docs;
+        documents.addAll(page);
+      }
+      if (auth.currentUser?.uid != uid) return <RiderNotificationRecord>[];
+      final unique = <String, RiderNotificationRecord>{};
+      for (final doc in documents.take(limit)) {
+        final record = RiderNotificationRecord.fromDocument(doc);
+        if (!record.archived && !record.deleted) unique[record.id] = record;
+      }
+      return unique.values.toList();
     });
   }
 
@@ -260,7 +302,7 @@ class RiderCommunicationService {
         .toList();
     // The callable accepts at most 100 notification IDs per transaction.
     for (var offset = 0; offset < notificationIds.length; offset += 100) {
-      await functions.httpsCallable('updateRiderNotificationState').call({
+      await _call('updateRiderNotificationState', {
         'notificationIds': notificationIds.skip(offset).take(100).toList(),
         'action': action,
       }).timeout(const Duration(seconds: 20));

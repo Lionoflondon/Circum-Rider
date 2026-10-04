@@ -16,7 +16,7 @@ void main() {
     test('wallet onboarding uses the authoritative idempotent callable', () {
       expect(RiderRothOnboarding.walletCollection, 'riderRothWallets');
       expect(RiderRothOnboarding.ledgerCollection, 'riderRothLedger');
-      expect(service, contains("httpsCallable('ensureRiderRothWallet')"));
+      expect(service, contains("riderCallable('ensureRiderRothWallet')"));
       expect(service, contains("'riderId': riderId"));
       expect(service, contains("data['walletCreated']"));
       expect(service, isNot(contains('FirebaseFirestore')));
@@ -25,7 +25,7 @@ void main() {
     });
 
     test('auth onboarding invokes server-authoritative wallet connection', () {
-      expect(authBloc, contains("httpsCallable('ensureRiderRothWallet')"));
+      expect(authBloc, contains("riderCallable('ensureRiderRothWallet')"));
       expect(authBloc, contains('await ensureRiderRothWallet(user)'));
       expect(authBloc, contains('await ensureRiderRothWallet(user).timeout'));
       expect(authBloc, isNot(contains('RiderRothOnboarding')));

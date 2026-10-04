@@ -135,7 +135,7 @@ void main() {
         'This account belongs to another Circum app. Sign in with a Rider account.');
     final source =
         File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
-    expect(source, contains("httpsCallable('verifyRiderAccountAccess')"));
+    expect(source, contains("riderCallable('verifyRiderAccountAccess')"));
     final guardedAuthCalls =
         source.split('await verifyRiderSurfaceAfterAuthentication(').length;
     expect(guardedAuthCalls, 5);
@@ -144,7 +144,7 @@ void main() {
         source.indexOf('Future<void> verifyRiderSurface('),
         source.indexOf('Future<void> upsertRiderOnboarding('));
     expect(guard, contains("access.data['profileExists'] == false"));
-    expect(guard.indexOf("httpsCallable('verifyRiderAccountAccess')"),
+    expect(guard.indexOf("riderCallable('verifyRiderAccountAccess')"),
         lessThan(guard.indexOf('updateRiderProfileViaCloudRun(')));
   });
 }

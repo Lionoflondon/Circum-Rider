@@ -25,7 +25,10 @@ class RequestWithdrawal extends AccountEvent {
 
 class GetRequests extends AccountEvent {}
 
-class CancelWithdrawalRequest extends AccountEvent {}
+class CancelWithdrawalRequest extends AccountEvent {
+  final String? requestId;
+  const CancelWithdrawalRequest({this.requestId});
+}
 
 class ResetAccountStatus extends AccountEvent {
   final AccountStatus status;

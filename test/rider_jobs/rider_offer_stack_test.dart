@@ -525,11 +525,11 @@ void main() {
       expect(source, isNot(contains('noShowAvailable(DateTime')));
       expect(source, isNot(contains('FieldValue.arrayUnion')));
       expect(source, contains('CallableRiderDeliveryController'));
-      expect(controller, contains("httpsCallable('recordRiderArrival')"));
+      expect(controller, contains("riderCallable('recordRiderArrival')"));
       expect(controller, contains("invokeRiderDeliveryAuthorityViaCloudRun("));
-      expect(controller, contains("httpsCallable('markRiderNoShow')"));
+      expect(controller, contains("riderCallable('markRiderNoShow')"));
       expect(
-          controller, contains("httpsCallable('confirmRiderIrisAssessment')"));
+          controller, contains("riderCallable('confirmRiderIrisAssessment')"));
       expect(legacyHome, isNot(contains("'status': 'outForDelivery'")));
       expect(legacyHome, isNot(contains('HomeRepo().endTrip')));
       expect(legacyEvents, isNot(contains('class StartDelivery')));
@@ -547,11 +547,11 @@ void main() {
             'const _riderDeliveryOperationTimeout = Duration(seconds: 30)'),
       );
       for (final callable in [
-        "httpsCallable('recordRiderArrival')",
-        "httpsCallable('reportLoadDiscrepancy')",
-        "httpsCallable('markRiderNoShow')",
-        "httpsCallable('reportWaitingContext')",
-        "httpsCallable('confirmRiderIrisAssessment')",
+        "riderCallable('recordRiderArrival')",
+        "riderCallable('reportLoadDiscrepancy')",
+        "riderCallable('markRiderNoShow')",
+        "riderCallable('reportWaitingContext')",
+        "riderCallable('confirmRiderIrisAssessment')",
       ]) {
         expect(controller, contains(callable));
       }

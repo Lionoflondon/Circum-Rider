@@ -1,3 +1,4 @@
+import 'package:circum_rider/app/rider_callable_api.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 class RiderReviewFixtureService {
@@ -9,7 +10,7 @@ class RiderReviewFixtureService {
 
   Future<Map<String, dynamic>> getOwnFixture() async {
     final result =
-        await _functions.httpsCallable('getGooglePlayReviewFixture').call();
+        await _functions.riderCallable('getGooglePlayReviewFixture').call();
     final data = result.data;
     if (data is! Map) throw StateError('Review fixture is unavailable.');
     return Map<String, dynamic>.from(data);
@@ -20,7 +21,7 @@ class RiderReviewFixtureService {
     required bool online,
   }) async {
     final result = await _functions
-        .httpsCallable('setGooglePlayReviewPresence')
+        .riderCallable('setGooglePlayReviewPresence')
         .call(<String, dynamic>{
       'fixtureId': fixtureId,
       'presence': online ? 'online' : 'offline',

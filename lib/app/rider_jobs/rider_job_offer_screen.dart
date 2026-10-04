@@ -29,6 +29,7 @@ import 'rider_offer_stack.dart';
 class RiderJobOfferScreen extends StatefulWidget {
   static const routeName = '/rider/jobs/offers';
 
+  final String? initialDeliveryId;
   final FirebaseFirestore? firestore;
   final FirebaseAuth? auth;
   final RiderAcceptController? acceptController;
@@ -39,6 +40,7 @@ class RiderJobOfferScreen extends StatefulWidget {
 
   const RiderJobOfferScreen({
     super.key,
+    this.initialDeliveryId,
     this.firestore,
     this.auth,
     this.acceptController,
@@ -205,7 +207,12 @@ class _RiderJobOfferScreenState extends State<RiderJobOfferScreen> {
                                 );
                               }
 
-                              final offers = snapshot.data!;
+                              final offers = widget.initialDeliveryId == null
+                                  ? snapshot.data!
+                                  : snapshot.data!
+                                      .where((offer) =>
+                                          offer.id == widget.initialDeliveryId)
+                                      .toList();
 
                               if (_activeIndex >= offers.length &&
                                   offers.isNotEmpty) {

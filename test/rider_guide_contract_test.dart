@@ -127,10 +127,10 @@ void main() {
 
     test('Application Centre stores documents securely for Admin review', () {
       expect(
-          applicationCentre, contains("httpsCallable('submitRiderDocument')"));
+          applicationCentre, contains("riderCallable('submitRiderDocument')"));
       expect(applicationCentre, contains('base64Encode(bytes)'));
       expect(applicationCentre,
-          contains("httpsCallable('updateRiderApplicationSection')"));
+          contains("riderCallable('updateRiderApplicationSection')"));
       expect(applicationCentre, isNot(contains('publicDownloadUrl')));
     });
 

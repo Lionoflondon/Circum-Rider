@@ -85,9 +85,9 @@ void main() {
     expect(authBloc, contains("'profilePhotoUrl': downloadUrl"));
     expect(authBloc, contains(".collection('riders')"));
     expect(authBloc, contains(".collection('riderProfiles')"));
-    expect(homeBloc.indexOf('profileThumbnailUrl'),
-        lessThan(homeBloc.indexOf('profilePhotoUrl')));
-    expect(homeBloc, contains(r"'photoURL': '$riderPhoto'"));
+    expect(homeBloc, isNot(contains('sendRiderUpdate')));
+    expect(homeBloc, contains('Delivery updates are published by the authoritative backend transition.'));
+    expect(homeBloc, isNot(contains('MessagingServer(')));
   });
 
   test('Rider username is editable and persisted to backend profile documents',

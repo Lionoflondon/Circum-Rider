@@ -4,6 +4,7 @@ class WithdrawRequestModel {
   String amount;
   bool saveAccountDetails;
   String riderId;
+  final String? requestId;
 
   WithdrawRequestModel({
     required this.accountNumber,
@@ -11,6 +12,7 @@ class WithdrawRequestModel {
     required this.amount,
     required this.saveAccountDetails,
     required this.riderId,
+    this.requestId,
   });
 
   factory WithdrawRequestModel.fromJson(data) {
@@ -18,7 +20,8 @@ class WithdrawRequestModel {
       accountNumber: data['accountNumber'].toString(),
       bankName: data['bankName'].toString(),
       amount: data['amount'].toString(),
-      saveAccountDetails: data['saveAccountDetails'],
+      saveAccountDetails: data['saveAccountDetails'] == true,
+      requestId: data['id']?.toString() ?? data['requestId']?.toString(),
       riderId: data['riderId'].toString(),
     );
   }

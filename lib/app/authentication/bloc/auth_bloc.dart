@@ -1,3 +1,4 @@
+import 'package:circum_rider/app/rider_callable_api.dart';
 import '../../verification/rider_document_transport.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -55,7 +56,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
 
     Future<void> ensureRiderRothWallet(User user) async {
-      await functions.httpsCallable('ensureRiderRothWallet').call({
+      await functions.riderCallable('ensureRiderRothWallet').call({
         'riderId': user.uid,
         if (user.email != null) 'email': user.email,
       }).timeout(_authOperationTimeout);
@@ -86,7 +87,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (user == null) throw FirebaseAuthException(code: 'user-not-found');
       try {
         final access = await functions
-            .httpsCallable('verifyRiderAccountAccess')
+            .riderCallable('verifyRiderAccountAccess')
             .call({}).timeout(_authOperationTimeout);
         if (access.data is Map && access.data['profileExists'] == false) {
           await updateRiderProfileViaCloudRun(const {})
@@ -987,7 +988,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             'idempotencyKey': idempotencyKey,
           },
           call: (payload) async {
-            await functions.httpsCallable('submitRiderDocument').call(payload);
+            await functions.riderCallable('submitRiderDocument').call(payload);
           });
     }
 
@@ -1392,6 +1393,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             user = userCredential.user;
           }
 
+          if (user == null) {
+            throw FirebaseAuthException(code: 'user-not-found');
+          }
+          if (!user.emailVerified) {
+            await sendRiderVerificationEmailViaCloudRun(auth: auth)
+                .timeout(_authOperationTimeout);
+          }
           final fullName =
               '${state.firstName ?? ''} ${state.lastName ?? ''}'.trim();
           if (user != null && fullName.isNotEmpty) {
@@ -1404,13 +1412,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               ),
               initializeRothWallet: () => ensureRiderRothWallet(user!),
             );
-          }
-          if (user == null) {
-            throw FirebaseAuthException(code: 'user-not-found');
-          }
-          if (!user.emailVerified) {
-            await sendRiderVerificationEmailViaCloudRun(auth: auth)
-                .timeout(_authOperationTimeout);
           }
 
           emit(state.copyWith(

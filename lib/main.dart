@@ -19,6 +19,8 @@ import 'app/home/bloc/home_bloc.dart';
 import 'app/history/bloc/history_bloc.dart';
 import 'app/communication/rider_conversation_view.dart';
 import 'app/notifications/rider_notifications_view.dart';
+import 'app/notifications/rider_push_payload.dart';
+import 'app/notifications/rider_notification_entity_view.dart';
 import 'app/rider_jobs/rider_job_offer_screen.dart';
 import 'app/support/bloc/support_bloc.dart';
 import 'app/verification/bloc/verification_bloc.dart';
@@ -55,18 +57,35 @@ void main() {
 Future<void> _initializeRiderNative() async {
   const initializationSettings = InitializationSettings(
     android: AndroidInitializationSettings('@mipmap/launcher_icon'),
-    iOS: DarwinInitializationSettings(),
+    iOS: DarwinInitializationSettings(
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
+    ),
   );
-  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  await flutterLocalNotificationsPlugin.initialize(
+    initializationSettings,
+    onDidReceiveNotificationResponse: (response) {
+      try {
+        final data = jsonDecode(response.payload ?? '{}');
+        if (data is Map) {
+          _routeRiderNotification(
+              RemoteMessage(data: Map<String, dynamic>.from(data)));
+        }
+      } catch (_) {
+        _routeRiderNotification(const RemoteMessage());
+      }
+    },
+  );
   await _createRiderNotificationChannel();
   await Firebase.initializeApp();
   if (!await initializeRiderAppCheck()) {
     throw StateError('Rider security verification is not configured.');
   }
   await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-    alert: true,
+    alert: false,
     badge: true,
-    sound: true,
+    sound: false,
   );
   // var status = await Permission.appTrackingTransparency.status;
   // if (status.isDenied || status.isPermanentlyDenied) {
@@ -82,6 +101,20 @@ Future<void> _initializeRiderNative() async {
   foregoundMessage();
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   _configureRiderNotificationOpenRouting();
+  final localLaunch =
+      await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
+  if (localLaunch?.didNotificationLaunchApp == true) {
+    try {
+      final data =
+          jsonDecode(localLaunch?.notificationResponse?.payload ?? '{}');
+      if (data is Map) {
+        _routeRiderNotification(
+            RemoteMessage(data: Map<String, dynamic>.from(data)));
+      }
+    } catch (_) {
+      _routeRiderNotification(const RemoteMessage());
+    }
+  }
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -128,6 +161,8 @@ class RiderStartupApp extends StatefulWidget {
 class _RiderStartupAppState extends State<RiderStartupApp> {
   Object? _error;
   bool _ready = false;
+  bool _slow = false;
+  Future<void>? _pending;
 
   @override
   void initState() {
@@ -139,18 +174,28 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
   }
 
   Future<void> _start() async {
+    if (_pending != null) return;
     setState(() {
       _error = null;
       _ready = false;
+      _slow = false;
+    });
+    final pending = Future<void>.sync(widget.initializer);
+    _pending = pending;
+    final timer = Timer(widget.timeout, () {
+      if (mounted) setState(() => _slow = true);
     });
     try {
-      await widget.initializer().timeout(widget.timeout);
+      await pending;
       if (!mounted) return;
       setState(() => _ready = true);
       if (kIsWeb) signalRiderWebReady();
+      // Home requests notification permission after startup and sign-in.
     } catch (error) {
-      if (!mounted) return;
-      setState(() => _error = error);
+      if (mounted) setState(() => _error = error);
+    } finally {
+      timer.cancel();
+      if (identical(_pending, pending)) _pending = null;
     }
   }
 
@@ -165,7 +210,17 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
           body: Center(
             child: Semantics(
               label: 'Starting Rider',
-              child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(color: Color(0xFF3B82F6)),
+                  if (_slow)
+                    const Text(
+                      'Rider is taking longer to start. Please wait.',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                ],
+              ),
             ),
           ),
         ),

@@ -13,7 +13,7 @@ void main() {
         'lib/app/rider_jobs/rider_job_offer_screen.dart',
       ).readAsStringSync();
 
-      expect(controllerSource, contains("httpsCallable('acceptRideRequests')"));
+      expect(controllerSource, contains("invokeRiderDeliveryAuthorityViaCloudRun("));
       expect(
         controllerSource,
         isNot(contains('FirestoreRiderJobTransactionStore')),

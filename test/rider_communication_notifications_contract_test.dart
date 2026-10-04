@@ -23,9 +23,9 @@ void main() {
     final messaging = File('lib/messaging.dart').readAsStringSync();
 
     test('Rider sends messages through canonical communication callables', () {
-      expect(serviceSource, contains("httpsCallable('sendCircumMessage')"));
-      expect(serviceSource, contains("httpsCallable('setConversationTyping')"));
-      expect(serviceSource, contains("httpsCallable('markConversationRead')"));
+      expect(serviceSource, contains("_call('sendCircumMessage',"));
+      expect(serviceSource, contains("_call('setConversationTyping',"));
+      expect(serviceSource, contains("riderCallable('markConversationRead')"));
       expect(supportBloc, contains('communication.sendText'));
       expect(homeBloc, contains('_communicationService.sendText'));
       expect(
@@ -139,10 +139,10 @@ void main() {
 
     test('Notification Centre routes to Rider destinations', () {
       expect(notificationSource, contains('RiderConversationView'));
-      expect(notificationSource, contains("return 1"));
-      expect(notificationSource, contains("return 2"));
-      expect(notificationSource, contains("return 3"));
-      expect(notificationSource, contains("return 4"));
+      expect(notificationSource, contains('RiderNotificationTarget.fromDestination'));
+      expect(notificationSource, contains('RiderNotificationEntityView'));
+      expect(notificationSource, isNot(contains('onNavigateTab?.call')));
+      expect(notificationSource, contains('RiderConversationView'));
       expect(
           notificationSource, contains('This update is no longer available'));
     });
