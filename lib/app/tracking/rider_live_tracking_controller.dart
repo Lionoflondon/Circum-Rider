@@ -750,11 +750,13 @@ class RiderLiveTrackingController {
   }
 
   Future<void> _restoreQueue() async {
+    final generation = _generation;
+    final key = 'rider_tracking_pending_${_riderId}_$_deliveryId';
     await _storageWrites;
+    if (generation != _generation) return;
     try {
-      final key = 'rider_tracking_pending_${_riderId}_$_deliveryId';
       final encoded = await _storage.read(key: key);
-      if (encoded == null) return;
+      if (encoded == null || generation != _generation) return;
       final now = DateTime.now();
       for (final raw in (jsonDecode(encoded) as List)) {
         final data = Map<String, dynamic>.from(raw as Map);
