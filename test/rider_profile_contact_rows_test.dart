@@ -86,7 +86,10 @@ void main() {
     expect(authBloc, contains(".collection('riders')"));
     expect(authBloc, contains(".collection('riderProfiles')"));
     expect(homeBloc, isNot(contains('sendRiderUpdate')));
-    expect(homeBloc, contains('Delivery updates are published by the authoritative backend transition.'));
+    expect(
+        homeBloc,
+        contains(
+            'Delivery updates are published by the authoritative backend transition.'));
     expect(homeBloc, isNot(contains('MessagingServer(')));
   });
 

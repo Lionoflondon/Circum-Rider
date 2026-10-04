@@ -139,7 +139,8 @@ void main() {
 
     test('Notification Centre routes to Rider destinations', () {
       expect(notificationSource, contains('RiderConversationView'));
-      expect(notificationSource, contains('RiderNotificationTarget.fromDestination'));
+      expect(notificationSource,
+          contains('RiderNotificationTarget.fromDestination'));
       expect(notificationSource, contains('RiderNotificationEntityView'));
       expect(notificationSource, isNot(contains('onNavigateTab?.call')));
       expect(notificationSource, contains('RiderConversationView'));
