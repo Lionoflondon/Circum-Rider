@@ -87,5 +87,24 @@
         "destination": "/index.html"
       }
     ]
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "circum-2797c",
+          "appId": "1:516426305461:android:71c13843740cb0eae813fc",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "circum-2797c",
+          "appId": "1:516426305461:ios:deacc66a1db90dede813fc",
+          "uploadDebugSymbols": true,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      }
+    }
   }
 }

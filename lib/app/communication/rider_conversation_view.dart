@@ -12,11 +12,13 @@ class RiderConversationView extends StatefulWidget {
     required this.title,
     this.subtitle,
     this.service,
+    this.initialDraft,
   });
 
   final String chatId;
   final String title;
   final String? subtitle;
+  final String? initialDraft;
   final RiderCommunicationService? service;
 
   @override
@@ -43,6 +45,7 @@ class _RiderConversationViewState extends State<RiderConversationView> {
     _typing = RiderTypingController(chatId: widget.chatId, service: _service);
     _conversation =
         _service.watchConversation(widget.chatId, limit: _messageLimit);
+    _input.text = widget.initialDraft ?? '';
     _restoreDraft();
   }
 

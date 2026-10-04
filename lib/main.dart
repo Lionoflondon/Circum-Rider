@@ -1,5 +1,8 @@
 import 'dart:convert';
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'app/notifications/rider_pending_open.dart';
 
 import 'package:circum_rider/app/account/bloc/account_bloc.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -12,7 +15,10 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 import 'app.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'app/rider_callable_api.dart';
 import 'app/security/circum_rider_app_check.dart';
+import 'app/security/rider_error_reporting.dart';
 import 'app/authentication/bloc/auth_bloc.dart';
 import 'app/bottom_nav/bloc/navbar_bloc.dart';
 import 'app/home/bloc/home_bloc.dart';
@@ -79,6 +85,11 @@ Future<void> _initializeRiderNative() async {
   );
   await _createRiderNotificationChannel();
   await Firebase.initializeApp();
+  try {
+    await initializeRiderErrorReporting();
+  } catch (_) {
+    // Diagnostics must never block authentication or startup.
+  }
   if (!await initializeRiderAppCheck()) {
     throw StateError('Rider security verification is not configured.');
   }
@@ -100,7 +111,7 @@ Future<void> _initializeRiderNative() async {
 
   foregoundMessage();
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-  _configureRiderNotificationOpenRouting();
+  await _configureRiderNotificationOpenRouting();
   final localLaunch =
       await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
   if (localLaunch?.didNotificationLaunchApp == true) {
