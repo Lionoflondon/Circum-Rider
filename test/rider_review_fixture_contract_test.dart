@@ -103,7 +103,7 @@ void main() {
     expect(earnings, contains("title: 'Transactions'"));
     expect(
       earnings.indexOf('if (widget.isolatedZeroData) return;'),
-      lessThan(earnings.indexOf("httpsCallable('getRiderEarningsSummary')")),
+      lessThan(earnings.indexOf("riderCallable('getRiderEarningsSummary')")),
     );
   });
 }

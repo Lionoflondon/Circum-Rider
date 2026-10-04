@@ -6,5 +6,10 @@ abstract class HistoryEvent {
 
 class FetchHistory extends HistoryEvent {
   bool descending;
-  FetchHistory({required this.descending});
+  final bool loadMore;
+  FetchHistory({required this.descending, this.loadMore = false});
+}
+
+class _ResetHistory extends HistoryEvent {
+  const _ResetHistory();
 }

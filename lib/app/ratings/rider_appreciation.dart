@@ -1,3 +1,4 @@
+import 'package:circum_rider/app/rider_callable_api.dart';
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -49,7 +50,7 @@ class _RiderAppreciationListenerState extends State<RiderAppreciationListener> {
       while (hasMore && mounted) {
         final result = await FirebaseFunctions.instanceFor(
                 region: 'us-central1')
-            .httpsCallable('repairRiderRatingFeedback')
+            .riderCallable('repairRiderRatingFeedback')
             .call({'cursors': cursors}).timeout(const Duration(seconds: 20));
         final data = Map<String, dynamic>.from(result.data as Map);
         cursors = Map<String, dynamic>.from(data['cursors'] as Map);
@@ -716,7 +717,7 @@ Future<void> reportRiderFeedback(BuildContext context, String ratingId) async {
   if (reason == null || !context.mounted) return;
   try {
     await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('reportRating')
+        .riderCallable('reportRating')
         .call({'ratingId': ratingId, 'reason': reason}).timeout(
             const Duration(seconds: 20));
     if (context.mounted) {

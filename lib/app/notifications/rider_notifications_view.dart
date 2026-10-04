@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../communication/rider_communication_service.dart';
 import '../communication/rider_conversation_view.dart';
+import 'rider_notification_entity_view.dart';
 import '../rider_design/rider_ui.dart';
 
 const riderNotificationFilters = [
@@ -32,12 +33,15 @@ class RiderNotificationsView extends StatefulWidget {
 class _RiderNotificationsViewState extends State<RiderNotificationsView> {
   late final RiderCommunicationService _service;
   var _filter = 'All';
+  int _notificationLimit = 100;
   String? _message;
+  late Stream<List<RiderNotificationRecord>> _notifications;
 
   @override
   void initState() {
     super.initState();
     _service = widget.service ?? RiderCommunicationService();
+    _notifications = _service.watchNotifications(limit: _notificationLimit);
   }
 
   @override
@@ -46,7 +50,7 @@ class _RiderNotificationsViewState extends State<RiderNotificationsView> {
       backgroundColor: RiderPalette.background,
       body: SafeArea(
         child: StreamBuilder<List<RiderNotificationRecord>>(
-          stream: _service.watchNotifications(),
+          stream: _notifications,
           builder: (context, snapshot) {
             final records = snapshot.data ?? const <RiderNotificationRecord>[];
             final unread = records.where((record) => !record.read).toList();
@@ -98,6 +102,13 @@ class _RiderNotificationsViewState extends State<RiderNotificationsView> {
                     },
                   ),
                 ),
+                TextButton(
+                    onPressed: () => setState(() {
+                          _notificationLimit += 100;
+                          _notifications = _service.watchNotifications(
+                              limit: _notificationLimit);
+                        }),
+                    child: const Text('Load older notifications')),
                 if (_message != null)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(18, 4, 18, 0),
@@ -206,31 +217,17 @@ class _RiderNotificationsViewState extends State<RiderNotificationsView> {
       );
       return;
     }
-    final tab = _tabFor(record);
-    if (tab != null && widget.onNavigateTab != null) {
-      widget.onNavigateTab!(tab);
-      Navigator.maybePop(context);
+    final target = RiderNotificationTarget.fromDestination(destination,
+        category: record.category);
+    if (target != null) {
+      Navigator.push(
+          context,
+          MaterialPageRoute(
+              builder: (_) => RiderNotificationEntityView(target: target)));
       return;
     }
-    setState(() {
-      _message = 'This update is no longer available. Showing notifications.';
-    });
-  }
-
-  int? _tabFor(RiderNotificationRecord record) {
-    final route = '${record.destination['route'] ?? ''}'.toLowerCase();
-    final category = record.category;
-    if (route == 'conversation') return null;
-    if (route == 'tracking' ||
-        route == 'delivery' ||
-        category == 'deliveries') {
-      return 1;
-    }
-    if (route == 'jobs' || category == 'jobs') return 1;
-    if (route == 'schedule' || category == 'schedule') return 2;
-    if (route == 'wallet' || category == 'earnings') return 3;
-    if (route == 'account' || category == 'account') return 4;
-    return null;
+    setState(() => _message =
+        'This update is no longer available. Showing notifications.');
   }
 
   Future<void> _guard(Future<void> Function() action) async {

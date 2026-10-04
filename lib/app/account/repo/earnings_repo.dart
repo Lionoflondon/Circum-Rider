@@ -1,3 +1,4 @@
+import 'package:circum_rider/app/rider_callable_api.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 import '../models/earnings.m.dart';
@@ -9,7 +10,7 @@ class EarningsRepo {
     try {
       final response =
           await FirebaseFunctions.instanceFor(region: 'us-central1')
-              .httpsCallable('getRiderEarningsSummary')
+              .riderCallable('getRiderEarningsSummary')
               .call(const <String, dynamic>{});
       final summary = Map<String, dynamic>.from(response.data as Map);
       final totals = Map<String, dynamic>.from(

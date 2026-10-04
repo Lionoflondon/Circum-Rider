@@ -1,21 +1,23 @@
 // lib/services/notification_service.dart
-import 'dart:ui';
+import 'dart:convert';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../main.dart';
-import '../utils/theme/theme.dart';
 
 class NotificationService {
   Future<void> showNotification({
     required String title,
     required String body,
+    Map<String, dynamic> data = const {},
   }) async {
-    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+    final isJob = data['type'] == 'broadcast-request';
+    final AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
-      'rider_job_offers',
-      'New delivery offers',
-      channelDescription: 'New delivery offers available for you.',
+      isJob ? 'rider_job_offers' : 'notifications_updates',
+      isJob ? 'New delivery offers' : 'Delivery updates',
+      channelDescription: isJob
+          ? 'New delivery offers available for you.'
+          : 'Delivery, message and account updates.',
       importance: Importance.max,
       priority: Priority.high,
       showWhen: true,
@@ -37,10 +39,13 @@ class NotificationService {
     //     _createStageIndicators(currentStage, totalStages);
 
     await flutterLocalNotificationsPlugin.show(
-      0,
+      '${data["notificationId"] ?? data["deliveryId"] ?? data["requestId"] ?? title}'
+              .hashCode &
+          0x7fffffff,
       title,
       body,
       platformChannelSpecifics,
+      payload: jsonEncode(data),
     );
   }
 }

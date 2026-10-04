@@ -34,12 +34,15 @@ class _RiderConversationViewState extends State<RiderConversationView> {
   var _readMarked = false;
   String? _error;
 
+  int _messageLimit = 80;
+
   @override
   void initState() {
     super.initState();
     _service = widget.service ?? RiderCommunicationService();
     _typing = RiderTypingController(chatId: widget.chatId, service: _service);
-    _conversation = _service.watchConversation(widget.chatId);
+    _conversation =
+        _service.watchConversation(widget.chatId, limit: _messageLimit);
     _restoreDraft();
   }
 
@@ -109,7 +112,8 @@ class _RiderConversationViewState extends State<RiderConversationView> {
 
   void _retryConversation() {
     setState(() {
-      _conversation = _service.watchConversation(widget.chatId);
+      _conversation =
+          _service.watchConversation(widget.chatId, limit: _messageLimit);
       _readMarked = false;
     });
   }
@@ -159,6 +163,17 @@ class _RiderConversationViewState extends State<RiderConversationView> {
                       .addPostFrameCallback((_) => _scrollToEnd());
                   return Column(
                     children: [
+                      if (conversation.messages.length >= _messageLimit)
+                        TextButton(
+                            onPressed: () {
+                              setState(() {
+                                _messageLimit += 80;
+                                _conversation = _service.watchConversation(
+                                    widget.chatId,
+                                    limit: _messageLimit);
+                              });
+                            },
+                            child: const Text('Load earlier messages')),
                       Expanded(
                         child: conversation.messages.isEmpty
                             ? const Padding(

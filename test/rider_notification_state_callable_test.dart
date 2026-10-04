@@ -54,7 +54,15 @@ void main() {
   setUp(() {
     functions = _Functions();
     service = RiderCommunicationService(
-        firestore: _NoFirestore(), functions: functions, auth: _NoAuth());
+        firestore: _NoFirestore(),
+        functions: functions,
+        auth: _NoAuth(),
+        callable: (name, data) async {
+          expect(name, 'updateRiderNotificationState');
+          if (functions.fail) throw StateError('offline');
+          functions.payloads.add(data);
+          return {'ok': true};
+        });
   });
   test('read archive and delete use only the safe backend callable', () async {
     await service.markNotificationRead('one');

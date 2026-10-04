@@ -1,3 +1,4 @@
+import 'package:circum_rider/app/rider_callable_api.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -42,7 +43,7 @@ class _RiderPersonalDetailsViewState extends State<RiderPersonalDetailsView> {
   Future<void> _ensurePublicRiderId() async {
     try {
       await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('ensurePublicRiderId')
+          .riderCallable('ensurePublicRiderId')
           .call()
           .timeout(const Duration(seconds: 20));
     } catch (_) {

@@ -227,15 +227,10 @@ class CallableRiderJobTransactionStore implements RiderJobTransactionStore {
     required RiderProfileSnapshot rider,
   }) async {
     try {
-      final data = isQaPublicDeliveryId(jobId)
-          ? await invokeRiderDeliveryAuthorityViaCloudRun(
-              'acceptRideRequests',
-              {'requestId': jobId},
-            ).timeout(_acceptTimeout)
-          : Map<String, dynamic>.from((await functions
-                  .httpsCallable('acceptRideRequests')
-                  .call({'requestId': jobId}).timeout(_acceptTimeout))
-              .data as Map);
+      final data = await invokeRiderDeliveryAuthorityViaCloudRun(
+        'acceptRideRequests',
+        {'requestId': jobId},
+      ).timeout(_acceptTimeout);
       return RiderAcceptResult(
         status: RiderAcceptStatus.accepted,
         message: 'Delivery accepted.',

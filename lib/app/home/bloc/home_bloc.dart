@@ -19,10 +19,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../helper/bitmap_descriptor_helper.dart';
 import '../../../helper/formatted_string_after_seconds.dart';
-import '../../../helper/messaging_server.dart';
 import '../../../utils/theme/theme.dart';
 import '../../communication/rider_communication_service.dart';
 import '../../rider_delivery_authority_api.dart';
+import '../../rider_callable_api.dart';
 import '../models/dispatch_request.m..dart';
 import '../models/message.m.dart';
 import '../models/place_coordinates.m.dart';
@@ -51,7 +51,9 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   bool _presenceHeartbeatInFlight = false;
   int _availabilityOperation = 0;
   int _presenceReconnectAttempt = 0;
-  bool _pushTokenRefreshBound = false;
+  StreamSubscription<String>? _pushTokenRefreshSubscription;
+  bool _registeringPushToken = false;
+  bool _pushRegistrationPending = false;
 
   bool get _isLogicallyOnline {
     if (state.riderIntentOnline) return true;
@@ -138,6 +140,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.resumed:
+        if (!isClosed) add(CheckForPushToken());
         if (_isLogicallyOnline) {
           _startPresenceHeartbeat();
           _schedulePresenceReconnect(immediate: true);
@@ -155,55 +158,59 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   }
 
   void _handleCheckForPushToken(CheckForPushToken event, Emitter emit) async {
-    final User? user = auth.currentUser;
-    var internalAccess = false;
-    if (user != null) {
-      try {
-        internalAccess = (await user.getIdTokenResult().timeout(
-                      const Duration(seconds: 15),
-                    ))
-                .claims?['founderRider'] ==
-            true;
-      } catch (_) {
-        internalAccess = false;
+    if (_registeringPushToken) {
+      _pushRegistrationPending = true;
+      return;
+    }
+    final user = auth.currentUser;
+    if (user == null) return;
+    _registeringPushToken = true;
+    try {
+      final profile = await db.collection('riders').doc(user.uid).get();
+      final internalAccess =
+          (await user.getIdTokenResult()).claims?['founderRider'] == true;
+      if (auth.currentUser?.uid != user.uid || isClosed) return;
+      if (profile.exists) {
+        final remaining = _remainingVerificationItems(profile.data());
+        emit(state.copyWith(
+            canGoOnline: internalAccess || remaining.isEmpty,
+            verificationChecklist: remaining));
       }
-    }
-    if (!kIsWeb && (Platform.isIOS || Platform.isAndroid)) {
-      await firebaseMessaging.requestPermission();
-    }
-    if (!kIsWeb && Platform.isIOS) {
-      await firebaseMessaging.getAPNSToken();
-    }
-    if (!_pushTokenRefreshBound) {
-      _pushTokenRefreshBound = true;
-      firebaseMessaging.onTokenRefresh.listen((_) => add(CheckForPushToken()));
-    }
-    final fcmToken = await firebaseMessaging.getToken();
-    if (fcmToken != null) {
-      try {
-        final documentReference = db.collection('riders').doc(user?.uid);
-
-        // Get the document snapshot
-        final documentSnapshot = await documentReference.get();
-        if (documentSnapshot.exists) {
-          final remaining = _remainingVerificationItems(
-            documentSnapshot.data(),
-          );
-          emit(
-            state.copyWith(
-              canGoOnline: internalAccess || remaining.isEmpty,
-              verificationChecklist: remaining,
-            ),
-          );
-          await db
-              .collection("riders")
-              .doc(user?.uid)
-              .update({'fcmToken': fcmToken, 'updatedAt': DateTime.now()}).then(
-                  (value) {},
-                  onError: (e) {});
+      _pushTokenRefreshSubscription ??= firebaseMessaging.onTokenRefresh.listen(
+        (_) {
+          if (!isClosed) add(CheckForPushToken());
+        },
+      );
+      if (!kIsWeb && (Platform.isIOS || Platform.isAndroid)) {
+        final permission = await firebaseMessaging.requestPermission();
+        if (permission.authorizationStatus == AuthorizationStatus.denied) {
+          throw StateError('Notifications permission is denied.');
         }
-      } catch (_) {
-        // Push token updates should not block the Rider home state.
+      }
+      if (!kIsWeb &&
+          Platform.isIOS &&
+          await firebaseMessaging.getAPNSToken() == null) {
+        throw StateError('Apple push registration is not ready. Please retry.');
+      }
+      final token = await firebaseMessaging.getToken();
+      if (token == null || token.isEmpty) {
+        throw StateError('Push registration is not ready. Please retry.');
+      }
+      if (auth.currentUser?.uid != user.uid || isClosed) return;
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .riderCallable('updateRiderPushToken')
+          .call({'fcmToken': token});
+    } catch (_) {
+      if (!isClosed && auth.currentUser?.uid == user.uid) {
+        emit(state.copyWith(
+            message:
+                'Job notifications could not be enabled. Enable notifications in Settings and retry.'));
+      }
+    } finally {
+      _registeringPushToken = false;
+      if (_pushRegistrationPending && !isClosed) {
+        _pushRegistrationPending = false;
+        add(CheckForPushToken());
       }
     }
   }
@@ -525,41 +532,20 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
 
       final formattedDeliveryTime = formattedTimeAfterSeconds(totalTime);
       final riderPhone = riderData?['phone'] ?? user.phoneNumber ?? '';
-      final riderPhoto =
-          '${riderData?['profileThumbnailUrl'] ?? riderData?['profilePhotoUrl'] ?? riderData?['photoURL'] ?? riderData?['photoUrl'] ?? user.photoURL ?? ''}';
 
       // final userData = await firebaseMessaging
       //     .subscribeToTopic('your_topic_name')
       //         'Successfully subscribed to your_topic_name')); // Replace with your topic name
-      await MessagingServer().sendMessage(
-        data: {
-          'type': 'connection',
-          'status': 'accepted',
-          'data': '''{
-                'courierName': '${user.displayName}',
-                'photoURL': '$riderPhoto',
-                'rating': '${riderData?['rating'] ?? '0'}',
-                'plateNumber': '${riderData!['plateNumber']}',
-                'typeOfVehicle': '${riderData['typeOfVehicle']}',
-                'estimatedDeliveryTime': '$formattedDeliveryTime',
-                'phoneNumber': '$riderPhone',
-                'riderId': '${user.uid}',
-                'code': '${riderData['fcmToken']}'
-              }''',
-        },
-        code: event.code,
-        message:
-            '${user.displayName?.split(' ').first.trim() ?? 'Your Rider'} will be picking up your parcel soon.',
-      );
+      // Delivery updates are published by the authoritative backend transition.
 
       await prefs.setString('courierName', '${user.displayName}');
-      await prefs.setString('rating', '${riderData['rating']}');
-      await prefs.setString('plateNumber', '${riderData['plateNumber']}');
-      await prefs.setString('typeOfVehicle', '${riderData['typeOfVehicle']}');
+      await prefs.setString('rating', '${riderData?['rating']}');
+      await prefs.setString('plateNumber', '${riderData?['plateNumber']}');
+      await prefs.setString('typeOfVehicle', '${riderData?['typeOfVehicle']}');
       await prefs.setString('estimatedDeliveryTime', formattedDeliveryTime);
       await prefs.setString('phoneNumber', '$riderPhone');
       await prefs.setString('riderId', user.uid);
-      await prefs.setString('code', '${riderData['fcmToken']}');
+      await prefs.setString('code', '${riderData?['fcmToken']}');
       await prefs.setString('userCode', event.code);
 
       // Verify that the ride was assigned to this rider
@@ -760,7 +746,6 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
       final SharedPreferences prefs = await SharedPreferences.getInstance();
       final double? riderLng = prefs.getDouble('longitude');
       final double? riderLat = prefs.getDouble('latitude');
-      final String? riderId = prefs.getString('riderId');
       emit(state.copyWith(broadcastStatus: BroadcastStatus.broadcasting));
       if (state.activeRequest != null &&
           (state.rideStatus == RideStatus.userConfirmedRide ||
@@ -785,43 +770,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
 
         emit(state.copyWith(markers: markers));
 
-        // final SharedPreferences prefs = await SharedPreferences.getInstance();
-        final courierName = prefs.getString('courierName');
-        Map<String, dynamic>? riderSnapshotData;
-        try {
-          riderSnapshotData =
-              (await db.collection('riders').doc(riderId).get()).data();
-        } catch (_) {
-          // Rider photo fallback uses the authenticated user profile.
-        }
-        final riderPhoto =
-            '${riderSnapshotData?['profileThumbnailUrl'] ?? riderSnapshotData?['profilePhotoUrl'] ?? riderSnapshotData?['photoURL'] ?? riderSnapshotData?['photoUrl'] ?? auth.currentUser?.photoURL ?? ''}';
-        final rating = prefs.getString('rating');
-        final plateNumber = prefs.getString('plateNumber');
-        final typeOfVehicle = prefs.getString('typeOfVehicle');
-        final estimatedDeliveryTime = prefs.getString('estimatedDeliveryTime');
-        final phoneNumber = prefs.getString('phoneNumber');
-        final code = prefs.getString('code');
-        await MessagingServer().sendMessage(
-          data: {
-            'type': 'location-broadcast',
-            'data': '''{
-                'riderId': '$riderId',
-                'latitude': '$riderLat',
-                'longitude': '$riderLng',
-                'courierName': '$courierName',
-                'photoURL': '$riderPhoto',
-                'rating': '$rating',
-                'plateNumber': '$plateNumber',
-                'typeOfVehicle': '$typeOfVehicle',
-                'estimatedDeliveryTime': '$estimatedDeliveryTime',
-                'phoneNumber': '$phoneNumber',
-                'code': '$code'
-              }''',
-          },
-          code: state.activeRequest!.code,
-          message: "Broadcasting rider's location",
-        );
+        // Delivery updates are published by the authoritative backend transition.
         await Future.delayed(const Duration(seconds: 5));
         emit(state.copyWith(broadcastStatus: BroadcastStatus.initialized));
       }
@@ -1197,6 +1146,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _stopPresenceHeartbeat();
     _stopPresenceReconnect();
+    _pushTokenRefreshSubscription?.cancel();
     return super.close();
   }
 

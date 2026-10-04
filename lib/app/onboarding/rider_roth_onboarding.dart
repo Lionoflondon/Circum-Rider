@@ -1,3 +1,4 @@
+import 'package:circum_rider/app/rider_callable_api.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 class RiderRothOnboardingResult {
@@ -27,7 +28,7 @@ class RiderRothOnboarding {
     required String riderId,
     String? email,
   }) async {
-    final result = await _backend.httpsCallable('ensureRiderRothWallet').call({
+    final result = await _backend.riderCallable('ensureRiderRothWallet').call({
       'riderId': riderId,
       if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
     });

@@ -17,10 +17,11 @@ class HistoryView extends StatefulWidget {
 }
 
 class HistoryViewState extends State<HistoryView> {
+  bool _descending = true;
   @override
   void initState() {
     super.initState();
-    context.read<HistoryBloc>().add(FetchHistory(descending: true));
+    context.read<HistoryBloc>().add(FetchHistory(descending: _descending));
   }
 
   @override
@@ -86,6 +87,7 @@ class HistoryViewState extends State<HistoryView> {
                 .map((e) => DropdownMenuItem(value: e, child: AppText.text(e)))
                 .toList(),
             onChanged: (data) {
+              _descending = data == 'Descending';
               context.read<HistoryBloc>().add(FetchHistory(
                   descending: data == 'Descending' ? true : false));
             }));
@@ -93,6 +95,20 @@ class HistoryViewState extends State<HistoryView> {
 
   Widget history() {
     return BlocBuilder<HistoryBloc, HistoryState>(builder: (context, state) {
+      if (state.error != null)
+        return Expanded(
+            child: Center(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(state.error!, style: const TextStyle(color: Colors.white)),
+          TextButton(
+              onPressed: () => context
+                  .read<HistoryBloc>()
+                  .add(FetchHistory(descending: _descending)),
+              child: const Text('Retry'))
+        ])));
+      if (state.loading && state.ridesHistory.isEmpty)
+        return const Expanded(
+            child: Center(child: CircularProgressIndicator()));
       if (state.ridesHistory.isEmpty) {
         return Expanded(
             child: Column(
@@ -119,6 +135,16 @@ class HistoryViewState extends State<HistoryView> {
                   shrinkWrap: true,
                   // physics: const NeverScrollableScrollPhysics(),
                   itemBuilder: (contxt, index) {
+                    if (index == state.ridesHistory.length)
+                      return TextButton(
+                          onPressed: state.loading
+                              ? null
+                              : () => context.read<HistoryBloc>().add(
+                                  FetchHistory(
+                                      descending: _descending, loadMore: true)),
+                          child: Text(state.loading
+                              ? 'Loading…'
+                              : 'Load older deliveries'));
                     return RiderGlassCard(
                         padding: const EdgeInsets.all(16),
                         onTap: () {
@@ -168,7 +194,8 @@ class HistoryViewState extends State<HistoryView> {
                         ));
                   },
                   separatorBuilder: (_, i) => const SizedBox(height: 10),
-                  itemCount: state.ridesHistory.length)));
+                  itemCount:
+                      state.ridesHistory.length + (state.hasMore ? 1 : 0))));
     });
   }
 }

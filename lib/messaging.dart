@@ -1,5 +1,8 @@
 part of './main.dart';
 
+String? _lastOpenedNotification;
+DateTime? _lastOpenedAt;
+
 const _riderOfferPushType = 'broadcast-request';
 const _riderJobChannelId = 'rider_job_offers';
 
@@ -54,14 +57,31 @@ String _notificationChatId(RemoteMessage message) {
 }
 
 Future<void> _routeRiderNotification(RemoteMessage message) async {
-  // The offer feed remains backend-authoritative. A push only opens the feed.
-  final navigator = NavKey.navKey.currentState;
+  // Resolve the exact offer through the backend-authoritative offer feed.
+  var navigator = NavKey.navKey.currentState;
+  for (var attempt = 0; navigator == null && attempt < 100; attempt++) {
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    navigator = NavKey.navKey.currentState;
+  }
   if (navigator == null) return;
+  final notificationId =
+      '${message.data['notificationId'] ?? message.messageId ?? ''}';
+  final now = DateTime.now();
+  if (notificationId.isNotEmpty &&
+      notificationId == _lastOpenedNotification &&
+      _lastOpenedAt != null &&
+      now.difference(_lastOpenedAt!) < const Duration(seconds: 2)) return;
+  _lastOpenedNotification = notificationId;
+  _lastOpenedAt = now;
   if (_isOfferMessage(message)) {
-    navigator.pushNamedAndRemoveUntil(
-      RiderJobOfferScreen.routeName,
-      (route) => route.isFirst,
-    );
+    final id = riderOfferId(message.data);
+    if (id == null) {
+      navigator.push(
+          MaterialPageRoute(builder: (_) => const RiderNotificationsView()));
+    } else {
+      navigator.push(MaterialPageRoute(
+          builder: (_) => RiderJobOfferScreen(initialDeliveryId: id)));
+    }
     return;
   }
   final route = '${message.data['route'] ?? ''}'.toLowerCase();
@@ -77,6 +97,13 @@ Future<void> _routeRiderNotification(RemoteMessage message) async {
         ),
       ),
     );
+    return;
+  }
+  final target = RiderNotificationTarget.fromDestination(
+      Map<String, dynamic>.from(message.data));
+  if (target != null) {
+    navigator.push(MaterialPageRoute(
+        builder: (_) => RiderNotificationEntityView(target: target)));
     return;
   }
   navigator.push(
@@ -109,6 +136,7 @@ void foregoundMessage() {
       notifyUser(
         body: message.notification?.body ?? 'You have a new message.',
         title: message.notification?.title ?? 'New message',
+        data: message.data,
       );
       return;
     }
@@ -124,6 +152,7 @@ void foregoundMessage() {
       notifyUser(
         body: 'You have a new delivery request waiting!',
         title: 'Circum',
+        data: message.data,
       );
       return;
     }
@@ -131,6 +160,7 @@ void foregoundMessage() {
       notifyUser(
         body: message.notification?.body ?? 'You have a new Circum update.',
         title: message.notification?.title ?? 'Circum Rider',
+        data: message.data,
       );
     }
   });
@@ -145,6 +175,9 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   return;
 }
 
-void notifyUser({required String title, required String body}) {
-  _notificationService.showNotification(title: title, body: body);
+void notifyUser(
+    {required String title,
+    required String body,
+    Map<String, dynamic> data = const {}}) {
+  _notificationService.showNotification(title: title, body: body, data: data);
 }

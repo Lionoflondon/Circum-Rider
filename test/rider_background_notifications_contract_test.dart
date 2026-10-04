@@ -20,7 +20,7 @@ void main() {
     final source = read('lib/messaging.dart');
     expect(source, contains('FirebaseMessaging.onMessageOpenedApp'));
     expect(source, contains('getInitialMessage()'));
-    expect(source, contains('RiderJobOfferScreen.routeName'));
+    expect(source, contains('RiderJobOfferScreen(initialDeliveryId: id)'));
     expect(source, contains("_riderOfferPushType = 'broadcast-request'"));
   });
 

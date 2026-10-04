@@ -20,7 +20,7 @@ void main() {
         upload,
         contains(
             "allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf']"));
-    expect(auth, contains("httpsCallable('submitRiderDocument')"));
+    expect(auth, contains("riderCallable('submitRiderDocument')"));
     expect(auth, contains('timeout: _documentUploadOperationTimeout'));
     expect(applicationCentre, contains('FilePicker.platform.pickFiles'));
     expect(applicationCentre, contains("'Upload Document'"));

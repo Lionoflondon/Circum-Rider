@@ -142,8 +142,7 @@ void main() {
       expect(dashboard, isNot(contains('_initials(rawName)')));
       expect(profile.indexOf('profilePhotoUrl'),
           lessThan(profile.indexOf('photoURL')));
-      expect(homeBloc.indexOf('profileThumbnailUrl'),
-          lessThan(homeBloc.indexOf('photoURL')));
+      expect(homeBloc, isNot(contains('MessagingServer')));
     });
 
     test('jobs expose Taken state and scheduled handoff', () {
@@ -172,8 +171,8 @@ void main() {
       expect(schedule, contains('RiderGlassSurface'));
       expect(earnings, contains('getRiderEarningsSummary'));
       expect(earnings, contains("collection('riderEarnings')"));
-      expect(earnings, contains("collection('payoutRequests')"));
-      expect(earnings, contains("collection('riderWalletTransactions')"));
+      expect(earnings, contains("watchRiderLedger('payoutRequests'"));
+      expect(earnings, contains("watchRiderLedger('riderWalletTransactions'"));
       expect(accountBloc, contains('requestRiderWithdrawal'));
       expect(earnings, contains('Roth remains separate'));
       expect(earnings, isNot(contains('CASH EARNINGS')));
@@ -360,7 +359,7 @@ void main() {
       expect(profile, contains('RiderLegalView'));
       expect(profile, contains('showModalBottomSheet'));
       expect(profile, contains('SignOut()'));
-      expect(profile, contains("httpsCallable('closeCircumAccount')"));
+      expect(profile, contains("riderCallable('closeCircumAccount')"));
     });
 
     test('profile keeps Stripe payouts and Roth wallet separate', () {
