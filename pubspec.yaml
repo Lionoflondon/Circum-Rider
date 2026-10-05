@@ -182,3 +182,8 @@ flutter_native_splash:
     image: assets/images/splash_image.png
     icon_background_color_dark: "#131313"
     image_dark: assets/images/splash_image.png
+
+# Temporary Android SafetyNet removal; see third_party/firebase_app_check/CIRCUM_PATCH.md.
+dependency_overrides:
+  firebase_app_check:
+    path: third_party/firebase_app_check

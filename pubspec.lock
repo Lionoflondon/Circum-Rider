@@ -340,10 +340,9 @@ packages:
   firebase_app_check:
     dependency: "direct main"
     description:
-      name: firebase_app_check
-      sha256: d608b74fb8d7da053fc3f21b63071a1ce7537eb65a6f0df96ad7ee48c65065d2
-      url: "https://pub.dev"
-    source: hosted
+      path: "third_party/firebase_app_check"
+      relative: true
+    source: path
     version: "0.3.2"
   firebase_app_check_platform_interface:
     dependency: transitive

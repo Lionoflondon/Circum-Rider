@@ -1,3 +1,4 @@
+import 'rider_demand_areas.dart';
 // ignore_for_file: deprecated_member_use, prefer_const_constructors, curly_braces_in_flow_control_structures
 
 import 'dart:async';
@@ -426,6 +427,7 @@ class _OfferExperience extends StatelessWidget {
               child: Column(
                 children: [
                   _OfferHeader(count: offers.length, activeIndex: safeIndex),
+                  if (!accepted) RiderDemandAreas(offers: offers),
                   const Spacer(),
                   if (statusMessage != null) ...[
                     _InlineStatus(message: statusMessage!),

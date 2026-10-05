@@ -47,6 +47,21 @@ void main() {
         isEmpty);
   });
 
+  test('malformed rows do not hide other valid available offers', () async {
+    final data = response();
+    final rows = List<dynamic>.from(data['nearestRequests'] as List);
+    data['nearestRequests'] = rows;
+    final row = Map<String, dynamic>.from(rows.single as Map);
+    rows.addAll([
+      {...row, 'deliveryId': null},
+      {...row, 'deliveryId': ' '},
+      {...row, 'offerExpiresAt': double.infinity},
+    ]);
+    expect(
+        await RiderOfferFeed(load: () async => data).refresh(riderId: 'rider'),
+        hasLength(1));
+  });
+
   test('failed authorization refresh first clears any offer list', () async {
     final feed = RiderOfferFeed(load: () async => throw StateError('offline'));
     expect(await feed.watch(riderId: 'rider').first, isEmpty);
