@@ -83,9 +83,9 @@ jobs:
             --tag rider-release \
             --update-env-vars "CIRCUM_SOURCE_SHA=${{ env.RIDER_RELEASE_SHA }}" \
             --labels "circum-source-sha=${{ env.RIDER_RELEASE_SHA }},circum-surface=rider-web"
-          REVISION="$(gcloud run services describe circum-rider-web --project circum-2797c --region us-central1 --format='value(status.latestCreatedRevisionName)')"
-          test -n "$REVISION"
           gcloud run services describe circum-rider-web --project circum-2797c --region us-central1 --format=json > /tmp/rider-release-service.json
+          REVISION="$(jq -r '.status.traffic[] | select(.tag == "rider-release") | .revisionName' /tmp/rider-release-service.json)"
+          test -n "$REVISION"
           CANARY_URL="$(jq -r '.status.traffic[] | select(.tag == "rider-release") | .url' /tmp/rider-release-service.json)"
           test -n "$CANARY_URL"
           curl --fail --silent --show-error --retry 3 "$CANARY_URL/deployment-manifest.json" > /tmp/rider-canary-manifest.json
