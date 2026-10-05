@@ -18,6 +18,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.release_ref }}
+      - name: Capture checked-out release identity
+        run: echo "RIDER_RELEASE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -42,7 +44,7 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
       - name: Build and push Rider Web image
         env:
-          IMAGE: us-central1-docker.pkg.dev/circum-2797c/cloud-run-source-deploy/circum-rider-web:${{ github.sha }}
+          IMAGE: us-central1-docker.pkg.dev/circum-2797c/cloud-run-source-deploy/circum-rider-web:${{ env.RIDER_RELEASE_SHA }}
         run: |
           BUILD_ID="$(gcloud builds submit \
             --async \
@@ -69,7 +71,7 @@ jobs:
           exit 1
       - name: Deploy Rider Web to Cloud Run
         env:
-          IMAGE: us-central1-docker.pkg.dev/circum-2797c/cloud-run-source-deploy/circum-rider-web:${{ github.sha }}
+          IMAGE: us-central1-docker.pkg.dev/circum-2797c/cloud-run-source-deploy/circum-rider-web:${{ env.RIDER_RELEASE_SHA }}
         run: |
           gcloud run deploy circum-rider-web \
             --project circum-2797c \
@@ -77,6 +79,20 @@ jobs:
             --platform managed \
             --image "$IMAGE" \
             --port 8080 \
-            --allow-unauthenticated \
-            --set-env-vars "CIRCUM_SOURCE_SHA=${{ github.sha }}" \
-            --labels "circum-source-sha=${{ github.sha }},circum-surface=rider-web"
+            --no-traffic \
+            --tag rider-release \
+            --update-env-vars "CIRCUM_SOURCE_SHA=${{ env.RIDER_RELEASE_SHA }}" \
+            --labels "circum-source-sha=${{ env.RIDER_RELEASE_SHA }},circum-surface=rider-web"
+          gcloud run services describe circum-rider-web --project circum-2797c --region us-central1 --format=json > /tmp/rider-release-service.json
+          REVISION="$(jq -r '.status.traffic[] | select(.tag == "rider-release") | .revisionName' /tmp/rider-release-service.json)"
+          test -n "$REVISION"
+          CANARY_URL="$(jq -r '.status.traffic[] | select(.tag == "rider-release") | .url' /tmp/rider-release-service.json)"
+          test -n "$CANARY_URL"
+          curl --fail --silent --show-error --retry 3 "$CANARY_URL/deployment-manifest.json" > /tmp/rider-canary-manifest.json
+          jq -e --arg sha "$RIDER_RELEASE_SHA" '.gitCommit == $sha and .buildIdentity == "CIRCUM_BUILD_ID=rider-app"' /tmp/rider-canary-manifest.json
+          gcloud run services update-traffic circum-rider-web --project circum-2797c --region us-central1 --to-revisions "$REVISION=100"
+          gcloud run services describe circum-rider-web --project circum-2797c --region us-central1 --format=json > /tmp/rider-promoted-service.json
+          jq -e --arg revision "$REVISION" 'any(.status.traffic[]; .revisionName == $revision and .percent == 100)' /tmp/rider-promoted-service.json
+          PUBLIC_URL="$(jq -r '.status.url' /tmp/rider-promoted-service.json)"
+          curl --fail --silent --show-error --retry 3 "$PUBLIC_URL/deployment-manifest.json" > /tmp/rider-public-manifest.json
+          jq -e --arg sha "$RIDER_RELEASE_SHA" '.gitCommit == $sha' /tmp/rider-public-manifest.json
