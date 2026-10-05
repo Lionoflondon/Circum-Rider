@@ -31,7 +31,10 @@ class RiderOfferFeed {
         .map((row) => Map<String, dynamic>.from(row))
         .where((row) =>
             row['projectionVersion'] == 2 &&
+            row['deliveryId'] is String &&
+            (row['deliveryId'] as String).trim().isNotEmpty &&
             row['offerExpiresAt'] is num &&
+            (row['offerExpiresAt'] as num).isFinite &&
             (row['offerExpiresAt'] as num) > now)
         .map((row) => RiderJobOffer.fromFirestore(
             docId: row['deliveryId'] as String, data: row))
