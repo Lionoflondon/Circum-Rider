@@ -17,7 +17,9 @@ Map<String, int> riderDemandAreas(List<RiderJobOffer> offers, {DateTime? now}) {
         offer.id.isEmpty ||
         area.isEmpty ||
         area == 'Location pending' ||
-        !seen.add(offer.id)) continue;
+        !seen.add(offer.id)) {
+      continue;
+    }
     counts.update(area, (count) => count + 1, ifAbsent: () => 1);
   }
   final sorted = counts.entries.toList()
