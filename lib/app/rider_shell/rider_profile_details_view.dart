@@ -821,7 +821,7 @@ class RiderVehicleManagerView extends StatelessWidget {
 }
 
 class RiderVehicleEditor extends StatefulWidget {
-  const RiderVehicleEditor({this.source});
+  const RiderVehicleEditor({super.key, this.source});
   final Map<String, dynamic>? source;
   @override
   State<RiderVehicleEditor> createState() => _RiderVehicleEditorState();
