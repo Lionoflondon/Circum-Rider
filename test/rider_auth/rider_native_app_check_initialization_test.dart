@@ -7,7 +7,8 @@ void main() {
     final source = File('ios/Runner/AppDelegate.swift').readAsStringSync();
     final configure = source.indexOf('FirebaseApp.configure()');
     expect(source.indexOf('GeneratedPluginRegistrant.register(with: self)'),
-        lessThan(configure));
+        greaterThan(configure));
+    expect(source, contains('if FirebaseApp.app() == nil'));
     final debug = source.indexOf('AppCheckDebugProviderFactory()');
     expect(debug, lessThan(configure));
     expect(source, contains('#if DEBUG && targetEnvironment(simulator)'));
