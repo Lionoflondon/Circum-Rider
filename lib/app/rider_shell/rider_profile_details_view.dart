@@ -771,7 +771,7 @@ class RiderVehicleManagerView extends StatelessWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: RiderPalette.panel,
-      builder: (_) => _VehicleEditor(source: source),
+      builder: (_) => RiderVehicleEditor(source: source),
     );
     if (result == null) return;
     if (!context.mounted) return;
@@ -820,15 +820,16 @@ class RiderVehicleManagerView extends StatelessWidget {
   }
 }
 
-class _VehicleEditor extends StatefulWidget {
-  const _VehicleEditor({this.source});
+class RiderVehicleEditor extends StatefulWidget {
+  const RiderVehicleEditor({this.source});
   final Map<String, dynamic>? source;
   @override
-  State<_VehicleEditor> createState() => _VehicleEditorState();
+  State<RiderVehicleEditor> createState() => _RiderVehicleEditorState();
 }
 
-class _VehicleEditorState extends State<_VehicleEditor> {
+class _RiderVehicleEditorState extends State<RiderVehicleEditor> {
   late final Map<String, TextEditingController> fields;
+  String? validationError;
   @override
   void initState() {
     super.initState();
@@ -847,7 +848,7 @@ class _VehicleEditorState extends State<_VehicleEditor> {
       ])
         key: TextEditingController(
           text:
-              '${source[key] ?? (key == 'manufacturer' ? source['make'] : '')}',
+              '${source[key] ?? (key == 'manufacturer' ? source['make'] : '') ?? ''}',
         ),
     };
   }
@@ -883,13 +884,20 @@ class _VehicleEditorState extends State<_VehicleEditor> {
                         style: const TextStyle(color: RiderPalette.paper),
                         decoration:
                             InputDecoration(labelText: _label(entry.key)))),
+              if (validationError != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(validationError!,
+                      style: const TextStyle(color: RiderPalette.red)),
+                ),
               FilledButton(
                   onPressed: () {
                     if (fields['type']!.text.trim().isEmpty ||
                         fields['registration']!.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                          content: Text(
-                              'Vehicle type and registration are required.')));
+                      setState(() {
+                        validationError =
+                            'Vehicle type and registration are required.';
+                      });
                       return;
                     }
                     Navigator.pop(context, {
