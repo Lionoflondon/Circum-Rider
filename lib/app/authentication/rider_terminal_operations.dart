@@ -12,6 +12,11 @@ Future<T> runBoundedRiderOperation<T>(
 }) =>
     operation.timeout(timeout);
 
+/// Native authentication can finish after a short UI operation deadline. Wait
+/// for that same operation, without retrying credentials or relaxing security.
+Future<T> runRiderEmailAuthentication<T>(Future<T> operation) =>
+    operation.timeout(const Duration(minutes: 1));
+
 Future<bool> runRiderEmailVerification({
   required Future<void> Function() reload,
   required bool Function() isVerified,

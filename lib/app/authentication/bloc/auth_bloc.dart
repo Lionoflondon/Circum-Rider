@@ -1270,10 +1270,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         var signInStage = 'email_sign_in_authentication';
         try {
           emit(state.copyWith(status: Status.loading));
-          final UserCredential userCredential = await auth
-              .signInWithEmailAndPassword(
-                  email: event.email, password: event.password)
-              .timeout(_authOperationTimeout);
+          final UserCredential userCredential =
+              await runRiderEmailAuthentication(
+            auth.signInWithEmailAndPassword(
+                email: event.email, password: event.password),
+          );
           firebaseAuthenticationSucceeded = true;
           signInStage = 'email_sign_in_surface_check';
           await verifyRiderSurfaceAfterAuthentication(

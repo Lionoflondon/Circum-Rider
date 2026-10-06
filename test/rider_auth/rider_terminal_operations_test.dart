@@ -4,6 +4,40 @@ import 'package:circum_rider/app/authentication/rider_terminal_operations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets(
+      'email auth accepts native completion after the old 20 second deadline',
+      (tester) async {
+    final native = Completer<String>();
+    String? result;
+    Object? failure;
+    runRiderEmailAuthentication(native.future).then<void>(
+      (value) {
+        result = value;
+      },
+      onError: (Object error) {
+        failure = error;
+      },
+    );
+    Timer(const Duration(seconds: 25), () => native.complete('authenticated'));
+    await tester.pump(const Duration(seconds: 25));
+    expect(result, 'authenticated');
+    expect(failure, isNull);
+  });
+  testWidgets('email authentication still has a finite network deadline',
+      (tester) async {
+    final native = Completer<String>();
+    Object? failure;
+    runRiderEmailAuthentication(native.future).then<void>(
+      (_) {},
+      onError: (Object error) {
+        failure = error;
+      },
+    );
+    await tester.pump(const Duration(seconds: 61));
+    expect(failure, isA<TimeoutException>());
+    native.complete('late');
+    await tester.pump();
+  });
   test('sign-out during email reload discards verification and bootstrap',
       () async {
     final reload = Completer<void>();
