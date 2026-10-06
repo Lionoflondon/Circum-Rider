@@ -90,7 +90,17 @@ class _OnboardingViewState extends State<OnboardingView> {
     );
   }
 
+  void _clearAuthError() {
+    context.read<AuthBloc>().add(const SetErrorMessage(errorMessage: ''));
+  }
+
+  void _changeStep(_RiderAuthStep nextStep) {
+    _clearAuthError();
+    setState(() => _step = nextStep);
+  }
+
   void _finishGuide(_RiderAuthStep nextStep) {
+    _clearAuthError();
     setState(() {
       _showGuide = false;
       _step = nextStep;
@@ -100,8 +110,8 @@ class _OnboardingViewState extends State<OnboardingView> {
   Widget _buildStep(BuildContext context, AuthState state) {
     return switch (_step) {
       _RiderAuthStep.welcome => _WelcomeStep(
-          onCreate: () => setState(() => _step = _RiderAuthStep.createAccount),
-          onSignIn: () => setState(() => _step = _RiderAuthStep.signIn),
+          onCreate: () => _changeStep(_RiderAuthStep.createAccount),
+          onSignIn: () => _changeStep(_RiderAuthStep.signIn),
           onGoogle: () => context.read<AuthBloc>().add(SignInWithGoogle()),
           onApple: _appleAvailable
               ? () => context.read<AuthBloc>().add(SignInWithAppleAuth())
@@ -125,7 +135,7 @@ class _OnboardingViewState extends State<OnboardingView> {
           onTerms: (value) => setState(() => _terms = value),
           onPrivacy: (value) => setState(() => _privacy = value),
           onSubmit: () => _createAccount(state),
-          onSignIn: () => setState(() => _step = _RiderAuthStep.signIn),
+          onSignIn: () => _changeStep(_RiderAuthStep.signIn),
         ),
       _RiderAuthStep.signIn => _SignInStep(
           email: _signInEmail,
@@ -135,7 +145,7 @@ class _OnboardingViewState extends State<OnboardingView> {
           onChanged: () => setState(() {}),
           onSubmit: _signIn,
           onReset: _resetPassword,
-          onCreate: () => setState(() => _step = _RiderAuthStep.createAccount),
+          onCreate: () => _changeStep(_RiderAuthStep.createAccount),
         ),
     };
   }
@@ -143,6 +153,7 @@ class _OnboardingViewState extends State<OnboardingView> {
   bool get _appleAvailable => !kIsWeb && Platform.isIOS;
 
   void _back() {
+    _clearAuthError();
     setState(() {
       _step = switch (_step) {
         _RiderAuthStep.createAccount ||

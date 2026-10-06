@@ -15,7 +15,8 @@ enum AuthenticatedStatus {
   initial,
   incompleteData,
   authenticated,
-  pendingApproval
+  pendingApproval,
+  emailVerificationRequired
 }
 
 enum AppLocationStatus {
@@ -88,6 +89,10 @@ class AuthState extends AuthInitial {
   final AppLocationStatus appLocationStatus;
   final VerificationUploadStatus verificationUploadStatus;
   final AuthenticatedStatus authenticatedStatus;
+
+  bool get requiresEmailVerification =>
+      currentState == AppState.authenticated &&
+      authenticatedStatus == AuthenticatedStatus.emailVerificationRequired;
   final RiderAccountState riderAccountState;
 
   final int countdown;

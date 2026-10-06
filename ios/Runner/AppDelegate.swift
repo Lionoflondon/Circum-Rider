@@ -2,6 +2,7 @@ import UIKit
 import Flutter
 import GoogleMaps
 import FirebaseCore
+import FirebaseAppCheck
 import FirebaseAuth
 import flutter_local_notifications
 
@@ -26,7 +27,14 @@ import flutter_local_notifications
     if #available(iOS 10.0, *) {
       UNUserNotificationCenter.current().delegate = self as UNUserNotificationCenterDelegate
     }
-    FirebaseApp.configure()
+    #if DEBUG && targetEnvironment(simulator)
+    // DeviceCheck/App Attest cannot attest a simulator. This still requires an
+    // explicitly registered, scoped Firebase App Check debug token.
+    AppCheck.setAppCheckProviderFactory(AppCheckDebugProviderFactory())
+    #endif
+    if FirebaseApp.app() == nil {
+      FirebaseApp.configure()
+    }
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }

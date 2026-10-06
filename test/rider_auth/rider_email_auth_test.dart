@@ -114,7 +114,7 @@ void main() {
     final app = File('lib/app.dart').readAsStringSync();
     expect(app,
         contains("import '../app/authentication/view/verify_email.dart';"));
-    expect(app, contains('state.status == Status.unverifiedEmail'));
+    expect(app, contains('state.requiresEmailVerification'));
     expect(app, contains('return const VerifyEmailView();'));
   });
 

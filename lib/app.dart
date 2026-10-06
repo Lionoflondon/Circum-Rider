@@ -15,8 +15,7 @@ class App extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<AuthBloc, AuthState>(
       builder: (context, state) {
-        if (state.currentState == AppState.authenticated &&
-            state.status == Status.unverifiedEmail) {
+        if (state.requiresEmailVerification) {
           return const VerifyEmailView();
         }
         if (state.currentState == AppState.authenticated) {

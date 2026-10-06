@@ -12,22 +12,34 @@ Future<T> runBoundedRiderOperation<T>(
 }) =>
     operation.timeout(timeout);
 
+/// Native authentication can finish after a short UI operation deadline. Wait
+/// for that same operation, without retrying credentials or relaxing security.
+Future<T> runRiderAuthentication<T>(Future<T> operation) =>
+    operation.timeout(const Duration(minutes: 1));
+
 Future<bool> runRiderEmailVerification({
   required Future<void> Function() reload,
   required bool Function() isVerified,
+  required Future<void> Function() refreshVerifiedToken,
   required Future<void> Function() completeVerifiedBootstrap,
   required Duration timeout,
+  bool Function()? isCurrentSession,
 }) async {
   try {
     await reload().timeout(timeout);
+    if (isCurrentSession?.call() == false) return false;
     if (!isVerified()) return false;
+    await refreshVerifiedToken().timeout(timeout);
+    if (isCurrentSession?.call() == false) return false;
     await completeVerifiedBootstrap().timeout(timeout);
-    return true;
+    return isCurrentSession?.call() != false;
   } on TimeoutException {
+    if (isCurrentSession?.call() == false) return false;
     throw const RiderOperationFailure(
       'Email verification took too long. Check your connection and try again.',
     );
   } catch (_) {
+    if (isCurrentSession?.call() == false) return false;
     throw const RiderOperationFailure(
       'Email verification could not be checked. Please try again.',
     );

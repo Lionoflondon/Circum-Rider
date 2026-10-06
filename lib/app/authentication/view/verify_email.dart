@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../utils/theme/theme.dart';
+import '../../../utils/app_state/app_state.dart';
 import '../bloc/auth_bloc.dart';
 import 'enable_location.dart';
 import 'widgets/step_progress.dart';
@@ -40,7 +41,9 @@ class VerifyEmailViewState extends State<VerifyEmailView> {
       backgroundColor: AppColors.secondary,
       body: BlocListener<AuthBloc, AuthState>(
         listener: (context, state) {
-          if (state.status == Status.success) {
+          if (state.status == Status.success &&
+              state.currentState == AppState.authenticated &&
+              !state.requiresEmailVerification) {
             _timer?.cancel();
             context.read<AuthBloc>().add(ResetStatus());
             Navigator.pushReplacement(
@@ -70,6 +73,18 @@ class VerifyEmailViewState extends State<VerifyEmailView> {
                     color: AppColors.textGrey,
                     fontSize: 15,
                   ),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: () {
+                      _timer?.cancel();
+                      context.read<AuthBloc>().add(SignOut());
+                    },
+                    child: const Text('Sign out'),
+                  ),
+                  if (state.status == Status.failure &&
+                      (state.errorMessage?.isNotEmpty ?? false))
+                    Text(state.errorMessage!,
+                        style: const TextStyle(color: Colors.white)),
                   const SizedBox(height: 28),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(30),

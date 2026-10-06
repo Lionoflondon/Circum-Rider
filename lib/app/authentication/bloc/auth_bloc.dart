@@ -32,6 +32,7 @@ import '../apple_auth_nonce.dart';
 import '../rider_auth_error.dart';
 import '../rider_auth_bootstrap.dart';
 import '../rider_terminal_operations.dart';
+import '../rider_vehicle_document_status.dart';
 // import '../../onboarding/view/onboarding.dart';
 
 part 'auth_event.dart';
@@ -41,7 +42,6 @@ part 'signup_event.dart';
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   static const _authOperationTimeout = Duration(seconds: 20);
   static const _authRestoreTimeout = Duration(seconds: 12);
-  static const _signupOperationTimeout = Duration(seconds: 30);
   static const _signupBootstrapTimeout = Duration(seconds: 20);
   static const _profilePhotoOperationTimeout = Duration(seconds: 30);
   static const _documentUploadOperationTimeout = Duration(minutes: 2);
@@ -153,14 +153,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
 
     Future<String?> vehicleRegistrationDocumentStatus(String uid) async {
-      final doc = await db
+      // An absent direct document read is denied by the owner-data rule. Use
+      // the same owner-constrained query as the Verification Centre instead.
+      final documents = await db
           .collection('riderDocuments')
-          .doc('${uid}_vehicle_registration')
+          .where('riderId', isEqualTo: uid)
+          .limit(100)
           .get()
           .timeout(_authRestoreTimeout);
-      if (!doc.exists) return null;
-      return '${doc.data()?['status'] ?? doc.data()?['verificationStatus'] ?? ''}'
-          .trim();
+      return riderVehicleDocumentStatus(
+        documents.docs.map((doc) => {...doc.data(), 'documentId': doc.id}),
+        riderId: uid,
+      );
     }
 
     void listenForPermissionStatus() async {
@@ -186,6 +190,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 status: Status.failure,
                 isLoading: false,
                 errorMessage: RiderAuthError.messageFor(error.code)));
+            return;
+          }
+          if (!user.emailVerified) {
+            emit(state.copyWith(
+              currentState: AppState.authenticated,
+              authenticatedStatus:
+                  AuthenticatedStatus.emailVerificationRequired,
+              status: Status.unverifiedEmail,
+              email: user.email,
+              isLoading: false,
+              clearSensitiveAuthFields: true,
+            ));
             return;
           }
           String? phone;
@@ -372,12 +388,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
 
       if (event is ResendVerificationEmail) {
+        final verificationUid = auth.currentUser?.uid;
+        if (verificationUid == null || !state.requiresEmailVerification) return;
+        bool sessionIsCurrent() =>
+            auth.currentUser?.uid == verificationUid &&
+            state.requiresEmailVerification;
         try {
           emit(state.copyWith(status: Status.loading));
           await sendRiderVerificationEmailViaCloudRun(auth: auth)
               .timeout(_authOperationTimeout);
-          emit(state.copyWith(status: Status.success));
+          if (!sessionIsCurrent()) return;
+          emit(state.copyWith(status: Status.unverifiedEmail));
         } catch (error) {
+          if (!sessionIsCurrent()) return;
           emit(state.copyWith(
               status: Status.failure,
               errorMessage: 'We could not resend the email. Try again.'));
@@ -399,7 +422,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               AppleIDAuthorizationScopes.fullName,
             ],
             nonce: sha256Nonce(rawNonce),
-          ).timeout(_authOperationTimeout);
+          );
 
           // SignInWithApple
 
@@ -413,9 +436,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           );
 
           // Sign in with credential
-          UserCredential userCredential = await auth
-              .signInWithCredential(oauthCredential)
-              .timeout(_authOperationTimeout);
+          UserCredential userCredential = await runRiderAuthentication(
+            auth.signInWithCredential(oauthCredential),
+          );
           await verifyRiderSurfaceAfterAuthentication(
             userCredential.user,
             step: 'apple_sign_in_surface_check',
@@ -464,7 +487,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           final GoogleSignIn googleSignIn = GoogleSignIn();
           await googleSignIn.signOut().timeout(_authOperationTimeout);
           final GoogleSignInAccount? googleSignInAccount =
-              await googleSignIn.signIn().timeout(_authOperationTimeout);
+              await googleSignIn.signIn();
 
           if (googleSignInAccount == null) {
             emit(state.copyWith(status: Status.initial));
@@ -481,10 +504,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           );
 
           // Sign in with credential
-          UserCredential userCredential =
-              await auth.signInWithCredential(credential).timeout(
-                    _authOperationTimeout,
-                  );
+          UserCredential userCredential = await runRiderAuthentication(
+            auth.signInWithCredential(credential),
+          );
           await verifyRiderSurfaceAfterAuthentication(
             userCredential.user,
             step: 'google_sign_in_surface_check',
@@ -1248,13 +1270,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<SignInWithEmail>(
       (event, emit) async {
         var firebaseAuthenticationSucceeded = false;
+        var signInStage = 'email_sign_in_authentication';
         try {
           emit(state.copyWith(status: Status.loading));
-          final UserCredential userCredential = await auth
-              .signInWithEmailAndPassword(
-                  email: event.email, password: event.password)
-              .timeout(_authOperationTimeout);
+          final authenticationStarted = DateTime.now();
+          final UserCredential userCredential = await runRiderAuthentication(
+            auth.signInWithEmailAndPassword(
+                email: event.email, password: event.password),
+          );
+          if (kDebugMode) {
+            debugPrint('Rider email authentication completed elapsedMs='
+                '${DateTime.now().difference(authenticationStarted).inMilliseconds}');
+          }
           firebaseAuthenticationSucceeded = true;
+          signInStage = 'email_sign_in_surface_check';
           await verifyRiderSurfaceAfterAuthentication(
             userCredential.user,
             step: 'email_sign_in_surface_check',
@@ -1262,10 +1291,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           const storage = FlutterSecureStorage();
 
           if (auth.currentUser?.emailVerified == false) {
+            emit(state.copyWith(
+              currentState: AppState.authenticated,
+              authenticatedStatus:
+                  AuthenticatedStatus.emailVerificationRequired,
+              status: Status.loading,
+              email: auth.currentUser?.email,
+              clearSensitiveAuthFields: true,
+            ));
+            signInStage = 'email_sign_in_verification_email';
             await sendRiderVerificationEmailViaCloudRun(auth: auth)
                 .timeout(_authOperationTimeout);
             emit(state.copyWith(
               status: Status.unverifiedEmail,
+              currentState: AppState.authenticated,
+              authenticatedStatus:
+                  AuthenticatedStatus.emailVerificationRequired,
+              email: auth.currentUser?.email,
               clearSensitiveAuthFields: true,
             ));
           } else {
@@ -1279,11 +1321,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               return;
             }
             final documentReference = db.collection('riders').doc(user.uid);
+            signInStage = 'email_sign_in_profile_read';
             // Get the document snapshot
             var documentSnapshot =
                 await documentReference.get().timeout(_authRestoreTimeout);
             if (!documentSnapshot.exists) {
               final recoveredName = user.displayName?.trim() ?? '';
+              signInStage = 'email_sign_in_profile_bootstrap';
               await runRiderAuthBootstrap(
                 timeout: _signupBootstrapTimeout,
                 updateDisplayName: () async {},
@@ -1293,6 +1337,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 ),
                 initializeRothWallet: () => ensureRiderRothWallet(user),
               );
+              signInStage = 'email_sign_in_profile_reread';
               documentSnapshot =
                   await documentReference.get().timeout(_authRestoreTimeout);
             }
@@ -1314,6 +1359,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                     : AuthenticatedStatus.pendingApproval;
               }
               if (riderPhone != null) {
+                signInStage = 'email_sign_in_phone_storage';
                 await storage
                     .write(key: 'phone', value: riderPhone)
                     .timeout(_authOperationTimeout);
@@ -1335,6 +1381,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 clearSensitiveAuthFields: true));
           }
         } on FirebaseAuthException catch (e) {
+          logRiderAuthError(
+            error: e,
+            path: 'riders/${auth.currentUser?.uid ?? 'unknown'}',
+            step: signInStage,
+            riderDocumentId: auth.currentUser?.uid,
+          );
           emit(state.copyWith(
             status: Status.failure,
             errorMessage: RiderAuthError.messageFor(e.code),
@@ -1344,14 +1396,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           logRiderAuthError(
             error: error,
             path: 'riders/${auth.currentUser?.uid ?? 'unknown'}',
-            step: 'email_sign_in_enrichment',
+            step: signInStage,
             riderDocumentId: auth.currentUser?.uid,
           );
           if (firebaseAuthenticationSucceeded && auth.currentUser != null) {
             emit(state.copyWith(
               status: Status.success,
               currentState: AppState.authenticated,
-              authenticatedStatus: AuthenticatedStatus.incompleteData,
+              authenticatedStatus: auth.currentUser?.emailVerified == false
+                  ? AuthenticatedStatus.emailVerificationRequired
+                  : AuthenticatedStatus.incompleteData,
               errorMessage:
                   'You are signed in. Some account details are still loading.',
               clearSensitiveAuthFields: true,
@@ -1386,10 +1440,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           User? user = auth.currentUser;
           final normalizedEmail = event.email.trim().toLowerCase();
           if (user?.email?.trim().toLowerCase() != normalizedEmail) {
-            final userCredential = await auth
-                .createUserWithEmailAndPassword(
-                    email: event.email, password: event.password)
-                .timeout(_signupOperationTimeout);
+            final userCredential = await runRiderAuthentication(
+              auth.createUserWithEmailAndPassword(
+                  email: event.email, password: event.password),
+            );
             user = userCredential.user;
           }
 
@@ -1420,7 +1474,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             status:
                 user.emailVerified ? Status.success : Status.unverifiedEmail,
             currentState: AppState.authenticated,
-            authenticatedStatus: AuthenticatedStatus.incompleteData,
+            authenticatedStatus: user.emailVerified
+                ? AuthenticatedStatus.incompleteData
+                : AuthenticatedStatus.emailVerificationRequired,
             clearSensitiveAuthFields: true,
           ));
         } on FirebaseAuthException catch (e) {
@@ -1514,22 +1570,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<ConfirmEmailVerification>((event, emit) async {
       if (state.status == Status.loading) return;
+      final verificationUser = auth.currentUser;
+      if (verificationUser == null ||
+          state.currentState != AppState.authenticated) return;
+      bool sessionIsCurrent() =>
+          auth.currentUser?.uid == verificationUser.uid &&
+          state.currentState == AppState.authenticated;
       emit(state.copyWith(status: Status.loading, isLoading: true));
       try {
         final verified = await runRiderEmailVerification(
-          reload: () async {
-            final user = auth.currentUser;
-            if (user == null) {
-              throw FirebaseAuthException(code: 'user-not-found');
-            }
-            await user.reload();
-          },
+          reload: verificationUser.reload,
           isVerified: () => auth.currentUser?.emailVerified == true,
+          refreshVerifiedToken: () async {
+            await verificationUser.getIdToken(true);
+          },
           completeVerifiedBootstrap: () async {
-            final user = auth.currentUser;
-            if (user == null) {
-              throw FirebaseAuthException(code: 'user-not-found');
-            }
+            final user = verificationUser;
             await upsertRiderOnboarding(user: user, data: {
               'onboardingStatus': 'email_verified',
               'emailVerified': true,
@@ -1544,7 +1600,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             }
           },
           timeout: _authOperationTimeout,
+          isCurrentSession: sessionIsCurrent,
         );
+        if (!sessionIsCurrent()) return;
         if (!verified) {
           emit(state.copyWith(
               status: Status.unverifiedEmail,
@@ -1563,10 +1621,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(state.copyWith(
               status: Status.success,
               isLoading: false,
+              authenticatedStatus: AuthenticatedStatus.incompleteData,
               username: user?.displayName,
               profilePhoto: user?.photoURL));
         }
       } on RiderOperationFailure catch (error) {
+        if (!sessionIsCurrent()) return;
         emit(state.copyWith(
             status: Status.failure,
             isLoading: false,
