@@ -801,7 +801,9 @@ class RiderVehicleManagerView extends StatelessWidget {
               .where((e) => e.isNotEmpty)
               .join(' ')
               .isEmpty
-          ? '${v['type'] ?? 'Vehicle'}'
+          ? ('${v['type'] ?? ''}'.trim().isEmpty
+              ? 'Vehicle'
+              : '${v['type']}'.trim())
           : [v['manufacturer'] ?? v['make'], v['model']]
               .map((e) => '${e ?? ''}'.trim())
               .where((e) => e.isNotEmpty)
