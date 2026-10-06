@@ -31,12 +31,12 @@ void main() {
         findsOneWidget);
     expect(find.byType(RiderVehicleEditor), findsOneWidget);
     expect(result, isNull);
-    await tester.enterText(find.byType(TextField).first, 'Bicycle');
+    await tester.enterText(find.byType(TextField).first, 'Motorbike');
     await tester.enterText(find.byType(TextField).at(5), 'QA-ONLY');
     await tester.ensureVisible(find.text('Save vehicle'));
     await tester.tap(find.text('Save vehicle'));
     await tester.pumpAndSettle();
-    expect(result!['type'], 'Bicycle');
+    expect(result!['type'], 'Motorbike');
     expect(result!['registration'], 'QA-ONLY');
     expect(result!['manufacturer'], '');
   });

@@ -32,6 +32,7 @@ import '../apple_auth_nonce.dart';
 import '../rider_auth_error.dart';
 import '../rider_auth_bootstrap.dart';
 import '../rider_terminal_operations.dart';
+import '../rider_vehicle_document_status.dart';
 // import '../../onboarding/view/onboarding.dart';
 
 part 'auth_event.dart';
@@ -153,14 +154,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     }
 
     Future<String?> vehicleRegistrationDocumentStatus(String uid) async {
-      final doc = await db
+      // An absent direct document read is denied by the owner-data rule. Use
+      // the same owner-constrained query as the Verification Centre instead.
+      final documents = await db
           .collection('riderDocuments')
-          .doc('${uid}_vehicle_registration')
+          .where('riderId', isEqualTo: uid)
+          .limit(100)
           .get()
           .timeout(_authRestoreTimeout);
-      if (!doc.exists) return null;
-      return '${doc.data()?['status'] ?? doc.data()?['verificationStatus'] ?? ''}'
-          .trim();
+      return riderVehicleDocumentStatus(
+        documents.docs.map((doc) => {...doc.data(), 'documentId': doc.id}),
+        riderId: uid,
+      );
     }
 
     void listenForPermissionStatus() async {
@@ -432,9 +437,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           );
 
           // Sign in with credential
-          UserCredential userCredential = await auth
-              .signInWithCredential(oauthCredential)
-              .timeout(_authOperationTimeout);
+          UserCredential userCredential = await runRiderAuthentication(
+            auth.signInWithCredential(oauthCredential),
+          );
           await verifyRiderSurfaceAfterAuthentication(
             userCredential.user,
             step: 'apple_sign_in_surface_check',
@@ -500,10 +505,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           );
 
           // Sign in with credential
-          UserCredential userCredential =
-              await auth.signInWithCredential(credential).timeout(
-                    _authOperationTimeout,
-                  );
+          UserCredential userCredential = await runRiderAuthentication(
+            auth.signInWithCredential(credential),
+          );
           await verifyRiderSurfaceAfterAuthentication(
             userCredential.user,
             step: 'google_sign_in_surface_check',
@@ -1270,11 +1274,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         var signInStage = 'email_sign_in_authentication';
         try {
           emit(state.copyWith(status: Status.loading));
-          final UserCredential userCredential =
-              await runRiderEmailAuthentication(
+          final authenticationStarted = DateTime.now();
+          final UserCredential userCredential = await runRiderAuthentication(
             auth.signInWithEmailAndPassword(
                 email: event.email, password: event.password),
           );
+          if (kDebugMode) {
+            debugPrint('Rider email authentication completed elapsedMs='
+                '${DateTime.now().difference(authenticationStarted).inMilliseconds}');
+          }
           firebaseAuthenticationSucceeded = true;
           signInStage = 'email_sign_in_surface_check';
           await verifyRiderSurfaceAfterAuthentication(
@@ -1433,10 +1441,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           User? user = auth.currentUser;
           final normalizedEmail = event.email.trim().toLowerCase();
           if (user?.email?.trim().toLowerCase() != normalizedEmail) {
-            final userCredential = await auth
-                .createUserWithEmailAndPassword(
-                    email: event.email, password: event.password)
-                .timeout(_signupOperationTimeout);
+            final userCredential = await runRiderAuthentication(
+              auth.createUserWithEmailAndPassword(
+                  email: event.email, password: event.password),
+            );
             user = userCredential.user;
           }
 
@@ -1574,6 +1582,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         final verified = await runRiderEmailVerification(
           reload: verificationUser.reload,
           isVerified: () => auth.currentUser?.emailVerified == true,
+          refreshVerifiedToken: () async {
+            await verificationUser.getIdToken(true);
+          },
           completeVerifiedBootstrap: () async {
             final user = verificationUser;
             await upsertRiderOnboarding(user: user, data: {

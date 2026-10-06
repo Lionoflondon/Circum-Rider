@@ -10,7 +10,7 @@ void main() {
     final native = Completer<String>();
     String? result;
     Object? failure;
-    runRiderEmailAuthentication(native.future).then<void>(
+    runRiderAuthentication(native.future).then<void>(
       (value) {
         result = value;
       },
@@ -27,7 +27,7 @@ void main() {
       (tester) async {
     final native = Completer<String>();
     Object? failure;
-    runRiderEmailAuthentication(native.future).then<void>(
+    runRiderAuthentication(native.future).then<void>(
       (_) {},
       onError: (Object error) {
         failure = error;
@@ -46,6 +46,7 @@ void main() {
     final verification = runRiderEmailVerification(
       reload: () => reload.future,
       isVerified: () => true,
+      refreshVerifiedToken: () async {},
       completeVerifiedBootstrap: () async {
         bootstrapped = true;
       },
@@ -64,6 +65,7 @@ void main() {
     final verification = runRiderEmailVerification(
       reload: () => reload.future,
       isVerified: () => true,
+      refreshVerifiedToken: () async {},
       completeVerifiedBootstrap: () async {},
       isCurrentSession: () => current,
       timeout: const Duration(seconds: 1),
@@ -93,28 +95,60 @@ void main() {
   });
 
   group('email verification', () {
-    test('completes verified bootstrap', () async {
-      var bootstrapped = false;
+    test('refreshes verified claims before protected bootstrap', () async {
+      final order = <String>[];
       final verified = await runRiderEmailVerification(
-        reload: () async {},
-        isVerified: () => true,
-        completeVerifiedBootstrap: () async => bootstrapped = true,
+        reload: () async {
+          order.add('reload');
+        },
+        isVerified: () {
+          order.add('verified');
+          return true;
+        },
+        refreshVerifiedToken: () async {
+          order.add('refresh');
+        },
+        completeVerifiedBootstrap: () async {
+          order.add('bootstrap');
+        },
         timeout: const Duration(seconds: 1),
       );
       expect(verified, isTrue);
-      expect(bootstrapped, isTrue);
+      expect(order, ['reload', 'verified', 'refresh', 'bootstrap']);
+    });
+    test('failed claim refresh cannot establish verified onboarding', () async {
+      var bootstrapped = false;
+      await expectLater(
+          runRiderEmailVerification(
+            reload: () async {},
+            isVerified: () => true,
+            refreshVerifiedToken: () async {
+              throw StateError('token unavailable');
+            },
+            completeVerifiedBootstrap: () async {
+              bootstrapped = true;
+            },
+            timeout: const Duration(seconds: 1),
+          ),
+          throwsA(isA<RiderOperationFailure>()));
+      expect(bootstrapped, isFalse);
     });
 
     test('returns terminal unverified state without bootstrapping', () async {
       var bootstrapped = false;
+      var refreshed = false;
       final verified = await runRiderEmailVerification(
         reload: () async {},
         isVerified: () => false,
+        refreshVerifiedToken: () async {
+          refreshed = true;
+        },
         completeVerifiedBootstrap: () async => bootstrapped = true,
         timeout: const Duration(seconds: 1),
       );
       expect(verified, isFalse);
       expect(bootstrapped, isFalse);
+      expect(refreshed, isFalse);
     });
 
     test('maps reload, bootstrap, and timeout failures safely', () async {
@@ -135,6 +169,7 @@ void main() {
         () async => runRiderEmailVerification(
           reload: () async => throw Exception('provider-secret'),
           isVerified: () => false,
+          refreshVerifiedToken: () async {},
           completeVerifiedBootstrap: () async {},
           timeout: const Duration(seconds: 1),
         ),
@@ -143,6 +178,7 @@ void main() {
         () async => runRiderEmailVerification(
           reload: () async {},
           isVerified: () => true,
+          refreshVerifiedToken: () async {},
           completeVerifiedBootstrap: () async =>
               throw Exception('provider-secret'),
           timeout: const Duration(seconds: 1),
@@ -152,6 +188,7 @@ void main() {
         () async => runRiderEmailVerification(
           reload: () => Completer<void>().future,
           isVerified: () => false,
+          refreshVerifiedToken: () async {},
           completeVerifiedBootstrap: () async {},
           timeout: const Duration(milliseconds: 1),
         ),
