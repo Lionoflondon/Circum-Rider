@@ -418,7 +418,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               AppleIDAuthorizationScopes.fullName,
             ],
             nonce: sha256Nonce(rawNonce),
-          ).timeout(_authOperationTimeout);
+          );
 
           // SignInWithApple
 
@@ -483,7 +483,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           final GoogleSignIn googleSignIn = GoogleSignIn();
           await googleSignIn.signOut().timeout(_authOperationTimeout);
           final GoogleSignInAccount? googleSignInAccount =
-              await googleSignIn.signIn().timeout(_authOperationTimeout);
+              await googleSignIn.signIn();
 
           if (googleSignInAccount == null) {
             emit(state.copyWith(status: Status.initial));

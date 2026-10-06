@@ -46,6 +46,15 @@ void main() {
   });
 
   test('Rider OAuth and password reset failures terminate safely', () {
+    expect(authBloc, contains('await googleSignIn.signIn();'));
+    final appleInteraction = authBloc.substring(
+        authBloc.indexOf('await SignInWithApple.getAppleIDCredential('),
+        authBloc.indexOf('// SignInWithApple'));
+    expect(appleInteraction, isNot(contains('.timeout(')));
+    expect(
+        authBloc,
+        contains(
+            'signInWithCredential(oauthCredential)\n              .timeout(_authOperationTimeout)'));
     expect(authBloc, contains("step: 'apple_sign_in'"));
     expect(authBloc, contains("step: 'google_sign_in'"));
     expect(
