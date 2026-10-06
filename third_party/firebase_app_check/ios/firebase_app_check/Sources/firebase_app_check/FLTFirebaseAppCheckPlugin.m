@@ -32,15 +32,8 @@ NSString *const kFLTFirebaseAppCheckChannelName = @"plugins.flutter.io/firebase_
 - (instancetype)init:(NSObject<FlutterBinaryMessenger> *)messenger {
   self = [super init];
   if (self) {
-    // App Check is process-wide. Background engine registrations must retain
-    // the configured provider objects already captured by Firebase services.
-    static FLTAppCheckProviderFactory *sharedProviderFactory;
-    static dispatch_once_t providerFactoryOnce;
-    dispatch_once(&providerFactoryOnce, ^{
-      sharedProviderFactory = [[FLTAppCheckProviderFactory alloc] init];
-      [FIRAppCheck setAppCheckProviderFactory:sharedProviderFactory];
-    });
-    self->providerFactory = sharedProviderFactory;
+    self->providerFactory = [[FLTAppCheckProviderFactory alloc] init];
+    [FIRAppCheck setAppCheckProviderFactory:self->providerFactory];
 
     [[FLTFirebasePluginRegistry sharedInstance] registerFirebasePlugin:self];
     _binaryMessenger = messenger;
