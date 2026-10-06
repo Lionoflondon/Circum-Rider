@@ -16,12 +16,12 @@ void main() {
   });
 
   test('bounds every signup operation that can strand loading', () {
-    expect(authBloc, contains('_signupOperationTimeout'));
+    expect(authBloc, contains('runRiderAuthentication('));
     expect(authBloc, contains('createUserWithEmailAndPassword'));
     expect(authBloc, contains('updateDisplayName(fullName)'));
     expect(authBloc, contains('upsertRiderOnboarding(user: user, data:'));
     expect(authBloc, contains('ensureRiderRothWallet'));
-    expect(authBloc, contains('.timeout(_signupOperationTimeout)'));
+    expect(authBloc, contains('timeout: _signupBootstrapTimeout'));
   });
 
   test('bounds Rider session restore and profile enrichment operations', () {
@@ -51,10 +51,7 @@ void main() {
         authBloc.indexOf('await SignInWithApple.getAppleIDCredential('),
         authBloc.indexOf('// SignInWithApple'));
     expect(appleInteraction, isNot(contains('.timeout(')));
-    expect(
-        authBloc,
-        contains(
-            'signInWithCredential(oauthCredential)\n              .timeout(_authOperationTimeout)'));
+    expect(authBloc, contains('auth.signInWithCredential(oauthCredential)'));
     expect(authBloc, contains("step: 'apple_sign_in'"));
     expect(authBloc, contains("step: 'google_sign_in'"));
     expect(

@@ -42,7 +42,6 @@ part 'signup_event.dart';
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   static const _authOperationTimeout = Duration(seconds: 20);
   static const _authRestoreTimeout = Duration(seconds: 12);
-  static const _signupOperationTimeout = Duration(seconds: 30);
   static const _signupBootstrapTimeout = Duration(seconds: 20);
   static const _profilePhotoOperationTimeout = Duration(seconds: 30);
   static const _documentUploadOperationTimeout = Duration(minutes: 2);
