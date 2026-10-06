@@ -795,13 +795,15 @@ class RiderVehicleManagerView extends StatelessWidget {
     });
   }
 
-  String _vehicleName(Map<String, dynamic> v) => [
-        v['manufacturer'] ?? v['make'],
-        v['model']
-      ].map((e) => '$e'.trim()).where((e) => e.isNotEmpty).join(' ').isEmpty
+  String _vehicleName(Map<String, dynamic> v) =>
+      [v['manufacturer'] ?? v['make'], v['model']]
+              .map((e) => '${e ?? ''}'.trim())
+              .where((e) => e.isNotEmpty)
+              .join(' ')
+              .isEmpty
           ? '${v['type'] ?? 'Vehicle'}'
           : [v['manufacturer'] ?? v['make'], v['model']]
-              .map((e) => '$e'.trim())
+              .map((e) => '${e ?? ''}'.trim())
               .where((e) => e.isNotEmpty)
               .join(' ');
   String _vehicleDetails(Map<String, dynamic> v) => [
@@ -809,7 +811,7 @@ class RiderVehicleManagerView extends StatelessWidget {
         v['colour'],
         v['registration'],
         v['capacity']
-      ].map((e) => '$e'.trim()).where((e) => e.isNotEmpty).join(' · ');
+      ].map((e) => '${e ?? ''}'.trim()).where((e) => e.isNotEmpty).join(' · ');
   String _status(Map<String, dynamic> v) =>
       '${v['verificationStatus'] ?? 'Pending Review'}';
   Color _statusColor(Map<String, dynamic> v) {
