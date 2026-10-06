@@ -69,6 +69,6 @@ void main() {
     await tester.pump();
     expect(bloc.signOutRequested, isTrue);
     await tester.pumpWidget(const SizedBox.shrink());
-    await bloc.close();
+    await tester.runAsync(bloc.close);
   });
 }
