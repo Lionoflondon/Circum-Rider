@@ -188,6 +188,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 errorMessage: RiderAuthError.messageFor(error.code)));
             return;
           }
+          if (!user.emailVerified) {
+            emit(state.copyWith(
+              currentState: AppState.authenticated,
+              authenticatedStatus:
+                  AuthenticatedStatus.emailVerificationRequired,
+              status: Status.unverifiedEmail,
+              email: user.email,
+              isLoading: false,
+              clearSensitiveAuthFields: true,
+            ));
+            return;
+          }
           String? phone;
           try {
             phone = (await storage
@@ -376,7 +388,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(state.copyWith(status: Status.loading));
           await sendRiderVerificationEmailViaCloudRun(auth: auth)
               .timeout(_authOperationTimeout);
-          emit(state.copyWith(status: Status.success));
+          emit(state.copyWith(status: Status.unverifiedEmail));
         } catch (error) {
           emit(state.copyWith(
               status: Status.failure,
@@ -1264,11 +1276,23 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           const storage = FlutterSecureStorage();
 
           if (auth.currentUser?.emailVerified == false) {
+            emit(state.copyWith(
+              currentState: AppState.authenticated,
+              authenticatedStatus:
+                  AuthenticatedStatus.emailVerificationRequired,
+              status: Status.loading,
+              email: auth.currentUser?.email,
+              clearSensitiveAuthFields: true,
+            ));
             signInStage = 'email_sign_in_verification_email';
             await sendRiderVerificationEmailViaCloudRun(auth: auth)
                 .timeout(_authOperationTimeout);
             emit(state.copyWith(
               status: Status.unverifiedEmail,
+              currentState: AppState.authenticated,
+              authenticatedStatus:
+                  AuthenticatedStatus.emailVerificationRequired,
+              email: auth.currentUser?.email,
               clearSensitiveAuthFields: true,
             ));
           } else {
@@ -1364,7 +1388,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             emit(state.copyWith(
               status: Status.success,
               currentState: AppState.authenticated,
-              authenticatedStatus: AuthenticatedStatus.incompleteData,
+              authenticatedStatus: auth.currentUser?.emailVerified == false
+                  ? AuthenticatedStatus.emailVerificationRequired
+                  : AuthenticatedStatus.incompleteData,
               errorMessage:
                   'You are signed in. Some account details are still loading.',
               clearSensitiveAuthFields: true,
@@ -1433,7 +1459,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             status:
                 user.emailVerified ? Status.success : Status.unverifiedEmail,
             currentState: AppState.authenticated,
-            authenticatedStatus: AuthenticatedStatus.incompleteData,
+            authenticatedStatus: user.emailVerified
+                ? AuthenticatedStatus.incompleteData
+                : AuthenticatedStatus.emailVerificationRequired,
             clearSensitiveAuthFields: true,
           ));
         } on FirebaseAuthException catch (e) {
