@@ -1248,6 +1248,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<SignInWithEmail>(
       (event, emit) async {
         var firebaseAuthenticationSucceeded = false;
+        var signInStage = 'email_sign_in_authentication';
         try {
           emit(state.copyWith(status: Status.loading));
           final UserCredential userCredential = await auth
@@ -1255,6 +1256,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                   email: event.email, password: event.password)
               .timeout(_authOperationTimeout);
           firebaseAuthenticationSucceeded = true;
+          signInStage = 'email_sign_in_surface_check';
           await verifyRiderSurfaceAfterAuthentication(
             userCredential.user,
             step: 'email_sign_in_surface_check',
@@ -1262,6 +1264,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           const storage = FlutterSecureStorage();
 
           if (auth.currentUser?.emailVerified == false) {
+            signInStage = 'email_sign_in_verification_email';
             await sendRiderVerificationEmailViaCloudRun(auth: auth)
                 .timeout(_authOperationTimeout);
             emit(state.copyWith(
@@ -1279,11 +1282,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               return;
             }
             final documentReference = db.collection('riders').doc(user.uid);
+            signInStage = 'email_sign_in_profile_read';
             // Get the document snapshot
             var documentSnapshot =
                 await documentReference.get().timeout(_authRestoreTimeout);
             if (!documentSnapshot.exists) {
               final recoveredName = user.displayName?.trim() ?? '';
+              signInStage = 'email_sign_in_profile_bootstrap';
               await runRiderAuthBootstrap(
                 timeout: _signupBootstrapTimeout,
                 updateDisplayName: () async {},
@@ -1293,6 +1298,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 ),
                 initializeRothWallet: () => ensureRiderRothWallet(user),
               );
+              signInStage = 'email_sign_in_profile_reread';
               documentSnapshot =
                   await documentReference.get().timeout(_authRestoreTimeout);
             }
@@ -1314,6 +1320,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                     : AuthenticatedStatus.pendingApproval;
               }
               if (riderPhone != null) {
+                signInStage = 'email_sign_in_phone_storage';
                 await storage
                     .write(key: 'phone', value: riderPhone)
                     .timeout(_authOperationTimeout);
@@ -1335,6 +1342,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 clearSensitiveAuthFields: true));
           }
         } on FirebaseAuthException catch (e) {
+          logRiderAuthError(
+            error: e,
+            path: 'riders/${auth.currentUser?.uid ?? 'unknown'}',
+            step: signInStage,
+            riderDocumentId: auth.currentUser?.uid,
+          );
           emit(state.copyWith(
             status: Status.failure,
             errorMessage: RiderAuthError.messageFor(e.code),
@@ -1344,7 +1357,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           logRiderAuthError(
             error: error,
             path: 'riders/${auth.currentUser?.uid ?? 'unknown'}',
-            step: 'email_sign_in_enrichment',
+            step: signInStage,
             riderDocumentId: auth.currentUser?.uid,
           );
           if (firebaseAuthenticationSucceeded && auth.currentUser != null) {
