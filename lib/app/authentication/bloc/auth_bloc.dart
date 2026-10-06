@@ -384,12 +384,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
 
       if (event is ResendVerificationEmail) {
+        final verificationUid = auth.currentUser?.uid;
+        if (verificationUid == null || !state.requiresEmailVerification) return;
+        bool sessionIsCurrent() =>
+            auth.currentUser?.uid == verificationUid &&
+            state.requiresEmailVerification;
         try {
           emit(state.copyWith(status: Status.loading));
           await sendRiderVerificationEmailViaCloudRun(auth: auth)
               .timeout(_authOperationTimeout);
+          if (!sessionIsCurrent()) return;
           emit(state.copyWith(status: Status.unverifiedEmail));
         } catch (error) {
+          if (!sessionIsCurrent()) return;
           emit(state.copyWith(
               status: Status.failure,
               errorMessage: 'We could not resend the email. Try again.'));
@@ -1555,22 +1562,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     on<ConfirmEmailVerification>((event, emit) async {
       if (state.status == Status.loading) return;
+      final verificationUser = auth.currentUser;
+      if (verificationUser == null ||
+          state.currentState != AppState.authenticated) return;
+      bool sessionIsCurrent() =>
+          auth.currentUser?.uid == verificationUser.uid &&
+          state.currentState == AppState.authenticated;
       emit(state.copyWith(status: Status.loading, isLoading: true));
       try {
         final verified = await runRiderEmailVerification(
-          reload: () async {
-            final user = auth.currentUser;
-            if (user == null) {
-              throw FirebaseAuthException(code: 'user-not-found');
-            }
-            await user.reload();
-          },
+          reload: verificationUser.reload,
           isVerified: () => auth.currentUser?.emailVerified == true,
           completeVerifiedBootstrap: () async {
-            final user = auth.currentUser;
-            if (user == null) {
-              throw FirebaseAuthException(code: 'user-not-found');
-            }
+            final user = verificationUser;
             await upsertRiderOnboarding(user: user, data: {
               'onboardingStatus': 'email_verified',
               'emailVerified': true,
@@ -1585,7 +1589,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             }
           },
           timeout: _authOperationTimeout,
+          isCurrentSession: sessionIsCurrent,
         );
+        if (!sessionIsCurrent()) return;
         if (!verified) {
           emit(state.copyWith(
               status: Status.unverifiedEmail,
@@ -1604,10 +1610,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           emit(state.copyWith(
               status: Status.success,
               isLoading: false,
+              authenticatedStatus: AuthenticatedStatus.incompleteData,
               username: user?.displayName,
               profilePhoto: user?.photoURL));
         }
       } on RiderOperationFailure catch (error) {
+        if (!sessionIsCurrent()) return;
         emit(state.copyWith(
             status: Status.failure,
             isLoading: false,

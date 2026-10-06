@@ -4,6 +4,40 @@ import 'package:circum_rider/app/authentication/rider_terminal_operations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('sign-out during email reload discards verification and bootstrap',
+      () async {
+    final reload = Completer<void>();
+    var current = true;
+    var bootstrapped = false;
+    final verification = runRiderEmailVerification(
+      reload: () => reload.future,
+      isVerified: () => true,
+      completeVerifiedBootstrap: () async {
+        bootstrapped = true;
+      },
+      isCurrentSession: () => current,
+      timeout: const Duration(seconds: 1),
+    );
+    current = false;
+    reload.complete();
+    expect(await verification, isFalse);
+    expect(bootstrapped, isFalse);
+  });
+  test('stale verification failure does not overwrite a signed-out session',
+      () async {
+    final reload = Completer<void>();
+    var current = true;
+    final verification = runRiderEmailVerification(
+      reload: () => reload.future,
+      isVerified: () => true,
+      completeVerifiedBootstrap: () async {},
+      isCurrentSession: () => current,
+      timeout: const Duration(seconds: 1),
+    );
+    current = false;
+    reload.completeError(StateError('old session'));
+    expect(await verification, isFalse);
+  });
   group('bounded operation guard', () {
     test('returns successful operation result', () async {
       final result = await runBoundedRiderOperation(

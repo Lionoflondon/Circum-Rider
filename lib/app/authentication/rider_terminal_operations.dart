@@ -17,17 +17,21 @@ Future<bool> runRiderEmailVerification({
   required bool Function() isVerified,
   required Future<void> Function() completeVerifiedBootstrap,
   required Duration timeout,
+  bool Function()? isCurrentSession,
 }) async {
   try {
     await reload().timeout(timeout);
+    if (isCurrentSession?.call() == false) return false;
     if (!isVerified()) return false;
     await completeVerifiedBootstrap().timeout(timeout);
-    return true;
+    return isCurrentSession?.call() != false;
   } on TimeoutException {
+    if (isCurrentSession?.call() == false) return false;
     throw const RiderOperationFailure(
       'Email verification took too long. Check your connection and try again.',
     );
   } catch (_) {
+    if (isCurrentSession?.call() == false) return false;
     throw const RiderOperationFailure(
       'Email verification could not be checked. Please try again.',
     );
