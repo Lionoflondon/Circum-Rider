@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #import <FirebaseAppCheck/FIRAppCheck.h>
+#import <TargetConditionals.h>
 
 @import FirebaseAppCheck;
 @import FirebaseCore;
@@ -25,7 +26,12 @@
     self.providers[app.name] = [FLTAppCheckProvider new];
     FLTAppCheckProvider *provider = self.providers[app.name];
     // We set "deviceCheck" as this is currently what is default. Backward compatible.
+#if DEBUG && TARGET_OS_SIMULATOR
+    // Simulator requests still require a registered App Check debug token.
+    [provider configure:app providerName:@"debug"];
+#else
     [provider configure:app providerName:@"deviceCheck"];
+#endif
   }
 
   return self.providers[app.name];
