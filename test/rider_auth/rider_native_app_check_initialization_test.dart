@@ -14,22 +14,19 @@ void main() {
     expect(source, contains('#if DEBUG && targetEnvironment(simulator)'));
     expect(source.indexOf('#endif', debug), lessThan(configure));
   });
-  test(
-      'native engines share providers and only simulator debug defaults change',
-      () {
-    const root =
-        'third_party/firebase_app_check/ios/firebase_app_check/Sources/firebase_app_check/';
-    final plugin =
-        File('${root}FLTFirebaseAppCheckPlugin.m').readAsStringSync();
-    final factory =
-        File('${root}FLTAppCheckProviderFactory.m').readAsStringSync();
-    expect(plugin, contains('dispatch_once(&providerFactoryOnce'));
-    expect(plugin, contains('self->providerFactory = sharedProviderFactory'));
-    expect(factory, contains('#if DEBUG && TARGET_OS_SIMULATOR'));
-    expect(factory, contains('providerName:@"debug"'));
+  test('Runner enables Swift DEBUG only in the development build', () {
+    final project =
+        File('ios/Runner.xcodeproj/project.pbxproj').readAsStringSync();
+    final start = project.indexOf('97C147061CF9000F007C117D /* Debug */ = {');
+    final releaseStart =
+        project.indexOf('97C147071CF9000F007C117D /* Release */ = {', start);
+    final debug = project.substring(start, releaseStart);
+    final release = project.substring(
+        releaseStart, project.indexOf('name = Release;', releaseStart));
     expect(
-        factory,
+        debug,
         contains(
-            '#else\n    [provider configure:app providerName:@"deviceCheck"];\n#endif'));
+            r'SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DEBUG";'));
+    expect(release, isNot(contains('SWIFT_ACTIVE_COMPILATION_CONDITIONS')));
   });
 }
