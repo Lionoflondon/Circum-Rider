@@ -167,4 +167,41 @@ void main() {
     expect(bloc.state.message, isNull);
     expect(bloc.state.dispatchReason, isNull);
   });
+  test('signed out clears job and eligibility without server reads', () async {
+    var reads = 0;
+    final db = _Db()
+      ..presence = () async {
+        reads++;
+        return _Snapshot();
+      };
+    final auth = _Auth()..currentUser = null;
+    final bloc =
+        HomeBloc(authentication: auth, firestore: db, messaging: _Messaging());
+    addTearDown(bloc.close);
+    bloc.state.activeRequest = _Active();
+    bloc.state.dispatchEligible = true;
+    final cleared = bloc.stream.first;
+    bloc.add(CheckForActiveRequest());
+    final state = await cleared.timeout(const Duration(seconds: 2));
+    expect(state.activeRequest, isNull);
+    expect(state.dispatchEligible, isFalse);
+    expect(reads, 0);
+  });
+  test('a new account failed read cannot retain the previous account job',
+      () async {
+    final auth = _Auth();
+    final db = _Db()
+      ..presence = () async => throw FirebaseException(
+          plugin: 'cloud_firestore', code: 'permission-denied');
+    final bloc =
+        HomeBloc(authentication: auth, firestore: db, messaging: _Messaging());
+    addTearDown(bloc.close);
+    bloc.state.activeRequest = _Active();
+    auth.currentUser = _User('new');
+    final failed = bloc.stream
+        .firstWhere((s) => s.dispatchReason == 'session_restore_failed');
+    bloc.add(CheckForActiveRequest());
+    final state = await failed.timeout(const Duration(seconds: 2));
+    expect(state.activeRequest, isNull);
+  });
 }

@@ -51,6 +51,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   bool _presenceHeartbeatInFlight = false;
   int _availabilityOperation = 0;
   int _activeRestoreGeneration = 0;
+  String? _activeSessionUid;
   int _presenceReconnectAttempt = 0;
   StreamSubscription<String>? _pushTokenRefreshSubscription;
   bool _registeringPushToken = false;
@@ -122,6 +123,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         db = firestore ?? FirebaseFirestore.instance,
         firebaseMessaging = messaging ?? FirebaseMessaging.instance,
         super(HomeState()) {
+    _activeSessionUid = auth.currentUser?.uid;
     WidgetsBinding.instance.addObserver(this);
     on<CheckForPushToken>(_handleCheckForPushToken);
     on<SetRideStatus>(_handleSetRideStatus);
@@ -798,16 +800,17 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
         generation == _activeRestoreGeneration &&
         auth.currentUser?.uid == initiatingUid;
     try {
+      if (_activeSessionUid != initiatingUid) {
+        _activeSessionUid = initiatingUid;
+        _availabilityOperation++;
+        _stopPresenceHeartbeat();
+        _stopPresenceReconnect();
+        // Never retain a previous account's job when the new read fails.
+        emit(HomeState());
+      }
       User? user = auth.currentUser;
       if (user == null) {
-        emit(
-          state.copyWith(
-            rideStatus: RideStatus.offline,
-            onlineTransition: OnlineTransition.offline,
-            riderIntentOnline: false,
-            clearMessage: true,
-          ),
-        );
+        emit(HomeState());
         return;
       }
       final SharedPreferences prefs = await SharedPreferences.getInstance()
