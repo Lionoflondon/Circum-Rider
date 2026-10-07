@@ -12,7 +12,13 @@ void main() {
     expect(bloc, contains('.timeout(operationTimeout)'));
     expect(bloc, contains('auth.currentUser?.uid'));
     expect(bloc, isNot(contains('User? user = auth.currentUser')));
-    expect(earnings, contains('.timeout(const Duration(seconds: 25))'));
+    final summaryLoader =
+        File('lib/app/account/repo/rider_earnings_summary_loader.dart')
+            .readAsStringSync();
+    expect(earnings, contains('loadRiderEarningsSummary('));
+    expect(summaryLoader,
+        contains('Duration timeout = const Duration(seconds: 25)'));
+    expect(summaryLoader, contains('await load().timeout(timeout)'));
     expect(earnings, contains('BlocConsumer<AccountBloc, AccountState>'));
   });
 
