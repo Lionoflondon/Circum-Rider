@@ -12,6 +12,7 @@ import '../../rider_design/rider_ui.dart';
 import '../../stripe/rider_payout_account_view.dart';
 import '../bloc/account_bloc.dart';
 import '../repo/rider_ledger_feed.dart';
+import '../repo/rider_earnings_summary_loader.dart';
 
 class EarningsView extends StatefulWidget {
   const EarningsView({
@@ -45,16 +46,14 @@ class _EarningsViewState extends State<EarningsView> {
       ..add(GetRequests());
   }
 
-  Future<Map<String, dynamic>> _loadSummary() async {
-    final initiatingUid = FirebaseAuth.instance.currentUser?.uid;
-    final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .riderCallable('getRiderEarningsSummary')
-        .call()
-        .timeout(const Duration(seconds: 25));
-    if (FirebaseAuth.instance.currentUser?.uid != initiatingUid)
-      throw StateError('Account changed. Refresh earnings.');
-    return Map<String, dynamic>.from(result.data as Map);
-  }
+  Future<Map<String, dynamic>> _loadSummary() => loadRiderEarningsSummary(
+        currentUid: () => FirebaseAuth.instance.currentUser?.uid,
+        load: () async =>
+            (await FirebaseFunctions.instanceFor(region: 'us-central1')
+                    .riderCallable('getRiderEarningsSummary')
+                    .call())
+                .data,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -151,7 +150,11 @@ class _EarningsViewState extends State<EarningsView> {
                             onRefresh: () async {
                               final next = _loadSummary();
                               setState(() => _summary = next);
-                              await next;
+                              try {
+                                await next;
+                              } catch (_) {
+                                // FutureBuilder owns the failure/retry UI.
+                              }
                             },
                           );
                         },

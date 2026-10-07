@@ -36,13 +36,13 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   static const _presenceHeartbeatInterval = Duration(seconds: 45);
   static const _desiredOnlineStateKey = 'desiredOnlineState';
 
-  FirebaseAuth auth = FirebaseAuth.instance;
-  FirebaseFirestore db = FirebaseFirestore.instance;
-  final FirebaseMessaging firebaseMessaging = FirebaseMessaging.instance;
+  final FirebaseAuth auth;
+  final FirebaseFirestore db;
+  final FirebaseMessaging firebaseMessaging;
 
   final DirectionsService _directionsService = DirectionsService();
-  final RiderCommunicationService _communicationService =
-      RiderCommunicationService();
+  late final RiderCommunicationService _communicationService =
+      RiderCommunicationService(firestore: db, auth: auth);
 
   List<DirectionStep> _currentRoute = [];
   Timer? _presenceHeartbeatTimer;
@@ -50,6 +50,7 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
   Position? _lastPresencePosition;
   bool _presenceHeartbeatInFlight = false;
   int _availabilityOperation = 0;
+  int _activeRestoreGeneration = 0;
   int _presenceReconnectAttempt = 0;
   StreamSubscription<String>? _pushTokenRefreshSubscription;
   bool _registeringPushToken = false;
@@ -113,7 +114,14 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
     return _remainingVerificationItems(riderDoc.data());
   }
 
-  HomeBloc() : super(HomeState()) {
+  HomeBloc({
+    FirebaseAuth? authentication,
+    FirebaseFirestore? firestore,
+    FirebaseMessaging? messaging,
+  })  : auth = authentication ?? FirebaseAuth.instance,
+        db = firestore ?? FirebaseFirestore.instance,
+        firebaseMessaging = messaging ?? FirebaseMessaging.instance,
+        super(HomeState()) {
     WidgetsBinding.instance.addObserver(this);
     on<CheckForPushToken>(_handleCheckForPushToken);
     on<SetRideStatus>(_handleSetRideStatus);
@@ -779,112 +787,144 @@ class HomeBloc extends Bloc<HomeEvent, HomeState> with WidgetsBindingObserver {
     }
   }
 
-  void _handleCheckForActiveRequest(
+  Future<void> _handleCheckForActiveRequest(
     CheckForActiveRequest event,
-    Emitter emit,
+    Emitter<HomeState> emit,
   ) async {
-    User? user = auth.currentUser;
-    if (user == null) {
-      emit(
-        state.copyWith(
-          rideStatus: RideStatus.offline,
-          onlineTransition: OnlineTransition.offline,
-          riderIntentOnline: false,
-          clearMessage: true,
-        ),
-      );
-      return;
-    }
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    final desiredOnline = prefs.getBool(_desiredOnlineStateKey) == true;
-    final double? riderLng = prefs.getDouble('longitude');
-    final double? riderLat = prefs.getDouble('latitude');
-    String? statusString = prefs.getString('status');
-    RideStatus? status;
-    final presenceSnapshot =
-        await db.collection('riderPresence').doc(user.uid).get();
-    final presence = presenceSnapshot?.data();
-    final presenceOnline = presence?['isOnline'] == true &&
-        '${presence?['availabilityStatus'] ?? ''}'.toLowerCase() != 'offline';
-    emit(state.copyWith(riderIntentOnline: desiredOnline || presenceOnline));
-    if (desiredOnline || presenceOnline || statusString == 'online') {
-      add(SetRideStatus(status: RideStatus.online));
-    }
-    final documentReference =
-        db.collection('deliveryRequests').where('riderId', isEqualTo: user.uid);
-
-    final docResponse = await documentReference.get();
-    // final doc = docResponse.docs.firstOrNull;
-
-    for (final doc in docResponse.docs) {
-      final data = doc.data();
-      final activeRequest = DispatchRequest.fromJson(data);
-
-      PlaceCoordinate pickupCoordinates;
-      PlaceCoordinate desinationCoordinate;
-
-      final deliveryStatus = '${data['status'] ?? ''}';
-      final activeDelivery = deliveryStatus == 'accepted' ||
-          deliveryStatus == 'outForDelivery' ||
-          deliveryStatus == 'arrivedAtPickup' ||
-          deliveryStatus == 'arrived_at_pickup' ||
-          deliveryStatus == 'arrivedAtDropoff' ||
-          deliveryStatus == 'arrived_at_dropoff';
-      if (!activeDelivery) continue;
-
-      if (deliveryStatus == 'accepted') {
-        status = RideStatus.userConfirmedRide;
-        pickupCoordinates = PlaceCoordinate(lat: riderLat!, lng: riderLng!);
-        desinationCoordinate = PlaceCoordinate(
-          lat: activeRequest.pickupData.position.geopoint.latitude,
-          lng: activeRequest.pickupData.position.geopoint.longitude,
-        );
-        add(
-          GetPolylines(
-            desinationCoordinate: desinationCoordinate,
-            pickupCoordinate: pickupCoordinates,
-          ),
-        );
+    final generation = ++_activeRestoreGeneration;
+    final initiatingUid = auth.currentUser?.uid;
+    bool isCurrent() =>
+        !emit.isDone &&
+        generation == _activeRestoreGeneration &&
+        auth.currentUser?.uid == initiatingUid;
+    try {
+      User? user = auth.currentUser;
+      if (user == null) {
         emit(
           state.copyWith(
-            actionButtonStatus: ActionButtonStatus.goingToPickupLocation,
+            rideStatus: RideStatus.offline,
+            onlineTransition: OnlineTransition.offline,
+            riderIntentOnline: false,
+            clearMessage: true,
           ),
         );
+        return;
+      }
+      final SharedPreferences prefs = await SharedPreferences.getInstance()
+          .timeout(const Duration(seconds: 15));
+      if (!isCurrent()) return;
+      final desiredOnline = prefs.getBool(_desiredOnlineStateKey) == true;
+      final double? riderLng = prefs.getDouble('longitude');
+      final double? riderLat = prefs.getDouble('latitude');
+      String? statusString = prefs.getString('status');
+      RideStatus? status;
+      final presenceSnapshot = await db
+          .collection('riderPresence')
+          .doc(user.uid)
+          .get()
+          .timeout(const Duration(seconds: 15));
+      if (!isCurrent()) return;
+      final presence = presenceSnapshot.data();
+      final presenceOnline = presence?['isOnline'] == true &&
+          '${presence?['availabilityStatus'] ?? ''}'.toLowerCase() != 'offline';
+      final documentReference = db
+          .collection('deliveryRequests')
+          .where('riderId', isEqualTo: user.uid);
+
+      final docResponse =
+          await documentReference.get().timeout(const Duration(seconds: 15));
+      if (!isCurrent()) return;
+      final recovered = state.dispatchReason == 'session_restore_failed';
+      emit(state.copyWith(
+        riderIntentOnline: desiredOnline || presenceOnline,
+        clearMessage: recovered,
+        clearDispatchReason: recovered,
+      ));
+      if (desiredOnline || presenceOnline || statusString == 'online') {
+        add(SetRideStatus(status: RideStatus.online));
       }
 
-      if (deliveryStatus == 'outForDelivery') {
-        status = RideStatus.outForDelivery;
-        pickupCoordinates = PlaceCoordinate(
-          lat: activeRequest.pickupData.position.geopoint.latitude,
-          lng: activeRequest.pickupData.position.geopoint.longitude,
-        );
-        desinationCoordinate = PlaceCoordinate(
-          lat: activeRequest.dropoffData.position.geopoint.latitude,
-          lng: activeRequest.dropoffData.position.geopoint.longitude,
-        );
-        add(
-          GetPolylines(
-            desinationCoordinate: desinationCoordinate,
-            pickupCoordinate: pickupCoordinates,
-          ),
-        );
-        emit(
-          state.copyWith(actionButtonStatus: ActionButtonStatus.outForDelivery),
-        );
+      for (final doc in docResponse.docs) {
+        final data = doc.data();
+        PlaceCoordinate pickupCoordinates;
+        PlaceCoordinate desinationCoordinate;
+
+        final deliveryStatus = '${data['status'] ?? ''}';
+        final activeDelivery = deliveryStatus == 'accepted' ||
+            deliveryStatus == 'outForDelivery' ||
+            deliveryStatus == 'arrivedAtPickup' ||
+            deliveryStatus == 'arrived_at_pickup' ||
+            deliveryStatus == 'arrivedAtDropoff' ||
+            deliveryStatus == 'arrived_at_dropoff';
+        if (!activeDelivery) continue;
+        final activeRequest = DispatchRequest.fromJson(data);
+
+        if (deliveryStatus == 'accepted') {
+          status = RideStatus.userConfirmedRide;
+          pickupCoordinates = PlaceCoordinate(lat: riderLat!, lng: riderLng!);
+          desinationCoordinate = PlaceCoordinate(
+            lat: activeRequest.pickupData.position.geopoint.latitude,
+            lng: activeRequest.pickupData.position.geopoint.longitude,
+          );
+          add(
+            GetPolylines(
+              desinationCoordinate: desinationCoordinate,
+              pickupCoordinate: pickupCoordinates,
+            ),
+          );
+          emit(
+            state.copyWith(
+              actionButtonStatus: ActionButtonStatus.goingToPickupLocation,
+            ),
+          );
+        }
+
+        if (deliveryStatus == 'outForDelivery') {
+          status = RideStatus.outForDelivery;
+          pickupCoordinates = PlaceCoordinate(
+            lat: activeRequest.pickupData.position.geopoint.latitude,
+            lng: activeRequest.pickupData.position.geopoint.longitude,
+          );
+          desinationCoordinate = PlaceCoordinate(
+            lat: activeRequest.dropoffData.position.geopoint.latitude,
+            lng: activeRequest.dropoffData.position.geopoint.longitude,
+          );
+          add(
+            GetPolylines(
+              desinationCoordinate: desinationCoordinate,
+              pickupCoordinate: pickupCoordinates,
+            ),
+          );
+          emit(
+            state.copyWith(
+                actionButtonStatus: ActionButtonStatus.outForDelivery),
+          );
+        }
+
+        if (status != null) add(SetRideStatus(status: status));
+
+        emit(state.copyWith(rideStatus: status));
+
+        if (data['status'] != 'confirmed') {
+          emit(state.copyWith(activeRequest: activeRequest));
+          add(BroadcastLocation());
+        }
       }
 
-      if (status != null) add(SetRideStatus(status: status));
-
-      emit(state.copyWith(rideStatus: status));
-
-      if (data['status'] != 'confirmed') {
-        emit(state.copyWith(activeRequest: activeRequest));
-        add(BroadcastLocation());
+      if (docResponse.docs.isEmpty) {
+        add(CancelRequest());
       }
-    }
-
-    if (docResponse.docs.isEmpty) {
-      add(CancelRequest());
+    } catch (_) {
+      if (!isCurrent()) return;
+      // A read failure is not evidence that the Rider has no active job.
+      emit(state.copyWith(
+        message: 'We could not restore your Rider session. Pull to refresh.',
+        dispatchEligible: false,
+        dispatchReason: 'session_restore_failed',
+        onlineTransition: _isLogicallyOnline
+            ? OnlineTransition.reconnecting
+            : state.onlineTransition,
+      ));
     }
   }
 
