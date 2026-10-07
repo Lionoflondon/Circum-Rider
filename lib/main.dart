@@ -315,7 +315,10 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
 }
 
 class CircumRider extends StatelessWidget {
-  const CircumRider({super.key});
+  const CircumRider({super.key, this.homeOverride});
+
+  @visibleForTesting
+  final Widget? homeOverride;
 
   // This widget is the root of your application.
   @override
@@ -355,27 +358,28 @@ class CircumRider extends StatelessWidget {
           },
           // Let the root Navigator handle Back. Calling maybePop from this
           // route's onWillPop callback re-enters the same callback recursively.
-          home: MultiBlocProvider(
-            providers: [
-              BlocProvider<AuthBloc>(
-                create: (BuildContext context) =>
-                    AuthBloc()..add(SortSessionState()),
+          home: homeOverride ??
+              MultiBlocProvider(
+                providers: [
+                  BlocProvider<AuthBloc>(
+                    create: (BuildContext context) =>
+                        AuthBloc()..add(SortSessionState()),
+                  ),
+                  BlocProvider(create: (context) => NavbarBloc()),
+                  BlocProvider(create: (context) => VerificationBloc()),
+                  BlocProvider<HomeBloc>.value(value: homeBloc),
+                  BlocProvider<HistoryBloc>(
+                    create: (BuildContext context) => HistoryBloc(),
+                  ),
+                  BlocProvider<SupportBloc>(
+                    create: (BuildContext context) => SupportBloc(),
+                  ),
+                  BlocProvider<AccountBloc>(
+                    create: (BuildContext context) => AccountBloc(),
+                  ),
+                ],
+                child: const App(),
               ),
-              BlocProvider(create: (context) => NavbarBloc()),
-              BlocProvider(create: (context) => VerificationBloc()),
-              BlocProvider<HomeBloc>.value(value: homeBloc),
-              BlocProvider<HistoryBloc>(
-                create: (BuildContext context) => HistoryBloc(),
-              ),
-              BlocProvider<SupportBloc>(
-                create: (BuildContext context) => SupportBloc(),
-              ),
-              BlocProvider<AccountBloc>(
-                create: (BuildContext context) => AccountBloc(),
-              ),
-            ],
-            child: const App(),
-          ),
         );
       },
     );
