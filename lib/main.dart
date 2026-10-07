@@ -353,30 +353,28 @@ class CircumRider extends StatelessWidget {
           routes: {
             RiderJobOfferScreen.routeName: (_) => const RiderJobOfferScreen(),
           },
-          home: WillPopScope(
-            onWillPop: () async =>
-                !await NavKey.navKey.currentState!.maybePop(),
-            child: MultiBlocProvider(
-              providers: [
-                BlocProvider<AuthBloc>(
-                  create: (BuildContext context) =>
-                      AuthBloc()..add(SortSessionState()),
-                ),
-                BlocProvider(create: (context) => NavbarBloc()),
-                BlocProvider(create: (context) => VerificationBloc()),
-                BlocProvider<HomeBloc>.value(value: homeBloc),
-                BlocProvider<HistoryBloc>(
-                  create: (BuildContext context) => HistoryBloc(),
-                ),
-                BlocProvider<SupportBloc>(
-                  create: (BuildContext context) => SupportBloc(),
-                ),
-                BlocProvider<AccountBloc>(
-                  create: (BuildContext context) => AccountBloc(),
-                ),
-              ],
-              child: const App(),
-            ),
+          // Let the root Navigator handle Back. Calling maybePop from this
+          // route's onWillPop callback re-enters the same callback recursively.
+          home: MultiBlocProvider(
+            providers: [
+              BlocProvider<AuthBloc>(
+                create: (BuildContext context) =>
+                    AuthBloc()..add(SortSessionState()),
+              ),
+              BlocProvider(create: (context) => NavbarBloc()),
+              BlocProvider(create: (context) => VerificationBloc()),
+              BlocProvider<HomeBloc>.value(value: homeBloc),
+              BlocProvider<HistoryBloc>(
+                create: (BuildContext context) => HistoryBloc(),
+              ),
+              BlocProvider<SupportBloc>(
+                create: (BuildContext context) => SupportBloc(),
+              ),
+              BlocProvider<AccountBloc>(
+                create: (BuildContext context) => AccountBloc(),
+              ),
+            ],
+            child: const App(),
           ),
         );
       },
