@@ -136,7 +136,7 @@ Widget _alreadyHaveAnAccount() {
                 GotAnAccount(),
               );
         },
-        child: SizedBox(
+        child: const SizedBox(
             child: Text.rich(
           textAlign: TextAlign.center,
           TextSpan(

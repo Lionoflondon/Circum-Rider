@@ -46,7 +46,7 @@ class AppTextInput {
       enabled: enabled,
 
       maxLength: maxLength,
-      style: TextStyle(
+      style: const TextStyle(
         color: Colors.white,
         fontFamily: 'OpenSans',
         decoration: TextDecoration.none,

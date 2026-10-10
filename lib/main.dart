@@ -217,7 +217,7 @@ class _RiderStartupAppState extends State<RiderStartupApp> {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
         home: Scaffold(
-          backgroundColor: Color(0xFF07090F),
+          backgroundColor: const Color(0xFF07090F),
           body: Center(
             child: Semantics(
               label: 'Starting Rider',

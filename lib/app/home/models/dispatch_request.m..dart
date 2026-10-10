@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 
-import '../../../helper/format_date.dart';
 import 'contact_info.m.dart';
 
 class DispatchRequest extends Equatable {

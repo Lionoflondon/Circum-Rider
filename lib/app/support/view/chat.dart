@@ -4,7 +4,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../utils/theme/theme.dart';
-import '../../authentication/bloc/auth_bloc.dart';
 import '../bloc/support_bloc.dart';
 
 class ChatPageView extends StatefulWidget {

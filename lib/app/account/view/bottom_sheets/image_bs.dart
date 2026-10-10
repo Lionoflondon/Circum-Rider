@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../utils/theme/text_field.dart';
 import '../../../../utils/theme/theme.dart';
 
 showImageBottomSheet(context) {
@@ -12,7 +11,7 @@ showImageBottomSheet(context) {
       ),
       backgroundColor: AppColors.secondary,
       builder: (context) {
-        return ImageButtSheet();
+        return const ImageButtSheet();
       });
 }
 
