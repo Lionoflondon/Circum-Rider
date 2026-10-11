@@ -20,8 +20,8 @@ class Validator {
       throw Exception('Password cannot be empty');
     }
     if (!IsEmpty.isEmpty(data['password']) &&
-        '${data['password']}'.length < 6) {
-      throw Exception('Password cannot be less than six characters');
+        '${data['password']}'.length < 10) {
+      throw Exception('Password cannot be less than ten characters');
     }
     if (IsEmpty.isEmpty(data['countryCode'])) {
       throw Exception('Please select a country');
@@ -49,9 +49,6 @@ class Validator {
   static void validatePasswordReset({required data}) {
     if (IsEmpty.isEmpty(data['email'])) {
       throw Exception('Email field cannot be empty');
-    }
-    if (IsEmpty.isEmpty(data['otp'])) {
-      throw Exception('Token field cannot be empty');
     }
     if (IsEmpty.isEmpty(data['password'])) {
       throw Exception('Password field cannot be empty');

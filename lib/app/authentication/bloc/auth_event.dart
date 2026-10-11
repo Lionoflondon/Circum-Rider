@@ -62,22 +62,12 @@ class DateOfBirthChanged extends AuthEvent {
   DateOfBirthChanged({required this.dateOfBirth});
 }
 
-class VerificationCodeChanged extends AuthEvent {
-  final int verificationCode;
-  VerificationCodeChanged({required this.verificationCode});
-}
-
 class SetVerificationUploadStatus extends AuthEvent {
   final VerificationUploadStatus status;
   const SetVerificationUploadStatus({required this.status});
 }
 
 class VerifyEmail extends AuthEvent {}
-
-class SetOTP extends AuthEvent {
-  final String otp;
-  SetOTP({required this.otp});
-}
 
 class ResendVerificationEmail extends AuthEvent {}
 
@@ -119,33 +109,11 @@ class UpdatePhoneNumber extends AuthEvent {
   const UpdatePhoneNumber({required this.value});
 }
 
-class SetResetPasswordOTP extends AuthEvent {
-  final String otp;
-  SetResetPasswordOTP({required this.otp});
-}
-
-class SubmitOTP extends AuthEvent {}
-
 class SubmitRegistrationDetails extends AuthEvent {}
-
-class SetVerificationMethod extends AuthEvent {
-  final String method;
-  SetVerificationMethod({required this.method});
-}
 
 class RegisterUser extends AuthEvent {}
 
 class LoginUser extends AuthEvent {}
-
-class SetPin extends AuthEvent {
-  final String pin;
-  const SetPin({required this.pin});
-}
-
-class CreateAuthPin extends AuthEvent {
-  final String pin;
-  const CreateAuthPin({required this.pin});
-}
 
 class UpdatePhone extends AuthEvent {}
 
@@ -155,10 +123,6 @@ class HandleUserLogin extends AuthEvent {
 }
 
 class ResetStatus extends AuthEvent {}
-
-class StartCountDown extends AuthEvent {}
-
-class ResetCountdown extends AuthEvent {}
 
 class SetShowPassword extends AuthEvent {
   final bool val;
