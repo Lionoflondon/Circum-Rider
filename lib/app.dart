@@ -110,13 +110,14 @@ class _AuthenticatedStartupGateState extends State<_AuthenticatedStartupGate> {
       future: _startupAccessFuture,
       builder: (context, startupAccess) {
         if (startupAccess.connectionState != ConnectionState.done) {
-          return App()._buildNavigator(widget.state, false);
+          return const App()._buildNavigator(widget.state, false);
         }
         if (startupAccess.hasError) {
-          return App()._buildNavigator(widget.state, false, onRetry: _retry);
+          return const App()
+              ._buildNavigator(widget.state, false, onRetry: _retry);
         }
         final access = startupAccess.data!;
-        return App()._buildNavigator(
+        return const App()._buildNavigator(
           widget.state,
           access.internalAccess,
           reviewFixture: access.reviewFixture,

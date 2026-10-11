@@ -118,7 +118,7 @@ class _AccountDetailsState extends State<AccountDetails> {
                                   //   color: Colors.grey,
                                   // ),
                                   errorWidget: (context, url, error) =>
-                                      Icon(Icons.error),
+                                      const Icon(Icons.error),
                                 )
                               : Stack(
                                   children: [
@@ -202,7 +202,7 @@ class _AccountDetailsState extends State<AccountDetails> {
           // backgroundColor: AppColors.secondary,
           style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            shape: RoundedRectangleBorder(),
+            shape: const RoundedRectangleBorder(),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -248,7 +248,7 @@ class _AccountDetailsState extends State<AccountDetails> {
           // backgroundColor: AppColors.secondary,
           style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            shape: RoundedRectangleBorder(),
+            shape: const RoundedRectangleBorder(),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -334,7 +334,7 @@ class _AccountDetailsState extends State<AccountDetails> {
           child: TextButton(
             style: TextButton.styleFrom(
                 backgroundColor: AppColors.danger.withOpacity(0.5),
-                shape: RoundedRectangleBorder(),
+                shape: const RoundedRectangleBorder(),
                 padding: const EdgeInsets.symmetric(vertical: 20)),
             onPressed: () {
               context.read<AuthBloc>().add(SignOut());

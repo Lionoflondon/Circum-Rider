@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
 
-import '../../../../utils/theme/text_field.dart';
 import '../../../../utils/theme/theme.dart';
 
 showImageBottomSheet(context) {
   return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.zero)),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.zero)),
       constraints: BoxConstraints(
         maxHeight: MediaQuery.of(context).size.height * 0.7,
       ),
       backgroundColor: AppColors.secondary,
       builder: (context) {
-        return ImageButtSheet();
+        return const ImageButtSheet();
       });
 }
 

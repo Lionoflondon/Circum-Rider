@@ -32,7 +32,7 @@ class AmountFormatter extends TextInputFormatter {
 
     // Check for multiple leading decimals
     if (newValue.text.startsWith('.')) {
-      return TextEditingValue(
+      return const TextEditingValue(
         text: '0.',
         selection: TextSelection.collapsed(offset: 2),
       );

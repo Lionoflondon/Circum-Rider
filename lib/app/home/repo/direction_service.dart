@@ -45,7 +45,7 @@ class DirectionsService {
 
   Future<List<DirectionStep>> getDetailedDirections(
       LatLng origin, LatLng destination) async {
-    final String url = 'https://maps.googleapis.com/maps/api/directions/json';
+    const String url = 'https://maps.googleapis.com/maps/api/directions/json';
 
     try {
       final response = await _dio.get(

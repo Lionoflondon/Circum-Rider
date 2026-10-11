@@ -86,7 +86,7 @@ class _ForgotPasswordViewState extends State<ForgotPasswordView> {
   Widget _loader() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return state.status == Status.loading
-          ? LinearProgressIndicator(color: AppColors.primary)
+          ? const LinearProgressIndicator(color: AppColors.primary)
           : Container();
     });
   }

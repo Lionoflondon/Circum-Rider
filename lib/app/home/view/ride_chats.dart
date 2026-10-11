@@ -66,7 +66,7 @@ class _RideChatPageViewState extends State<RideChatPageView> {
     return BlocBuilder<HomeBloc, HomeState>(builder: (context, state) {
       return Container(
         color: AppColors.secondary,
-        padding: EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.only(bottom: 10),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [

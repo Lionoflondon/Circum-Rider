@@ -1,8 +1,5 @@
-import 'dart:async';
-
 // import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/svg.dart';
 
 import '../../../utils/theme/theme.dart';
 
@@ -81,7 +78,7 @@ class OnboardingSliderState extends State<OnboardingSlider>
       children: [
         Expanded(
           child: Container(
-              color: Color(0xFFEDF3F8),
+              color: const Color(0xFFEDF3F8),
               child: Container(
                 margin: EdgeInsets.only(
                     left: screenWidth * 0.15,
