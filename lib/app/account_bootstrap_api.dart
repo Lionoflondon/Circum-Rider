@@ -154,7 +154,7 @@ Future<Map<String, dynamic>> _invokeRiderAccountViaCloudRun(
           body: jsonEncode({'data': data}),
         )
         .timeout(const Duration(seconds: 30));
-    return decodeRiderMapResponse(response);
+    return decodeRiderMapResponse(response, operation: operation);
   } on TimeoutException {
     throw FirebaseFunctionsException(
       code: 'deadline-exceeded',

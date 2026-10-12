@@ -72,7 +72,26 @@ void main() {
       requests.add(request);
       return http.Response(
           jsonEncode({
-            'result': {'status': 'accepted'}
+            'result': switch (request.url.path) {
+              '/recordRiderArrival' => {
+                  'success': true,
+                  'decision': {'state': 'arrived_at_pickup'}
+                },
+              '/updateDeliveryTrackingStatus' => {
+                  'status': 'navigating_to_pickup'
+                },
+              '/updateDeliveryLiveLocation' => {'success': true},
+              '/goOnline' => {
+                  'success': true,
+                  'dispatchEligible': false,
+                  'presence': {}
+                },
+              '/goOffline' || '/updateRiderPresence' => {
+                  'success': true,
+                  'presence': {}
+                },
+              _ => {'status': 'accepted'},
+            }
           }),
           200);
     });
@@ -92,7 +111,7 @@ void main() {
         appCheckToken: 'app-check-token',
         client: client,
       );
-      expect(result['status'], 'accepted');
+      expect(result, isNotEmpty);
     }
     expect(requests.map((request) => request.url.path), [
       '/acceptRideRequests',
