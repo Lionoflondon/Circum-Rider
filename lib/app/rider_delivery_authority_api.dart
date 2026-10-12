@@ -105,7 +105,7 @@ Future<Map<String, dynamic>> invokeRiderDeliveryAuthorityWithTokens(
           body: jsonEncode({'data': data}),
         )
         .timeout(const Duration(seconds: 30));
-    return decodeRiderMapResponse(response);
+    return decodeRiderMapResponse(response, operation: route);
   } on TimeoutException {
     throw FirebaseFunctionsException(
       code: 'deadline-exceeded',
