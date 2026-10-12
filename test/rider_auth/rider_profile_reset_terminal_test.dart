@@ -7,9 +7,14 @@ void main() {
   test('active reset event has bounded success and explicit terminal errors',
       () {
     final handler = source.substring(source.indexOf('on<ResetPassword>'));
-    expect(handler, contains('.timeout(_authOperationTimeout)'));
+    expect(handler, contains('requestCircumPasswordReset'));
+    final transport =
+        File('lib/helper/password_recovery.dart').readAsStringSync();
+    expect(transport, contains('.timeout(const Duration(seconds: 25))'));
     expect(handler, contains('Status.passwordResetEmailSent'));
-    expect(handler, contains('RiderAuthError.messageFor(error.code)'));
+    expect(handler, contains('on PasswordRecoveryException'));
+    expect(handler, contains('error.message'));
+    expect(handler, isNot(contains('sendPasswordResetEmail')));
     expect(handler, contains('on TimeoutException'));
     expect(handler, contains('Password reset took too long.'));
     expect(handler,
