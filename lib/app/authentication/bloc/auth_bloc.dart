@@ -1,3 +1,4 @@
+import '../../../helper/password_recovery.dart';
 import 'package:circum_rider/app/rider_callable_api.dart';
 import '../../verification/rider_document_transport.dart';
 import 'dart:async';
@@ -682,6 +683,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
 
       if (event is ForgotPassword) {
+        if (state.isLoading) return;
         final email = state.email?.trim() ?? '';
         if (email.isEmpty) {
           emit(state.copyWith(
@@ -697,27 +699,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             isLoading: true,
             errorMessage: null,
           ));
-          await auth
-              .sendPasswordResetEmail(email: email)
-              .timeout(_authOperationTimeout);
+          await requestCircumPasswordReset(email: email, application: 'rider');
           emit(state.copyWith(
             status: Status.passwordResetEmailSent,
             isLoading: false,
           ));
-        } on FirebaseAuthException catch (error) {
+        } on PasswordRecoveryException catch (error) {
           emit(state.copyWith(
-            status: Status.failure,
-            isLoading: false,
-            errorMessage: switch (error.code) {
-              'invalid-email' => 'Enter a valid email address.',
-              'user-not-found' => 'No Rider account was found for that email.',
-              'network-request-failed' =>
-                'Check your connection and try again.',
-              'too-many-requests' =>
-                'Too many attempts. Wait a moment and try again.',
-              _ => 'Password reset could not be completed. Please try again.',
-            },
-          ));
+              status: Status.failure,
+              isLoading: false,
+              errorMessage: error.message));
         } on TimeoutException {
           emit(state.copyWith(
             status: Status.failure,
@@ -1628,19 +1619,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     });
 
     on<ResetPassword>((event, emit) async {
+      if (state.isLoading) return;
       emit(state.copyWith(
           status: Status.loading, isLoading: true, errorMessage: ''));
       try {
-        await auth
-            .sendPasswordResetEmail(email: event.email.trim())
-            .timeout(_authOperationTimeout);
+        await requestCircumPasswordReset(
+            email: event.email.trim(), application: 'rider');
         emit(state.copyWith(
             status: Status.passwordResetEmailSent, isLoading: false));
-      } on FirebaseAuthException catch (error) {
+      } on PasswordRecoveryException catch (error) {
         emit(state.copyWith(
             status: Status.failure,
             isLoading: false,
-            errorMessage: RiderAuthError.messageFor(error.code)));
+            errorMessage: error.message));
       } on TimeoutException {
         emit(state.copyWith(
             status: Status.failure,

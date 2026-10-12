@@ -1,3 +1,4 @@
+import '../../../helper/password_recovery.dart';
 import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -46,7 +47,7 @@ class _ForgotPasswordViewState extends State<ForgotPasswordView> {
                             const SizedBox(width: 6),
                             Expanded(
                                 child: AppText.text(
-                                    'Password reset instructions have been sent to your email.',
+                                    passwordRecoveryAcknowledgement,
                                     color: Colors.white,
                                     fontWeight: FontWeight.w600)),
                           ],
