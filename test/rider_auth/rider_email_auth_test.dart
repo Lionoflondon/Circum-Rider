@@ -166,8 +166,9 @@ void main() {
       source.indexOf('if (event is ForgotPassword)'),
       source.indexOf('if (event is SetShowPassword)'),
     );
-    expect(handler, contains('sendPasswordResetEmail'));
-    expect(handler, contains('timeout(_authOperationTimeout)'));
+    expect(handler, contains('requestCircumPasswordReset'));
+    expect(handler, isNot(contains('sendPasswordResetEmail')));
+    expect(handler, contains('PasswordRecoveryException'));
     expect(handler, contains('Status.passwordResetEmailSent'));
     expect(handler, contains('isLoading: false'));
     expect(handler, isNot(contains('error.toString()')));
